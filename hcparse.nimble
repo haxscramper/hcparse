@@ -11,3 +11,7 @@ srcDir        = "src"
 # Dependencies
 
 requires "nim >= 1.2.6"
+
+# import shell
+
+# task c2nim_build, "Generate base file libclang wrapper":
