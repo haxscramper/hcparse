@@ -104,6 +104,7 @@ Str toNimType(CXType type, int level = 0) {
         case CXType_LongLong: return "clonglong";
         case CXType_Double: return "cdouble";
         case CXType_ULongLong: return "culonglong";
+        case CXType_ULong: return "culong";
 
         case CXType_Elaborated: {
             return fixTypeName(type);
@@ -117,6 +118,13 @@ Str toNimType(CXType type, int level = 0) {
                 return fmt::format(
                     "ptr[{}]", toNimType(pointee, level + 1));
             }
+        }
+
+        case CXType_ConstantArray: {
+            return fmt::format(
+                "array[{}, {}]",
+                clang_getNumElements(type),
+                clang_getElementType(type));
         }
 
         case CXType_FunctionProto: {
@@ -143,6 +151,7 @@ Str toNimType(CXType type, int level = 0) {
             std::cout << "  \e[31m\e[3mCANT TRANSFORM\e[23m\e[39m: \e[92m"
                       << clang_getTypeKindSpelling(type.kind) << "\e[39m "
                       << kindStr << "\n";
+
 
             return "eee";
         }
@@ -256,6 +265,21 @@ CXBuf directSubnodes(CXCursor cursor) {
         &children);
 
     return children;
+}
+
+void pprintDirect(CXCursor cursor, int ident) {
+    let pref = std::string(' ', ident * 2);
+    fmt::print(
+        "{}{} {} {}\n",
+        pref,
+        cursor,
+        clang_getCursorKind(cursor),
+        clang_getCursorType(cursor));
+
+    for (auto& subnode : directSubnodes(cursor)) {
+        let kind = clang_getCursorKind(subnode);
+        std::cout << pref << "  " << kind << "\n";
+    }
 }
 
 CXChildVisitResult visitStructDecl(CHILD_VISIT_PARAMS) {
@@ -394,14 +418,33 @@ CXChildVisitResult visitTypedef(CHILD_VISIT_PARAMS) {
 
     let         kind      = clang_getCursorKind(cursor);
     ClientData* data      = toClientData(client_data);
-    bool        isTypeDef = !clang_equalTypes(
-        clang_getCursorType(cursor),
-        clang_getCanonicalType(clang_getCursorType(cursor)));
+    bool        isTypeDef = true;
+
+    {
+        let subnodes = directSubnodes(cursor);
+        if (subnodes.size() == 1) {
+            let subnode = subnodes[0];
+            let kind    = clang_getCursorKind(subnode);
+            if (kind == CXCursor_EnumDecl || kind == CXCursor_StructDecl) {
+                isTypeDef = false;
+            }
+        }
+    }
 
     if (isTypeDef) {
-        // std::cout << kind << " \e[34m" << cursor << "\e[39m \e[94m"
-        //           << clang_getCanonicalType(clang_getCursorType(cursor))
-        //           << "\e[39m\n";
+        if (false) { // Print typedef and all child nodes
+            std::cout << "\e[33m" << clang_getCursorType(cursor)
+                      << "\e[39m \e[3mtypedef of\e[23m "
+                      << clang_getCanonicalType(
+                             clang_getCursorType(cursor))
+                      << "\n";
+
+
+            for (auto& subnode : directSubnodes(cursor)) {
+                let kind = clang_getCursorKind(subnode);
+                std::cout << "  " << kind << "\n";
+            }
+        }
 
         *(data->outfile) << fmt::format(
             "type {}* = distinct {} # {}\n\n",
@@ -461,54 +504,70 @@ CXChildVisitResult visitToplevel(CHILD_VISIT_PARAMS) {
 }
 
 int main() {
-    Vec<Pair<Str, Str>> translations = {{"Index.h", "index.nim"}};
+    Str targetDir = "../src/hcparse/libclang_raw/";
 
-    // for(auto& translation : translations) {}
-    CXIndex           index = clang_createIndex(0, 0);
-    CXTranslationUnit unit  = clang_parseTranslationUnit(
-        index,
-        "/usr/include/clang-c/Index.h",
-        nullptr,
-        0,
-        nullptr,
-        0,
-        CXTranslationUnit_None);
+    Vec<Pair<Str, Str>> translations = {
+        {"Index.h", "index.nim"},
+        {"BuildSystem.h", "build_system.nim"},
+        {"CXCompilationDatabase.h", "cxcompilation_database.nim"},
+        {"CXErrorCode.h", "cxerror_code.nim"},
+        {"CXString.h", "cxstring.nim"},
+        {"Documentation.h", "documentation.nim"},
+        {"ExternC.h", "externc.nim"},
+        {"FatalErrorHandler.h", "fatal_error_handler.nim"},
+        {"Platform.h", "platform.nim"}
+        //
+    };
 
-    if (unit == nullptr) {
-        cerr << "Unable to parse translation unit. Quitting." << endl;
-        exit(-1);
+    for (auto& tr : translations) {
+        CXIndex           index = clang_createIndex(0, 0);
+        CXTranslationUnit unit  = clang_parseTranslationUnit(
+            index,
+            fmt::format("/usr/include/clang-c/{}", tr.first).c_str(),
+            nullptr,
+            0,
+            nullptr,
+            0,
+            CXTranslationUnit_None);
+
+        if (unit == nullptr) {
+            cerr << "Unable to parse translation unit. Quitting." << endl;
+            exit(-1);
+        }
+
+        CXCursor   cursor = clang_getTranslationUnitCursor(unit);
+        ClientData data;
+        data.unit = unit;
+
+        std::ofstream outfile;
+        data.outfile = &outfile;
+
+        fmt::print("{} -> {}\n", tr.first, targetDir + tr.second);
+
+        data.outfile->open(targetDir + tr.second);
+
+        *data.outfile << "from times import Time\n"
+                         "{.deadCodeElim: on.}\n"
+                         "{.push callconv: cdecl.}\n"
+                         "import opaque_impls\n"
+                         "\n"
+                         "when defined(windows):\n"
+                         "  const\n"
+                         "    libclang* = \"libclang.dll\"\n"
+                         "elif defined(macosx):\n"
+                         "  const\n"
+                         "    libclang* = \"libclang.dylib\"\n"
+                         "else:\n"
+                         "  const\n"
+                         "    libclang* = \"libclang.so\"\n"
+                         "\n"
+                         "\n";
+
+        clang_visitChildren(cursor, visitToplevel, &data);
+
+        data.outfile->close();
+
+        clang_disposeTranslationUnit(unit);
+        clang_disposeIndex(index);
     }
-
-    CXCursor   cursor = clang_getTranslationUnitCursor(unit);
-    ClientData data;
-    data.unit = unit;
-
-    std::ofstream outfile;
-    data.outfile = &outfile;
-
-    data.outfile->open("result_raw.nim");
-
-    *data.outfile << "from times import Time\n"
-                     "{.deadCodeElim: on.}\n"
-                     "{.push callconv: cdecl.}\n"
-                     "import opaque_impls\n"
-                     "\n"
-                     "when defined(windows):\n"
-                     "  const\n"
-                     "    libclang* = \"libclang.dll\"\n"
-                     "elif defined(macosx):\n"
-                     "  const\n"
-                     "    libclang* = \"libclang.dylib\"\n"
-                     "else:\n"
-                     "  const\n"
-                     "    libclang* = \"libclang.so\"\n"
-                     "\n"
-                     "\n";
-
-    clang_visitChildren(cursor, visitToplevel, &data);
-
-    data.outfile->close();
-
-    clang_disposeTranslationUnit(unit);
-    clang_disposeIndex(index);
 }
