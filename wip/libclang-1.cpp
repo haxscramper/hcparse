@@ -5,6 +5,7 @@
 #include <fmt/ostream.h>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <utility>
 #include <vector>
 
@@ -35,6 +36,16 @@ ostream& operator<<(ostream& stream, const CXCursor& cursor) {
 ostream& operator<<(ostream& stream, const CXCursorKind& kind) {
     stream << clang_getCursorKindSpelling(kind);
     return stream;
+}
+
+struct ClientData {
+    std::ofstream*    outfile;
+    CXTranslationUnit unit;
+};
+
+
+ClientData* toClientData(void* data) {
+    return reinterpret_cast<ClientData*>(data);
 }
 
 
@@ -72,9 +83,10 @@ Str fixTypeName(CXType type) {
     } else if (fullStr.rfind("struct ") == 0) {
         return fullStr.substr(7, fullStr.size());
     } else {
-        std::cout << type << " \e[31m" << clang_Type_getNamedType(type)
-                  << "\e[39m\n";
-        return "\e[91m!!!\e[39m";
+        // std::cout << type << " \e[31m\e[3mUNFIX\e[23m\e[39m: \e[31m"
+        //           << clang_Type_getNamedType(type) << "\e[39m\n";
+        return fullStr;
+        // return "\e[91m!!!\e[39m";
     }
 }
 
@@ -167,8 +179,8 @@ Str toNimProcDecl(
 
 CXChildVisitResult visitFunction(CHILD_VISIT_PARAMS) {
 
-    CXBuf          children;
-    std::ofstream* outfile = reinterpret_cast<std::ofstream*>(client_data);
+    CXBuf       children;
+    ClientData* data = toClientData(client_data);
 
     clang_visitChildren( // Visit direct children of function node
         cursor,
@@ -200,7 +212,7 @@ CXChildVisitResult visitFunction(CHILD_VISIT_PARAMS) {
     let nimProc = toNimProcDecl(
         toStr(clang_getCursorSpelling(cursor)), arguments, funcResT);
 
-    (*outfile) << nimProc << "\n\n";
+    *(data->outfile) << nimProc << "\n\n";
 
 
     return CXChildVisit_Continue;
@@ -223,15 +235,86 @@ CXBuf directSubnodes(CXCursor cursor) {
 
 CXChildVisitResult visitStructDecl(CHILD_VISIT_PARAMS) {
 
-    let            kind    = clang_getCursorKind(cursor);
-    std::ofstream* outfile = reinterpret_cast<std::ofstream*>(client_data);
+    let         kind = clang_getCursorKind(cursor);
+    ClientData* data = toClientData(client_data);
 
-    // std::cout << "  Struct: \e[93m"
+    *(data->outfile) << fmt::format(
+        "type\n  {}* {{.pure, bycopy.}} = object\n",
+        fixTypeName(clang_getCursorType(cursor)));
+
+    for (auto& subnode : directSubnodes(cursor)) {
+        let kind = clang_getCursorKind(subnode);
+
+        let type = clang_getCursorType(subnode);
+        *(data->outfile) << fmt::format(
+            "    {}*: {} # `{}`\n",
+            fixArgName(toStr(clang_getCursorSpelling(subnode))),
+            toNimType(type),
+            type);
+    }
+
+    *(data->outfile) << "\n";
+
+
+    return CXChildVisit_Continue;
+}
+
+
+Str cursorTokens(CXCursor cursor, CXTranslationUnit tu) {
+    CXSourceRange range   = clang_getCursorExtent(cursor);
+    CXToken*      tokens  = 0;
+    unsigned int  nTokens = 0;
+    Str           result;
+    clang_tokenize(tu, range, &tokens, &nTokens);
+
+    for (unsigned int i = 0; i < nTokens; i++) {
+        CXString spelling = clang_getTokenSpelling(tu, tokens[i]);
+        result += toStr(spelling);
+        if (i != nTokens - 1) {
+            result += " ";
+        }
+        // printf("token = %s\n", clang_getCString(spelling));
+        // result = std::atoi(clang_getCString(spelling));
+        // clang_disposeString(spelling);
+    }
+    clang_disposeTokens(tu, tokens, nTokens);
+
+    return result;
+}
+
+
+int integerLiteralValue(CXCursor cursor, CXTranslationUnit tu) {
+    let tok = cursorTokens(cursor, tu);
+
+    // return std::stoi(tok);
+    if (tok.size() > 1 and tok[1] == 'x') {
+        int result;
+        std::istringstream(tok) >> std::hex >> result;
+        return result;
+    } else {
+        return std::atoi(tok.c_str());
+    }
+}
+
+Str dropPrefix(Str str, Str pref) {
+    if (str.rfind(pref) == 0) {
+        return str.substr(pref.size(), str.size());
+    } else {
+        return str;
+    }
+}
+
+CXChildVisitResult visitEnumDecl(CHILD_VISIT_PARAMS) {
+
+    let         kind = clang_getCursorKind(cursor);
+    ClientData* data = toClientData(client_data);
+
+    // std::cout << "  Enum: \e[95m"
     //           << clang_getCanonicalType(clang_getCursorType(cursor))
     //           << "\e[39m\n";
 
-    (*outfile) << fmt::format(
-        "type\n  {}* {{.pure, bycopy.}} = object\n",
+    *(data->outfile) << fmt::format(
+        "type\n  {}* {{.pure, size: sizeof(cint).}} = enum\n",
         fixTypeName(clang_getCursorType(cursor)));
 
     for (auto& subnode : directSubnodes(cursor)) {
@@ -240,39 +323,52 @@ CXChildVisitResult visitStructDecl(CHILD_VISIT_PARAMS) {
         //           << " \e[93m"
         //           <<
         //           clang_getCanonicalType(clang_getCursorType(subnode))
-        //           << "\e[39m\n";
+        //           << "\e[39m\e[34m";
+        *(data->outfile) << "    "
+                         << toStr(clang_getCursorSpelling(subnode));
 
-        let type = clang_getCursorType(subnode);
-        (*outfile) << fmt::format(
-            "    {}*: {} # `{}`\n",
-            fixArgName(toStr(clang_getCursorSpelling(subnode))),
-            toNimType(type),
-            type);
+        let value = directSubnodes(subnode);
+
+        if (value.size() == 0) {
+        } else {
+            let kind = clang_getCursorKind(value[0]);
+            switch (kind) {
+                case CXCursor_BinaryOperator: {
+                    // Assume `int << int` for now
+                    let operands = directSubnodes(value[0]);
+                    let lhs = integerLiteralValue(operands[0], data->unit);
+                    let rhs = integerLiteralValue(operands[1], data->unit);
+                    // fmt::print(" {} << {} // {}", lhs, rhs, lhs << rhs);
+                    *(data->outfile) << " = " << (lhs << rhs);
+                    break;
+                }
+                case CXCursor_IntegerLiteral: {
+                    let val = integerLiteralValue(value[0], data->unit);
+                    // std::cout << " " << val << " // "
+                    //           << cursorTokens(value[0], data->unit);
+                    *(data->outfile) << " = " << val;
+                    break;
+                }
+                default: {
+                    // std::cout << " \e[34m" << kind << "\e[39m";
+                }
+            }
+        }
+
+
+        // std::cout << "\e[39m\n";
+        *(data->outfile) << "\n";
     }
 
-    (*outfile) << "\n";
-
-
-    return CXChildVisit_Continue;
-}
-
-
-CXChildVisitResult visitEnumDecl(CHILD_VISIT_PARAMS) {
-
-    let            kind    = clang_getCursorKind(cursor);
-    std::ofstream* outfile = reinterpret_cast<std::ofstream*>(client_data);
-
-    std::cout << "  Enum: \e[95m"
-              << clang_getCanonicalType(clang_getCursorType(cursor))
-              << "\e[39m\n";
+    *(data->outfile) << "\n";
 
     return CXChildVisit_Continue;
 }
 
 CXChildVisitResult visitTypedef(CHILD_VISIT_PARAMS) {
 
-    let            kind    = clang_getCursorKind(cursor);
-    std::ofstream* outfile = reinterpret_cast<std::ofstream*>(client_data);
+    let         kind = clang_getCursorKind(cursor);
+    ClientData* data = toClientData(client_data);
 
 
     clang_visitChildren(
@@ -342,31 +438,34 @@ int main() {
         exit(-1);
     }
 
-    CXCursor cursor = clang_getTranslationUnitCursor(unit);
+    CXCursor   cursor = clang_getTranslationUnitCursor(unit);
+    ClientData data;
+    data.unit = unit;
 
     std::ofstream outfile;
+    data.outfile = &outfile;
 
-    outfile.open("result_raw.nim");
+    data.outfile->open("result_raw.nim");
 
-    outfile << "from times import Time\n"
-               "{.deadCodeElim: on.}\n"
-               "{.push callconv: cdecl.}\n"
-               "\n"
-               "when defined(windows):\n"
-               "  const\n"
-               "    libclang* = \"libclang.dll\"\n"
-               "elif defined(macosx):\n"
-               "  const\n"
-               "    libclang* = \"libclang.dylib\"\n"
-               "else:\n"
-               "  const\n"
-               "    libclang* = \"libclang.so\"\n"
-               "\n"
-               "\n";
+    *data.outfile << "from times import Time\n"
+                     "{.deadCodeElim: on.}\n"
+                     "{.push callconv: cdecl.}\n"
+                     "\n"
+                     "when defined(windows):\n"
+                     "  const\n"
+                     "    libclang* = \"libclang.dll\"\n"
+                     "elif defined(macosx):\n"
+                     "  const\n"
+                     "    libclang* = \"libclang.dylib\"\n"
+                     "else:\n"
+                     "  const\n"
+                     "    libclang* = \"libclang.so\"\n"
+                     "\n"
+                     "\n";
 
-    clang_visitChildren(cursor, visitToplevel, &outfile);
+    clang_visitChildren(cursor, visitToplevel, &data);
 
-    outfile.close();
+    data.outfile->close();
 
     clang_disposeTranslationUnit(unit);
     clang_disposeIndex(index);
