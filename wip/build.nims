@@ -2,5 +2,6 @@
 import shell
 
 shell:
-  "clang++" "-fcolor-diagnostics" "-lclang" "-olibclang" "libclang-1.cpp"
+  "clang++" "-fcolor-diagnostics" -lfmt "-lclang" "-olibclang" "libclang-1.cpp"
   ./libclang
+  bat "--line-range 180:210 --color=always result.nim"
