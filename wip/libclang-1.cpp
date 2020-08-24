@@ -95,6 +95,7 @@ Str toNimType(CXType type, int level = 0) {
     switch (type.kind) {
         case CXType_Typedef: return kindStr;
         case CXType_Enum: return kindStr;
+        case CXType_Record: return fixTypeName(type);
 
         case CXType_UInt: return "cuint";
         case CXType_Char_S: return "cstring";
@@ -109,15 +110,39 @@ Str toNimType(CXType type, int level = 0) {
         }
 
         case CXType_Pointer: {
-            return fmt::format(
-                "ptr[{}]",
-                toNimType(clang_getPointeeType(type), level + 1));
+            CXType pointee = clang_getPointeeType(type);
+            if (pointee.kind == CXType_Void) {
+                return "pointer";
+            } else {
+                return fmt::format(
+                    "ptr[{}]", toNimType(pointee, level + 1));
+            }
         }
 
+        case CXType_FunctionProto: {
+            let args = clang_getNumArgTypes(type);
+            Str argParams;
+
+            for (int arg = 0; arg < args; ++arg) {
+                argParams += fmt::format(
+                    "a{}: {}",
+                    arg,
+                    toNimType(clang_getArgType(type, arg)));
+                if (arg != args - 1) {
+                    argParams += ", ";
+                }
+            }
+
+            return fmt::format(
+                "proc({}): {} {{.cdecl.}}",
+                argParams,
+                toNimType(clang_getResultType(type)));
+        }
 
         default: {
-            std::cout << "  " << kindStr << " "
-                      << clang_getTypeKindSpelling(type.kind) << "\n";
+            std::cout << "  \e[31m\e[3mCANT TRANSFORM\e[23m\e[39m: \e[92m"
+                      << clang_getTypeKindSpelling(type.kind) << "\e[39m "
+                      << kindStr << "\n";
 
             return "eee";
         }
@@ -367,38 +392,51 @@ CXChildVisitResult visitEnumDecl(CHILD_VISIT_PARAMS) {
 
 CXChildVisitResult visitTypedef(CHILD_VISIT_PARAMS) {
 
-    let         kind = clang_getCursorKind(cursor);
-    ClientData* data = toClientData(client_data);
+    let         kind      = clang_getCursorKind(cursor);
+    ClientData* data      = toClientData(client_data);
+    bool        isTypeDef = !clang_equalTypes(
+        clang_getCursorType(cursor),
+        clang_getCanonicalType(clang_getCursorType(cursor)));
 
+    if (isTypeDef) {
+        // std::cout << kind << " \e[34m" << cursor << "\e[39m \e[94m"
+        //           << clang_getCanonicalType(clang_getCursorType(cursor))
+        //           << "\e[39m\n";
 
-    clang_visitChildren(
-        cursor,
-        [](CHILD_VISIT_PARAMS) {
-            let kind = clang_getCursorKind(cursor);
+        *(data->outfile) << fmt::format(
+            "type {}* = distinct {} # {}\n\n",
+            cursor,
+            toNimType(clang_getCanonicalType(clang_getCursorType(cursor))),
+            clang_getCursorType(cursor));
+
+    } else {
+        for (auto& subnode : directSubnodes(cursor)) {
+            let kind = clang_getCursorKind(subnode);
             switch (kind) {
                 case CXCursor_StructDecl: {
-                    visitStructDecl(cursor, parent, client_data);
+                    visitStructDecl(subnode, cursor, client_data);
                     break;
                 }
                 case CXCursor_EnumDecl: {
-                    visitEnumDecl(cursor, parent, client_data);
+                    visitEnumDecl(subnode, cursor, client_data);
                     break;
                 }
                 default: {
-
+                    isTypeDef = true;
                     std::cout << cursor << " \e[32m" << kind
                               << "\e[39m \e[93m"
                               << clang_getCanonicalType(
-                                     clang_getCursorType(cursor))
+                                     clang_getCursorType(subnode))
                               << "\e[39m\n";
                 }
             }
-            return CXChildVisit_Continue;
-        },
-        client_data);
+        }
+    }
 
-    // (*outfile) << fmt::format("type {} = distinct {}", cursor,
-    // toNimType)
+
+    // if (isTypeDef) {
+    // }
+
 
     return CXChildVisit_Continue;
 }
@@ -423,6 +461,9 @@ CXChildVisitResult visitToplevel(CHILD_VISIT_PARAMS) {
 }
 
 int main() {
+    Vec<Pair<Str, Str>> translations = {{"Index.h", "index.nim"}};
+
+    // for(auto& translation : translations) {}
     CXIndex           index = clang_createIndex(0, 0);
     CXTranslationUnit unit  = clang_parseTranslationUnit(
         index,
@@ -450,6 +491,7 @@ int main() {
     *data.outfile << "from times import Time\n"
                      "{.deadCodeElim: on.}\n"
                      "{.push callconv: cdecl.}\n"
+                     "import opaque_impls\n"
                      "\n"
                      "when defined(windows):\n"
                      "  const\n"
