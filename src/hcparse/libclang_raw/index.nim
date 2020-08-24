@@ -1,3 +1,11 @@
+import build_system
+import cxcompilation_database
+import cxerror_code
+import cxstring
+import externc
+import fatal_error_handler
+import opaque_impls
+import platform
 from times import Time
 {.deadCodeElim: on.}
 {.push callconv: cdecl.}
@@ -5,13 +13,13 @@ import opaque_impls
 
 when defined(windows):
   const
-    libclang* = "libclang.dll"
+    libclang = "libclang.dll"
 elif defined(macosx):
   const
-    libclang* = "libclang.dylib"
+    libclang = "libclang.dylib"
 else:
   const
-    libclang* = "libclang.so"
+    libclang = "libclang.so"
 
 
 type CXIndex* = distinct pointer # CXIndex
@@ -50,10 +58,10 @@ type
     CXGlobalOpt_None = 0
     CXGlobalOpt_ThreadBackgroundPriorityForIndexing = 1
     CXGlobalOpt_ThreadBackgroundPriorityForEditing = 2
-    CXGlobalOpt_ThreadBackgroundPriorityForAll = 0
+    CXGlobalOpt_ThreadBackgroundPriorityForAll = 4
 
 proc clang_CXIndex_setGlobalOptions*(
-  arg_0: CXIndex, # `CXIndex`
+  arg_1: CXIndex, # `CXIndex`
   options: cuint, # `unsigned int`
 ): void {.
     cdecl,
@@ -62,7 +70,7 @@ proc clang_CXIndex_setGlobalOptions*(
   .}
 
 proc clang_CXIndex_getGlobalOptions*(
-  arg_0: CXIndex, # `CXIndex`
+  arg_1: CXIndex, # `CXIndex`
 ): cuint {.
     cdecl,
     importc: "clang_CXIndex_getGlobalOptions",
@@ -70,7 +78,7 @@ proc clang_CXIndex_getGlobalOptions*(
   .}
 
 proc clang_CXIndex_setInvocationEmissionPathOption*(
-  arg_0: CXIndex, # `CXIndex`
+  arg_1: CXIndex, # `CXIndex`
   path: ptr[cstring], # `const char *`
 ): void {.
     cdecl,
@@ -165,8 +173,7 @@ type
     begin_int_data*: cuint # `unsigned int`
     end_int_data*: cuint # `unsigned int`
 
-proc clang_getNullLocation*(
-): CXSourceLocation {.
+proc clang_getNullLocation*(): CXSourceLocation {.
     cdecl,
     importc: "clang_getNullLocation",
     dynlib: libclang
@@ -218,8 +225,7 @@ proc clang_Location_isFromMainFile*(
     dynlib: libclang
   .}
 
-proc clang_getNullRange*(
-): CXSourceRange {.
+proc clang_getNullRange*(): CXSourceRange {.
     cdecl,
     importc: "clang_getNullRange",
     dynlib: libclang
@@ -445,15 +451,14 @@ proc clang_formatDiagnostic*(
     dynlib: libclang
   .}
 
-proc clang_defaultDiagnosticDisplayOptions*(
-): cuint {.
+proc clang_defaultDiagnosticDisplayOptions*(): cuint {.
     cdecl,
     importc: "clang_defaultDiagnosticDisplayOptions",
     dynlib: libclang
   .}
 
 proc clang_getDiagnosticSeverity*(
-  arg_0: CXDiagnostic, # `CXDiagnostic`
+  arg_1: CXDiagnostic, # `CXDiagnostic`
 ): CXDiagnosticSeverity {.
     cdecl,
     importc: "clang_getDiagnosticSeverity",
@@ -461,7 +466,7 @@ proc clang_getDiagnosticSeverity*(
   .}
 
 proc clang_getDiagnosticLocation*(
-  arg_0: CXDiagnostic, # `CXDiagnostic`
+  arg_1: CXDiagnostic, # `CXDiagnostic`
 ): CXSourceLocation {.
     cdecl,
     importc: "clang_getDiagnosticLocation",
@@ -469,7 +474,7 @@ proc clang_getDiagnosticLocation*(
   .}
 
 proc clang_getDiagnosticSpelling*(
-  arg_0: CXDiagnostic, # `CXDiagnostic`
+  arg_1: CXDiagnostic, # `CXDiagnostic`
 ): CXString {.
     cdecl,
     importc: "clang_getDiagnosticSpelling",
@@ -486,7 +491,7 @@ proc clang_getDiagnosticOption*(
   .}
 
 proc clang_getDiagnosticCategory*(
-  arg_0: CXDiagnostic, # `CXDiagnostic`
+  arg_1: CXDiagnostic, # `CXDiagnostic`
 ): cuint {.
     cdecl,
     importc: "clang_getDiagnosticCategory",
@@ -502,7 +507,7 @@ proc clang_getDiagnosticCategoryName*(
   .}
 
 proc clang_getDiagnosticCategoryText*(
-  arg_0: CXDiagnostic, # `CXDiagnostic`
+  arg_1: CXDiagnostic, # `CXDiagnostic`
 ): CXString {.
     cdecl,
     importc: "clang_getDiagnosticCategoryText",
@@ -510,7 +515,7 @@ proc clang_getDiagnosticCategoryText*(
   .}
 
 proc clang_getDiagnosticNumRanges*(
-  arg_0: CXDiagnostic, # `CXDiagnostic`
+  arg_1: CXDiagnostic, # `CXDiagnostic`
 ): cuint {.
     cdecl,
     importc: "clang_getDiagnosticNumRanges",
@@ -584,8 +589,7 @@ proc clang_createTranslationUnit2*(
     dynlib: libclang
   .}
 
-proc clang_defaultEditingTranslationUnitOptions*(
-): cuint {.
+proc clang_defaultEditingTranslationUnitOptions*(): cuint {.
     cdecl,
     importc: "clang_defaultEditingTranslationUnitOptions",
     dynlib: libclang
@@ -654,7 +658,7 @@ proc clang_saveTranslationUnit*(
   .}
 
 proc clang_suspendTranslationUnit*(
-  arg_0: CXTranslationUnit, # `CXTranslationUnit`
+  arg_1: CXTranslationUnit, # `CXTranslationUnit`
 ): cuint {.
     cdecl,
     importc: "clang_suspendTranslationUnit",
@@ -662,7 +666,7 @@ proc clang_suspendTranslationUnit*(
   .}
 
 proc clang_disposeTranslationUnit*(
-  arg_0: CXTranslationUnit, # `CXTranslationUnit`
+  arg_1: CXTranslationUnit, # `CXTranslationUnit`
 ): void {.
     cdecl,
     importc: "clang_disposeTranslationUnit",
@@ -761,15 +765,14 @@ type
     xdata*: cint # `int`
     data*: array[3, const void *] # `const void *[3]`
 
-proc clang_getNullCursor*(
-): CXCursor {.
+proc clang_getNullCursor*(): CXCursor {.
     cdecl,
     importc: "clang_getNullCursor",
     dynlib: libclang
   .}
 
 proc clang_getTranslationUnitCursor*(
-  arg_0: CXTranslationUnit, # `CXTranslationUnit`
+  arg_1: CXTranslationUnit, # `CXTranslationUnit`
 ): CXCursor {.
     cdecl,
     importc: "clang_getTranslationUnitCursor",
@@ -777,8 +780,8 @@ proc clang_getTranslationUnitCursor*(
   .}
 
 proc clang_equalCursors*(
-  arg_0: CXCursor, # `CXCursor`
   arg_1: CXCursor, # `CXCursor`
+  arg_2: CXCursor, # `CXCursor`
 ): cuint {.
     cdecl,
     importc: "clang_equalCursors",
@@ -794,7 +797,7 @@ proc clang_Cursor_isNull*(
   .}
 
 proc clang_hashCursor*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): cuint {.
     cdecl,
     importc: "clang_hashCursor",
@@ -802,7 +805,7 @@ proc clang_hashCursor*(
   .}
 
 proc clang_getCursorKind*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): CXCursorKind {.
     cdecl,
     importc: "clang_getCursorKind",
@@ -810,7 +813,7 @@ proc clang_getCursorKind*(
   .}
 
 proc clang_isDeclaration*(
-  arg_0: CXCursorKind, # `enum CXCursorKind`
+  arg_1: CXCursorKind, # `enum CXCursorKind`
 ): cuint {.
     cdecl,
     importc: "clang_isDeclaration",
@@ -818,7 +821,7 @@ proc clang_isDeclaration*(
   .}
 
 proc clang_isInvalidDeclaration*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): cuint {.
     cdecl,
     importc: "clang_isInvalidDeclaration",
@@ -826,7 +829,7 @@ proc clang_isInvalidDeclaration*(
   .}
 
 proc clang_isReference*(
-  arg_0: CXCursorKind, # `enum CXCursorKind`
+  arg_1: CXCursorKind, # `enum CXCursorKind`
 ): cuint {.
     cdecl,
     importc: "clang_isReference",
@@ -834,7 +837,7 @@ proc clang_isReference*(
   .}
 
 proc clang_isExpression*(
-  arg_0: CXCursorKind, # `enum CXCursorKind`
+  arg_1: CXCursorKind, # `enum CXCursorKind`
 ): cuint {.
     cdecl,
     importc: "clang_isExpression",
@@ -842,7 +845,7 @@ proc clang_isExpression*(
   .}
 
 proc clang_isStatement*(
-  arg_0: CXCursorKind, # `enum CXCursorKind`
+  arg_1: CXCursorKind, # `enum CXCursorKind`
 ): cuint {.
     cdecl,
     importc: "clang_isStatement",
@@ -850,7 +853,7 @@ proc clang_isStatement*(
   .}
 
 proc clang_isAttribute*(
-  arg_0: CXCursorKind, # `enum CXCursorKind`
+  arg_1: CXCursorKind, # `enum CXCursorKind`
 ): cuint {.
     cdecl,
     importc: "clang_isAttribute",
@@ -866,7 +869,7 @@ proc clang_Cursor_hasAttrs*(
   .}
 
 proc clang_isInvalid*(
-  arg_0: CXCursorKind, # `enum CXCursorKind`
+  arg_1: CXCursorKind, # `enum CXCursorKind`
 ): cuint {.
     cdecl,
     importc: "clang_isInvalid",
@@ -874,7 +877,7 @@ proc clang_isInvalid*(
   .}
 
 proc clang_isTranslationUnit*(
-  arg_0: CXCursorKind, # `enum CXCursorKind`
+  arg_1: CXCursorKind, # `enum CXCursorKind`
 ): cuint {.
     cdecl,
     importc: "clang_isTranslationUnit",
@@ -882,7 +885,7 @@ proc clang_isTranslationUnit*(
   .}
 
 proc clang_isPreprocessing*(
-  arg_0: CXCursorKind, # `enum CXCursorKind`
+  arg_1: CXCursorKind, # `enum CXCursorKind`
 ): cuint {.
     cdecl,
     importc: "clang_isPreprocessing",
@@ -890,7 +893,7 @@ proc clang_isPreprocessing*(
   .}
 
 proc clang_isUnexposed*(
-  arg_0: CXCursorKind, # `enum CXCursorKind`
+  arg_1: CXCursorKind, # `enum CXCursorKind`
 ): cuint {.
     cdecl,
     importc: "clang_isUnexposed",
@@ -969,7 +972,7 @@ proc clang_getCursorTLSKind*(
   .}
 
 proc clang_Cursor_getTranslationUnit*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): CXTranslationUnit {.
     cdecl,
     importc: "clang_Cursor_getTranslationUnit",
@@ -978,8 +981,7 @@ proc clang_Cursor_getTranslationUnit*(
 
 type CXCursorSet* = distinct ptr[CXCursorSetImpl] # CXCursorSet
 
-proc clang_createCXCursorSet*(
-): CXCursorSet {.
+proc clang_createCXCursorSet*(): CXCursorSet {.
     cdecl,
     importc: "clang_createCXCursorSet",
     dynlib: libclang
@@ -1054,8 +1056,8 @@ proc clang_getIncludedFile*(
   .}
 
 proc clang_getCursor*(
-  arg_0: CXTranslationUnit, # `CXTranslationUnit`
-  arg_1: CXSourceLocation, # `CXSourceLocation`
+  arg_1: CXTranslationUnit, # `CXTranslationUnit`
+  arg_2: CXSourceLocation, # `CXSourceLocation`
 ): CXCursor {.
     cdecl,
     importc: "clang_getCursor",
@@ -1063,7 +1065,7 @@ proc clang_getCursor*(
   .}
 
 proc clang_getCursorLocation*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): CXSourceLocation {.
     cdecl,
     importc: "clang_getCursorLocation",
@@ -1071,7 +1073,7 @@ proc clang_getCursorLocation*(
   .}
 
 proc clang_getCursorExtent*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): CXSourceRange {.
     cdecl,
     importc: "clang_getCursorExtent",
@@ -1599,7 +1601,7 @@ proc clang_Cursor_isBitField*(
   .}
 
 proc clang_isVirtualBase*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): cuint {.
     cdecl,
     importc: "clang_isVirtualBase",
@@ -1607,7 +1609,7 @@ proc clang_isVirtualBase*(
   .}
 
 proc clang_getCXXAccessSpecifier*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): CX_CXXAccessSpecifier {.
     cdecl,
     importc: "clang_getCXXAccessSpecifier",
@@ -1615,7 +1617,7 @@ proc clang_getCXXAccessSpecifier*(
   .}
 
 proc clang_Cursor_getStorageClass*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): CX_StorageClass {.
     cdecl,
     importc: "clang_Cursor_getStorageClass",
@@ -1640,14 +1642,14 @@ proc clang_getOverloadedDecl*(
   .}
 
 proc clang_getIBOutletCollectionType*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): CXType {.
     cdecl,
     importc: "clang_getIBOutletCollectionType",
     dynlib: libclang
   .}
 
-type CXCursorVisitor* = distinct ptr[proc(a0: CXCursor, a1: CXCursor, a2: pointer): enum CXChildVisitResult {.cdecl.}] # CXCursorVisitor
+type CXCursorVisitor* = distinct proc(a0: CXCursor, a1: CXCursor, a2: pointer): enum CXChildVisitResult {.cdecl.} # CXCursorVisitor
 
 proc clang_visitChildren*(
   parent: CXCursor, # `CXCursor`
@@ -1660,7 +1662,7 @@ proc clang_visitChildren*(
   .}
 
 proc clang_getCursorUSR*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): CXString {.
     cdecl,
     importc: "clang_getCursorUSR",
@@ -1721,7 +1723,7 @@ proc clang_constructUSR_ObjCProperty*(
   .}
 
 proc clang_getCursorSpelling*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): CXString {.
     cdecl,
     importc: "clang_getCursorSpelling",
@@ -1729,7 +1731,7 @@ proc clang_getCursorSpelling*(
   .}
 
 proc clang_Cursor_getSpellingNameRange*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
   pieceIndex: cuint, # `unsigned int`
   options: cuint, # `unsigned int`
 ): CXSourceRange {.
@@ -1760,7 +1762,7 @@ proc clang_PrintingPolicy_setProperty*(
   .}
 
 proc clang_getCursorPrintingPolicy*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): CXPrintingPolicy {.
     cdecl,
     importc: "clang_getCursorPrintingPolicy",
@@ -1785,7 +1787,7 @@ proc clang_getCursorPrettyPrinted*(
   .}
 
 proc clang_getCursorDisplayName*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): CXString {.
     cdecl,
     importc: "clang_getCursorDisplayName",
@@ -1793,7 +1795,7 @@ proc clang_getCursorDisplayName*(
   .}
 
 proc clang_getCursorReferenced*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): CXCursor {.
     cdecl,
     importc: "clang_getCursorReferenced",
@@ -1801,7 +1803,7 @@ proc clang_getCursorReferenced*(
   .}
 
 proc clang_getCursorDefinition*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): CXCursor {.
     cdecl,
     importc: "clang_getCursorDefinition",
@@ -1809,7 +1811,7 @@ proc clang_getCursorDefinition*(
   .}
 
 proc clang_isCursorDefinition*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): cuint {.
     cdecl,
     importc: "clang_isCursorDefinition",
@@ -1817,7 +1819,7 @@ proc clang_isCursorDefinition*(
   .}
 
 proc clang_getCanonicalCursor*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): CXCursor {.
     cdecl,
     importc: "clang_getCanonicalCursor",
@@ -1825,7 +1827,7 @@ proc clang_getCanonicalCursor*(
   .}
 
 proc clang_Cursor_getObjCSelectorIndex*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): cint {.
     cdecl,
     importc: "clang_Cursor_getObjCSelectorIndex",
@@ -1960,7 +1962,7 @@ proc clang_Cursor_getBriefCommentText*(
   .}
 
 proc clang_Cursor_getMangling*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): CXString {.
     cdecl,
     importc: "clang_Cursor_getMangling",
@@ -1968,7 +1970,7 @@ proc clang_Cursor_getMangling*(
   .}
 
 proc clang_Cursor_getCXXManglings*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): ptr[CXStringSet] {.
     cdecl,
     importc: "clang_Cursor_getCXXManglings",
@@ -1976,7 +1978,7 @@ proc clang_Cursor_getCXXManglings*(
   .}
 
 proc clang_Cursor_getObjCManglings*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
 ): ptr[CXStringSet] {.
     cdecl,
     importc: "clang_Cursor_getObjCManglings",
@@ -1994,8 +1996,8 @@ proc clang_Cursor_getModule*(
   .}
 
 proc clang_getModuleForFile*(
-  arg_0: CXTranslationUnit, # `CXTranslationUnit`
-  arg_1: CXFile, # `CXFile`
+  arg_1: CXTranslationUnit, # `CXTranslationUnit`
+  arg_2: CXFile, # `CXFile`
 ): CXModule {.
     cdecl,
     importc: "clang_getModuleForFile",
@@ -2043,7 +2045,7 @@ proc clang_Module_isSystem*(
   .}
 
 proc clang_Module_getNumTopLevelHeaders*(
-  arg_0: CXTranslationUnit, # `CXTranslationUnit`
+  arg_1: CXTranslationUnit, # `CXTranslationUnit`
   module: CXModule, # `CXModule`
 ): cuint {.
     cdecl,
@@ -2052,7 +2054,7 @@ proc clang_Module_getNumTopLevelHeaders*(
   .}
 
 proc clang_Module_getTopLevelHeader*(
-  arg_0: CXTranslationUnit, # `CXTranslationUnit`
+  arg_1: CXTranslationUnit, # `CXTranslationUnit`
   module: CXModule, # `CXModule`
   index: cuint, # `unsigned int`
 ): CXFile {.
@@ -2206,7 +2208,7 @@ proc clang_getToken*(
   .}
 
 proc clang_getTokenKind*(
-  arg_0: CXToken, # `CXToken`
+  arg_1: CXToken, # `CXToken`
 ): CXTokenKind {.
     cdecl,
     importc: "clang_getTokenKind",
@@ -2214,8 +2216,8 @@ proc clang_getTokenKind*(
   .}
 
 proc clang_getTokenSpelling*(
-  arg_0: CXTranslationUnit, # `CXTranslationUnit`
-  arg_1: CXToken, # `CXToken`
+  arg_1: CXTranslationUnit, # `CXTranslationUnit`
+  arg_2: CXToken, # `CXToken`
 ): CXString {.
     cdecl,
     importc: "clang_getTokenSpelling",
@@ -2223,8 +2225,8 @@ proc clang_getTokenSpelling*(
   .}
 
 proc clang_getTokenLocation*(
-  arg_0: CXTranslationUnit, # `CXTranslationUnit`
-  arg_1: CXToken, # `CXToken`
+  arg_1: CXTranslationUnit, # `CXTranslationUnit`
+  arg_2: CXToken, # `CXToken`
 ): CXSourceLocation {.
     cdecl,
     importc: "clang_getTokenLocation",
@@ -2232,8 +2234,8 @@ proc clang_getTokenLocation*(
   .}
 
 proc clang_getTokenExtent*(
-  arg_0: CXTranslationUnit, # `CXTranslationUnit`
-  arg_1: CXToken, # `CXToken`
+  arg_1: CXTranslationUnit, # `CXTranslationUnit`
+  arg_2: CXToken, # `CXToken`
 ): CXSourceRange {.
     cdecl,
     importc: "clang_getTokenExtent",
@@ -2281,7 +2283,7 @@ proc clang_getCursorKindSpelling*(
   .}
 
 proc clang_getDefinitionSpellingAndExtent*(
-  arg_0: CXCursor, # `CXCursor`
+  arg_1: CXCursor, # `CXCursor`
   startBuf: ptr[ptr[cstring]], # `const char **`
   endBuf: ptr[ptr[cstring]], # `const char **`
   startLine: ptr[cuint], # `unsigned int *`
@@ -2294,15 +2296,14 @@ proc clang_getDefinitionSpellingAndExtent*(
     dynlib: libclang
   .}
 
-proc clang_enableStackTraces*(
-): void {.
+proc clang_enableStackTraces*(): void {.
     cdecl,
     importc: "clang_enableStackTraces",
     dynlib: libclang
   .}
 
 proc clang_executeOnThread*(
-  fn: ptr[proc(a0: pointer): void {.cdecl.}], # `void (*)(void *)`
+  fn: proc(a0: pointer): void {.cdecl.}, # `void (*)(void *)`
   user_data: pointer, # `void *`
   stack_size: cuint, # `unsigned int`
 ): void {.
@@ -2436,8 +2437,7 @@ proc clang_getCompletionFixIt*(
     dynlib: libclang
   .}
 
-proc clang_defaultCodeCompleteOptions*(
-): cuint {.
+proc clang_defaultCodeCompleteOptions*(): cuint {.
     cdecl,
     importc: "clang_defaultCodeCompleteOptions",
     dynlib: libclang
@@ -2524,8 +2524,7 @@ proc clang_codeCompleteGetObjCSelector*(
     dynlib: libclang
   .}
 
-proc clang_getClangVersion*(
-): CXString {.
+proc clang_getClangVersion*(): CXString {.
     cdecl,
     importc: "clang_getClangVersion",
     dynlib: libclang
@@ -2539,7 +2538,7 @@ proc clang_toggleCrashRecovery*(
     dynlib: libclang
   .}
 
-type CXInclusionVisitor* = distinct ptr[proc(a0: pointer, a1: ptr[CXSourceLocation], a2: cuint, a3: pointer): void {.cdecl.}] # CXInclusionVisitor
+type CXInclusionVisitor* = distinct proc(a0: pointer, a1: ptr[CXSourceLocation], a2: cuint, a3: pointer): void {.cdecl.} # CXInclusionVisitor
 
 proc clang_getInclusions*(
   tu: CXTranslationUnit, # `CXTranslationUnit`
@@ -2655,7 +2654,7 @@ proc clang_getRemappingsFromFileList*(
   .}
 
 proc clang_remap_getNumFiles*(
-  arg_0: CXRemapping, # `CXRemapping`
+  arg_1: CXRemapping, # `CXRemapping`
 ): cuint {.
     cdecl,
     importc: "clang_remap_getNumFiles",
@@ -2663,7 +2662,7 @@ proc clang_remap_getNumFiles*(
   .}
 
 proc clang_remap_getFilenames*(
-  arg_0: CXRemapping, # `CXRemapping`
+  arg_1: CXRemapping, # `CXRemapping`
   index: cuint, # `unsigned int`
   original: ptr[CXString], # `CXString *`
   transformed: ptr[CXString], # `CXString *`
@@ -2674,7 +2673,7 @@ proc clang_remap_getFilenames*(
   .}
 
 proc clang_remap_dispose*(
-  arg_0: CXRemapping, # `CXRemapping`
+  arg_1: CXRemapping, # `CXRemapping`
 ): void {.
     cdecl,
     importc: "clang_remap_dispose",
@@ -2684,7 +2683,7 @@ proc clang_remap_dispose*(
 type
   CXCursorAndRangeVisitor* {.pure, bycopy.} = object
     context*: pointer # `void *`
-    visit*: ptr[proc(a0: pointer, a1: CXCursor, a2: CXSourceRange): CXVisitorResult {.cdecl.}] # `enum CXVisitorResult (*)(void *, CXCursor, CXSourceRange)`
+    visit*: proc(a0: pointer, a1: CXCursor, a2: CXSourceRange): CXVisitorResult {.cdecl.} # `enum CXVisitorResult (*)(void *, CXCursor, CXSourceRange)`
 
 type
   CXResult* {.pure, size: sizeof(cint).} = enum
@@ -2925,17 +2924,17 @@ type
 
 type
   IndexerCallbacks* {.pure, bycopy.} = object
-    abortQuery*: ptr[proc(a0: CXClientData, a1: pointer): cint {.cdecl.}] # `int (*)(CXClientData, void *)`
-    diagnostic*: ptr[proc(a0: CXClientData, a1: CXDiagnosticSet, a2: pointer): void {.cdecl.}] # `void (*)(CXClientData, CXDiagnosticSet, void *)`
-    enteredMainFile*: ptr[proc(a0: CXClientData, a1: CXFile, a2: pointer): CXIdxClientFile {.cdecl.}] # `CXIdxClientFile (*)(CXClientData, CXFile, void *)`
-    ppIncludedFile*: ptr[proc(a0: CXClientData, a1: ptr[const CXIdxIncludedFileInfo]): CXIdxClientFile {.cdecl.}] # `CXIdxClientFile (*)(CXClientData, const CXIdxIncludedFileInfo *)`
-    importedASTFile*: ptr[proc(a0: CXClientData, a1: ptr[const CXIdxImportedASTFileInfo]): CXIdxClientASTFile {.cdecl.}] # `CXIdxClientASTFile (*)(CXClientData, const CXIdxImportedASTFileInfo *)`
-    startedTranslationUnit*: ptr[proc(a0: CXClientData, a1: pointer): CXIdxClientContainer {.cdecl.}] # `CXIdxClientContainer (*)(CXClientData, void *)`
-    indexDeclaration*: ptr[proc(a0: CXClientData, a1: ptr[const CXIdxDeclInfo]): void {.cdecl.}] # `void (*)(CXClientData, const CXIdxDeclInfo *)`
-    indexEntityReference*: ptr[proc(a0: CXClientData, a1: ptr[const CXIdxEntityRefInfo]): void {.cdecl.}] # `void (*)(CXClientData, const CXIdxEntityRefInfo *)`
+    abortQuery*: proc(a0: CXClientData, a1: pointer): cint {.cdecl.} # `int (*)(CXClientData, void *)`
+    diagnostic*: proc(a0: CXClientData, a1: CXDiagnosticSet, a2: pointer): void {.cdecl.} # `void (*)(CXClientData, CXDiagnosticSet, void *)`
+    enteredMainFile*: proc(a0: CXClientData, a1: CXFile, a2: pointer): CXIdxClientFile {.cdecl.} # `CXIdxClientFile (*)(CXClientData, CXFile, void *)`
+    ppIncludedFile*: proc(a0: CXClientData, a1: ptr[const CXIdxIncludedFileInfo]): CXIdxClientFile {.cdecl.} # `CXIdxClientFile (*)(CXClientData, const CXIdxIncludedFileInfo *)`
+    importedASTFile*: proc(a0: CXClientData, a1: ptr[const CXIdxImportedASTFileInfo]): CXIdxClientASTFile {.cdecl.} # `CXIdxClientASTFile (*)(CXClientData, const CXIdxImportedASTFileInfo *)`
+    startedTranslationUnit*: proc(a0: CXClientData, a1: pointer): CXIdxClientContainer {.cdecl.} # `CXIdxClientContainer (*)(CXClientData, void *)`
+    indexDeclaration*: proc(a0: CXClientData, a1: ptr[const CXIdxDeclInfo]): void {.cdecl.} # `void (*)(CXClientData, const CXIdxDeclInfo *)`
+    indexEntityReference*: proc(a0: CXClientData, a1: ptr[const CXIdxEntityRefInfo]): void {.cdecl.} # `void (*)(CXClientData, const CXIdxEntityRefInfo *)`
 
 proc clang_index_isEntityObjCContainerKind*(
-  arg_0: CXIdxEntityKind, # `CXIdxEntityKind`
+  arg_1: CXIdxEntityKind, # `CXIdxEntityKind`
 ): cint {.
     cdecl,
     importc: "clang_index_isEntityObjCContainerKind",
@@ -2943,7 +2942,7 @@ proc clang_index_isEntityObjCContainerKind*(
   .}
 
 proc clang_index_getObjCContainerDeclInfo*(
-  arg_0: ptr[const CXIdxDeclInfo], # `const CXIdxDeclInfo *`
+  arg_1: ptr[const CXIdxDeclInfo], # `const CXIdxDeclInfo *`
 ): ptr[const CXIdxObjCContainerDeclInfo] {.
     cdecl,
     importc: "clang_index_getObjCContainerDeclInfo",
@@ -2951,7 +2950,7 @@ proc clang_index_getObjCContainerDeclInfo*(
   .}
 
 proc clang_index_getObjCInterfaceDeclInfo*(
-  arg_0: ptr[const CXIdxDeclInfo], # `const CXIdxDeclInfo *`
+  arg_1: ptr[const CXIdxDeclInfo], # `const CXIdxDeclInfo *`
 ): ptr[const CXIdxObjCInterfaceDeclInfo] {.
     cdecl,
     importc: "clang_index_getObjCInterfaceDeclInfo",
@@ -2959,7 +2958,7 @@ proc clang_index_getObjCInterfaceDeclInfo*(
   .}
 
 proc clang_index_getObjCCategoryDeclInfo*(
-  arg_0: ptr[const CXIdxDeclInfo], # `const CXIdxDeclInfo *`
+  arg_1: ptr[const CXIdxDeclInfo], # `const CXIdxDeclInfo *`
 ): ptr[const CXIdxObjCCategoryDeclInfo] {.
     cdecl,
     importc: "clang_index_getObjCCategoryDeclInfo",
@@ -2967,7 +2966,7 @@ proc clang_index_getObjCCategoryDeclInfo*(
   .}
 
 proc clang_index_getObjCProtocolRefListInfo*(
-  arg_0: ptr[const CXIdxDeclInfo], # `const CXIdxDeclInfo *`
+  arg_1: ptr[const CXIdxDeclInfo], # `const CXIdxDeclInfo *`
 ): ptr[const CXIdxObjCProtocolRefListInfo] {.
     cdecl,
     importc: "clang_index_getObjCProtocolRefListInfo",
@@ -2975,7 +2974,7 @@ proc clang_index_getObjCProtocolRefListInfo*(
   .}
 
 proc clang_index_getObjCPropertyDeclInfo*(
-  arg_0: ptr[const CXIdxDeclInfo], # `const CXIdxDeclInfo *`
+  arg_1: ptr[const CXIdxDeclInfo], # `const CXIdxDeclInfo *`
 ): ptr[const CXIdxObjCPropertyDeclInfo] {.
     cdecl,
     importc: "clang_index_getObjCPropertyDeclInfo",
@@ -2983,7 +2982,7 @@ proc clang_index_getObjCPropertyDeclInfo*(
   .}
 
 proc clang_index_getIBOutletCollectionAttrInfo*(
-  arg_0: ptr[const CXIdxAttrInfo], # `const CXIdxAttrInfo *`
+  arg_1: ptr[const CXIdxAttrInfo], # `const CXIdxAttrInfo *`
 ): ptr[const CXIdxIBOutletCollectionAttrInfo] {.
     cdecl,
     importc: "clang_index_getIBOutletCollectionAttrInfo",
@@ -2991,7 +2990,7 @@ proc clang_index_getIBOutletCollectionAttrInfo*(
   .}
 
 proc clang_index_getCXXClassDeclInfo*(
-  arg_0: ptr[const CXIdxDeclInfo], # `const CXIdxDeclInfo *`
+  arg_1: ptr[const CXIdxDeclInfo], # `const CXIdxDeclInfo *`
 ): ptr[const CXIdxCXXClassDeclInfo] {.
     cdecl,
     importc: "clang_index_getCXXClassDeclInfo",
@@ -2999,7 +2998,7 @@ proc clang_index_getCXXClassDeclInfo*(
   .}
 
 proc clang_index_getClientContainer*(
-  arg_0: ptr[const CXIdxContainerInfo], # `const CXIdxContainerInfo *`
+  arg_1: ptr[const CXIdxContainerInfo], # `const CXIdxContainerInfo *`
 ): CXIdxClientContainer {.
     cdecl,
     importc: "clang_index_getClientContainer",
@@ -3007,8 +3006,8 @@ proc clang_index_getClientContainer*(
   .}
 
 proc clang_index_setClientContainer*(
-  arg_0: ptr[const CXIdxContainerInfo], # `const CXIdxContainerInfo *`
-  arg_1: CXIdxClientContainer, # `CXIdxClientContainer`
+  arg_1: ptr[const CXIdxContainerInfo], # `const CXIdxContainerInfo *`
+  arg_2: CXIdxClientContainer, # `CXIdxClientContainer`
 ): void {.
     cdecl,
     importc: "clang_index_setClientContainer",
@@ -3016,7 +3015,7 @@ proc clang_index_setClientContainer*(
   .}
 
 proc clang_index_getClientEntity*(
-  arg_0: ptr[const CXIdxEntityInfo], # `const CXIdxEntityInfo *`
+  arg_1: ptr[const CXIdxEntityInfo], # `const CXIdxEntityInfo *`
 ): CXIdxClientEntity {.
     cdecl,
     importc: "clang_index_getClientEntity",
@@ -3024,8 +3023,8 @@ proc clang_index_getClientEntity*(
   .}
 
 proc clang_index_setClientEntity*(
-  arg_0: ptr[const CXIdxEntityInfo], # `const CXIdxEntityInfo *`
-  arg_1: CXIdxClientEntity, # `CXIdxClientEntity`
+  arg_1: ptr[const CXIdxEntityInfo], # `const CXIdxEntityInfo *`
+  arg_2: CXIdxClientEntity, # `CXIdxClientEntity`
 ): void {.
     cdecl,
     importc: "clang_index_setClientEntity",
@@ -3043,7 +3042,7 @@ proc clang_IndexAction_create*(
   .}
 
 proc clang_IndexAction_dispose*(
-  arg_0: CXIndexAction, # `CXIndexAction`
+  arg_1: CXIndexAction, # `CXIndexAction`
 ): void {.
     cdecl,
     importc: "clang_IndexAction_dispose",
@@ -3060,7 +3059,7 @@ type
     CXIndexOpt_SkipParsedBodiesInSession = 16
 
 proc clang_indexSourceFile*(
-  arg_0: CXIndexAction, # `CXIndexAction`
+  arg_1: CXIndexAction, # `CXIndexAction`
   client_data: CXClientData, # `CXClientData`
   index_callbacks: ptr[IndexerCallbacks], # `IndexerCallbacks *`
   index_callbacks_size: cuint, # `unsigned int`
@@ -3079,7 +3078,7 @@ proc clang_indexSourceFile*(
   .}
 
 proc clang_indexSourceFileFullArgv*(
-  arg_0: CXIndexAction, # `CXIndexAction`
+  arg_1: CXIndexAction, # `CXIndexAction`
   client_data: CXClientData, # `CXClientData`
   index_callbacks: ptr[IndexerCallbacks], # `IndexerCallbacks *`
   index_callbacks_size: cuint, # `unsigned int`
@@ -3098,12 +3097,12 @@ proc clang_indexSourceFileFullArgv*(
   .}
 
 proc clang_indexTranslationUnit*(
-  arg_0: CXIndexAction, # `CXIndexAction`
+  arg_1: CXIndexAction, # `CXIndexAction`
   client_data: CXClientData, # `CXClientData`
   index_callbacks: ptr[IndexerCallbacks], # `IndexerCallbacks *`
   index_callbacks_size: cuint, # `unsigned int`
   index_options: cuint, # `unsigned int`
-  arg_1: CXTranslationUnit, # `CXTranslationUnit`
+  arg_2: CXTranslationUnit, # `CXTranslationUnit`
 ): cint {.
     cdecl,
     importc: "clang_indexTranslationUnit",
@@ -3131,7 +3130,7 @@ proc clang_indexLoc_getCXSourceLocation*(
     dynlib: libclang
   .}
 
-type CXFieldVisitor* = distinct ptr[proc(a0: CXCursor, a1: pointer): enum CXVisitorResult {.cdecl.}] # CXFieldVisitor
+type CXFieldVisitor* = distinct proc(a0: CXCursor, a1: pointer): enum CXVisitorResult {.cdecl.} # CXFieldVisitor
 
 proc clang_Type_visitFields*(
   t: CXType, # `CXType`

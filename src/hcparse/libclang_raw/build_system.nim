@@ -1,3 +1,7 @@
+import cxerror_code
+import cxstring
+import platform
+import externc
 from times import Time
 {.deadCodeElim: on.}
 {.push callconv: cdecl.}
@@ -5,17 +9,16 @@ import opaque_impls
 
 when defined(windows):
   const
-    libclang* = "libclang.dll"
+    libclang = "libclang.dll"
 elif defined(macosx):
   const
-    libclang* = "libclang.dylib"
+    libclang = "libclang.dylib"
 else:
   const
-    libclang* = "libclang.so"
+    libclang = "libclang.so"
 
 
-proc clang_getBuildSessionTimestamp*(
-): culonglong {.
+proc clang_getBuildSessionTimestamp*(): culonglong {.
     cdecl,
     importc: "clang_getBuildSessionTimestamp",
     dynlib: libclang
@@ -32,7 +35,7 @@ proc clang_VirtualFileOverlay_create*(
   .}
 
 proc clang_VirtualFileOverlay_addFileMapping*(
-  arg_0: CXVirtualFileOverlay, # `CXVirtualFileOverlay`
+  arg_1: CXVirtualFileOverlay, # `CXVirtualFileOverlay`
   virtualPath: ptr[cstring], # `const char *`
   realPath: ptr[cstring], # `const char *`
 ): CXErrorCode {.
@@ -42,7 +45,7 @@ proc clang_VirtualFileOverlay_addFileMapping*(
   .}
 
 proc clang_VirtualFileOverlay_setCaseSensitivity*(
-  arg_0: CXVirtualFileOverlay, # `CXVirtualFileOverlay`
+  arg_1: CXVirtualFileOverlay, # `CXVirtualFileOverlay`
   caseSensitive: cint, # `int`
 ): CXErrorCode {.
     cdecl,
@@ -51,7 +54,7 @@ proc clang_VirtualFileOverlay_setCaseSensitivity*(
   .}
 
 proc clang_VirtualFileOverlay_writeToBuffer*(
-  arg_0: CXVirtualFileOverlay, # `CXVirtualFileOverlay`
+  arg_1: CXVirtualFileOverlay, # `CXVirtualFileOverlay`
   options: cuint, # `unsigned int`
   out_buffer_ptr: ptr[ptr[cstring]], # `char **`
   out_buffer_size: ptr[cuint], # `unsigned int *`
@@ -70,7 +73,7 @@ proc clang_free*(
   .}
 
 proc clang_VirtualFileOverlay_dispose*(
-  arg_0: CXVirtualFileOverlay, # `CXVirtualFileOverlay`
+  arg_1: CXVirtualFileOverlay, # `CXVirtualFileOverlay`
 ): void {.
     cdecl,
     importc: "clang_VirtualFileOverlay_dispose",
@@ -88,7 +91,7 @@ proc clang_ModuleMapDescriptor_create*(
   .}
 
 proc clang_ModuleMapDescriptor_setFrameworkModuleName*(
-  arg_0: CXModuleMapDescriptor, # `CXModuleMapDescriptor`
+  arg_1: CXModuleMapDescriptor, # `CXModuleMapDescriptor`
   name: ptr[cstring], # `const char *`
 ): CXErrorCode {.
     cdecl,
@@ -97,7 +100,7 @@ proc clang_ModuleMapDescriptor_setFrameworkModuleName*(
   .}
 
 proc clang_ModuleMapDescriptor_setUmbrellaHeader*(
-  arg_0: CXModuleMapDescriptor, # `CXModuleMapDescriptor`
+  arg_1: CXModuleMapDescriptor, # `CXModuleMapDescriptor`
   name: ptr[cstring], # `const char *`
 ): CXErrorCode {.
     cdecl,
@@ -106,7 +109,7 @@ proc clang_ModuleMapDescriptor_setUmbrellaHeader*(
   .}
 
 proc clang_ModuleMapDescriptor_writeToBuffer*(
-  arg_0: CXModuleMapDescriptor, # `CXModuleMapDescriptor`
+  arg_1: CXModuleMapDescriptor, # `CXModuleMapDescriptor`
   options: cuint, # `unsigned int`
   out_buffer_ptr: ptr[ptr[cstring]], # `char **`
   out_buffer_size: ptr[cuint], # `unsigned int *`
@@ -117,7 +120,7 @@ proc clang_ModuleMapDescriptor_writeToBuffer*(
   .}
 
 proc clang_ModuleMapDescriptor_dispose*(
-  arg_0: CXModuleMapDescriptor, # `CXModuleMapDescriptor`
+  arg_1: CXModuleMapDescriptor, # `CXModuleMapDescriptor`
 ): void {.
     cdecl,
     importc: "clang_ModuleMapDescriptor_dispose",

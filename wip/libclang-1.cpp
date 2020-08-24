@@ -114,6 +114,8 @@ Str toNimType(CXType type, int level = 0) {
             CXType pointee = clang_getPointeeType(type);
             if (pointee.kind == CXType_Void) {
                 return "pointer";
+            } else if (pointee.kind == CXType_FunctionProto) {
+                return toNimType(pointee);
             } else {
                 return fmt::format(
                     "ptr[{}]", toNimType(pointee, level + 1));
@@ -183,6 +185,12 @@ Str toNimProcDecl(
     int idx = 0;
     for (auto& arg : arguments) {
         Str name = arg.first;
+        if (idx == 0) {
+            args += "\n";
+            ++idx;
+        }
+
+
         if (name.size() == 0) {
             name = "arg_" + std::to_string(idx);
             ++idx;
@@ -204,7 +212,7 @@ Str toNimProcDecl(
         procName);
 
     return fmt::format(
-        "proc {}*(\n{}): {} {}",
+        "proc {}*({}): {} {}",
         procName,
         args,
         toNimType(rType),
@@ -553,13 +561,13 @@ int main() {
                          "\n"
                          "when defined(windows):\n"
                          "  const\n"
-                         "    libclang* = \"libclang.dll\"\n"
+                         "    libclang = \"libclang.dll\"\n"
                          "elif defined(macosx):\n"
                          "  const\n"
-                         "    libclang* = \"libclang.dylib\"\n"
+                         "    libclang = \"libclang.dylib\"\n"
                          "else:\n"
                          "  const\n"
-                         "    libclang* = \"libclang.so\"\n"
+                         "    libclang = \"libclang.so\"\n"
                          "\n"
                          "\n";
 

@@ -5,13 +5,13 @@ import opaque_impls
 
 when defined(windows):
   const
-    libclang* = "libclang.dll"
+    libclang = "libclang.dll"
 elif defined(macosx):
   const
-    libclang* = "libclang.dylib"
+    libclang = "libclang.dylib"
 else:
   const
-    libclang* = "libclang.so"
+    libclang = "libclang.so"
 
 
 type

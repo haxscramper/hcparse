@@ -1,3 +1,4 @@
+import cxstring
 from times import Time
 {.deadCodeElim: on.}
 {.push callconv: cdecl.}
@@ -5,13 +6,13 @@ import opaque_impls
 
 when defined(windows):
   const
-    libclang* = "libclang.dll"
+    libclang = "libclang.dll"
 elif defined(macosx):
   const
-    libclang* = "libclang.dylib"
+    libclang = "libclang.dylib"
 else:
   const
-    libclang* = "libclang.so"
+    libclang = "libclang.so"
 
 
 type CXCompilationDatabase* = distinct pointer # CXCompilationDatabase
@@ -35,7 +36,7 @@ proc clang_CompilationDatabase_fromDirectory*(
   .}
 
 proc clang_CompilationDatabase_dispose*(
-  arg_0: CXCompilationDatabase, # `CXCompilationDatabase`
+  arg_1: CXCompilationDatabase, # `CXCompilationDatabase`
 ): void {.
     cdecl,
     importc: "clang_CompilationDatabase_dispose",
@@ -43,7 +44,7 @@ proc clang_CompilationDatabase_dispose*(
   .}
 
 proc clang_CompilationDatabase_getCompileCommands*(
-  arg_0: CXCompilationDatabase, # `CXCompilationDatabase`
+  arg_1: CXCompilationDatabase, # `CXCompilationDatabase`
   completeFileName: ptr[cstring], # `const char *`
 ): CXCompileCommands {.
     cdecl,
@@ -52,7 +53,7 @@ proc clang_CompilationDatabase_getCompileCommands*(
   .}
 
 proc clang_CompilationDatabase_getAllCompileCommands*(
-  arg_0: CXCompilationDatabase, # `CXCompilationDatabase`
+  arg_1: CXCompilationDatabase, # `CXCompilationDatabase`
 ): CXCompileCommands {.
     cdecl,
     importc: "clang_CompilationDatabase_getAllCompileCommands",
@@ -60,7 +61,7 @@ proc clang_CompilationDatabase_getAllCompileCommands*(
   .}
 
 proc clang_CompileCommands_dispose*(
-  arg_0: CXCompileCommands, # `CXCompileCommands`
+  arg_1: CXCompileCommands, # `CXCompileCommands`
 ): void {.
     cdecl,
     importc: "clang_CompileCommands_dispose",
@@ -68,7 +69,7 @@ proc clang_CompileCommands_dispose*(
   .}
 
 proc clang_CompileCommands_getSize*(
-  arg_0: CXCompileCommands, # `CXCompileCommands`
+  arg_1: CXCompileCommands, # `CXCompileCommands`
 ): cuint {.
     cdecl,
     importc: "clang_CompileCommands_getSize",
@@ -76,7 +77,7 @@ proc clang_CompileCommands_getSize*(
   .}
 
 proc clang_CompileCommands_getCommand*(
-  arg_0: CXCompileCommands, # `CXCompileCommands`
+  arg_1: CXCompileCommands, # `CXCompileCommands`
   i: cuint, # `unsigned int`
 ): CXCompileCommand {.
     cdecl,
@@ -85,7 +86,7 @@ proc clang_CompileCommands_getCommand*(
   .}
 
 proc clang_CompileCommand_getDirectory*(
-  arg_0: CXCompileCommand, # `CXCompileCommand`
+  arg_1: CXCompileCommand, # `CXCompileCommand`
 ): CXString {.
     cdecl,
     importc: "clang_CompileCommand_getDirectory",
@@ -93,7 +94,7 @@ proc clang_CompileCommand_getDirectory*(
   .}
 
 proc clang_CompileCommand_getFilename*(
-  arg_0: CXCompileCommand, # `CXCompileCommand`
+  arg_1: CXCompileCommand, # `CXCompileCommand`
 ): CXString {.
     cdecl,
     importc: "clang_CompileCommand_getFilename",
@@ -101,7 +102,7 @@ proc clang_CompileCommand_getFilename*(
   .}
 
 proc clang_CompileCommand_getNumArgs*(
-  arg_0: CXCompileCommand, # `CXCompileCommand`
+  arg_1: CXCompileCommand, # `CXCompileCommand`
 ): cuint {.
     cdecl,
     importc: "clang_CompileCommand_getNumArgs",
@@ -109,7 +110,7 @@ proc clang_CompileCommand_getNumArgs*(
   .}
 
 proc clang_CompileCommand_getArg*(
-  arg_0: CXCompileCommand, # `CXCompileCommand`
+  arg_1: CXCompileCommand, # `CXCompileCommand`
   i: cuint, # `unsigned int`
 ): CXString {.
     cdecl,
@@ -118,7 +119,7 @@ proc clang_CompileCommand_getArg*(
   .}
 
 proc clang_CompileCommand_getNumMappedSources*(
-  arg_0: CXCompileCommand, # `CXCompileCommand`
+  arg_1: CXCompileCommand, # `CXCompileCommand`
 ): cuint {.
     cdecl,
     importc: "clang_CompileCommand_getNumMappedSources",
@@ -126,7 +127,7 @@ proc clang_CompileCommand_getNumMappedSources*(
   .}
 
 proc clang_CompileCommand_getMappedSourcePath*(
-  arg_0: CXCompileCommand, # `CXCompileCommand`
+  arg_1: CXCompileCommand, # `CXCompileCommand`
   i: cuint, # `unsigned int`
 ): CXString {.
     cdecl,
@@ -135,7 +136,7 @@ proc clang_CompileCommand_getMappedSourcePath*(
   .}
 
 proc clang_CompileCommand_getMappedSourceContent*(
-  arg_0: CXCompileCommand, # `CXCompileCommand`
+  arg_1: CXCompileCommand, # `CXCompileCommand`
   i: cuint, # `unsigned int`
 ): CXString {.
     cdecl,
