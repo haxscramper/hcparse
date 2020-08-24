@@ -20,9 +20,20 @@ ostream& operator<<(ostream& stream, const CXString& str) {
     return stream;
 }
 
-
 ostream& operator<<(ostream& stream, const CXType& type) {
     stream << clang_getTypeSpelling(type);
+    return stream;
+}
+
+
+ostream& operator<<(ostream& stream, const CXCursor& cursor) {
+    stream << clang_getCursorSpelling(cursor);
+    return stream;
+}
+
+
+ostream& operator<<(ostream& stream, const CXCursorKind& kind) {
+    stream << clang_getCursorKindSpelling(kind);
     return stream;
 }
 
@@ -54,6 +65,18 @@ CXBufPtr toBufPtr(void* client_data) {
     return reinterpret_cast<CXBufPtr>(client_data);
 }
 
+Str fixTypeName(CXType type) {
+    let fullStr = toStr(clang_getTypeSpelling(type));
+    if (fullStr.rfind("enum ") == 0) {
+        return fullStr.substr(5, fullStr.size());
+    } else if (fullStr.rfind("struct ") == 0) {
+        return fullStr.substr(7, fullStr.size());
+    } else {
+        std::cout << type << " \e[31m" << clang_Type_getNamedType(type)
+                  << "\e[39m\n";
+        return "\e[91m!!!\e[39m";
+    }
+}
 
 Str toNimType(CXType type, int level = 0) {
     let kindStr = toStr(clang_getTypeSpelling(type));
@@ -70,16 +93,7 @@ Str toNimType(CXType type, int level = 0) {
         case CXType_ULongLong: return "culonglong";
 
         case CXType_Elaborated: {
-            let fullStr = toStr(clang_getTypeSpelling(type));
-            if (fullStr.rfind("enum ") == 0) {
-                return fullStr.substr(5, fullStr.size());
-            } else if (fullStr.rfind("struct ") == 0) {
-                return fullStr.substr(7, fullStr.size());
-            } else {
-                std::cout << type << " \e[31m"
-                          << clang_Type_getNamedType(type) << "\e[39m\n";
-                return "\e[91m!!!\e[39m";
-            }
+            return fixTypeName(type);
         }
 
         case CXType_Pointer: {
@@ -98,6 +112,21 @@ Str toNimType(CXType type, int level = 0) {
     }
 }
 
+Str fixArgName(Str name) {
+    if (name == "begin") {
+        return "begin";
+    } else if (name == "end") {
+        return "cend";
+    } else if (name == "range") {
+        return "crange"; // cringe
+    } else if ('A' <= name[0] and name[0] <= 'Z') {
+        name[0] = std::tolower(name[0]);
+        return name;
+    } else {
+        return name;
+    }
+}
+
 Str toNimProcDecl(
     Str                    procName,
     Vec<Pair<Str, CXType>> arguments,
@@ -111,6 +140,8 @@ Str toNimProcDecl(
         if (name.size() == 0) {
             name = "arg_" + std::to_string(idx);
             ++idx;
+        } else {
+            name = fixArgName(name);
         }
 
         args += fmt::format(
@@ -120,8 +151,18 @@ Str toNimProcDecl(
             clang_getTypeSpelling(arg.second));
     }
 
+    // TODO add 'declared in file:line:col' comment into the `importc`
+    Str importcInfo = fmt::format(
+        "{{.\n    cdecl,\n    importc: \"{}\",\n    dynlib: libclang\n  "
+        ".}}",
+        procName);
+
     return fmt::format(
-        "proc {}(\n{}): {}", procName, args, toNimType(rType));
+        "proc {}*(\n{}): {} {}",
+        procName,
+        args,
+        toNimType(rType),
+        importcInfo);
 }
 
 CXChildVisitResult visitFunction(CHILD_VISIT_PARAMS) {
@@ -133,7 +174,13 @@ CXChildVisitResult visitFunction(CHILD_VISIT_PARAMS) {
         cursor,
         [](CHILD_VISIT_PARAMS) {
             CXBufPtr ptr = toBufPtr(client_data);
-            ptr->push_back(cursor);
+
+            if (toStr(clang_getCursorSpelling(cursor))
+                == toStr(
+                    clang_getTypeSpelling(clang_getCursorType(cursor)))) {
+            } else {
+                ptr->push_back(cursor);
+            }
             return CXChildVisit_Continue;
         },
         &children);
@@ -159,6 +206,107 @@ CXChildVisitResult visitFunction(CHILD_VISIT_PARAMS) {
     return CXChildVisit_Continue;
 }
 
+
+CXBuf directSubnodes(CXCursor cursor) {
+    CXBuf children;
+    clang_visitChildren(
+        cursor,
+        [](CHILD_VISIT_PARAMS) {
+            CXBufPtr ptr = toBufPtr(client_data);
+            ptr->push_back(cursor);
+            return CXChildVisit_Continue;
+        },
+        &children);
+
+    return children;
+}
+
+CXChildVisitResult visitStructDecl(CHILD_VISIT_PARAMS) {
+
+    let            kind    = clang_getCursorKind(cursor);
+    std::ofstream* outfile = reinterpret_cast<std::ofstream*>(client_data);
+
+    // std::cout << "  Struct: \e[93m"
+    //           << clang_getCanonicalType(clang_getCursorType(cursor))
+    //           << "\e[39m\n";
+
+    (*outfile) << fmt::format(
+        "type\n  {}* {{.pure, bycopy.}} = object\n",
+        fixTypeName(clang_getCursorType(cursor)));
+
+    for (auto& subnode : directSubnodes(cursor)) {
+        let kind = clang_getCursorKind(subnode);
+        // std::cout << "    \e[92m" << kind << "\e[39m " << subnode
+        //           << " \e[93m"
+        //           <<
+        //           clang_getCanonicalType(clang_getCursorType(subnode))
+        //           << "\e[39m\n";
+
+        let type = clang_getCursorType(subnode);
+        (*outfile) << fmt::format(
+            "    {}*: {} # `{}`\n",
+            fixArgName(toStr(clang_getCursorSpelling(subnode))),
+            toNimType(type),
+            type);
+    }
+
+    (*outfile) << "\n";
+
+
+    return CXChildVisit_Continue;
+}
+
+
+CXChildVisitResult visitEnumDecl(CHILD_VISIT_PARAMS) {
+
+    let            kind    = clang_getCursorKind(cursor);
+    std::ofstream* outfile = reinterpret_cast<std::ofstream*>(client_data);
+
+    std::cout << "  Enum: \e[95m"
+              << clang_getCanonicalType(clang_getCursorType(cursor))
+              << "\e[39m\n";
+
+    return CXChildVisit_Continue;
+}
+
+CXChildVisitResult visitTypedef(CHILD_VISIT_PARAMS) {
+
+    let            kind    = clang_getCursorKind(cursor);
+    std::ofstream* outfile = reinterpret_cast<std::ofstream*>(client_data);
+
+
+    clang_visitChildren(
+        cursor,
+        [](CHILD_VISIT_PARAMS) {
+            let kind = clang_getCursorKind(cursor);
+            switch (kind) {
+                case CXCursor_StructDecl: {
+                    visitStructDecl(cursor, parent, client_data);
+                    break;
+                }
+                case CXCursor_EnumDecl: {
+                    visitEnumDecl(cursor, parent, client_data);
+                    break;
+                }
+                default: {
+
+                    std::cout << cursor << " \e[32m" << kind
+                              << "\e[39m \e[93m"
+                              << clang_getCanonicalType(
+                                     clang_getCursorType(cursor))
+                              << "\e[39m\n";
+                }
+            }
+            return CXChildVisit_Continue;
+        },
+        client_data);
+
+    // (*outfile) << fmt::format("type {} = distinct {}", cursor,
+    // toNimType)
+
+    return CXChildVisit_Continue;
+}
+
 CXChildVisitResult visitToplevel(CHILD_VISIT_PARAMS) {
     let kind = clang_getCursorKind(cursor);
 
@@ -167,7 +315,10 @@ CXChildVisitResult visitToplevel(CHILD_VISIT_PARAMS) {
     {
         if (kind == CXCursor_FunctionDecl) {
             return visitFunction(cursor, parent, client_data);
+        } else if (kind == CXCursor_TypedefDecl) {
+            return visitTypedef(cursor, parent, client_data);
         } else {
+            // std::cout << cursor << " \e[32m" << kind << "\e[39m\n";
             return CXChildVisit_Recurse;
         }
     } else {
@@ -195,7 +346,23 @@ int main() {
 
     std::ofstream outfile;
 
-    outfile.open("result.nim");
+    outfile.open("result_raw.nim");
+
+    outfile << "from times import Time\n"
+               "{.deadCodeElim: on.}\n"
+               "{.push callconv: cdecl.}\n"
+               "\n"
+               "when defined(windows):\n"
+               "  const\n"
+               "    libclang* = \"libclang.dll\"\n"
+               "elif defined(macosx):\n"
+               "  const\n"
+               "    libclang* = \"libclang.dylib\"\n"
+               "else:\n"
+               "  const\n"
+               "    libclang* = \"libclang.so\"\n"
+               "\n"
+               "\n";
 
     clang_visitChildren(cursor, visitToplevel, &outfile);
 
