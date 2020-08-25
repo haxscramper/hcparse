@@ -1,7 +1,9 @@
-import macros, sugar, strformat, lenientops, bitops
+import macros, sugar, strformat, lenientops, bitops, sequtils, options,
+       terminal
+
 import hmisc/hexceptions
 import hmisc/helpers
-import hmisc/types/hnim_ast
+import hmisc/types/[hnim_ast, colorstring]
 # import compiler/[parser, llstream, idents, options,
 #                  pathutils, astalgo, msgs,
 #                  ast, renderer, lineinfos]
@@ -124,32 +126,42 @@ proc cxKind*(comment: CXComment): CXCommentKind =
   comment.clang_Comment_getKind()
 
 proc `$`*(comment: CXComment): string =
-  echo comment.cxKind()
   $comment.clang_FullComment_getAsHTML() # NOTE it seems like libclang
   # API does not provide a way to get full comment string as raw string.
 
+proc retType*(cursor: CXCursor): CXType =
+  cursor.expectKind(CXCursor_FunctionDecl)
+  cursor.cxType().clang_getResultType()
+
 #=============================  Converters  ==============================#
 
-proc toNimType*(cxtype: CXType): PNode =
+proc toNType*(cxtype: CXType): NType =
   case cxtype.cxKind:
-    of CXType_Bool:
-      newPIdent("bool")
+    of CXType_Bool: mkNType("bool")
+    of CXType_Int: mkNType("int")
+    of CXType_Void: mkNType("void")
+    of CXType_UInt: mkNType("cuint")
     else:
-      newPIdent("!!!")
+      echo "CANT CONVERT: ".toRed({styleItalic}),
+        &"{($cxtype).toGreen()} ({cxtype.cxKind()})"
+      mkNType("!!!")
+
+proc toPIdentDefs*(cursor: CXCursor): PIdentDefs =
+  echo cursor, " ", cursor.cxKind()
+  discard
+
 
 #==========================  Toplevel visitors  ==========================#
 
 proc visitFunction(cursor: CXCursor, stmtList: var PNode) =
-  echo "function ", cursor, " kind ", cursor.cxKind()
-  echo "with comment '", cursor.comment(), "'"
+  cursor.expectKind(CXCursor_FunctionDecl)
+  let arguments = cursor.children.mapIt(it.toPIdentDefs())
   stmtList.add mkProcDeclNode(
     head = newPIdent($cursor),
-    {
-      "hello" : mkNType("World")
-    },
-    newPIdent("impl"),
-
-    comment = $cursor.comment()
+    rtype = some(toNType(cursor.retType())),
+    args = arguments,
+    impl = newPIdent("impl"),
+    # comment = $cursor.comment() # XXXX
   )
 
 
@@ -178,7 +190,8 @@ proc parseTranslationUnit(
 
 proc main() =
   let trIndex = clang_createIndex(0, 0);
-  let unit = parseTranslationUnit(trIndex, "header.hpp")
+  let unit = parseTranslationUnit(trIndex, "/usr/include/clang-c/Index.h")
+
 
   if unit.isNil:
     raiseAssert "Unable to parse translation unit. Quitting."
@@ -199,7 +212,7 @@ proc main() =
 
       return CXChildVisit_Recurse
 
-  echo "toplevel:\n", toplevel
+  # echo "toplevel:\n", toplevel
 
 
 when isMainModule:
