@@ -1,5 +1,5 @@
 import macros, sugar, strformat, lenientops, bitops, sequtils, options,
-       terminal
+       terminal, shell, strutils
 
 import hpprint, hpprint/hpprint_repr
 
@@ -12,6 +12,7 @@ import hmisc/types/[hnim_ast, colorstring]
 
 import compiler/[ast, renderer, lineinfos]
 import packages/docutils/rstast
+import std/decls
 
 import index, documentation, cxstring
 
@@ -49,6 +50,17 @@ proc cxKind*(cxtype: CXType): CXTypeKind = cxtype.kind
 proc expectKind*(cxtype: CXType, kind: CXTypeKind) =
   if cxtype.cxKind != kind:
     raiseAssert(&"Expected type kind {kind}, but got {cxtype.cxKind()}")
+
+proc argc*(cxtype: CXType): int =
+  cxtype.expectKind(CXType_FunctionProto)
+  clang_getNumArgTypes(cxtype).int
+
+proc argc*(cursor: CXCursor): int =
+  cursor.cxType().argc()
+
+proc nthArg*(cxtype: CXType, idx: int): CXType =
+  assert idx < cxtype.argc()
+  clang_getArgType(cxtype, cuint(idx))
 
 
 #===========================  Location checks  ===========================#
@@ -97,16 +109,18 @@ macro makeVisitor(captureVars, body: untyped): untyped =
 
       newColonExpr(capture, newCall("addr", capture))
 
+  let byaddrid = ident "byaddr"
   let dataUnpack = newStmtList: collect(newSeq):
     for capture in captureVars:
       quote do:
-        var `capture` = data[].`capture`[]
+        var `capture` {.`byaddrid`.} = data[].`capture`[]
 
   let
     cursorId = ident "cursor"
     parentId = ident "parent"
 
   result = quote do:
+    `immutableCopies`
     var data {.inject.} = `tupleData`
     type Data = typeof(data)
     proc visitor(`cursorId`, `parentId`: CXCursor,
@@ -121,10 +135,41 @@ macro makeVisitor(captureVars, body: untyped): untyped =
 
 proc children*(cursor: CXCursor): seq[CXCursor] =
   var buf: seq[CXCursor]
+  var ddd: int
   cursor.clangVisitChildren do:
-    makeVisitor [buf]:
+    makeVisitor [buf, ddd]:
       buf.add cursor
       return CXChildVisit_Continue
+
+  return buf
+
+proc `[]`*(cursor: CXCursor, idx: int): CXCursor =
+  var
+    res: CXCursor
+    cnt = 0
+
+  cursor.clangVisitChildren do:
+    makeVisitor [res, cnt, idx]:
+      if cnt == idx:
+        res = cursor
+        return CXChildVisit_Break
+      else:
+        inc cnt
+        return CXChildVisit_Continue
+
+  if cnt < idx:
+    raiseAssert("Cursor {cursor} no child at index {idx}")
+  else:
+    return res
+
+proc len*(cursor: CXCursor): int =
+  var cnt = 0
+  cursor.clangVisitChildren do:
+    makeVisitor [cnt]:
+      inc cnt
+      return CXChildVisit_Continue
+
+  return cnt
 
 #============================  Documentation  ============================#
 
@@ -253,7 +298,7 @@ proc toRstNode*(comment: CXComment): PRstNode =
       raiseAssert("#[ IMPLEMENT ]#")
 
 proc toNimDoc*(comment: CXComment): string =
-  echo comment.objTreeRepr().pstring()
+  # echo comment.objTreeRepr().pstring()
   comment.toRstNode().renderRstToRst(result)
 
 #=============================  Converters  ==============================#
@@ -274,6 +319,42 @@ proc objTreeRepr*(cxtype: CXType): ObjTree =
       pptObj("ptr", cxtype.getPointee().objTreeRepr())
     else:
       pptObj($cxtype.cxkind, pptConst($cxtype))
+
+proc tokens*(cursor: CXCursor, tu: CXTranslationUnit): seq[string] =
+  let range: CXSourceRange   = clang_getCursorExtent(cursor);
+  var tokens: ptr[CXToken]
+  var nTokens: cuint = 0
+  clang_tokenize(tu, range, addr tokens, addr nTokens)
+
+  for i in 0 ..< nTokens:
+    result.add $clang_getTokenSpelling(
+      tu, (cast[ptr UncheckedArray[CXToken]](tokens))[i])
+
+
+proc objTreeRepr*(cursor: CXCursor): ObjTree =
+  if cursor.len  == 0:
+    pptObj($cursor.cxkind, pptConst($cursor))
+  else:
+    pptObj(
+      $cursor.cxkind,
+      toSeq(cursor.children).mapIt(it.objTreeRepr()))
+
+
+proc objTreeRepr*(cursor: CXCursor, tu: CXTranslationUnit): ObjTree =
+  if cursor.len  == 0:
+    pptObj($cursor.cxkind,
+           pptConst(
+             $cursor & " " & cursor.tokens(tu).join(" ")))
+  else:
+    pptObj(
+      $cursor.cxkind,
+      toSeq(cursor.children).mapIt(it.objTreeRepr(tu)))
+
+proc treeRepr*(cursor: CXCursor, tu: CXTranslationUnit): string =
+  cursor.objTreeRepr(tu).treeRepr()
+
+proc treeRepr*(cursor: CXCursor): string =
+  cursor.objTreeRepr().treeRepr()
 
 proc lispRepr*(cxtype: CXType): string =
   cxtype.objTreeRepr().lispRepr()
@@ -297,31 +378,89 @@ proc toNType*(cxtype: CXType): NType =
         of CXType_Char_S:
           mkNType("cstring")
         else:
-          echo "NESTED ".toYellow(), cxtype.lispRepr()
+          # echo "NESTED ".toYellow(), cxtype.lispRepr()
           mkNType("ptr", [toNType(pointee)])
     else:
       echo "CANT CONVERT: ".toRed({styleItalic}),
         cxtype.kind, " ", cxtype.lispRepr().toGreen()
       mkNType("!!!")
 
+proc dropPOD*(cxtype: CXType): string =
+  case cxtype.cxKind:
+    of CXType_Elaborated:
+      cxtype.fromElaboratedNType().head
+    of CXType_Pointer:
+      cxtype.getPointee().dropPOD()
+    of CXType_Typedef:
+      ($cxtype).dropPrefix("const ")
+    else:
+      ""
+
 proc toPIdentDefs*(cursor: CXCursor): PIdentDefs =
-  echo cursor, " ", cursor.cxKind()
-  discard
+  result.varname = $cursor
+  if result.varname.len == 0:
+    result.varname = "arg" & $cursor.cxType().dropPOD()
+
+  result.vtype = cursor.cxType.toNType()
 
 
 #==========================  Toplevel visitors  ==========================#
 
-proc visitFunction(cursor: CXCursor, stmtList: var PNode) =
+type
+  RewriteContext = object
+    resultNode*: PNode
+    prefix*: string
+    typePrefix*: string
+    translationUnit*: CXTranslationUnit
+
+proc simplifyFuncName(cursor: CXCursor, context: var RewriteContext): string =
+  let unprefix = ($cursor).dropPrefix(context.prefix)
+
+  if cursor.argc() > 0:
+    let
+      first = cursor.cxType().nthArg(0)
+      rawName = first.dropPOD()
+      name = rawName.dropPrefix(context.typePrefix)
+
+    if name.len > 0:
+      return unprefix.
+        dropPrefix(name & "_").
+        dropPrefix(rawName & "_")
+  else:
+    return unprefix
+
+proc isAliasTypedef*(cursor: CXCursor): bool =
+  if cursor.len > 0:
+    cursor[0].cxKind in {
+      CXCursor_EnumDecl,
+      CXCursor_StructDecl
+    }
+  else:
+    false
+
+proc visitFunction(cursor: CXCursor, context: var RewriteContext) =
   cursor.expectKind(CXCursor_FunctionDecl)
-  let arguments = cursor.children.mapIt(it.toPIdentDefs())
-  stmtList.add mkProcDeclNode(
-    head = newPIdent($cursor),
+  let arguments = cursor.children.
+    filterIt(it.cxKind == CXCursor_ParmDecl).
+    mapIt(it.toPIdentDefs())
+
+  context.resultNode.add mkProcDeclNode(
+    head = newPIdent(cursor.simplifyFuncName(context)),
     rtype = some(toNType(cursor.retType())),
     args = arguments,
     impl = newPIdent("impl"),
     comment = cursor.comment().toNimDoc()
   )
 
+proc visitAliasTypedef*(cursor: CXCursor, context: var RewriteContext) =
+  echo "Alias typedef: ", cursor
+
+proc visitEnumDecl*(cursor: CXCursor, context: var RewriteContext) =
+  echo "enum decl: ", cursor
+
+proc visitStructDecl*(cursor: CXCursor, context: var RewriteContext) =
+  echo "struct decl: ", cursor
+  echo cursor.treeRepr(context.translationUnit)
 
 
 #================================  Main  =================================#
@@ -345,7 +484,6 @@ proc parseTranslationUnit(
   deallocCStringArray(cmdline)
 
 
-
 proc main() =
   let trIndex = clang_createIndex(0, 0);
   let unit = parseTranslationUnit(trIndex, "/usr/include/clang-c/Index.h")
@@ -356,24 +494,41 @@ proc main() =
 
   let cursor: CXCursor = clang_getTranslationUnitCursor(unit)
 
-  var toplevel: PNode = nkStmtList.newTree()
+  var context = RewriteContext(
+    resultNode: nkStmtList.newTree(),
+    prefix: "clang_",
+    typePrefix: "CX",
+    translationUnit: unit
+  )
 
   cursor.clangVisitChildren do:
-    makeVisitor [toplevel]:
+    makeVisitor [context]:
       if cursor.isFromMainFile():
         case cursor.cxkind:
           of CXCursor_FunctionDecl:
-            visitFunction(cursor, toplevel)
+            visitFunction(cursor, context)
             return CXChildVisit_Continue
+          of CXCursor_TypedefDecl:
+            if cursor.isAliasTypedef():
+              visitAliasTypedef(cursor, context)
+            else:
+              return CXChildVisit_Recurse
+          of CXCursor_EnumDecl:
+            visitEnumDecl(cursor, context)
+          of CXCursor_StructDecl:
+            visitStructDecl(cursor, context)
           else:
             discard
 
       return CXChildVisit_Recurse
 
-  "../libclang.nim".writeFile($toplevel)
+  "../libclang.nim".writeFile($context.resultNode)
+
 
 when isMainModule:
   try:
     main()
   except:
     pprintErr
+
+
