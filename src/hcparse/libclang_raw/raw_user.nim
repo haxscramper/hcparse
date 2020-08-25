@@ -2,10 +2,11 @@ import macros, sugar, strformat, lenientops, bitops
 import hmisc/hexceptions
 import hmisc/helpers
 import hmisc/types/hnim_ast
-import compiler/[parser, llstream, idents, options,
-                 pathutils, astalgo, msgs,
-                 ast, renderer, lineinfos]
+# import compiler/[parser, llstream, idents, options,
+#                  pathutils, astalgo, msgs,
+#                  ast, renderer, lineinfos]
 
+import compiler/[ast, renderer, lineinfos]
 
 import index, documentation, cxstring
 
@@ -129,9 +130,6 @@ proc `$`*(comment: CXComment): string =
 
 #=============================  Converters  ==============================#
 
-proc newPIdent*(str: string): PNode =
-  newIdentNode(PIdent(s: str), TLineInfo())
-
 proc toNimType*(cxtype: CXType): PNode =
   case cxtype.cxKind:
     of CXType_Bool:
@@ -144,6 +142,16 @@ proc toNimType*(cxtype: CXType): PNode =
 proc visitFunction(cursor: CXCursor, stmtList: var PNode) =
   echo "function ", cursor, " kind ", cursor.cxKind()
   echo "with comment '", cursor.comment(), "'"
+  stmtList.add mkProcDeclNode(
+    head = newPIdent($cursor),
+    {
+      "hello" : mkNType("World")
+    },
+    newPIdent("impl"),
+
+    comment = $cursor.comment()
+  )
+
 
 
 #================================  Main  =================================#
@@ -191,12 +199,10 @@ proc main() =
 
       return CXChildVisit_Recurse
 
+  echo "toplevel:\n", toplevel
+
 
 when isMainModule:
-  # block:
-    # echo newPIdent("bool")
-
-
   try:
     main()
   except:
