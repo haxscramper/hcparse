@@ -24,17 +24,49 @@ else:
 
 type CXIndex* = distinct pointer # CXIndex
 
+type
+  CXTargetInfoImpl* {.pure, bycopy.} = object
+
 type CXTargetInfo* = distinct ptr[CXTargetInfoImpl] # CXTargetInfo
+
+type
+  CXTranslationUnitImpl* {.pure, bycopy.} = object
 
 type CXTranslationUnit* = distinct ptr[CXTranslationUnitImpl] # CXTranslationUnit
 
 type CXClientData* = distinct pointer # CXClientData
 
 type
+  CXUnsavedFile* {.pure, bycopy.} = object
+    filename*: ptr[cstring] # `const char *`
+    contents*: ptr[cstring] # `const char *`
+    length*: culong # `unsigned long`
+
+type
+  CXAvailabilityKind* {.pure, size: sizeof(cint).} = enum
+    CXAvailability_Available
+    CXAvailability_Deprecated
+    CXAvailability_NotAvailable
+    CXAvailability_NotAccessible
+
+type
   CXVersion* {.pure, bycopy.} = object
     major*: cint # `int`
     minor*: cint # `int`
     subminor*: cint # `int`
+
+type
+  CXCursor_ExceptionSpecificationKind* {.pure, size: sizeof(cint).} = enum
+    CXCursor_ExceptionSpecificationKind_None
+    CXCursor_ExceptionSpecificationKind_DynamicNone
+    CXCursor_ExceptionSpecificationKind_Dynamic
+    CXCursor_ExceptionSpecificationKind_MSAny
+    CXCursor_ExceptionSpecificationKind_BasicNoexcept
+    CXCursor_ExceptionSpecificationKind_ComputedNoexcept
+    CXCursor_ExceptionSpecificationKind_Unevaluated
+    CXCursor_ExceptionSpecificationKind_Uninstantiated
+    CXCursor_ExceptionSpecificationKind_Unparsed
+    CXCursor_ExceptionSpecificationKind_NoThrow
 
 proc clang_createIndex*(
   excludeDeclarationsFromPCH: cint, # `int`
@@ -106,7 +138,7 @@ proc clang_getFileTime*(
 
 type
   CXFileUniqueID* {.pure, bycopy.} = object
-    data*: array[3, unsigned long long] # `unsigned long long [3]`
+    data*: array[3, culonglong] # `unsigned long long [3]`
 
 proc clang_getFileUniqueID*(
   file: CXFile, # `CXFile`
@@ -164,12 +196,12 @@ proc clang_File_tryGetRealPathName*(
 
 type
   CXSourceLocation* {.pure, bycopy.} = object
-    ptr_data*: array[2, const void *] # `const void *[2]`
+    ptr_data*: array[2, pointer] # `const void *[2]`
     int_data*: cuint # `unsigned int`
 
 type
   CXSourceRange* {.pure, bycopy.} = object
-    ptr_data*: array[2, const void *] # `const void *[2]`
+    ptr_data*: array[2, pointer] # `const void *[2]`
     begin_int_data*: cuint # `unsigned int`
     end_int_data*: cuint # `unsigned int`
 
@@ -362,6 +394,14 @@ proc clang_disposeSourceRangeList*(
     dynlib: libclang
   .}
 
+type
+  CXDiagnosticSeverity* {.pure, size: sizeof(cint).} = enum
+    CXDiagnostic_Ignored = 0
+    CXDiagnostic_Note = 1
+    CXDiagnostic_Warning = 2
+    CXDiagnostic_Error = 3
+    CXDiagnostic_Fatal = 4
+
 type CXDiagnostic* = distinct pointer # CXDiagnostic
 
 type CXDiagnosticSet* = distinct pointer # CXDiagnosticSet
@@ -382,6 +422,13 @@ proc clang_getDiagnosticInSet*(
     importc: "clang_getDiagnosticInSet",
     dynlib: libclang
   .}
+
+type
+  CXLoadDiag_Error* {.pure, size: sizeof(cint).} = enum
+    CXLoadDiag_None = 0
+    CXLoadDiag_Unknown = 1
+    CXLoadDiag_CannotLoad = 2
+    CXLoadDiag_InvalidFile = 3
 
 proc clang_loadDiagnostics*(
   file: ptr[cstring], # `const char *`
@@ -441,6 +488,15 @@ proc clang_disposeDiagnostic*(
     importc: "clang_disposeDiagnostic",
     dynlib: libclang
   .}
+
+type
+  CXDiagnosticDisplayOptions* {.pure, size: sizeof(cint).} = enum
+    CXDiagnostic_DisplaySourceLocation = 1
+    CXDiagnostic_DisplayColumn = 2
+    CXDiagnostic_DisplaySourceRanges = 4
+    CXDiagnostic_DisplayOption = 8
+    CXDiagnostic_DisplayCategoryId = 16
+    CXDiagnostic_DisplayCategoryName = 32
 
 proc clang_formatDiagnostic*(
   diagnostic: CXDiagnostic, # `CXDiagnostic`
@@ -589,6 +645,26 @@ proc clang_createTranslationUnit2*(
     dynlib: libclang
   .}
 
+type
+  CXTranslationUnit_Flags* {.pure, size: sizeof(cint).} = enum
+    CXTranslationUnit_None = 0
+    CXTranslationUnit_DetailedPreprocessingRecord = 1
+    CXTranslationUnit_Incomplete = 2
+    CXTranslationUnit_PrecompiledPreamble = 4
+    CXTranslationUnit_CacheCompletionResults = 8
+    CXTranslationUnit_ForSerialization = 16
+    CXTranslationUnit_CXXChainedPCH = 32
+    CXTranslationUnit_SkipFunctionBodies = 64
+    CXTranslationUnit_IncludeBriefCommentsInCodeCompletion = 128
+    CXTranslationUnit_CreatePreambleOnFirstParse = 256
+    CXTranslationUnit_KeepGoing = 512
+    CXTranslationUnit_SingleFileParse = 1024
+    CXTranslationUnit_LimitSkipFunctionBodiesToPreamble = 2048
+    CXTranslationUnit_IncludeAttributedTypes = 4096
+    CXTranslationUnit_VisitImplicitAttributes = 8192
+    CXTranslationUnit_IgnoreNonErrorsFromIncludedFiles = 16384
+    CXTranslationUnit_RetainExcludedConditionalBlocks = 32768
+
 proc clang_defaultEditingTranslationUnitOptions*(): cuint {.
     cdecl,
     importc: "clang_defaultEditingTranslationUnitOptions",
@@ -639,6 +715,10 @@ proc clang_parseTranslationUnit2FullArgv*(
     dynlib: libclang
   .}
 
+type
+  CXSaveTranslationUnit_Flags* {.pure, size: sizeof(cint).} = enum
+    CXSaveTranslationUnit_None = 0
+
 proc clang_defaultSaveOptions*(
   tU: CXTranslationUnit, # `CXTranslationUnit`
 ): cuint {.
@@ -646,6 +726,13 @@ proc clang_defaultSaveOptions*(
     importc: "clang_defaultSaveOptions",
     dynlib: libclang
   .}
+
+type
+  CXSaveError* {.pure, size: sizeof(cint).} = enum
+    CXSaveError_None = 0
+    CXSaveError_Unknown = 1
+    CXSaveError_TranslationErrors = 2
+    CXSaveError_InvalidTU = 3
 
 proc clang_saveTranslationUnit*(
   tU: CXTranslationUnit, # `CXTranslationUnit`
@@ -673,6 +760,10 @@ proc clang_disposeTranslationUnit*(
     dynlib: libclang
   .}
 
+type
+  CXReparse_Flags* {.pure, size: sizeof(cint).} = enum
+    CXReparse_None = 0
+
 proc clang_defaultReparseOptions*(
   tU: CXTranslationUnit, # `CXTranslationUnit`
 ): cuint {.
@@ -691,6 +782,27 @@ proc clang_reparseTranslationUnit*(
     importc: "clang_reparseTranslationUnit",
     dynlib: libclang
   .}
+
+type
+  CXTUResourceUsageKind* {.pure, size: sizeof(cint).} = enum
+    CXTUResourceUsage_AST = 1
+    CXTUResourceUsage_Identifiers = 2
+    CXTUResourceUsage_Selectors = 3
+    CXTUResourceUsage_GlobalCompletionResults = 4
+    CXTUResourceUsage_SourceManagerContentCache = 5
+    CXTUResourceUsage_AST_SideTables = 6
+    CXTUResourceUsage_SourceManager_Membuffer_Malloc = 7
+    CXTUResourceUsage_SourceManager_Membuffer_MMap = 8
+    CXTUResourceUsage_ExternalASTSource_Membuffer_Malloc = 9
+    CXTUResourceUsage_ExternalASTSource_Membuffer_MMap = 10
+    CXTUResourceUsage_Preprocessor = 11
+    CXTUResourceUsage_PreprocessingRecord = 12
+    CXTUResourceUsage_SourceManager_DataStructures = 13
+    CXTUResourceUsage_Preprocessor_HeaderSearch = 14
+    CXTUResourceUsage_MEMORY_IN_BYTES_BEGIN
+    CXTUResourceUsage_MEMORY_IN_BYTES_END
+    CXTUResourceUsage_First
+    CXTUResourceUsage_Last
 
 proc clang_getTUResourceUsageName*(
   kind: CXTUResourceUsageKind, # `enum CXTUResourceUsageKind`
@@ -760,10 +872,273 @@ proc clang_TargetInfo_getPointerWidth*(
   .}
 
 type
+  CXCursorKind* {.pure, size: sizeof(cint).} = enum
+    CXCursor_UnexposedDecl = 1
+    CXCursor_StructDecl = 2
+    CXCursor_UnionDecl = 3
+    CXCursor_ClassDecl = 4
+    CXCursor_EnumDecl = 5
+    CXCursor_FieldDecl = 6
+    CXCursor_EnumConstantDecl = 7
+    CXCursor_FunctionDecl = 8
+    CXCursor_VarDecl = 9
+    CXCursor_ParmDecl = 10
+    CXCursor_ObjCInterfaceDecl = 11
+    CXCursor_ObjCCategoryDecl = 12
+    CXCursor_ObjCProtocolDecl = 13
+    CXCursor_ObjCPropertyDecl = 14
+    CXCursor_ObjCIvarDecl = 15
+    CXCursor_ObjCInstanceMethodDecl = 16
+    CXCursor_ObjCClassMethodDecl = 17
+    CXCursor_ObjCImplementationDecl = 18
+    CXCursor_ObjCCategoryImplDecl = 19
+    CXCursor_TypedefDecl = 20
+    CXCursor_CXXMethod = 21
+    CXCursor_Namespace = 22
+    CXCursor_LinkageSpec = 23
+    CXCursor_Constructor = 24
+    CXCursor_Destructor = 25
+    CXCursor_ConversionFunction = 26
+    CXCursor_TemplateTypeParameter = 27
+    CXCursor_NonTypeTemplateParameter = 28
+    CXCursor_TemplateTemplateParameter = 29
+    CXCursor_FunctionTemplate = 30
+    CXCursor_ClassTemplate = 31
+    CXCursor_ClassTemplatePartialSpecialization = 32
+    CXCursor_NamespaceAlias = 33
+    CXCursor_UsingDirective = 34
+    CXCursor_UsingDeclaration = 35
+    CXCursor_TypeAliasDecl = 36
+    CXCursor_ObjCSynthesizeDecl = 37
+    CXCursor_ObjCDynamicDecl = 38
+    CXCursor_CXXAccessSpecifier = 39
+    # CXCursor_FirstDecl = 1
+    # CXCursor_LastDecl = 39
+    # CXCursor_FirstRef = 40 = 40
+    CXCursor_ObjCSuperClassRef = 40
+    CXCursor_ObjCProtocolRef = 41
+    CXCursor_ObjCClassRef = 42
+    CXCursor_TypeRef = 43
+    CXCursor_CXXBaseSpecifier = 44
+    CXCursor_TemplateRef = 45
+    CXCursor_NamespaceRef = 46
+    CXCursor_MemberRef = 47
+    CXCursor_LabelRef = 48
+    CXCursor_OverloadedDeclRef = 49
+    CXCursor_VariableRef = 50
+    CXCursor_LastRef
+    CXCursor_FirstInvalid = 70
+    # CXCursor_InvalidFile = 70
+    CXCursor_NoDeclFound = 71
+    CXCursor_NotImplemented = 72
+    CXCursor_InvalidCode = 73
+    CXCursor_LastInvalid
+    # CXCursor_FirstExpr = 100
+    CXCursor_UnexposedExpr = 100
+    CXCursor_DeclRefExpr = 101
+    CXCursor_MemberRefExpr = 102
+    CXCursor_CallExpr = 103
+    CXCursor_ObjCMessageExpr = 104
+    CXCursor_BlockExpr = 105
+    CXCursor_IntegerLiteral = 106
+    CXCursor_FloatingLiteral = 107
+    CXCursor_ImaginaryLiteral = 108
+    CXCursor_StringLiteral = 109
+    CXCursor_CharacterLiteral = 110
+    CXCursor_ParenExpr = 111
+    CXCursor_UnaryOperator = 112
+    CXCursor_ArraySubscriptExpr = 113
+    CXCursor_BinaryOperator = 114
+    CXCursor_CompoundAssignOperator = 115
+    CXCursor_ConditionalOperator = 116
+    CXCursor_CStyleCastExpr = 117
+    CXCursor_CompoundLiteralExpr = 118
+    CXCursor_InitListExpr = 119
+    CXCursor_AddrLabelExpr = 120
+    CXCursor_StmtExpr = 121
+    CXCursor_GenericSelectionExpr = 122
+    CXCursor_GNUNullExpr = 123
+    CXCursor_CXXStaticCastExpr = 124
+    CXCursor_CXXDynamicCastExpr = 125
+    CXCursor_CXXReinterpretCastExpr = 126
+    CXCursor_CXXConstCastExpr = 127
+    CXCursor_CXXFunctionalCastExpr = 128
+    CXCursor_CXXTypeidExpr = 129
+    CXCursor_CXXBoolLiteralExpr = 130
+    CXCursor_CXXNullPtrLiteralExpr = 131
+    CXCursor_CXXThisExpr = 132
+    CXCursor_CXXThrowExpr = 133
+    CXCursor_CXXNewExpr = 134
+    CXCursor_CXXDeleteExpr = 135
+    CXCursor_UnaryExpr = 136
+    CXCursor_ObjCStringLiteral = 137
+    CXCursor_ObjCEncodeExpr = 138
+    CXCursor_ObjCSelectorExpr = 139
+    CXCursor_ObjCProtocolExpr = 140
+    CXCursor_ObjCBridgedCastExpr = 141
+    CXCursor_PackExpansionExpr = 142
+    CXCursor_SizeOfPackExpr = 143
+    CXCursor_LambdaExpr = 144
+    CXCursor_ObjCBoolLiteralExpr = 145
+    CXCursor_ObjCSelfExpr = 146
+    CXCursor_OMPArraySectionExpr = 147
+    CXCursor_ObjCAvailabilityCheckExpr = 148
+    CXCursor_FixedPointLiteral = 149
+    CXCursor_LastExpr
+    # CXCursor_FirstStmt = 200
+    CXCursor_UnexposedStmt = 200
+    CXCursor_LabelStmt = 201
+    CXCursor_CompoundStmt = 202
+    CXCursor_CaseStmt = 203
+    CXCursor_DefaultStmt = 204
+    CXCursor_IfStmt = 205
+    CXCursor_SwitchStmt = 206
+    CXCursor_WhileStmt = 207
+    CXCursor_DoStmt = 208
+    CXCursor_ForStmt = 209
+    CXCursor_GotoStmt = 210
+    CXCursor_IndirectGotoStmt = 211
+    CXCursor_ContinueStmt = 212
+    CXCursor_BreakStmt = 213
+    CXCursor_ReturnStmt = 214
+    CXCursor_GCCAsmStmt = 215
+    # CXCursor_AsmStmt
+    CXCursor_ObjCAtTryStmt = 216
+    CXCursor_ObjCAtCatchStmt = 217
+    CXCursor_ObjCAtFinallyStmt = 218
+    CXCursor_ObjCAtThrowStmt = 219
+    CXCursor_ObjCAtSynchronizedStmt = 220
+    CXCursor_ObjCAutoreleasePoolStmt = 221
+    CXCursor_ObjCForCollectionStmt = 222
+    CXCursor_CXXCatchStmt = 223
+    CXCursor_CXXTryStmt = 224
+    CXCursor_CXXForRangeStmt = 225
+    CXCursor_SEHTryStmt = 226
+    CXCursor_SEHExceptStmt = 227
+    CXCursor_SEHFinallyStmt = 228
+    CXCursor_MSAsmStmt = 229
+    CXCursor_NullStmt = 230
+    CXCursor_DeclStmt = 231
+    CXCursor_OMPParallelDirective = 232
+    CXCursor_OMPSimdDirective = 233
+    CXCursor_OMPForDirective = 234
+    CXCursor_OMPSectionsDirective = 235
+    CXCursor_OMPSectionDirective = 236
+    CXCursor_OMPSingleDirective = 237
+    CXCursor_OMPParallelForDirective = 238
+    CXCursor_OMPParallelSectionsDirective = 239
+    CXCursor_OMPTaskDirective = 240
+    CXCursor_OMPMasterDirective = 241
+    CXCursor_OMPCriticalDirective = 242
+    CXCursor_OMPTaskyieldDirective = 243
+    CXCursor_OMPBarrierDirective = 244
+    CXCursor_OMPTaskwaitDirective = 245
+    CXCursor_OMPFlushDirective = 246
+    CXCursor_SEHLeaveStmt = 247
+    CXCursor_OMPOrderedDirective = 248
+    CXCursor_OMPAtomicDirective = 249
+    CXCursor_OMPForSimdDirective = 250
+    CXCursor_OMPParallelForSimdDirective = 251
+    CXCursor_OMPTargetDirective = 252
+    CXCursor_OMPTeamsDirective = 253
+    CXCursor_OMPTaskgroupDirective = 254
+    CXCursor_OMPCancellationPointDirective = 255
+    CXCursor_OMPCancelDirective = 256
+    CXCursor_OMPTargetDataDirective = 257
+    CXCursor_OMPTaskLoopDirective = 258
+    CXCursor_OMPTaskLoopSimdDirective = 259
+    CXCursor_OMPDistributeDirective = 260
+    CXCursor_OMPTargetEnterDataDirective = 261
+    CXCursor_OMPTargetExitDataDirective = 262
+    CXCursor_OMPTargetParallelDirective = 263
+    CXCursor_OMPTargetParallelForDirective = 264
+    CXCursor_OMPTargetUpdateDirective = 265
+    CXCursor_OMPDistributeParallelForDirective = 266
+    CXCursor_OMPDistributeParallelForSimdDirective = 267
+    CXCursor_OMPDistributeSimdDirective = 268
+    CXCursor_OMPTargetParallelForSimdDirective = 269
+    CXCursor_OMPTargetSimdDirective = 270
+    CXCursor_OMPTeamsDistributeDirective = 271
+    CXCursor_OMPTeamsDistributeSimdDirective = 272
+    CXCursor_OMPTeamsDistributeParallelForSimdDirective = 273
+    CXCursor_OMPTeamsDistributeParallelForDirective = 274
+    CXCursor_OMPTargetTeamsDirective = 275
+    CXCursor_OMPTargetTeamsDistributeDirective = 276
+    CXCursor_OMPTargetTeamsDistributeParallelForDirective = 277
+    CXCursor_OMPTargetTeamsDistributeParallelForSimdDirective = 278
+    CXCursor_OMPTargetTeamsDistributeSimdDirective = 279
+    CXCursor_BuiltinBitCastExpr = 280
+    CXCursor_OMPMasterTaskLoopDirective = 281
+    CXCursor_OMPParallelMasterTaskLoopDirective = 282
+    CXCursor_OMPMasterTaskLoopSimdDirective = 283
+    CXCursor_OMPParallelMasterTaskLoopSimdDirective = 284
+    CXCursor_OMPParallelMasterDirective = 285
+    CXCursor_LastStmt
+    CXCursor_TranslationUnit = 300
+    CXCursor_FirstAttr = 400
+    # CXCursor_UnexposedAttr = 400
+    CXCursor_IBActionAttr = 401
+    CXCursor_IBOutletAttr = 402
+    CXCursor_IBOutletCollectionAttr = 403
+    CXCursor_CXXFinalAttr = 404
+    CXCursor_CXXOverrideAttr = 405
+    CXCursor_AnnotateAttr = 406
+    CXCursor_AsmLabelAttr = 407
+    CXCursor_PackedAttr = 408
+    CXCursor_PureAttr = 409
+    CXCursor_ConstAttr = 410
+    CXCursor_NoDuplicateAttr = 411
+    CXCursor_CUDAConstantAttr = 412
+    CXCursor_CUDADeviceAttr = 413
+    CXCursor_CUDAGlobalAttr = 414
+    CXCursor_CUDAHostAttr = 415
+    CXCursor_CUDASharedAttr = 416
+    CXCursor_VisibilityAttr = 417
+    CXCursor_DLLExport = 418
+    CXCursor_DLLImport = 419
+    CXCursor_NSReturnsRetained = 420
+    CXCursor_NSReturnsNotRetained = 421
+    CXCursor_NSReturnsAutoreleased = 422
+    CXCursor_NSConsumesSelf = 423
+    CXCursor_NSConsumed = 424
+    CXCursor_ObjCException = 425
+    CXCursor_ObjCNSObject = 426
+    CXCursor_ObjCIndependentClass = 427
+    CXCursor_ObjCPreciseLifetime = 428
+    CXCursor_ObjCReturnsInnerPointer = 429
+    CXCursor_ObjCRequiresSuper = 430
+    CXCursor_ObjCRootClass = 431
+    CXCursor_ObjCSubclassingRestricted = 432
+    CXCursor_ObjCExplicitProtocolImpl = 433
+    CXCursor_ObjCDesignatedInitializer = 434
+    CXCursor_ObjCRuntimeVisible = 435
+    CXCursor_ObjCBoxable = 436
+    CXCursor_FlagEnum = 437
+    CXCursor_ConvergentAttr = 438
+    CXCursor_WarnUnusedAttr = 439
+    CXCursor_WarnUnusedResultAttr = 440
+    CXCursor_AlignedAttr = 441
+    CXCursor_LastAttr
+    CXCursor_PreprocessingDirective = 500
+    CXCursor_MacroDefinition = 501
+    CXCursor_MacroExpansion = 502
+    CXCursor_MacroInstantiation
+    # CXCursor_InclusionDirective = 503
+    CXCursor_FirstPreprocessing
+    CXCursor_LastPreprocessing
+    CXCursor_ModuleImportDecl = 600
+    CXCursor_TypeAliasTemplateDecl = 601
+    CXCursor_StaticAssert = 602
+    CXCursor_FriendDecl = 603
+    CXCursor_FirstExtraDecl
+    CXCursor_LastExtraDecl
+    CXCursor_OverloadCandidate = 700
+
+type
   CXCursor* {.pure, bycopy.} = object
     kind*: CXCursorKind # `enum CXCursorKind`
     xdata*: cint # `int`
-    data*: array[3, const void *] # `const void *[3]`
+    data*: array[3, pointer] # `const void *[3]`
 
 proc clang_getNullCursor*(): CXCursor {.
     cdecl,
@@ -900,6 +1275,14 @@ proc clang_isUnexposed*(
     dynlib: libclang
   .}
 
+type
+  CXLinkageKind* {.pure, size: sizeof(cint).} = enum
+    CXLinkage_Invalid
+    CXLinkage_NoLinkage
+    CXLinkage_Internal
+    CXLinkage_UniqueExternal
+    CXLinkage_External
+
 proc clang_getCursorLinkage*(
   cursor: CXCursor, # `CXCursor`
 ): CXLinkageKind {.
@@ -907,6 +1290,13 @@ proc clang_getCursorLinkage*(
     importc: "clang_getCursorLinkage",
     dynlib: libclang
   .}
+
+type
+  CXVisibilityKind* {.pure, size: sizeof(cint).} = enum
+    CXVisibility_Invalid
+    CXVisibility_Hidden
+    CXVisibility_Protected
+    CXVisibility_Default
 
 proc clang_getCursorVisibility*(
   cursor: CXCursor, # `CXCursor`
@@ -955,6 +1345,13 @@ proc clang_disposeCXPlatformAvailability*(
     dynlib: libclang
   .}
 
+type
+  CXLanguageKind* {.pure, size: sizeof(cint).} = enum
+    CXLanguage_Invalid = 0
+    CXLanguage_C
+    CXLanguage_ObjC
+    CXLanguage_CPlusPlus
+
 proc clang_getCursorLanguage*(
   cursor: CXCursor, # `CXCursor`
 ): CXLanguageKind {.
@@ -962,6 +1359,12 @@ proc clang_getCursorLanguage*(
     importc: "clang_getCursorLanguage",
     dynlib: libclang
   .}
+
+type
+  CXTLSKind* {.pure, size: sizeof(cint).} = enum
+    CXTLS_None = 0
+    CXTLS_Dynamic
+    CXTLS_Static
 
 proc clang_getCursorTLSKind*(
   cursor: CXCursor, # `CXCursor`
@@ -978,6 +1381,9 @@ proc clang_Cursor_getTranslationUnit*(
     importc: "clang_Cursor_getTranslationUnit",
     dynlib: libclang
   .}
+
+type
+  CXCursorSetImpl* {.pure, bycopy.} = object
 
 type CXCursorSet* = distinct ptr[CXCursorSetImpl] # CXCursorSet
 
@@ -1081,9 +1487,153 @@ proc clang_getCursorExtent*(
   .}
 
 type
+  CXTypeKind* {.pure, size: sizeof(cint).} = enum
+    CXType_Invalid = 0
+    CXType_Unexposed = 1
+    CXType_Void = 2
+    CXType_Bool = 3
+    CXType_Char_U = 4
+    CXType_UChar = 5
+    CXType_Char16 = 6
+    CXType_Char32 = 7
+    CXType_UShort = 8
+    CXType_UInt = 9
+    CXType_ULong = 10
+    CXType_ULongLong = 11
+    CXType_UInt128 = 12
+    CXType_Char_S = 13
+    CXType_SChar = 14
+    CXType_WChar = 15
+    CXType_Short = 16
+    CXType_Int = 17
+    CXType_Long = 18
+    CXType_LongLong = 19
+    CXType_Int128 = 20
+    CXType_Float = 21
+    CXType_Double = 22
+    CXType_LongDouble = 23
+    CXType_NullPtr = 24
+    CXType_Overload = 25
+    CXType_Dependent = 26
+    CXType_ObjCId = 27
+    CXType_ObjCClass = 28
+    CXType_ObjCSel = 29
+    CXType_Float128 = 30
+    CXType_Half = 31
+    CXType_Float16 = 32
+    CXType_ShortAccum = 33
+    CXType_Accum = 34
+    CXType_LongAccum = 35
+    CXType_UShortAccum = 36
+    CXType_UAccum = 37
+    CXType_ULongAccum = 38
+    CXType_FirstBuiltin
+    CXType_LastBuiltin
+    CXType_Complex = 100
+    CXType_Pointer = 101
+    CXType_BlockPointer = 102
+    CXType_LValueReference = 103
+    CXType_RValueReference = 104
+    CXType_Record = 105
+    CXType_Enum = 106
+    CXType_Typedef = 107
+    CXType_ObjCInterface = 108
+    CXType_ObjCObjectPointer = 109
+    CXType_FunctionNoProto = 110
+    CXType_FunctionProto = 111
+    CXType_ConstantArray = 112
+    CXType_Vector = 113
+    CXType_IncompleteArray = 114
+    CXType_VariableArray = 115
+    CXType_DependentSizedArray = 116
+    CXType_MemberPointer = 117
+    CXType_Auto = 118
+    CXType_Elaborated = 119
+    CXType_Pipe = 120
+    CXType_OCLImage1dRO = 121
+    CXType_OCLImage1dArrayRO = 122
+    CXType_OCLImage1dBufferRO = 123
+    CXType_OCLImage2dRO = 124
+    CXType_OCLImage2dArrayRO = 125
+    CXType_OCLImage2dDepthRO = 126
+    CXType_OCLImage2dArrayDepthRO = 127
+    CXType_OCLImage2dMSAARO = 128
+    CXType_OCLImage2dArrayMSAARO = 129
+    CXType_OCLImage2dMSAADepthRO = 130
+    CXType_OCLImage2dArrayMSAADepthRO = 131
+    CXType_OCLImage3dRO = 132
+    CXType_OCLImage1dWO = 133
+    CXType_OCLImage1dArrayWO = 134
+    CXType_OCLImage1dBufferWO = 135
+    CXType_OCLImage2dWO = 136
+    CXType_OCLImage2dArrayWO = 137
+    CXType_OCLImage2dDepthWO = 138
+    CXType_OCLImage2dArrayDepthWO = 139
+    CXType_OCLImage2dMSAAWO = 140
+    CXType_OCLImage2dArrayMSAAWO = 141
+    CXType_OCLImage2dMSAADepthWO = 142
+    CXType_OCLImage2dArrayMSAADepthWO = 143
+    CXType_OCLImage3dWO = 144
+    CXType_OCLImage1dRW = 145
+    CXType_OCLImage1dArrayRW = 146
+    CXType_OCLImage1dBufferRW = 147
+    CXType_OCLImage2dRW = 148
+    CXType_OCLImage2dArrayRW = 149
+    CXType_OCLImage2dDepthRW = 150
+    CXType_OCLImage2dArrayDepthRW = 151
+    CXType_OCLImage2dMSAARW = 152
+    CXType_OCLImage2dArrayMSAARW = 153
+    CXType_OCLImage2dMSAADepthRW = 154
+    CXType_OCLImage2dArrayMSAADepthRW = 155
+    CXType_OCLImage3dRW = 156
+    CXType_OCLSampler = 157
+    CXType_OCLEvent = 158
+    CXType_OCLQueue = 159
+    CXType_OCLReserveID = 160
+    CXType_ObjCObject = 161
+    CXType_ObjCTypeParam = 162
+    CXType_Attributed = 163
+    CXType_OCLIntelSubgroupAVCMcePayload = 164
+    CXType_OCLIntelSubgroupAVCImePayload = 165
+    CXType_OCLIntelSubgroupAVCRefPayload = 166
+    CXType_OCLIntelSubgroupAVCSicPayload = 167
+    CXType_OCLIntelSubgroupAVCMceResult = 168
+    CXType_OCLIntelSubgroupAVCImeResult = 169
+    CXType_OCLIntelSubgroupAVCRefResult = 170
+    CXType_OCLIntelSubgroupAVCSicResult = 171
+    CXType_OCLIntelSubgroupAVCImeResultSingleRefStreamout = 172
+    CXType_OCLIntelSubgroupAVCImeResultDualRefStreamout = 173
+    CXType_OCLIntelSubgroupAVCImeSingleRefStreamin = 174
+    CXType_OCLIntelSubgroupAVCImeDualRefStreamin = 175
+    CXType_ExtVector = 176
+
+type
+  CXCallingConv* {.pure, size: sizeof(cint).} = enum
+    CXCallingConv_Default = 0
+    CXCallingConv_C = 1
+    CXCallingConv_X86StdCall = 2
+    CXCallingConv_X86FastCall = 3
+    CXCallingConv_X86ThisCall = 4
+    CXCallingConv_X86Pascal = 5
+    CXCallingConv_AAPCS = 6
+    CXCallingConv_AAPCS_VFP = 7
+    CXCallingConv_X86RegCall = 8
+    CXCallingConv_IntelOclBicc = 9
+    CXCallingConv_Win64 = 10
+    CXCallingConv_X86_64Win64
+    # CXCallingConv_X86_64SysV = 11
+    CXCallingConv_X86VectorCall = 12
+    CXCallingConv_Swift = 13
+    CXCallingConv_PreserveMost = 14
+    CXCallingConv_PreserveAll = 15
+    CXCallingConv_AArch64VectorCall = 16
+    CXCallingConv_Invalid = 100
+    CXCallingConv_Unexposed = 200
+
+type
   CXType* {.pure, bycopy.} = object
     kind*: CXTypeKind # `enum CXTypeKind`
-    data*: array[2, void *] # `void *[2]`
+    data*: array[2, pointer] # `void *[2]`
 
 proc clang_getCursorType*(
   c: CXCursor, # `CXCursor`
@@ -1157,6 +1707,19 @@ proc clang_Cursor_getArgument*(
     importc: "clang_Cursor_getArgument",
     dynlib: libclang
   .}
+
+type
+  CXTemplateArgumentKind* {.pure, size: sizeof(cint).} = enum
+    CXTemplateArgumentKind_Null
+    CXTemplateArgumentKind_Type
+    CXTemplateArgumentKind_Declaration
+    CXTemplateArgumentKind_NullPtr
+    CXTemplateArgumentKind_Integral
+    CXTemplateArgumentKind_Template
+    CXTemplateArgumentKind_TemplateExpansion
+    CXTemplateArgumentKind_Expression
+    CXTemplateArgumentKind_Pack
+    CXTemplateArgumentKind_Invalid
 
 proc clang_Cursor_getNumTemplateArguments*(
   c: CXCursor, # `CXCursor`
@@ -1308,7 +1871,7 @@ proc clang_getDeclObjCTypeEncoding*(
   .}
 
 proc clang_Type_getObjCEncoding*(
-  type: CXType, # `CXType`
+  ctype: CXType, # `CXType`
 ): CXString {.
     cdecl,
     importc: "clang_Type_getObjCEncoding",
@@ -1486,6 +2049,13 @@ proc clang_Type_isTransparentTagTypedef*(
     dynlib: libclang
   .}
 
+type
+  CXTypeNullabilityKind* {.pure, size: sizeof(cint).} = enum
+    CXTypeNullability_NonNull = 0
+    CXTypeNullability_Nullable = 1
+    CXTypeNullability_Unspecified = 2
+    CXTypeNullability_Invalid = 3
+
 proc clang_Type_getNullability*(
   t: CXType, # `CXType`
 ): CXTypeNullabilityKind {.
@@ -1493,6 +2063,15 @@ proc clang_Type_getNullability*(
     importc: "clang_Type_getNullability",
     dynlib: libclang
   .}
+
+type
+  CXTypeLayoutError* {.pure, size: sizeof(cint).} = enum
+    CXTypeLayoutError_Invalid
+    CXTypeLayoutError_Incomplete
+    CXTypeLayoutError_Dependent
+    CXTypeLayoutError_NotConstantSize
+    CXTypeLayoutError_InvalidFieldName
+    CXTypeLayoutError_Undeduced
 
 proc clang_Type_getAlignOf*(
   t: CXType, # `CXType`
@@ -1567,6 +2146,12 @@ proc clang_Cursor_isInlineNamespace*(
     dynlib: libclang
   .}
 
+type
+  CXRefQualifierKind* {.pure, size: sizeof(cint).} = enum
+    CXRefQualifier_None = 0
+    CXRefQualifier_LValue
+    CXRefQualifier_RValue
+
 proc clang_Type_getNumTemplateArguments*(
   t: CXType, # `CXType`
 ): cint {.
@@ -1608,6 +2193,13 @@ proc clang_isVirtualBase*(
     dynlib: libclang
   .}
 
+type
+  CX_CXXAccessSpecifier* {.pure, size: sizeof(cint).} = enum
+    CX_CXXInvalidAccessSpecifier
+    CX_CXXPublic
+    CX_CXXProtected
+    CX_CXXPrivate
+
 proc clang_getCXXAccessSpecifier*(
   arg_1: CXCursor, # `CXCursor`
 ): CX_CXXAccessSpecifier {.
@@ -1615,6 +2207,17 @@ proc clang_getCXXAccessSpecifier*(
     importc: "clang_getCXXAccessSpecifier",
     dynlib: libclang
   .}
+
+type
+  CX_StorageClass* {.pure, size: sizeof(cint).} = enum
+    CX_SC_Invalid
+    CX_SC_None
+    CX_SC_Extern
+    CX_SC_Static
+    CX_SC_PrivateExtern
+    CX_SC_OpenCLWorkGroupLocal
+    CX_SC_Auto
+    CX_SC_Register
 
 proc clang_Cursor_getStorageClass*(
   arg_1: CXCursor, # `CXCursor`
@@ -1649,7 +2252,13 @@ proc clang_getIBOutletCollectionType*(
     dynlib: libclang
   .}
 
-type CXCursorVisitor* = distinct proc(a0: CXCursor, a1: CXCursor, a2: pointer): enum CXChildVisitResult {.cdecl.} # CXCursorVisitor
+type
+  CXChildVisitResult* {.pure, size: sizeof(cint).} = enum
+    CXChildVisit_Break
+    CXChildVisit_Continue
+    CXChildVisit_Recurse
+
+type CXCursorVisitor* = distinct proc(a0: CXCursor, a1: CXCursor, a2: pointer): CXChildVisitResult {.cdecl.} # CXCursorVisitor
 
 proc clang_visitChildren*(
   parent: CXCursor, # `CXCursor`
@@ -1741,6 +2350,36 @@ proc clang_Cursor_getSpellingNameRange*(
   .}
 
 type CXPrintingPolicy* = distinct pointer # CXPrintingPolicy
+
+type
+  CXPrintingPolicyProperty* {.pure, size: sizeof(cint).} = enum
+    CXPrintingPolicy_Indentation
+    CXPrintingPolicy_SuppressSpecifiers
+    CXPrintingPolicy_SuppressTagKeyword
+    CXPrintingPolicy_IncludeTagDefinition
+    CXPrintingPolicy_SuppressScope
+    CXPrintingPolicy_SuppressUnwrittenScope
+    CXPrintingPolicy_SuppressInitializers
+    CXPrintingPolicy_ConstantArraySizeAsWritten
+    CXPrintingPolicy_AnonymousTagLocations
+    CXPrintingPolicy_SuppressStrongLifetime
+    CXPrintingPolicy_SuppressLifetimeQualifiers
+    CXPrintingPolicy_SuppressTemplateArgsInCXXConstructors
+    CXPrintingPolicy_Bool
+    CXPrintingPolicy_Restrict
+    CXPrintingPolicy_Alignof
+    CXPrintingPolicy_UnderscoreAlignof
+    CXPrintingPolicy_UseVoidForZeroParams
+    CXPrintingPolicy_TerseOutput
+    CXPrintingPolicy_PolishForDeclaration
+    CXPrintingPolicy_Half
+    CXPrintingPolicy_MSWChar
+    CXPrintingPolicy_IncludeNewlines
+    CXPrintingPolicy_MSVCFormatting
+    CXPrintingPolicy_ConstantsAsWritten
+    CXPrintingPolicy_SuppressImplicitBase
+    CXPrintingPolicy_FullyQualifiedName
+    CXPrintingPolicy_LastProperty
 
 proc clang_PrintingPolicy_getProperty*(
   policy: CXPrintingPolicy, # `CXPrintingPolicy`
@@ -2186,6 +2825,12 @@ proc clang_getCursorReferenceNameRange*(
   .}
 
 type
+  CXNameRefFlags* {.pure, size: sizeof(cint).} = enum
+    CXNameRange_WantQualifier = 1
+    CXNameRange_WantTemplateArgs = 2
+    CXNameRange_WantSinglePiece = 4
+
+type
   CXTokenKind* {.pure, size: sizeof(cint).} = enum
     CXToken_Punctuation
     CXToken_Keyword
@@ -2195,7 +2840,7 @@ type
 
 type
   CXToken* {.pure, bycopy.} = object
-    int_data*: array[4, unsigned int] # `unsigned int [4]`
+    int_data*: array[4, cuint] # `unsigned int [4]`
     ptr_data*: pointer # `void *`
 
 proc clang_getToken*(
@@ -2319,6 +2964,30 @@ type
     cursorKind*: CXCursorKind # `enum CXCursorKind`
     completionString*: CXCompletionString # `CXCompletionString`
 
+type
+  CXCompletionChunkKind* {.pure, size: sizeof(cint).} = enum
+    CXCompletionChunk_Optional
+    CXCompletionChunk_TypedText
+    CXCompletionChunk_Text
+    CXCompletionChunk_Placeholder
+    CXCompletionChunk_Informative
+    CXCompletionChunk_CurrentParameter
+    CXCompletionChunk_LeftParen
+    CXCompletionChunk_RightParen
+    CXCompletionChunk_LeftBracket
+    CXCompletionChunk_RightBracket
+    CXCompletionChunk_LeftBrace
+    CXCompletionChunk_RightBrace
+    CXCompletionChunk_LeftAngle
+    CXCompletionChunk_RightAngle
+    CXCompletionChunk_Comma
+    CXCompletionChunk_ResultType
+    CXCompletionChunk_Colon
+    CXCompletionChunk_SemiColon
+    CXCompletionChunk_Equal
+    CXCompletionChunk_HorizontalSpace
+    CXCompletionChunk_VerticalSpace
+
 proc clang_getCompletionChunkKind*(
   completion_string: CXCompletionString, # `CXCompletionString`
   chunk_number: cuint, # `unsigned int`
@@ -2437,6 +3106,42 @@ proc clang_getCompletionFixIt*(
     dynlib: libclang
   .}
 
+type
+  CXCodeComplete_Flags* {.pure, size: sizeof(cint).} = enum
+    CXCodeComplete_IncludeMacros = 1
+    CXCodeComplete_IncludeCodePatterns = 2
+    CXCodeComplete_IncludeBriefComments = 4
+    CXCodeComplete_SkipPreamble = 8
+    CXCodeComplete_IncludeCompletionsWithFixIts = 16
+
+type
+  CXCompletionContext* {.pure, size: sizeof(cint).} = enum
+    CXCompletionContext_Unexposed = 0
+    CXCompletionContext_AnyType = 1
+    CXCompletionContext_AnyValue = 2
+    CXCompletionContext_ObjCObjectValue = 4
+    CXCompletionContext_ObjCSelectorValue = 8
+    CXCompletionContext_CXXClassTypeValue = 16
+    CXCompletionContext_DotMemberAccess = 32
+    CXCompletionContext_ArrowMemberAccess = 64
+    CXCompletionContext_ObjCPropertyAccess = 128
+    CXCompletionContext_EnumTag = 256
+    CXCompletionContext_UnionTag = 512
+    CXCompletionContext_StructTag = 1024
+    CXCompletionContext_ClassTag = 2048
+    CXCompletionContext_Namespace = 4096
+    CXCompletionContext_NestedNameSpecifier = 8192
+    CXCompletionContext_ObjCInterface = 16384
+    CXCompletionContext_ObjCProtocol = 32768
+    CXCompletionContext_ObjCCategory = 65536
+    CXCompletionContext_ObjCInstanceMessage = 131072
+    CXCompletionContext_ObjCClassMessage = 262144
+    CXCompletionContext_ObjCSelectorName = 524288
+    CXCompletionContext_MacroName = 1048576
+    CXCompletionContext_NaturalLanguage = 2097152
+    CXCompletionContext_IncludedFile = 4194304
+    CXCompletionContext_Unknown
+
 proc clang_defaultCodeCompleteOptions*(): cuint {.
     cdecl,
     importc: "clang_defaultCodeCompleteOptions",
@@ -2552,13 +3257,14 @@ proc clang_getInclusions*(
 
 type
   CXEvalResultKind* {.pure, size: sizeof(cint).} = enum
+    CXEval_UnExposed = 0
     CXEval_Int = 1
     CXEval_Float = 2
     CXEval_ObjCStrLiteral = 3
     CXEval_StrLiteral = 4
     CXEval_CFStr = 5
     CXEval_Other = 6
-    CXEval_UnExposed = 0
+    
 
 type CXEvalResult* = distinct pointer # CXEvalResult
 
@@ -2681,6 +3387,11 @@ proc clang_remap_dispose*(
   .}
 
 type
+  CXVisitorResult* {.pure, size: sizeof(cint).} = enum
+    CXVisit_Break
+    CXVisit_Continue
+
+type
   CXCursorAndRangeVisitor* {.pure, bycopy.} = object
     context*: pointer # `void *`
     visit*: proc(a0: pointer, a1: CXCursor, a2: CXSourceRange): CXVisitorResult {.cdecl.} # `enum CXVisitorResult (*)(void *, CXCursor, CXSourceRange)`
@@ -2721,7 +3432,7 @@ type CXIdxClientASTFile* = distinct pointer # CXIdxClientASTFile
 
 type
   CXIdxLoc* {.pure, bycopy.} = object
-    ptr_data*: array[2, void *] # `void *[2]`
+    ptr_data*: array[2, pointer] # `void *[2]`
     int_data*: cuint # `unsigned int`
 
 type
@@ -2806,7 +3517,7 @@ type
     name*: ptr[cstring] # `const char *`
     uSR*: ptr[cstring] # `const char *`
     cursor*: CXCursor # `CXCursor`
-    attributes*: ptr[ptr[const CXIdxAttrInfo]] # `const CXIdxAttrInfo *const *`
+    attributes*: ptr[ptr[CXIdxAttrInfo]] # `const CXIdxAttrInfo *const *`
     numAttributes*: cuint # `unsigned int`
 
 type
@@ -2815,8 +3526,8 @@ type
 
 type
   CXIdxIBOutletCollectionAttrInfo* {.pure, bycopy.} = object
-    attrInfo*: ptr[const CXIdxAttrInfo] # `const CXIdxAttrInfo *`
-    objcClass*: ptr[const CXIdxEntityInfo] # `const CXIdxEntityInfo *`
+    attrInfo*: ptr[CXIdxAttrInfo] # `const CXIdxAttrInfo *`
+    objcClass*: ptr[CXIdxEntityInfo] # `const CXIdxEntityInfo *`
     classCursor*: CXCursor # `CXCursor`
     classLoc*: CXIdxLoc # `CXIdxLoc`
 
@@ -2826,17 +3537,17 @@ type
 
 type
   CXIdxDeclInfo* {.pure, bycopy.} = object
-    entityInfo*: ptr[const CXIdxEntityInfo] # `const CXIdxEntityInfo *`
+    entityInfo*: ptr[CXIdxEntityInfo] # `const CXIdxEntityInfo *`
     cursor*: CXCursor # `CXCursor`
     loc*: CXIdxLoc # `CXIdxLoc`
-    semanticContainer*: ptr[const CXIdxContainerInfo] # `const CXIdxContainerInfo *`
-    lexicalContainer*: ptr[const CXIdxContainerInfo] # `const CXIdxContainerInfo *`
+    semanticContainer*: ptr[CXIdxContainerInfo] # `const CXIdxContainerInfo *`
+    lexicalContainer*: ptr[CXIdxContainerInfo] # `const CXIdxContainerInfo *`
     isRedeclaration*: cint # `int`
     isDefinition*: cint # `int`
     isContainer*: cint # `int`
-    declAsContainer*: ptr[const CXIdxContainerInfo] # `const CXIdxContainerInfo *`
+    declAsContainer*: ptr[CXIdxContainerInfo] # `const CXIdxContainerInfo *`
     isImplicit*: cint # `int`
-    attributes*: ptr[ptr[const CXIdxAttrInfo]] # `const CXIdxAttrInfo *const *`
+    attributes*: ptr[ptr[CXIdxAttrInfo]] # `const CXIdxAttrInfo *const *`
     numAttributes*: cuint # `unsigned int`
     flags*: cuint # `unsigned int`
 
@@ -2848,50 +3559,50 @@ type
 
 type
   CXIdxObjCContainerDeclInfo* {.pure, bycopy.} = object
-    declInfo*: ptr[const CXIdxDeclInfo] # `const CXIdxDeclInfo *`
+    declInfo*: ptr[CXIdxDeclInfo] # `const CXIdxDeclInfo *`
     kind*: CXIdxObjCContainerKind # `CXIdxObjCContainerKind`
 
 type
   CXIdxBaseClassInfo* {.pure, bycopy.} = object
-    base*: ptr[const CXIdxEntityInfo] # `const CXIdxEntityInfo *`
+    base*: ptr[CXIdxEntityInfo] # `const CXIdxEntityInfo *`
     cursor*: CXCursor # `CXCursor`
     loc*: CXIdxLoc # `CXIdxLoc`
 
 type
   CXIdxObjCProtocolRefInfo* {.pure, bycopy.} = object
-    protocol*: ptr[const CXIdxEntityInfo] # `const CXIdxEntityInfo *`
+    protocol*: ptr[CXIdxEntityInfo] # `const CXIdxEntityInfo *`
     cursor*: CXCursor # `CXCursor`
     loc*: CXIdxLoc # `CXIdxLoc`
 
 type
   CXIdxObjCProtocolRefListInfo* {.pure, bycopy.} = object
-    protocols*: ptr[ptr[const CXIdxObjCProtocolRefInfo]] # `const CXIdxObjCProtocolRefInfo *const *`
+    protocols*: ptr[ptr[CXIdxObjCProtocolRefInfo]] # `const CXIdxObjCProtocolRefInfo *const *`
     numProtocols*: cuint # `unsigned int`
 
 type
   CXIdxObjCInterfaceDeclInfo* {.pure, bycopy.} = object
-    containerInfo*: ptr[const CXIdxObjCContainerDeclInfo] # `const CXIdxObjCContainerDeclInfo *`
-    superInfo*: ptr[const CXIdxBaseClassInfo] # `const CXIdxBaseClassInfo *`
-    protocols*: ptr[const CXIdxObjCProtocolRefListInfo] # `const CXIdxObjCProtocolRefListInfo *`
+    containerInfo*: ptr[CXIdxObjCContainerDeclInfo] # `const CXIdxObjCContainerDeclInfo *`
+    superInfo*: ptr[CXIdxBaseClassInfo] # `const CXIdxBaseClassInfo *`
+    protocols*: ptr[CXIdxObjCProtocolRefListInfo] # `const CXIdxObjCProtocolRefListInfo *`
 
 type
   CXIdxObjCCategoryDeclInfo* {.pure, bycopy.} = object
-    containerInfo*: ptr[const CXIdxObjCContainerDeclInfo] # `const CXIdxObjCContainerDeclInfo *`
-    objcClass*: ptr[const CXIdxEntityInfo] # `const CXIdxEntityInfo *`
+    containerInfo*: ptr[CXIdxObjCContainerDeclInfo] # `const CXIdxObjCContainerDeclInfo *`
+    objcClass*: ptr[CXIdxEntityInfo] # `const CXIdxEntityInfo *`
     classCursor*: CXCursor # `CXCursor`
     classLoc*: CXIdxLoc # `CXIdxLoc`
-    protocols*: ptr[const CXIdxObjCProtocolRefListInfo] # `const CXIdxObjCProtocolRefListInfo *`
+    protocols*: ptr[CXIdxObjCProtocolRefListInfo] # `const CXIdxObjCProtocolRefListInfo *`
 
 type
   CXIdxObjCPropertyDeclInfo* {.pure, bycopy.} = object
-    declInfo*: ptr[const CXIdxDeclInfo] # `const CXIdxDeclInfo *`
-    getter*: ptr[const CXIdxEntityInfo] # `const CXIdxEntityInfo *`
-    setter*: ptr[const CXIdxEntityInfo] # `const CXIdxEntityInfo *`
+    declInfo*: ptr[CXIdxDeclInfo] # `const CXIdxDeclInfo *`
+    getter*: ptr[CXIdxEntityInfo] # `const CXIdxEntityInfo *`
+    setter*: ptr[CXIdxEntityInfo] # `const CXIdxEntityInfo *`
 
 type
   CXIdxCXXClassDeclInfo* {.pure, bycopy.} = object
-    declInfo*: ptr[const CXIdxDeclInfo] # `const CXIdxDeclInfo *`
-    bases*: ptr[ptr[const CXIdxBaseClassInfo]] # `const CXIdxBaseClassInfo *const *`
+    declInfo*: ptr[CXIdxDeclInfo] # `const CXIdxDeclInfo *`
+    bases*: ptr[ptr[CXIdxBaseClassInfo]] # `const CXIdxBaseClassInfo *const *`
     numBases*: cuint # `unsigned int`
 
 type
@@ -2917,9 +3628,9 @@ type
     kind*: CXIdxEntityRefKind # `CXIdxEntityRefKind`
     cursor*: CXCursor # `CXCursor`
     loc*: CXIdxLoc # `CXIdxLoc`
-    referencedEntity*: ptr[const CXIdxEntityInfo] # `const CXIdxEntityInfo *`
-    parentEntity*: ptr[const CXIdxEntityInfo] # `const CXIdxEntityInfo *`
-    container*: ptr[const CXIdxContainerInfo] # `const CXIdxContainerInfo *`
+    referencedEntity*: ptr[CXIdxEntityInfo] # `const CXIdxEntityInfo *`
+    parentEntity*: ptr[CXIdxEntityInfo] # `const CXIdxEntityInfo *`
+    container*: ptr[CXIdxContainerInfo] # `const CXIdxContainerInfo *`
     role*: CXSymbolRole # `CXSymbolRole`
 
 type
@@ -2927,11 +3638,11 @@ type
     abortQuery*: proc(a0: CXClientData, a1: pointer): cint {.cdecl.} # `int (*)(CXClientData, void *)`
     diagnostic*: proc(a0: CXClientData, a1: CXDiagnosticSet, a2: pointer): void {.cdecl.} # `void (*)(CXClientData, CXDiagnosticSet, void *)`
     enteredMainFile*: proc(a0: CXClientData, a1: CXFile, a2: pointer): CXIdxClientFile {.cdecl.} # `CXIdxClientFile (*)(CXClientData, CXFile, void *)`
-    ppIncludedFile*: proc(a0: CXClientData, a1: ptr[const CXIdxIncludedFileInfo]): CXIdxClientFile {.cdecl.} # `CXIdxClientFile (*)(CXClientData, const CXIdxIncludedFileInfo *)`
-    importedASTFile*: proc(a0: CXClientData, a1: ptr[const CXIdxImportedASTFileInfo]): CXIdxClientASTFile {.cdecl.} # `CXIdxClientASTFile (*)(CXClientData, const CXIdxImportedASTFileInfo *)`
+    ppIncludedFile*: proc(a0: CXClientData, a1: ptr[CXIdxIncludedFileInfo]): CXIdxClientFile {.cdecl.} # `CXIdxClientFile (*)(CXClientData, const CXIdxIncludedFileInfo *)`
+    importedASTFile*: proc(a0: CXClientData, a1: ptr[CXIdxImportedASTFileInfo]): CXIdxClientASTFile {.cdecl.} # `CXIdxClientASTFile (*)(CXClientData, const CXIdxImportedASTFileInfo *)`
     startedTranslationUnit*: proc(a0: CXClientData, a1: pointer): CXIdxClientContainer {.cdecl.} # `CXIdxClientContainer (*)(CXClientData, void *)`
-    indexDeclaration*: proc(a0: CXClientData, a1: ptr[const CXIdxDeclInfo]): void {.cdecl.} # `void (*)(CXClientData, const CXIdxDeclInfo *)`
-    indexEntityReference*: proc(a0: CXClientData, a1: ptr[const CXIdxEntityRefInfo]): void {.cdecl.} # `void (*)(CXClientData, const CXIdxEntityRefInfo *)`
+    indexDeclaration*: proc(a0: CXClientData, a1: ptr[CXIdxDeclInfo]): void {.cdecl.} # `void (*)(CXClientData, const CXIdxDeclInfo *)`
+    indexEntityReference*: proc(a0: CXClientData, a1: ptr[CXIdxEntityRefInfo]): void {.cdecl.} # `void (*)(CXClientData, const CXIdxEntityRefInfo *)`
 
 proc clang_index_isEntityObjCContainerKind*(
   arg_1: CXIdxEntityKind, # `CXIdxEntityKind`
@@ -2942,63 +3653,63 @@ proc clang_index_isEntityObjCContainerKind*(
   .}
 
 proc clang_index_getObjCContainerDeclInfo*(
-  arg_1: ptr[const CXIdxDeclInfo], # `const CXIdxDeclInfo *`
-): ptr[const CXIdxObjCContainerDeclInfo] {.
+  arg_1: ptr[CXIdxDeclInfo], # `const CXIdxDeclInfo *`
+): ptr[CXIdxObjCContainerDeclInfo] {.
     cdecl,
     importc: "clang_index_getObjCContainerDeclInfo",
     dynlib: libclang
   .}
 
 proc clang_index_getObjCInterfaceDeclInfo*(
-  arg_1: ptr[const CXIdxDeclInfo], # `const CXIdxDeclInfo *`
-): ptr[const CXIdxObjCInterfaceDeclInfo] {.
+  arg_1: ptr[CXIdxDeclInfo], # `const CXIdxDeclInfo *`
+): ptr[CXIdxObjCInterfaceDeclInfo] {.
     cdecl,
     importc: "clang_index_getObjCInterfaceDeclInfo",
     dynlib: libclang
   .}
 
 proc clang_index_getObjCCategoryDeclInfo*(
-  arg_1: ptr[const CXIdxDeclInfo], # `const CXIdxDeclInfo *`
-): ptr[const CXIdxObjCCategoryDeclInfo] {.
+  arg_1: ptr[CXIdxDeclInfo], # `const CXIdxDeclInfo *`
+): ptr[CXIdxObjCCategoryDeclInfo] {.
     cdecl,
     importc: "clang_index_getObjCCategoryDeclInfo",
     dynlib: libclang
   .}
 
 proc clang_index_getObjCProtocolRefListInfo*(
-  arg_1: ptr[const CXIdxDeclInfo], # `const CXIdxDeclInfo *`
-): ptr[const CXIdxObjCProtocolRefListInfo] {.
+  arg_1: ptr[CXIdxDeclInfo], # `const CXIdxDeclInfo *`
+): ptr[CXIdxObjCProtocolRefListInfo] {.
     cdecl,
     importc: "clang_index_getObjCProtocolRefListInfo",
     dynlib: libclang
   .}
 
 proc clang_index_getObjCPropertyDeclInfo*(
-  arg_1: ptr[const CXIdxDeclInfo], # `const CXIdxDeclInfo *`
-): ptr[const CXIdxObjCPropertyDeclInfo] {.
+  arg_1: ptr[CXIdxDeclInfo], # `const CXIdxDeclInfo *`
+): ptr[CXIdxObjCPropertyDeclInfo] {.
     cdecl,
     importc: "clang_index_getObjCPropertyDeclInfo",
     dynlib: libclang
   .}
 
 proc clang_index_getIBOutletCollectionAttrInfo*(
-  arg_1: ptr[const CXIdxAttrInfo], # `const CXIdxAttrInfo *`
-): ptr[const CXIdxIBOutletCollectionAttrInfo] {.
+  arg_1: ptr[CXIdxAttrInfo], # `const CXIdxAttrInfo *`
+): ptr[CXIdxIBOutletCollectionAttrInfo] {.
     cdecl,
     importc: "clang_index_getIBOutletCollectionAttrInfo",
     dynlib: libclang
   .}
 
 proc clang_index_getCXXClassDeclInfo*(
-  arg_1: ptr[const CXIdxDeclInfo], # `const CXIdxDeclInfo *`
-): ptr[const CXIdxCXXClassDeclInfo] {.
+  arg_1: ptr[CXIdxDeclInfo], # `const CXIdxDeclInfo *`
+): ptr[CXIdxCXXClassDeclInfo] {.
     cdecl,
     importc: "clang_index_getCXXClassDeclInfo",
     dynlib: libclang
   .}
 
 proc clang_index_getClientContainer*(
-  arg_1: ptr[const CXIdxContainerInfo], # `const CXIdxContainerInfo *`
+  arg_1: ptr[CXIdxContainerInfo], # `const CXIdxContainerInfo *`
 ): CXIdxClientContainer {.
     cdecl,
     importc: "clang_index_getClientContainer",
@@ -3006,7 +3717,7 @@ proc clang_index_getClientContainer*(
   .}
 
 proc clang_index_setClientContainer*(
-  arg_1: ptr[const CXIdxContainerInfo], # `const CXIdxContainerInfo *`
+  arg_1: ptr[CXIdxContainerInfo], # `const CXIdxContainerInfo *`
   arg_2: CXIdxClientContainer, # `CXIdxClientContainer`
 ): void {.
     cdecl,
@@ -3015,7 +3726,7 @@ proc clang_index_setClientContainer*(
   .}
 
 proc clang_index_getClientEntity*(
-  arg_1: ptr[const CXIdxEntityInfo], # `const CXIdxEntityInfo *`
+  arg_1: ptr[CXIdxEntityInfo], # `const CXIdxEntityInfo *`
 ): CXIdxClientEntity {.
     cdecl,
     importc: "clang_index_getClientEntity",
@@ -3023,7 +3734,7 @@ proc clang_index_getClientEntity*(
   .}
 
 proc clang_index_setClientEntity*(
-  arg_1: ptr[const CXIdxEntityInfo], # `const CXIdxEntityInfo *`
+  arg_1: ptr[CXIdxEntityInfo], # `const CXIdxEntityInfo *`
   arg_2: CXIdxClientEntity, # `CXIdxClientEntity`
 ): void {.
     cdecl,
@@ -3130,7 +3841,7 @@ proc clang_indexLoc_getCXSourceLocation*(
     dynlib: libclang
   .}
 
-type CXFieldVisitor* = distinct proc(a0: CXCursor, a1: pointer): enum CXVisitorResult {.cdecl.} # CXFieldVisitor
+type CXFieldVisitor* = distinct proc(a0: CXCursor, a1: pointer): CXVisitorResult {.cdecl.} # CXFieldVisitor
 
 proc clang_Type_visitFields*(
   t: CXType, # `CXType`

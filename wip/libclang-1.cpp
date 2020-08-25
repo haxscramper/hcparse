@@ -76,8 +76,8 @@ CXBufPtr toBufPtr(void* client_data) {
     return reinterpret_cast<CXBufPtr>(client_data);
 }
 
-Str fixTypeName(CXType type) {
-    let fullStr = toStr(clang_getTypeSpelling(type));
+
+Str fixTypeName(Str fullStr) {
     if (fullStr.rfind("enum ") == 0) {
         return fullStr.substr(5, fullStr.size());
     } else if (fullStr.rfind("struct ") == 0) {
@@ -88,6 +88,10 @@ Str fixTypeName(CXType type) {
         return fullStr;
         // return "\e[91m!!!\e[39m";
     }
+}
+
+Str fixTypeName(CXType type) {
+    return fixTypeName(toStr(clang_getTypeSpelling(type)));
 }
 
 Str toNimType(CXType type, int level = 0) {
@@ -123,10 +127,16 @@ Str toNimType(CXType type, int level = 0) {
         }
 
         case CXType_ConstantArray: {
+
+            let elemType = clang_getElementType(type);
+            std::cout << "  \e[31m\e[3mELEMENT\e[23m\e[39m: " << elemType
+                      << " " << clang_getTypeKindSpelling(elemType.kind)
+                      << "\n";
+
             return fmt::format(
                 "array[{}, {}]",
                 clang_getNumElements(type),
-                clang_getElementType(type));
+                toNimType(elemType));
         }
 
         case CXType_FunctionProto: {
@@ -146,7 +156,7 @@ Str toNimType(CXType type, int level = 0) {
             return fmt::format(
                 "proc({}): {} {{.cdecl.}}",
                 argParams,
-                toNimType(clang_getResultType(type)));
+                fixTypeName(toNimType(clang_getResultType(type))));
         }
 
         default: {
@@ -165,6 +175,8 @@ Str fixArgName(Str name) {
         return "begin";
     } else if (name == "end") {
         return "cend";
+    } else if (name == "type") {
+        return "ctype";
     } else if (name == "range") {
         return "crange"; // cringe
     } else if ('A' <= name[0] and name[0] <= 'Z') {
@@ -461,27 +473,27 @@ CXChildVisitResult visitTypedef(CHILD_VISIT_PARAMS) {
             clang_getCursorType(cursor));
 
     } else {
-        for (auto& subnode : directSubnodes(cursor)) {
-            let kind = clang_getCursorKind(subnode);
-            switch (kind) {
-                case CXCursor_StructDecl: {
-                    visitStructDecl(subnode, cursor, client_data);
-                    break;
-                }
-                case CXCursor_EnumDecl: {
-                    visitEnumDecl(subnode, cursor, client_data);
-                    break;
-                }
-                default: {
-                    isTypeDef = true;
-                    std::cout << cursor << " \e[32m" << kind
-                              << "\e[39m \e[93m"
-                              << clang_getCanonicalType(
-                                     clang_getCursorType(subnode))
-                              << "\e[39m\n";
-                }
-            }
-        }
+        // for (auto& subnode : directSubnodes(cursor)) {
+        //     let kind = clang_getCursorKind(subnode);
+        //     switch (kind) {
+        //         case CXCursor_StructDecl: {
+        //             visitStructDecl(subnode, cursor, client_data);
+        //             break;
+        //         }
+        //         case CXCursor_EnumDecl: {
+        //             visitEnumDecl(subnode, cursor, client_data);
+        //             break;
+        //         }
+        //         default: {
+        //             isTypeDef = true;
+        //             std::cout << cursor << " \e[32m" << kind
+        //                       << "\e[39m \e[93m"
+        //                       << clang_getCanonicalType(
+        //                              clang_getCursorType(subnode))
+        //                       << "\e[39m\n";
+        //         }
+        //     }
+        // }
     }
 
 
@@ -498,12 +510,19 @@ CXChildVisitResult visitToplevel(CHILD_VISIT_PARAMS) {
     if (clang_Location_isFromMainFile(clang_getCursorLocation(cursor)))
     // Only interested in functions defined in main file being processed
     {
+        if (kind != CXCursor_FunctionDecl) {
+            std::cout << cursor << " \e[32m" << kind << "\e[39m\n";
+        }
+
         if (kind == CXCursor_FunctionDecl) {
             return visitFunction(cursor, parent, client_data);
         } else if (kind == CXCursor_TypedefDecl) {
             return visitTypedef(cursor, parent, client_data);
+        } else if (kind == CXCursor_EnumDecl) {
+            return visitEnumDecl(cursor, parent, client_data);
+        } else if (kind == CXCursor_StructDecl) {
+            return visitStructDecl(cursor, parent, client_data);
         } else {
-            // std::cout << cursor << " \e[32m" << kind << "\e[39m\n";
             return CXChildVisit_Recurse;
         }
     } else {
@@ -519,11 +538,11 @@ int main() {
         {"BuildSystem.h", "build_system.nim"},
         {"CXCompilationDatabase.h", "cxcompilation_database.nim"},
         {"CXErrorCode.h", "cxerror_code.nim"},
-        {"CXString.h", "cxstring.nim"},
         {"Documentation.h", "documentation.nim"},
         {"ExternC.h", "externc.nim"},
         {"FatalErrorHandler.h", "fatal_error_handler.nim"},
-        {"Platform.h", "platform.nim"}
+        {"Platform.h", "platform.nim"},
+        {"CXString.h", "cxstring.nim"},
         //
     };
 

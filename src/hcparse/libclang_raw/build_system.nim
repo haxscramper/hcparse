@@ -24,6 +24,9 @@ proc clang_getBuildSessionTimestamp*(): culonglong {.
     dynlib: libclang
   .}
 
+type
+  CXVirtualFileOverlayImpl* {.pure, bycopy.} = object
+
 type CXVirtualFileOverlay* = distinct ptr[CXVirtualFileOverlayImpl] # CXVirtualFileOverlay
 
 proc clang_VirtualFileOverlay_create*(
@@ -79,6 +82,9 @@ proc clang_VirtualFileOverlay_dispose*(
     importc: "clang_VirtualFileOverlay_dispose",
     dynlib: libclang
   .}
+
+type
+  CXModuleMapDescriptorImpl* {.pure, bycopy.} = object
 
 type CXModuleMapDescriptor* = distinct ptr[CXModuleMapDescriptorImpl] # CXModuleMapDescriptor
 

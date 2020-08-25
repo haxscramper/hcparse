@@ -29,6 +29,36 @@ proc clang_Cursor_getParsedComment*(
     dynlib: libclang
   .}
 
+type
+  CXCommentKind* {.pure, size: sizeof(cint).} = enum
+    CXComment_Null = 0
+    CXComment_Text = 1
+    CXComment_InlineCommand = 2
+    CXComment_HTMLStartTag = 3
+    CXComment_HTMLEndTag = 4
+    CXComment_Paragraph = 5
+    CXComment_BlockCommand = 6
+    CXComment_ParamCommand = 7
+    CXComment_TParamCommand = 8
+    CXComment_VerbatimBlockCommand = 9
+    CXComment_VerbatimBlockLine = 10
+    CXComment_VerbatimLine = 11
+    CXComment_FullComment = 12
+
+type
+  CXCommentInlineCommandRenderKind* {.pure, size: sizeof(cint).} = enum
+    CXCommentInlineCommandRenderKind_Normal
+    CXCommentInlineCommandRenderKind_Bold
+    CXCommentInlineCommandRenderKind_Monospaced
+    CXCommentInlineCommandRenderKind_Emphasized
+    CXCommentInlineCommandRenderKind_Anchor
+
+type
+  CXCommentParamPassDirection* {.pure, size: sizeof(cint).} = enum
+    CXCommentParamPassDirection_In
+    CXCommentParamPassDirection_Out
+    CXCommentParamPassDirection_InOut
+
 proc clang_Comment_getKind*(
   comment: CXComment, # `CXComment`
 ): CXCommentKind {.
