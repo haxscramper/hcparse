@@ -11,6 +11,7 @@ import hmisc/types/[hnim_ast, colorstring]
 #                  ast, renderer, lineinfos]
 
 import compiler/[ast, renderer, lineinfos]
+import packages/docutils/rstast
 
 import index, documentation, cxstring
 
@@ -137,9 +138,123 @@ proc `$`*(comment: CXComment): string =
   $comment.clang_FullComment_getAsHTML() # NOTE it seems like libclang
   # API does not provide a way to get full comment string as raw string.
 
+iterator children*(comment: CXComment): CXComment =
+  for i in 0..clang_Comment_getNumChildren(comment):
+    yield comment.clang_Comment_getChild(cuint(i))
+
+proc len*(comment: CXComment): int =
+  clang_Comment_getNumChildren(comment).int
+
+proc `[]`*(comment: CXComment, idx: int): CXComment =
+  assert idx < comment.len
+  clang_Comment_getChild(comment, cuint(idx))
+
+proc objTreeRepr*(comment: CXComment): ObjTree =
+  case comment.cxKind:
+    of CXComment_Text:
+      pptConst $comment.clang_TextComment_getText()
+    of CXComment_ParamCommand:
+      pptObj(
+        $comment.cxKind,
+        [(
+          $clang_ParamCommandComment_getParamName(comment),
+          pptSeq(toSeq(comment.children).mapIt(it.objTreeRepr()))
+          # objTreeRepr(comment[0])
+        )]
+      )
+    of CXComment_InlineCommand:
+      let args: seq[string] = collect(newSeq):
+        for i in 0 ..< clang_InlineCommandComment_getNumArgs(comment):
+          $clang_InlineCommandComment_getArgText(comment, cuint(i))
+
+      pptObj(
+        $comment.cxKind,
+        [(
+          $clang_InlineCommandComment_getCommandName(comment),
+          pptSeq(
+            args.mapIt(it.pptConst) &
+            toSeq(comment.children).mapIt(it.objTreeRepr())
+          )
+        )]
+      )
+    of CXComment_BlockCommand:
+      pptObj(
+        $comment.cxKind,
+        [(
+          $clang_BlockCommandComment_getCommandName(comment),
+          pptSeq(toSeq(comment.children).mapIt(it.objTreeRepr()))
+          # objTreeRepr(comment[0])
+        )]
+      )
+    else:
+      if comment.len == 0:
+        pptObj($comment.cxKind,
+               pptConst($comment.clang_FullComment_getAsXML()))
+      else:
+        pptObj($comment.cxKind,
+               toSeq(comment.children).mapIt(it.objTreeRepr()))
+
 proc retType*(cursor: CXCursor): CXType =
   cursor.expectKind(CXCursor_FunctionDecl)
   cursor.cxType().clang_getResultType()
+
+proc newRstNode*(
+  kind: RstNodeKind, subnodes: varargs[PRstNode]): PRstNode =
+  result = rstast.newRstNode(kind)
+  for node in subnodes:
+    result.add node
+
+proc toRstNode*(comment: CXComment): PRstNode =
+  case comment.cxKind:
+    of CXComment_Text:
+      return rnLeaf.newRstNode($clang_TextComment_getText(comment))
+    of CXComment_FullComment, CXComment_Paragraph:
+      result = rnInner.newRstNode()
+      for subnode in comment.children():
+        result.add subnode.toRstNode()
+    of CXComment_Null:
+      return rnLeaf.newRstNode("")
+    of CXComment_InlineCommand:
+      return rnLiteralBlock.newRstNode(
+        "!!! TODO !!!\n" &
+        comment.objTreeRepr().pstring()
+      )
+    of CXComment_ParamCommand:
+      return rnInner.newRstNode(
+        @[
+          rnEmphasis.newRstNode(
+            rnInner.newRstNode(
+              $clang_ParamCommandComment_getParamName(comment)
+            )
+          )
+        ] & toSeq(comment.children).mapIt(it.toRstNode())
+      )
+    of CXComment_BlockCommand:
+      return rnInner.newRstNode(
+        @[
+          rnEmphasis.newRstNode(
+            rnInner.newRstNode(
+              $clang_BlockCommandComment_getCommandName(comment)
+            )
+          )
+        ] & toSeq(comment.children).mapIt(it.toRstNode())
+      )
+    of CXComment_VerbatimBlockCommand:
+      return rnCodeBlock.newRstNode(
+        rnLiteralBlock.newRstNode(
+          rnLeaf.newRstNode(
+            $clang_VerbatimBlockLineComment_getText(comment))))
+    of CXComment_VerbatimLine:
+      return rnInterpretedText.newRstNode(
+        $clang_VerbatimLineComment_getText(comment))
+    else:
+      echo "died".toRed()
+      echo comment.objTreeRepr().pstring()
+      raiseAssert("#[ IMPLEMENT ]#")
+
+proc toNimDoc*(comment: CXComment): string =
+  echo comment.objTreeRepr().pstring()
+  comment.toRstNode().renderRstToRst(result)
 
 #=============================  Converters  ==============================#
 
@@ -204,7 +319,7 @@ proc visitFunction(cursor: CXCursor, stmtList: var PNode) =
     rtype = some(toNType(cursor.retType())),
     args = arguments,
     impl = newPIdent("impl"),
-    # comment = $cursor.comment() # XXXX
+    comment = cursor.comment().toNimDoc()
   )
 
 
@@ -255,13 +370,10 @@ proc main() =
 
       return CXChildVisit_Recurse
 
-  # echo "toplevel:\n", toplevel
-
+  "../libclang.nim".writeFile($toplevel)
 
 when isMainModule:
   try:
     main()
   except:
     pprintErr
-
-
