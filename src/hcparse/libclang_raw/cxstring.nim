@@ -26,7 +26,7 @@ type
 
 proc clang_getCString*(
   string: CXString, # `CXString`
-): ptr[cstring] {.
+): cstring {.
     cdecl,
     importc: "clang_getCString",
     dynlib: libclang

@@ -118,6 +118,8 @@ Str toNimType(CXType type, int level = 0) {
             CXType pointee = clang_getPointeeType(type);
             if (pointee.kind == CXType_Void) {
                 return "pointer";
+            } else if (pointee.kind == CXType_Char_S) {
+                return "cstring";
             } else if (pointee.kind == CXType_FunctionProto) {
                 return toNimType(pointee);
             } else {
@@ -129,9 +131,10 @@ Str toNimType(CXType type, int level = 0) {
         case CXType_ConstantArray: {
 
             let elemType = clang_getElementType(type);
-            std::cout << "  \e[31m\e[3mELEMENT\e[23m\e[39m: " << elemType
-                      << " " << clang_getTypeKindSpelling(elemType.kind)
-                      << "\n";
+            // std::cout << "  \e[31m\e[3mELEMENT\e[23m\e[39m: " <<
+            // elemType
+            //           << " " << clang_getTypeKindSpelling(elemType.kind)
+            //           << "\n";
 
             return fmt::format(
                 "array[{}, {}]",
@@ -383,7 +386,7 @@ CXChildVisitResult visitEnumDecl(CHILD_VISIT_PARAMS) {
     //           << "\e[39m\n";
 
     *(data->outfile) << fmt::format(
-        "type\n  {}* {{.pure, size: sizeof(cint).}} = enum\n",
+        "type\n  {}* {{.size: sizeof(cint).}} = enum\n",
         fixTypeName(clang_getCursorType(cursor)));
 
     for (auto& subnode : directSubnodes(cursor)) {
@@ -510,9 +513,9 @@ CXChildVisitResult visitToplevel(CHILD_VISIT_PARAMS) {
     if (clang_Location_isFromMainFile(clang_getCursorLocation(cursor)))
     // Only interested in functions defined in main file being processed
     {
-        if (kind != CXCursor_FunctionDecl) {
-            std::cout << cursor << " \e[32m" << kind << "\e[39m\n";
-        }
+        // if (kind != CXCursor_FunctionDecl) {
+        //     std::cout << cursor << " \e[32m" << kind << "\e[39m\n";
+        // }
 
         if (kind == CXCursor_FunctionDecl) {
             return visitFunction(cursor, parent, client_data);

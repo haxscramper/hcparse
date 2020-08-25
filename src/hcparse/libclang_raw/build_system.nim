@@ -39,8 +39,8 @@ proc clang_VirtualFileOverlay_create*(
 
 proc clang_VirtualFileOverlay_addFileMapping*(
   arg_1: CXVirtualFileOverlay, # `CXVirtualFileOverlay`
-  virtualPath: ptr[cstring], # `const char *`
-  realPath: ptr[cstring], # `const char *`
+  virtualPath: cstring, # `const char *`
+  realPath: cstring, # `const char *`
 ): CXErrorCode {.
     cdecl,
     importc: "clang_VirtualFileOverlay_addFileMapping",
@@ -59,7 +59,7 @@ proc clang_VirtualFileOverlay_setCaseSensitivity*(
 proc clang_VirtualFileOverlay_writeToBuffer*(
   arg_1: CXVirtualFileOverlay, # `CXVirtualFileOverlay`
   options: cuint, # `unsigned int`
-  out_buffer_ptr: ptr[ptr[cstring]], # `char **`
+  out_buffer_ptr: ptr[cstring], # `char **`
   out_buffer_size: ptr[cuint], # `unsigned int *`
 ): CXErrorCode {.
     cdecl,
@@ -98,7 +98,7 @@ proc clang_ModuleMapDescriptor_create*(
 
 proc clang_ModuleMapDescriptor_setFrameworkModuleName*(
   arg_1: CXModuleMapDescriptor, # `CXModuleMapDescriptor`
-  name: ptr[cstring], # `const char *`
+  name: cstring, # `const char *`
 ): CXErrorCode {.
     cdecl,
     importc: "clang_ModuleMapDescriptor_setFrameworkModuleName",
@@ -107,7 +107,7 @@ proc clang_ModuleMapDescriptor_setFrameworkModuleName*(
 
 proc clang_ModuleMapDescriptor_setUmbrellaHeader*(
   arg_1: CXModuleMapDescriptor, # `CXModuleMapDescriptor`
-  name: ptr[cstring], # `const char *`
+  name: cstring, # `const char *`
 ): CXErrorCode {.
     cdecl,
     importc: "clang_ModuleMapDescriptor_setUmbrellaHeader",
@@ -117,7 +117,7 @@ proc clang_ModuleMapDescriptor_setUmbrellaHeader*(
 proc clang_ModuleMapDescriptor_writeToBuffer*(
   arg_1: CXModuleMapDescriptor, # `CXModuleMapDescriptor`
   options: cuint, # `unsigned int`
-  out_buffer_ptr: ptr[ptr[cstring]], # `char **`
+  out_buffer_ptr: ptr[cstring], # `char **`
   out_buffer_size: ptr[cuint], # `unsigned int *`
 ): CXErrorCode {.
     cdecl,

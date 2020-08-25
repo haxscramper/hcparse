@@ -22,12 +22,12 @@ type CXCompileCommands* = distinct pointer # CXCompileCommands
 type CXCompileCommand* = distinct pointer # CXCompileCommand
 
 type
-  CXCompilationDatabase_Error* {.pure, size: sizeof(cint).} = enum
+  CXCompilationDatabase_Error* {.size: sizeof(cint).} = enum
     CXCompilationDatabase_NoError = 0
     CXCompilationDatabase_CanNotLoadDatabase = 1
 
 proc clang_CompilationDatabase_fromDirectory*(
-  buildDir: ptr[cstring], # `const char *`
+  buildDir: cstring, # `const char *`
   errorCode: ptr[CXCompilationDatabase_Error], # `CXCompilationDatabase_Error *`
 ): CXCompilationDatabase {.
     cdecl,
@@ -45,7 +45,7 @@ proc clang_CompilationDatabase_dispose*(
 
 proc clang_CompilationDatabase_getCompileCommands*(
   arg_1: CXCompilationDatabase, # `CXCompilationDatabase`
-  completeFileName: ptr[cstring], # `const char *`
+  completeFileName: cstring, # `const char *`
 ): CXCompileCommands {.
     cdecl,
     importc: "clang_CompilationDatabase_getCompileCommands",

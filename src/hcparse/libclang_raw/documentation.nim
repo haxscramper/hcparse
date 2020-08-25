@@ -30,7 +30,7 @@ proc clang_Cursor_getParsedComment*(
   .}
 
 type
-  CXCommentKind* {.pure, size: sizeof(cint).} = enum
+  CXCommentKind* {.size: sizeof(cint).} = enum
     CXComment_Null = 0
     CXComment_Text = 1
     CXComment_InlineCommand = 2
@@ -46,7 +46,7 @@ type
     CXComment_FullComment = 12
 
 type
-  CXCommentInlineCommandRenderKind* {.pure, size: sizeof(cint).} = enum
+  CXCommentInlineCommandRenderKind* {.size: sizeof(cint).} = enum
     CXCommentInlineCommandRenderKind_Normal
     CXCommentInlineCommandRenderKind_Bold
     CXCommentInlineCommandRenderKind_Monospaced
@@ -54,7 +54,7 @@ type
     CXCommentInlineCommandRenderKind_Anchor
 
 type
-  CXCommentParamPassDirection* {.pure, size: sizeof(cint).} = enum
+  CXCommentParamPassDirection* {.size: sizeof(cint).} = enum
     CXCommentParamPassDirection_In
     CXCommentParamPassDirection_Out
     CXCommentParamPassDirection_InOut

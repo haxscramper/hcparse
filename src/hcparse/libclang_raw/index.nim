@@ -38,12 +38,12 @@ type CXClientData* = distinct pointer # CXClientData
 
 type
   CXUnsavedFile* {.pure, bycopy.} = object
-    filename*: ptr[cstring] # `const char *`
-    contents*: ptr[cstring] # `const char *`
+    filename*: cstring # `const char *`
+    contents*: cstring # `const char *`
     length*: culong # `unsigned long`
 
 type
-  CXAvailabilityKind* {.pure, size: sizeof(cint).} = enum
+  CXAvailabilityKind* {.size: sizeof(cint).} = enum
     CXAvailability_Available
     CXAvailability_Deprecated
     CXAvailability_NotAvailable
@@ -56,7 +56,7 @@ type
     subminor*: cint # `int`
 
 type
-  CXCursor_ExceptionSpecificationKind* {.pure, size: sizeof(cint).} = enum
+  CXCursor_ExceptionSpecificationKind* {.size: sizeof(cint).} = enum
     CXCursor_ExceptionSpecificationKind_None
     CXCursor_ExceptionSpecificationKind_DynamicNone
     CXCursor_ExceptionSpecificationKind_Dynamic
@@ -86,7 +86,7 @@ proc clang_disposeIndex*(
   .}
 
 type
-  CXGlobalOptFlags* {.pure, size: sizeof(cint).} = enum
+  CXGlobalOptFlags* {.size: sizeof(cint).} = enum
     CXGlobalOpt_None = 0
     CXGlobalOpt_ThreadBackgroundPriorityForIndexing = 1
     CXGlobalOpt_ThreadBackgroundPriorityForEditing = 2
@@ -111,7 +111,7 @@ proc clang_CXIndex_getGlobalOptions*(
 
 proc clang_CXIndex_setInvocationEmissionPathOption*(
   arg_1: CXIndex, # `CXIndex`
-  path: ptr[cstring], # `const char *`
+  path: cstring, # `const char *`
 ): void {.
     cdecl,
     importc: "clang_CXIndex_setInvocationEmissionPathOption",
@@ -160,7 +160,7 @@ proc clang_isFileMultipleIncludeGuarded*(
 
 proc clang_getFile*(
   tu: CXTranslationUnit, # `CXTranslationUnit`
-  file_name: ptr[cstring], # `const char *`
+  file_name: cstring, # `const char *`
 ): CXFile {.
     cdecl,
     importc: "clang_getFile",
@@ -171,7 +171,7 @@ proc clang_getFileContents*(
   tu: CXTranslationUnit, # `CXTranslationUnit`
   file: CXFile, # `CXFile`
   size: ptr[cint], # `int *`
-): ptr[cstring] {.
+): cstring {.
     cdecl,
     importc: "clang_getFileContents",
     dynlib: libclang
@@ -395,7 +395,7 @@ proc clang_disposeSourceRangeList*(
   .}
 
 type
-  CXDiagnosticSeverity* {.pure, size: sizeof(cint).} = enum
+  CXDiagnosticSeverity* {.size: sizeof(cint).} = enum
     CXDiagnostic_Ignored = 0
     CXDiagnostic_Note = 1
     CXDiagnostic_Warning = 2
@@ -424,14 +424,14 @@ proc clang_getDiagnosticInSet*(
   .}
 
 type
-  CXLoadDiag_Error* {.pure, size: sizeof(cint).} = enum
+  CXLoadDiag_Error* {.size: sizeof(cint).} = enum
     CXLoadDiag_None = 0
     CXLoadDiag_Unknown = 1
     CXLoadDiag_CannotLoad = 2
     CXLoadDiag_InvalidFile = 3
 
 proc clang_loadDiagnostics*(
-  file: ptr[cstring], # `const char *`
+  file: cstring, # `const char *`
   error: ptr[CXLoadDiag_Error], # `enum CXLoadDiag_Error *`
   errorString: ptr[CXString], # `CXString *`
 ): CXDiagnosticSet {.
@@ -490,7 +490,7 @@ proc clang_disposeDiagnostic*(
   .}
 
 type
-  CXDiagnosticDisplayOptions* {.pure, size: sizeof(cint).} = enum
+  CXDiagnosticDisplayOptions* {.size: sizeof(cint).} = enum
     CXDiagnostic_DisplaySourceLocation = 1
     CXDiagnostic_DisplayColumn = 2
     CXDiagnostic_DisplaySourceRanges = 4
@@ -615,9 +615,9 @@ proc clang_getTranslationUnitSpelling*(
 
 proc clang_createTranslationUnitFromSourceFile*(
   cIdx: CXIndex, # `CXIndex`
-  source_filename: ptr[cstring], # `const char *`
+  source_filename: cstring, # `const char *`
   num_clang_command_line_args: cint, # `int`
-  clang_command_line_args: ptr[ptr[cstring]], # `const char *const *`
+  clang_command_line_args: ptr[cstring], # `const char *const *`
   num_unsaved_files: cuint, # `unsigned int`
   unsaved_files: ptr[CXUnsavedFile], # `struct CXUnsavedFile *`
 ): CXTranslationUnit {.
@@ -628,7 +628,7 @@ proc clang_createTranslationUnitFromSourceFile*(
 
 proc clang_createTranslationUnit*(
   cIdx: CXIndex, # `CXIndex`
-  ast_filename: ptr[cstring], # `const char *`
+  ast_filename: cstring, # `const char *`
 ): CXTranslationUnit {.
     cdecl,
     importc: "clang_createTranslationUnit",
@@ -637,7 +637,7 @@ proc clang_createTranslationUnit*(
 
 proc clang_createTranslationUnit2*(
   cIdx: CXIndex, # `CXIndex`
-  ast_filename: ptr[cstring], # `const char *`
+  ast_filename: cstring, # `const char *`
   out_TU: ptr[CXTranslationUnit], # `CXTranslationUnit *`
 ): CXErrorCode {.
     cdecl,
@@ -646,7 +646,7 @@ proc clang_createTranslationUnit2*(
   .}
 
 type
-  CXTranslationUnit_Flags* {.pure, size: sizeof(cint).} = enum
+  CXTranslationUnit_Flags* {.size: sizeof(cint).} = enum
     CXTranslationUnit_None = 0
     CXTranslationUnit_DetailedPreprocessingRecord = 1
     CXTranslationUnit_Incomplete = 2
@@ -673,8 +673,8 @@ proc clang_defaultEditingTranslationUnitOptions*(): cuint {.
 
 proc clang_parseTranslationUnit*(
   cIdx: CXIndex, # `CXIndex`
-  source_filename: ptr[cstring], # `const char *`
-  command_line_args: ptr[ptr[cstring]], # `const char *const *`
+  source_filename: cstring, # `const char *`
+  command_line_args: ptr[cstring], # `const char *const *`
   num_command_line_args: cint, # `int`
   unsaved_files: ptr[CXUnsavedFile], # `struct CXUnsavedFile *`
   num_unsaved_files: cuint, # `unsigned int`
@@ -687,8 +687,8 @@ proc clang_parseTranslationUnit*(
 
 proc clang_parseTranslationUnit2*(
   cIdx: CXIndex, # `CXIndex`
-  source_filename: ptr[cstring], # `const char *`
-  command_line_args: ptr[ptr[cstring]], # `const char *const *`
+  source_filename: cstring, # `const char *`
+  command_line_args: ptr[cstring], # `const char *const *`
   num_command_line_args: cint, # `int`
   unsaved_files: ptr[CXUnsavedFile], # `struct CXUnsavedFile *`
   num_unsaved_files: cuint, # `unsigned int`
@@ -702,8 +702,8 @@ proc clang_parseTranslationUnit2*(
 
 proc clang_parseTranslationUnit2FullArgv*(
   cIdx: CXIndex, # `CXIndex`
-  source_filename: ptr[cstring], # `const char *`
-  command_line_args: ptr[ptr[cstring]], # `const char *const *`
+  source_filename: cstring, # `const char *`
+  command_line_args: ptr[cstring], # `const char *const *`
   num_command_line_args: cint, # `int`
   unsaved_files: ptr[CXUnsavedFile], # `struct CXUnsavedFile *`
   num_unsaved_files: cuint, # `unsigned int`
@@ -716,7 +716,7 @@ proc clang_parseTranslationUnit2FullArgv*(
   .}
 
 type
-  CXSaveTranslationUnit_Flags* {.pure, size: sizeof(cint).} = enum
+  CXSaveTranslationUnit_Flags* {.size: sizeof(cint).} = enum
     CXSaveTranslationUnit_None = 0
 
 proc clang_defaultSaveOptions*(
@@ -728,7 +728,7 @@ proc clang_defaultSaveOptions*(
   .}
 
 type
-  CXSaveError* {.pure, size: sizeof(cint).} = enum
+  CXSaveError* {.size: sizeof(cint).} = enum
     CXSaveError_None = 0
     CXSaveError_Unknown = 1
     CXSaveError_TranslationErrors = 2
@@ -736,7 +736,7 @@ type
 
 proc clang_saveTranslationUnit*(
   tU: CXTranslationUnit, # `CXTranslationUnit`
-  fileName: ptr[cstring], # `const char *`
+  fileName: cstring, # `const char *`
   options: cuint, # `unsigned int`
 ): cint {.
     cdecl,
@@ -761,7 +761,7 @@ proc clang_disposeTranslationUnit*(
   .}
 
 type
-  CXReparse_Flags* {.pure, size: sizeof(cint).} = enum
+  CXReparse_Flags* {.size: sizeof(cint).} = enum
     CXReparse_None = 0
 
 proc clang_defaultReparseOptions*(
@@ -784,7 +784,7 @@ proc clang_reparseTranslationUnit*(
   .}
 
 type
-  CXTUResourceUsageKind* {.pure, size: sizeof(cint).} = enum
+  CXTUResourceUsageKind* {.size: sizeof(cint).} = enum
     CXTUResourceUsage_AST = 1
     CXTUResourceUsage_Identifiers = 2
     CXTUResourceUsage_Selectors = 3
@@ -806,7 +806,7 @@ type
 
 proc clang_getTUResourceUsageName*(
   kind: CXTUResourceUsageKind, # `enum CXTUResourceUsageKind`
-): ptr[cstring] {.
+): cstring {.
     cdecl,
     importc: "clang_getTUResourceUsageName",
     dynlib: libclang
@@ -872,7 +872,7 @@ proc clang_TargetInfo_getPointerWidth*(
   .}
 
 type
-  CXCursorKind* {.pure, size: sizeof(cint).} = enum
+  CXCursorKind* {.size: sizeof(cint).} = enum
     CXCursor_UnexposedDecl = 1
     CXCursor_StructDecl = 2
     CXCursor_UnionDecl = 3
@@ -1276,7 +1276,7 @@ proc clang_isUnexposed*(
   .}
 
 type
-  CXLinkageKind* {.pure, size: sizeof(cint).} = enum
+  CXLinkageKind* {.size: sizeof(cint).} = enum
     CXLinkage_Invalid
     CXLinkage_NoLinkage
     CXLinkage_Internal
@@ -1292,7 +1292,7 @@ proc clang_getCursorLinkage*(
   .}
 
 type
-  CXVisibilityKind* {.pure, size: sizeof(cint).} = enum
+  CXVisibilityKind* {.size: sizeof(cint).} = enum
     CXVisibility_Invalid
     CXVisibility_Hidden
     CXVisibility_Protected
@@ -1346,7 +1346,7 @@ proc clang_disposeCXPlatformAvailability*(
   .}
 
 type
-  CXLanguageKind* {.pure, size: sizeof(cint).} = enum
+  CXLanguageKind* {.size: sizeof(cint).} = enum
     CXLanguage_Invalid = 0
     CXLanguage_C
     CXLanguage_ObjC
@@ -1361,7 +1361,7 @@ proc clang_getCursorLanguage*(
   .}
 
 type
-  CXTLSKind* {.pure, size: sizeof(cint).} = enum
+  CXTLSKind* {.size: sizeof(cint).} = enum
     CXTLS_None = 0
     CXTLS_Dynamic
     CXTLS_Static
@@ -1487,7 +1487,7 @@ proc clang_getCursorExtent*(
   .}
 
 type
-  CXTypeKind* {.pure, size: sizeof(cint).} = enum
+  CXTypeKind* {.size: sizeof(cint).} = enum
     CXType_Invalid = 0
     CXType_Unexposed = 1
     CXType_Void = 2
@@ -1608,7 +1608,7 @@ type
     CXType_ExtVector = 176
 
 type
-  CXCallingConv* {.pure, size: sizeof(cint).} = enum
+  CXCallingConv* {.size: sizeof(cint).} = enum
     CXCallingConv_Default = 0
     CXCallingConv_C = 1
     CXCallingConv_X86StdCall = 2
@@ -1709,7 +1709,7 @@ proc clang_Cursor_getArgument*(
   .}
 
 type
-  CXTemplateArgumentKind* {.pure, size: sizeof(cint).} = enum
+  CXTemplateArgumentKind* {.size: sizeof(cint).} = enum
     CXTemplateArgumentKind_Null
     CXTemplateArgumentKind_Type
     CXTemplateArgumentKind_Declaration
@@ -2050,7 +2050,7 @@ proc clang_Type_isTransparentTagTypedef*(
   .}
 
 type
-  CXTypeNullabilityKind* {.pure, size: sizeof(cint).} = enum
+  CXTypeNullabilityKind* {.size: sizeof(cint).} = enum
     CXTypeNullability_NonNull = 0
     CXTypeNullability_Nullable = 1
     CXTypeNullability_Unspecified = 2
@@ -2065,7 +2065,7 @@ proc clang_Type_getNullability*(
   .}
 
 type
-  CXTypeLayoutError* {.pure, size: sizeof(cint).} = enum
+  CXTypeLayoutError* {.size: sizeof(cint).} = enum
     CXTypeLayoutError_Invalid
     CXTypeLayoutError_Incomplete
     CXTypeLayoutError_Dependent
@@ -2099,7 +2099,7 @@ proc clang_Type_getSizeOf*(
 
 proc clang_Type_getOffsetOf*(
   t: CXType, # `CXType`
-  s: ptr[cstring], # `const char *`
+  s: cstring, # `const char *`
 ): clonglong {.
     cdecl,
     importc: "clang_Type_getOffsetOf",
@@ -2147,7 +2147,7 @@ proc clang_Cursor_isInlineNamespace*(
   .}
 
 type
-  CXRefQualifierKind* {.pure, size: sizeof(cint).} = enum
+  CXRefQualifierKind* {.size: sizeof(cint).} = enum
     CXRefQualifier_None = 0
     CXRefQualifier_LValue
     CXRefQualifier_RValue
@@ -2194,7 +2194,7 @@ proc clang_isVirtualBase*(
   .}
 
 type
-  CX_CXXAccessSpecifier* {.pure, size: sizeof(cint).} = enum
+  CX_CXXAccessSpecifier* {.size: sizeof(cint).} = enum
     CX_CXXInvalidAccessSpecifier
     CX_CXXPublic
     CX_CXXProtected
@@ -2209,7 +2209,7 @@ proc clang_getCXXAccessSpecifier*(
   .}
 
 type
-  CX_StorageClass* {.pure, size: sizeof(cint).} = enum
+  CX_StorageClass* {.size: sizeof(cint).} = enum
     CX_SC_Invalid
     CX_SC_None
     CX_SC_Extern
@@ -2253,7 +2253,7 @@ proc clang_getIBOutletCollectionType*(
   .}
 
 type
-  CXChildVisitResult* {.pure, size: sizeof(cint).} = enum
+  CXChildVisitResult* {.size: sizeof(cint).} = enum
     CXChildVisit_Break
     CXChildVisit_Continue
     CXChildVisit_Recurse
@@ -2279,7 +2279,7 @@ proc clang_getCursorUSR*(
   .}
 
 proc clang_constructUSR_ObjCClass*(
-  class_name: ptr[cstring], # `const char *`
+  class_name: cstring, # `const char *`
 ): CXString {.
     cdecl,
     importc: "clang_constructUSR_ObjCClass",
@@ -2287,8 +2287,8 @@ proc clang_constructUSR_ObjCClass*(
   .}
 
 proc clang_constructUSR_ObjCCategory*(
-  class_name: ptr[cstring], # `const char *`
-  category_name: ptr[cstring], # `const char *`
+  class_name: cstring, # `const char *`
+  category_name: cstring, # `const char *`
 ): CXString {.
     cdecl,
     importc: "clang_constructUSR_ObjCCategory",
@@ -2296,7 +2296,7 @@ proc clang_constructUSR_ObjCCategory*(
   .}
 
 proc clang_constructUSR_ObjCProtocol*(
-  protocol_name: ptr[cstring], # `const char *`
+  protocol_name: cstring, # `const char *`
 ): CXString {.
     cdecl,
     importc: "clang_constructUSR_ObjCProtocol",
@@ -2304,7 +2304,7 @@ proc clang_constructUSR_ObjCProtocol*(
   .}
 
 proc clang_constructUSR_ObjCIvar*(
-  name: ptr[cstring], # `const char *`
+  name: cstring, # `const char *`
   classUSR: CXString, # `CXString`
 ): CXString {.
     cdecl,
@@ -2313,7 +2313,7 @@ proc clang_constructUSR_ObjCIvar*(
   .}
 
 proc clang_constructUSR_ObjCMethod*(
-  name: ptr[cstring], # `const char *`
+  name: cstring, # `const char *`
   isInstanceMethod: cuint, # `unsigned int`
   classUSR: CXString, # `CXString`
 ): CXString {.
@@ -2323,7 +2323,7 @@ proc clang_constructUSR_ObjCMethod*(
   .}
 
 proc clang_constructUSR_ObjCProperty*(
-  property: ptr[cstring], # `const char *`
+  property: cstring, # `const char *`
   classUSR: CXString, # `CXString`
 ): CXString {.
     cdecl,
@@ -2352,7 +2352,7 @@ proc clang_Cursor_getSpellingNameRange*(
 type CXPrintingPolicy* = distinct pointer # CXPrintingPolicy
 
 type
-  CXPrintingPolicyProperty* {.pure, size: sizeof(cint).} = enum
+  CXPrintingPolicyProperty* {.size: sizeof(cint).} = enum
     CXPrintingPolicy_Indentation
     CXPrintingPolicy_SuppressSpecifiers
     CXPrintingPolicy_SuppressTagKeyword
@@ -2490,7 +2490,7 @@ proc clang_Cursor_getReceiverType*(
   .}
 
 type
-  CXObjCPropertyAttrKind* {.pure, size: sizeof(cint).} = enum
+  CXObjCPropertyAttrKind* {.size: sizeof(cint).} = enum
     CXObjCPropertyAttr_noattr = 0
     CXObjCPropertyAttr_readonly = 1
     CXObjCPropertyAttr_getter = 2
@@ -2532,7 +2532,7 @@ proc clang_Cursor_getObjCPropertySetterName*(
   .}
 
 type
-  CXObjCDeclQualifierKind* {.pure, size: sizeof(cint).} = enum
+  CXObjCDeclQualifierKind* {.size: sizeof(cint).} = enum
     CXObjCDeclQualifier_None = 0
     CXObjCDeclQualifier_In = 1
     CXObjCDeclQualifier_Inout = 2
@@ -2825,13 +2825,13 @@ proc clang_getCursorReferenceNameRange*(
   .}
 
 type
-  CXNameRefFlags* {.pure, size: sizeof(cint).} = enum
+  CXNameRefFlags* {.size: sizeof(cint).} = enum
     CXNameRange_WantQualifier = 1
     CXNameRange_WantTemplateArgs = 2
     CXNameRange_WantSinglePiece = 4
 
 type
-  CXTokenKind* {.pure, size: sizeof(cint).} = enum
+  CXTokenKind* {.size: sizeof(cint).} = enum
     CXToken_Punctuation
     CXToken_Keyword
     CXToken_Identifier
@@ -2929,8 +2929,8 @@ proc clang_getCursorKindSpelling*(
 
 proc clang_getDefinitionSpellingAndExtent*(
   arg_1: CXCursor, # `CXCursor`
-  startBuf: ptr[ptr[cstring]], # `const char **`
-  endBuf: ptr[ptr[cstring]], # `const char **`
+  startBuf: ptr[cstring], # `const char **`
+  endBuf: ptr[cstring], # `const char **`
   startLine: ptr[cuint], # `unsigned int *`
   startColumn: ptr[cuint], # `unsigned int *`
   endLine: ptr[cuint], # `unsigned int *`
@@ -2965,7 +2965,7 @@ type
     completionString*: CXCompletionString # `CXCompletionString`
 
 type
-  CXCompletionChunkKind* {.pure, size: sizeof(cint).} = enum
+  CXCompletionChunkKind* {.size: sizeof(cint).} = enum
     CXCompletionChunk_Optional
     CXCompletionChunk_TypedText
     CXCompletionChunk_Text
@@ -3107,7 +3107,7 @@ proc clang_getCompletionFixIt*(
   .}
 
 type
-  CXCodeComplete_Flags* {.pure, size: sizeof(cint).} = enum
+  CXCodeComplete_Flags* {.size: sizeof(cint).} = enum
     CXCodeComplete_IncludeMacros = 1
     CXCodeComplete_IncludeCodePatterns = 2
     CXCodeComplete_IncludeBriefComments = 4
@@ -3115,7 +3115,7 @@ type
     CXCodeComplete_IncludeCompletionsWithFixIts = 16
 
 type
-  CXCompletionContext* {.pure, size: sizeof(cint).} = enum
+  CXCompletionContext* {.size: sizeof(cint).} = enum
     CXCompletionContext_Unexposed = 0
     CXCompletionContext_AnyType = 1
     CXCompletionContext_AnyValue = 2
@@ -3150,7 +3150,7 @@ proc clang_defaultCodeCompleteOptions*(): cuint {.
 
 proc clang_codeCompleteAt*(
   tU: CXTranslationUnit, # `CXTranslationUnit`
-  complete_filename: ptr[cstring], # `const char *`
+  complete_filename: cstring, # `const char *`
   complete_line: cuint, # `unsigned int`
   complete_column: cuint, # `unsigned int`
   unsaved_files: ptr[CXUnsavedFile], # `struct CXUnsavedFile *`
@@ -3256,7 +3256,7 @@ proc clang_getInclusions*(
   .}
 
 type
-  CXEvalResultKind* {.pure, size: sizeof(cint).} = enum
+  CXEvalResultKind* {.size: sizeof(cint).} = enum
     CXEval_UnExposed = 0
     CXEval_Int = 1
     CXEval_Float = 2
@@ -3326,7 +3326,7 @@ proc clang_EvalResult_getAsDouble*(
 
 proc clang_EvalResult_getAsStr*(
   e: CXEvalResult, # `CXEvalResult`
-): ptr[cstring] {.
+): cstring {.
     cdecl,
     importc: "clang_EvalResult_getAsStr",
     dynlib: libclang
@@ -3343,7 +3343,7 @@ proc clang_EvalResult_dispose*(
 type CXRemapping* = distinct pointer # CXRemapping
 
 proc clang_getRemappings*(
-  path: ptr[cstring], # `const char *`
+  path: cstring, # `const char *`
 ): CXRemapping {.
     cdecl,
     importc: "clang_getRemappings",
@@ -3351,7 +3351,7 @@ proc clang_getRemappings*(
   .}
 
 proc clang_getRemappingsFromFileList*(
-  filePaths: ptr[ptr[cstring]], # `const char **`
+  filePaths: ptr[cstring], # `const char **`
   numFiles: cuint, # `unsigned int`
 ): CXRemapping {.
     cdecl,
@@ -3387,7 +3387,7 @@ proc clang_remap_dispose*(
   .}
 
 type
-  CXVisitorResult* {.pure, size: sizeof(cint).} = enum
+  CXVisitorResult* {.size: sizeof(cint).} = enum
     CXVisit_Break
     CXVisit_Continue
 
@@ -3397,7 +3397,7 @@ type
     visit*: proc(a0: pointer, a1: CXCursor, a2: CXSourceRange): CXVisitorResult {.cdecl.} # `enum CXVisitorResult (*)(void *, CXCursor, CXSourceRange)`
 
 type
-  CXResult* {.pure, size: sizeof(cint).} = enum
+  CXResult* {.size: sizeof(cint).} = enum
     CXResult_Success = 0
     CXResult_Invalid = 1
     CXResult_VisitBreak = 2
@@ -3438,7 +3438,7 @@ type
 type
   CXIdxIncludedFileInfo* {.pure, bycopy.} = object
     hashLoc*: CXIdxLoc # `CXIdxLoc`
-    filename*: ptr[cstring] # `const char *`
+    filename*: cstring # `const char *`
     file*: CXFile # `CXFile`
     isImport*: cint # `int`
     isAngled*: cint # `int`
@@ -3452,7 +3452,7 @@ type
     isImplicit*: cint # `int`
 
 type
-  CXIdxEntityKind* {.pure, size: sizeof(cint).} = enum
+  CXIdxEntityKind* {.size: sizeof(cint).} = enum
     CXIdxEntity_Unexposed = 0
     CXIdxEntity_Typedef = 1
     CXIdxEntity_Function = 2
@@ -3482,7 +3482,7 @@ type
     CXIdxEntity_CXXInterface = 26
 
 type
-  CXIdxEntityLanguage* {.pure, size: sizeof(cint).} = enum
+  CXIdxEntityLanguage* {.size: sizeof(cint).} = enum
     CXIdxEntityLang_None = 0
     CXIdxEntityLang_C = 1
     CXIdxEntityLang_ObjC = 2
@@ -3490,14 +3490,14 @@ type
     CXIdxEntityLang_Swift = 4
 
 type
-  CXIdxEntityCXXTemplateKind* {.pure, size: sizeof(cint).} = enum
+  CXIdxEntityCXXTemplateKind* {.size: sizeof(cint).} = enum
     CXIdxEntity_NonTemplate = 0
     CXIdxEntity_Template = 1
     CXIdxEntity_TemplatePartialSpecialization = 2
     CXIdxEntity_TemplateSpecialization = 3
 
 type
-  CXIdxAttrKind* {.pure, size: sizeof(cint).} = enum
+  CXIdxAttrKind* {.size: sizeof(cint).} = enum
     CXIdxAttr_Unexposed = 0
     CXIdxAttr_IBAction = 1
     CXIdxAttr_IBOutlet = 2
@@ -3514,8 +3514,8 @@ type
     kind*: CXIdxEntityKind # `CXIdxEntityKind`
     templateKind*: CXIdxEntityCXXTemplateKind # `CXIdxEntityCXXTemplateKind`
     lang*: CXIdxEntityLanguage # `CXIdxEntityLanguage`
-    name*: ptr[cstring] # `const char *`
-    uSR*: ptr[cstring] # `const char *`
+    name*: cstring # `const char *`
+    uSR*: cstring # `const char *`
     cursor*: CXCursor # `CXCursor`
     attributes*: ptr[ptr[CXIdxAttrInfo]] # `const CXIdxAttrInfo *const *`
     numAttributes*: cuint # `unsigned int`
@@ -3532,7 +3532,7 @@ type
     classLoc*: CXIdxLoc # `CXIdxLoc`
 
 type
-  CXIdxDeclInfoFlags* {.pure, size: sizeof(cint).} = enum
+  CXIdxDeclInfoFlags* {.size: sizeof(cint).} = enum
     CXIdxDeclFlag_Skipped = 1
 
 type
@@ -3552,7 +3552,7 @@ type
     flags*: cuint # `unsigned int`
 
 type
-  CXIdxObjCContainerKind* {.pure, size: sizeof(cint).} = enum
+  CXIdxObjCContainerKind* {.size: sizeof(cint).} = enum
     CXIdxObjCContainer_ForwardRef = 0
     CXIdxObjCContainer_Interface = 1
     CXIdxObjCContainer_Implementation = 2
@@ -3606,12 +3606,12 @@ type
     numBases*: cuint # `unsigned int`
 
 type
-  CXIdxEntityRefKind* {.pure, size: sizeof(cint).} = enum
+  CXIdxEntityRefKind* {.size: sizeof(cint).} = enum
     CXIdxEntityRef_Direct = 1
     CXIdxEntityRef_Implicit = 2
 
 type
-  CXSymbolRole* {.pure, size: sizeof(cint).} = enum
+  CXSymbolRole* {.size: sizeof(cint).} = enum
     CXSymbolRole_None = 0
     CXSymbolRole_Declaration = 1
     CXSymbolRole_Definition = 2
@@ -3761,7 +3761,7 @@ proc clang_IndexAction_dispose*(
   .}
 
 type
-  CXIndexOptFlags* {.pure, size: sizeof(cint).} = enum
+  CXIndexOptFlags* {.size: sizeof(cint).} = enum
     CXIndexOpt_None = 0
     CXIndexOpt_SuppressRedundantRefs = 1
     CXIndexOpt_IndexFunctionLocalSymbols = 2
@@ -3775,8 +3775,8 @@ proc clang_indexSourceFile*(
   index_callbacks: ptr[IndexerCallbacks], # `IndexerCallbacks *`
   index_callbacks_size: cuint, # `unsigned int`
   index_options: cuint, # `unsigned int`
-  source_filename: ptr[cstring], # `const char *`
-  command_line_args: ptr[ptr[cstring]], # `const char *const *`
+  source_filename: cstring, # `const char *`
+  command_line_args: ptr[cstring], # `const char *const *`
   num_command_line_args: cint, # `int`
   unsaved_files: ptr[CXUnsavedFile], # `struct CXUnsavedFile *`
   num_unsaved_files: cuint, # `unsigned int`
@@ -3794,8 +3794,8 @@ proc clang_indexSourceFileFullArgv*(
   index_callbacks: ptr[IndexerCallbacks], # `IndexerCallbacks *`
   index_callbacks_size: cuint, # `unsigned int`
   index_options: cuint, # `unsigned int`
-  source_filename: ptr[cstring], # `const char *`
-  command_line_args: ptr[ptr[cstring]], # `const char *const *`
+  source_filename: cstring, # `const char *`
+  command_line_args: ptr[cstring], # `const char *const *`
   num_command_line_args: cint, # `int`
   unsaved_files: ptr[CXUnsavedFile], # `struct CXUnsavedFile *`
   num_unsaved_files: cuint, # `unsigned int`
