@@ -1,5 +1,6 @@
 import externc
 import index
+import cxstring
 from times import Time
 {.deadCodeElim: on.}
 {.push callconv: cdecl.}

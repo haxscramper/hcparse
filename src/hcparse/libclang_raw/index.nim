@@ -674,7 +674,7 @@ proc clang_defaultEditingTranslationUnitOptions*(): cuint {.
 proc clang_parseTranslationUnit*(
   cIdx: CXIndex, # `CXIndex`
   source_filename: cstring, # `const char *`
-  command_line_args: ptr[cstring], # `const char *const *`
+  command_line_args: cstringArray, # `const char *const *`
   num_command_line_args: cint, # `int`
   unsaved_files: ptr[CXUnsavedFile], # `struct CXUnsavedFile *`
   num_unsaved_files: cuint, # `unsigned int`
