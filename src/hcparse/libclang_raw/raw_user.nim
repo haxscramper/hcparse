@@ -1,6 +1,8 @@
 import macros, sugar, strformat, lenientops, bitops, sequtils, options,
        terminal
 
+import hpprint, hpprint/hpprint_repr
+
 import hmisc/hexceptions
 import hmisc/helpers
 import hmisc/types/[hnim_ast, colorstring]
@@ -37,10 +39,16 @@ proc expectKind*(cursor: CXCursor, kind: CXCursorKind) =
   if cursor.cxKind != kind:
     raiseAssert(&"Expected cursor kind {kind}, but got {cursor.cxKind()}")
 
+
 proc cxType*(cursor: CXCursor): CXType =
   clang_getCursorType(cursor)
 
 proc cxKind*(cxtype: CXType): CXTypeKind = cxtype.kind
+
+proc expectKind*(cxtype: CXType, kind: CXTypeKind) =
+  if cxtype.cxKind != kind:
+    raiseAssert(&"Expected type kind {kind}, but got {cxtype.cxKind()}")
+
 
 #===========================  Location checks  ===========================#
 
@@ -135,15 +143,50 @@ proc retType*(cursor: CXCursor): CXType =
 
 #=============================  Converters  ==============================#
 
+proc fromElaboratedNType(cxtype: CXType): NType =
+  ($cxtype).
+    dropPrefix("enum ").
+    dropPrefix("struct ").
+    mkNType()
+
+proc getPointee*(cxType: CXType): CXType =
+  cxtype.expectKind(CXType_Pointer)
+  clang_getPointeeType(cxtype)
+
+proc objTreeRepr*(cxtype: CXType): ObjTree =
+  case cxtype.cxKind:
+    of CXType_Pointer:
+      pptObj("ptr", cxtype.getPointee().objTreeRepr())
+    else:
+      pptObj($cxtype.cxkind, pptConst($cxtype))
+
+proc lispRepr*(cxtype: CXType): string =
+  cxtype.objTreeRepr().lispRepr()
+
 proc toNType*(cxtype: CXType): NType =
+  # echo cxtype.objTreeRepr().treeRepr()
   case cxtype.cxKind:
     of CXType_Bool: mkNType("bool")
     of CXType_Int: mkNType("int")
     of CXType_Void: mkNType("void")
     of CXType_UInt: mkNType("cuint")
+    of CXType_LongLong: mkNType("clonglong")
+    of CXType_ULongLong: mkNType("culonglong")
+    of CXType_Double: mkNType("cdouble")
+    of CXType_Typedef: mkNType($cxtype) # XXX typedef processing -
+    of CXType_Elaborated:
+      fromElaboratedNType(cxtype)
+    of CXType_Pointer:
+      let pointee = cxtype.getPointee()
+      case pointee.cxkind:
+        of CXType_Char_S:
+          mkNType("cstring")
+        else:
+          echo "NESTED ".toYellow(), cxtype.lispRepr()
+          mkNType("ptr", [toNType(pointee)])
     else:
       echo "CANT CONVERT: ".toRed({styleItalic}),
-        &"{($cxtype).toGreen()} ({cxtype.cxKind()})"
+        cxtype.kind, " ", cxtype.lispRepr().toGreen()
       mkNType("!!!")
 
 proc toPIdentDefs*(cursor: CXCursor): PIdentDefs =
