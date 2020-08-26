@@ -343,12 +343,15 @@ proc objTreeRepr*(cursor: CXCursor): ObjTree =
 proc objTreeRepr*(cursor: CXCursor, tu: CXTranslationUnit): ObjTree =
   if cursor.len  == 0:
     pptObj($cursor.cxkind,
-           pptConst(
-             $cursor & " " & cursor.tokens(tu).join(" ")))
+           initPrintStyling(fg = fgYellow),
+           pptConst(cursor.tokens(tu).join(" "),
+                    initPrintStyling(fg = fgGreen)))
   else:
+    let ctype = pptConst($cursor.cxType, initPrintStyling(fg = fgBlue))
     pptObj(
-      $cursor.cxkind,
-      toSeq(cursor.children).mapIt(it.objTreeRepr(tu)))
+      ($cursor.cxkind).toMagenta() & " " & $cursor,
+      @[ctype] & toSeq(cursor.children).mapIt(it.objTreeRepr(tu))
+    )
 
 proc treeRepr*(cursor: CXCursor, tu: CXTranslationUnit): string =
   cursor.objTreeRepr(tu).treeRepr()
@@ -530,5 +533,3 @@ when isMainModule:
     main()
   except:
     pprintErr
-
-
