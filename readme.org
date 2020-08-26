@@ -1,3 +1,75 @@
 #+title: readme
 
-Higher-level bindings for libclang in nim
+Higher-level bindings for libclang in nim. 
+
+Right now this is only proof-of-concept, but it looks promising.
+
+
+#+begin_src nim :exports both
+{.define(plainStdout).}
+import hcparse/libclang_raw/[raw_user, index]
+import std/decls
+
+let outfile = "/tmp/file.cpp"
+outfile.writeFile """
+#include <cstring>
+#include <iostream>
+#include <map>
+#include <utility>
+
+class C;
+
+int get_number(int val) {
+    return val + 1;
+}
+
+void func_pointer_test() {
+    int (*func)(int) = &get_number;
+    std::cout << " [ " << func(0) << " ] \n";
+}
+"""
+
+
+let trIndex = clang_createIndex(0, 0);
+let unit = parseTranslationUnit(trIndex, outfile)
+let topCursor = unit.clang_getTranslationUnitCursor()
+topCursor.visitMainFile do:
+  makeVisitor [unit]:
+    echo cursor.treeRepr(unit)
+
+    return CXChildVisit_Continue
+#+end_src
+
+#+RESULTS:
+#+begin_example
+`FunctionDecl get_number`:
+    +-> int (int)
+    +-> ParmDecl:
+    |   +-> int val
+    +-> `CompoundStmt `:
+        +-> 
+        +-> `ReturnStmt `:
+            +-> 
+            +-> `BinaryOperator `:
+                +-> int
+                +-> `UnexposedExpr val`:
+                |   +-> int
+                |   +-> DeclRefExpr:
+                |       +-> val
+                +-> IntegerLiteral:
+                    +-> 1
+`FunctionDecl func_pointer_test`:
+    +-> void ()
+    +-> `CompoundStmt `:
+        +-> 
+        +-> `DeclStmt `:
+            +-> 
+            +-> `VarDecl func`:
+                +-> int (*)(int)
+                +-> ParmDecl:
+                |   +-> int
+                +-> `UnaryOperator `:
+                    +-> int (*)(int)
+                    +-> DeclRefExpr:
+                        +-> get_number
+#+end_example

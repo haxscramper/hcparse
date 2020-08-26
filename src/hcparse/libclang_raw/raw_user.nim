@@ -79,7 +79,7 @@ proc toCursorVisitor*(
   CXCursorVisitor(impl)
 
 
-proc clang_visitChildren[T](
+proc clang_visitChildren*[T](
   cursor: CXCursor,
   callback: tuple[
     data: T,
@@ -95,7 +95,7 @@ proc clang_visitChildren[T](
 func takesOnlyMutable*[T](v: var T) = discard
 template isMutable*(v: typed): untyped = compiles(takesOnlyMutable(v))
 
-macro makeVisitor(captureVars, body: untyped): untyped =
+macro makeVisitor*(captureVars, body: untyped): untyped =
   var immutableCopies = newStmtList()
   captureVars.assertNodeKind({nnkBracket})
   let tupleData = nnkPar.newTree: collect(newSeq):
@@ -139,7 +139,7 @@ proc visitMainFile*[T](
   var mainParent = cursor
   cursor.clang_visitChildren do:
     makeVisitor [callback, mainParent]:
-      echo cursor, " main file: ", cursor.isFromMainFile()
+      # echo cursor, " main file: ", cursor.isFromMainFile()
       if cursor.isFromMainFile():
         return callback.impl(cursor, mainParent, addr callback.data)
       else:
@@ -368,6 +368,7 @@ proc objTreeRepr*(cursor: CXCursor): ObjTree =
 
 
 proc objTreeRepr*(cursor: CXCursor, tu: CXTranslationUnit): ObjTree =
+  const colorize = not defined(plainStdout)
   if cursor.len  == 0:
     pptObj($cursor.cxkind,
            initPrintStyling(fg = fgYellow),
@@ -379,7 +380,7 @@ proc objTreeRepr*(cursor: CXCursor, tu: CXTranslationUnit): ObjTree =
       initPrintStyling(fg = fgBlue,
                        style = {styleItalic, styleDim}))
     pptObj(
-      ($cursor.cxkind).toMagenta() & " " & $cursor,
+      ($cursor.cxkind).toMagenta(colorize) & " " & $cursor,
       @[ctype] & toSeq(cursor.children).mapIt(it.objTreeRepr(tu))
     )
 
@@ -633,7 +634,7 @@ proc visitStructDecl*(cursor: CXCursor, context: var RewriteContext) =
 
 #================================  Main  =================================#
 
-proc parseTranslationUnit(
+proc parseTranslationUnit*(
   trIndex: CXIndex,
   filename: string,
   cmdline: seq[string] = @[],
@@ -651,38 +652,46 @@ proc parseTranslationUnit(
 
   deallocCStringArray(cmdline)
 
+proc parseCXXString*(
+  trIndex: CXIndex, str: cstring, size: int): CXTranslationUnit =
+
+  let tmpfile = "/tmp/eee.cpp"
+  tmpfile.writeFile("")
+
+
+  var file = CXUnsavedFile(
+    contents: str,
+    length: culong(size),
+    filename: tmpfile.cstring
+  )
+
+  var unit: CXTranslationUnit
+
+  let errcode = clang_parseTranslationUnit2(
+    trIndex,
+    sourceFilename     = tmpfile.cstring,
+    commandLineArgs    = nil,
+    numCommandLineArgs = 0,
+    unsavedFiles       = addr file,
+    numUnsavedFiles    = 1,
+    options            = 0,
+    outTU              = addr unit
+  )
+
+  return unit
+
+
 proc parseString() =
   let str = """
-
 int main() {
  2 + 2;
 }
 
 """
 
-  let tmpfile = "/tmp/eee.cpp"
-  tmpfile.writeFile(str)
-
   block:
-    var file = CXUnsavedFile(
-      contents: str.cstring,
-      length: culong(str.len),
-      filename: tmpfile.cstring
-    )
-
     let trIndex = clang_createIndex(0, 0);
-    var unit: CXTranslationUnit
-
-    let errcode = clang_parseTranslationUnit2(
-      trIndex,
-      sourceFilename     = tmpfile.cstring,
-      commandLineArgs    = nil,
-      numCommandLineArgs = 0,
-      unsavedFiles       = addr file,
-      numUnsavedFiles    = 1,
-      options            = 0,
-      outTU              = addr unit
-    )
+    let unit = trIndex.parseCXXString(str.cstring, str.len)
 
     if unit.isNil:
       raiseAssert "Unable to parse translation unit. Quitting."
@@ -693,9 +702,6 @@ int main() {
         echo cursor
         echo cursor.treeRepr(unit)
         return CXChildVisit_Continue
-
-
-    echo "done"
 
 
 proc parseLibclang() =
@@ -752,9 +758,40 @@ proc parseLibclang() =
   "../libclang.nim".writeFile($context.resultNode)
   echo "done"
 
+proc parseMainFile() =
+  let outfile = "/tmp/file.cpp"
+  outfile.writeFile """
+#include <cstring>
+#include <iostream>
+#include <map>
+#include <utility>
+
+class C;
+
+int get_number(int val) {
+    return val + 1;
+}
+
+void func_pointer_test() {
+    int (*func)(int) = &get_number;
+    std::cout << " [ " << func(0) << " ] \n";
+}
+"""
+
+
+  let trIndex = clang_createIndex(0, 0);
+  let unit = parseTranslationUnit(trIndex, outfile)
+  let topCursor = unit.clang_getTranslationUnitCursor()
+  topCursor.visitMainFile do:
+    makeVisitor [unit]:
+      echo cursor.treeRepr(unit)
+
+      return CXChildVisit_Continue
+
 
 proc main() =
-  parseString()
+  # parseString()
+  parseMainFile()
   # parseLibclang()
 
 when isMainModule:
