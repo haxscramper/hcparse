@@ -1,9 +1,9 @@
 import macros, sugar, strformat, lenientops, bitops, sequtils, options,
-       terminal, shell, strutils
+       terminal, shell, strutils, parseutils
 
 import hpprint, hpprint/hpprint_repr
 
-import hmisc/hexceptions
+import hmisc/[hexceptions, hdebug_misc]
 import hmisc/helpers
 import hmisc/types/[hnim_ast, colorstring]
 # import compiler/[parser, llstream, idents, options,
@@ -415,6 +415,7 @@ type
     prefix*: string
     typePrefix*: string
     translationUnit*: CXTranslationUnit
+    dropTypeSubseqs*: seq[string]
 
 proc simplifyFuncName(cursor: CXCursor, context: var RewriteContext): string =
   let unprefix = ($cursor).dropPrefix(context.prefix)
@@ -458,8 +459,63 @@ proc visitFunction(cursor: CXCursor, context: var RewriteContext) =
 proc visitAliasTypedef*(cursor: CXCursor, context: var RewriteContext) =
   echo "Alias typedef: ", cursor
 
+proc toEnumValue*(cursor: CXCursor, tu: CXTranslationUnit): Option[PNode] =
+  cursor.expectKind CXCursor_EnumConstantDecl
+  let val = cursor[0]
+  case val.cxKind:
+    of CXCursor_IntegerLiteral:
+      let tok = val.tokens(tu)[0]
+      var res: int
+      if tok.len > 2 and tok[1] == 'x':
+        discard parseHex(tok, res)
+      else:
+        discard parseInt(tok, res)
+
+      return some(newPLit(res))
+    of CXCursor_OverloadCandidate:
+      return none(PNode)
+    else:
+      echo val.treeRepr(tu)
+      # raiseAssert(&"#[ IMPLEMENT {val.cxkind} ]#")
+
+
 proc visitEnumDecl*(cursor: CXCursor, context: var RewriteContext) =
-  echo "enum decl: ", cursor
+  # echo "enum decl: ", cursor
+
+  let enumName = ($cursor.cxType).dropPrefix("enum ")
+
+  let names = @[enumName].concat: collect(newSeq): # NICE
+      for elem in cursor.children:
+        $elem
+
+  let pref = names.commonPrefix()
+
+  let enumPref = enumName.
+    dropLongestSubseq(context.dropTypeSubseqs).
+    dropPrefix(context.typePrefix).
+    splitCamel().
+    mapIt(it[0].toLowerAscii()).
+    join("")
+
+  if enumPref.len > 5:
+    echo cursor.treeRepr(context.translationUnit)
+    echov pref
+    echov names
+    echov enumPref
+    echov enumName
+    raiseAssert("#[ IMPLEMENT ]#")
+
+  var en = PEnum(name: enumName)
+
+  for elem in cursor.children:
+    # echo elem.treeRepr(context.translationUnit)
+    en.values.add (
+      name: ($elem).dropPrefix(pref).dropPrefix("_").addPrefix(enumPref),
+      value: elem.toEnumValue(context.translationUnit)
+    )
+
+  context.resultNode.add en.toNNode(standalone = true)
+
 
 proc visitStructDecl*(cursor: CXCursor, context: var RewriteContext) =
   echo "struct decl: ", cursor
@@ -501,7 +557,8 @@ proc main() =
     resultNode: nkStmtList.newTree(),
     prefix: "clang_",
     typePrefix: "CX",
-    translationUnit: unit
+    translationUnit: unit,
+    dropTypeSubseqs: @["CXX"]
   )
 
   cursor.clangVisitChildren do:

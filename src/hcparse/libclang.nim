@@ -1,4 +1,12 @@
 
+type
+  CXAvailabilityKind = enum
+    akAvailable, akDeprecated, akNotAvailable, akNotAccessible
+type
+  CXCursor_ExceptionSpecificationKind = enum
+    ceskNone, ceskDynamicNone, ceskDynamic, ceskMSAny, ceskBasicNoexcept,
+    ceskComputedNoexcept, ceskUnevaluated, ceskUninstantiated, ceskUnparsed,
+    ceskNoThrow
 proc *(excludeDeclarationsFromPCH: int; displayDiagnostics: int): CXIndex =
   ##  Provides a shared context for creating translation units. It provides two options: - excludeDeclarationsFromPCH: When non-zero, allows enumeration of "local" declarations (when loading any new translation units). A "local" declaration is one that belongs in the translation unit itself and not in a precompiled header that was used by the translation unit. If zero, all declarations will be enumerated. Here is an example: Error: cannot render: rnCodeBlock This process of creating the 'pch', loading it separately, and using it (via -include-pch) allows 'excludeDeclsFromPCH' to remove redundant callbacks (which gives the indexer the same performance benefit as the compiler).
   impl
@@ -7,6 +15,14 @@ proc disposeIndex*(index: CXIndex): void =
   ##  Destroy the given index. The index must not be destroyed until all of the translation units created within that index have been destroyed.
   impl
 
+type
+  CXGlobalOptFlags = enum
+    gofNone = 0, gofThreadBackgroundPriorityForIndexing = 1,
+    gofThreadBackgroundPriorityForEditing = 2, gofThreadBackgroundPriorityForAll
+type
+  CXGlobalOptFlags = enum
+    gofNone = 0, gofThreadBackgroundPriorityForIndexing = 1,
+    gofThreadBackgroundPriorityForEditing = 2, gofThreadBackgroundPriorityForAll
 proc setGlobalOptions*(argCXIndex: CXIndex; options: cuint): void =
   ##  Sets general options associated with a CXIndex. For example: Error: cannot render: rnCodeBlock ** A bitmask of options, a bitwise OR of CXGlobalOpt_XXX flags.
   impl
@@ -136,6 +152,9 @@ proc disposeSourceRangeList*(ranges: ptr[CXSourceRangeList]): void =
   ##  Destroy the given Error: cannot render: rnLiteralBlock 
   impl
 
+type
+  CXDiagnosticSeverity = enum
+    dsIgnored = 0, dsNote = 1, dsWarning = 2, dsError = 3, dsFatal = 4
 proc getNumDiagnosticsInSet*(Diags: CXDiagnosticSet): cuint =
   ##  Determine the number of diagnostics in a CXDiagnosticSet.
   impl
@@ -144,6 +163,9 @@ proc getDiagnosticInSet*(Diags: CXDiagnosticSet; Index: cuint): CXDiagnostic =
   ##  Retrieve a diagnostic associated with the given CXDiagnosticSet. ** the CXDiagnosticSet to query. ** the zero-based diagnostic number to retrieve. ** the requested diagnostic. This diagnostic must be freed via a call to Error: cannot render: rnLiteralBlock 
   impl
 
+type
+  CXLoadDiag_Error = enum
+    ldeNone = 0, ldeUnknown = 1, ldeCannotLoad = 2, ldeInvalidFile = 3
 proc *(file: cstring; error: ptr[CXLoadDiag_Error]; errorString: ptr[CXString]): CXDiagnosticSet =
   ##  Deserialize a set of diagnostics from a Clang diagnostics bitcode file. ** The name of the file to deserialize. ** A pointer to a enum value recording if there was a problem        deserializing the diagnostics. ** A pointer to a CXString for recording the error string        if the file was not successfully loaded. ** A loaded CXDiagnosticSet if successful, and NULL otherwise.  These diagnostics should be released using clang_disposeDiagnosticSet().
   impl
@@ -172,6 +194,10 @@ proc disposeDiagnostic*(Diagnostic: CXDiagnostic): void =
   ##  Destroy a diagnostic.
   impl
 
+type
+  CXDiagnosticDisplayOptions = enum
+    ddoDisplaySourceLocation = 1, ddoDisplayColumn = 2, ddoDisplaySourceRanges = 4,
+    ddoDisplayOption = 8, ddoDisplayCategoryId = 16, ddoDisplayCategoryName = 32
 proc formatDiagnostic*(Diagnostic: CXDiagnostic; Options: cuint): CXString =
   ##  Format the given diagnostic in a manner that is suitable for display. This routine will format the given diagnostic to a string, rendering the diagnostic according to the various options given. The Error: cannot render: rnLiteralBlock function returns the set of options that most closely mimics the behavior of the clang compiler. ** The diagnostic to print. ** A set of options that control the diagnostic display, created by combining Error: cannot render: rnLiteralBlock values. ** A new string containing for formatted diagnostic.
   impl
@@ -244,6 +270,17 @@ proc createTranslationUnit2*(CIdx: CXIndex; ast_filename: cstring;
   ##  Create a translation unit from an AST file (Error: cannot render: rnLiteralBlock ** A non-NULL pointer to store the created Error: cannot render: rnLiteralBlock ** Zero on success, otherwise returns an error code.
   impl
 
+type
+  CXTranslationUnit_Flags = enum
+    tufNone = 0, tufDetailedPreprocessingRecord = 1, tufIncomplete = 2,
+    tufPrecompiledPreamble = 4, tufCacheCompletionResults = 8,
+    tufForSerialization = 16, tufCXXChainedPCH = 32, tufSkipFunctionBodies = 64,
+    tufIncludeBriefCommentsInCodeCompletion = 128,
+    tufCreatePreambleOnFirstParse = 256, tufKeepGoing = 512,
+    tufSingleFileParse = 1024, tufLimitSkipFunctionBodiesToPreamble = 2048,
+    tufIncludeAttributedTypes = 4096, tufVisitImplicitAttributes = 8192,
+    tufIgnoreNonErrorsFromIncludedFiles = 16384,
+    tufRetainExcludedConditionalBlocks = 32768
 proc defaultEditingTranslationUnitOptions*(): cuint =
   ##  Returns the set of flags that is suitable for parsing a translation unit that is being edited. The set of flags returned provide options for Error: cannot render: rnLiteralBlock to indicate that the translation unit is likely to be reparsed many times, either explicitly (via Error: cannot render: rnLiteralBlock or implicitly (e.g., by code completion (Error: cannot render: rnLiteralBlock The returned flag set contains an unspecified set of optimizations (e.g., the precompiled preamble) geared toward improving the performance of these routines. The set of optimizations enabled may change from one version to the next.
   impl
@@ -274,10 +311,16 @@ proc parseTranslationUnit2FullArgv*(CIdx: CXIndex; source_filename: cstring;
   ##  Same as clang_parseTranslationUnit2 but requires a full command line for Error: cannot render: rnLiteralBlock including argv[0]. This is useful if the standard library paths are relative to the binary.
   impl
 
+type
+  CXSaveTranslationUnit_Flags = enum
+    stufNone = 0
 proc defaultSaveOptions*(TU: CXTranslationUnit): cuint =
   ##  Returns the set of flags that is suitable for saving a translation unit. The set of flags returned provide options for Error: cannot render: rnLiteralBlock by default. The returned flag set contains an unspecified set of options that save translation units with the most commonly-requested data.
   impl
 
+type
+  CXSaveError = enum
+    seNone = 0, seUnknown = 1, seTranslationErrors = 2, seInvalidTU = 3
 proc saveTranslationUnit*(TU: CXTranslationUnit; FileName: cstring; options: cuint): int =
   ##  Saves a translation unit into a serialized representation of that translation unit on disk. Any translation unit that was parsed without error can be saved into a file. The translation unit can then be deserialized into a new Error: cannot render: rnLiteralBlock with Error: cannot render: rnLiteralBlock or, if it is an incomplete translation unit that corresponds to a header, used as a precompiled header when parsing other translation units. ** The translation unit to save. ** The file to which the translation unit will be saved. ** A bitmask of options that affects how the translation unit is saved. This should be a bitwise OR of the CXSaveTranslationUnit_XXX flags. ** A value that will match one of the enumerators of the CXSaveError enumeration. Zero (CXSaveError_None) indicates that the translation unit was saved successfully, while a non-zero value indicates that a problem occurred.
   impl
@@ -290,6 +333,9 @@ proc disposeTranslationUnit*(argCXTranslationUnit: CXTranslationUnit): void =
   ##  Destroy the specified CXTranslationUnit object.
   impl
 
+type
+  CXReparse_Flags = enum
+    rfNone = 0
 proc defaultReparseOptions*(TU: CXTranslationUnit): cuint =
   ##  Returns the set of flags that is suitable for reparsing a translation unit. The set of flags returned provide options for Error: cannot render: rnLiteralBlock by default. The returned flag set contains an unspecified set of optimizations geared toward common uses of reparsing. The set of optimizations enabled may change from one version to the next.
   impl
@@ -299,6 +345,17 @@ proc reparseTranslationUnit*(TU: CXTranslationUnit; num_unsaved_files: cuint;
   ##  Reparse the source files that produced this translation unit. This routine can be used to re-parse the source files that originally created the given translation unit, for example because those source files have changed (either on disk or as passed via Error: cannot render: rnLiteralBlock The source code will be reparsed with the same command-line options as it was originally parsed. Reparsing a translation unit invalidates all cursors and source locations that refer into that translation unit. This makes reparsing a translation unit semantically equivalent to destroying the translation unit and then creating a new translation unit with the same command-line arguments. However, it may be more efficient to reparse a translation unit using this routine. ** The translation unit whose contents will be re-parsed. The translation unit must originally have been built with Error: cannot render: rnLiteralBlock ** The number of unsaved file entries in Error: cannot render: rnLiteralBlock ** The files that have not yet been saved to disk but may be required for parsing, including the contents of those files.  The contents and name of these files (as specified by CXUnsavedFile) are copied when necessary, so the client only needs to guarantee their validity until the call to this function returns. ** A bitset of options composed of the flags in CXReparse_Flags. The function Error: cannot render: rnLiteralBlock produces a default set of options recommended for most uses, based on the translation unit. ** 0 if the sources could be reparsed.  A non-zero error code will be returned if reparsing was impossible, such that the translation unit is invalid. In such cases, the only valid call for Error: cannot render: rnLiteralBlock is Error: cannot render: rnLiteralBlock  The error codes returned by this routine are described by the Error: cannot render: rnLiteralBlock enum.
   impl
 
+type
+  CXTUResourceUsageKind = enum
+    turukAST = 1, turukIdentifiers = 2, turukSelectors = 3,
+    turukGlobalCompletionResults = 4, turukSourceManagerContentCache = 5,
+    turukAST_SideTables = 6, turukSourceManager_Membuffer_Malloc = 7,
+    turukSourceManager_Membuffer_MMap = 8,
+    turukExternalASTSource_Membuffer_Malloc = 9,
+    turukExternalASTSource_Membuffer_MMap = 10, turukPreprocessor = 11,
+    turukPreprocessingRecord = 12, turukSourceManager_DataStructures = 13,
+    turukPreprocessor_HeaderSearch = 14, turukMEMORY_IN_BYTES_BEGIN,
+    turukMEMORY_IN_BYTES_END, turukFirst, turukLast
 proc getTUResourceUsageName*(kind: CXTUResourceUsageKind): cstring =
   ##  Returns the human-readable null-terminated C string that represents  the name of the memory category.  This string should never be freed.
   impl
@@ -326,6 +383,105 @@ proc getPointerWidth*(Info: CXTargetInfo): int =
   ##  Get the pointer width of the target in bits. Returns -1 in case of error.
   impl
 
+type
+  CXCursorKind = enum
+    ckUnexposedDecl = 1, ckStructDecl = 2, ckUnionDecl = 3, ckClassDecl = 4, ckEnumDecl = 5,
+    ckFieldDecl = 6, ckEnumConstantDecl = 7, ckFunctionDecl = 8, ckVarDecl = 9,
+    ckParmDecl = 10, ckObjCInterfaceDecl = 11, ckObjCCategoryDecl = 12,
+    ckObjCProtocolDecl = 13, ckObjCPropertyDecl = 14, ckObjCIvarDecl = 15,
+    ckObjCInstanceMethodDecl = 16, ckObjCClassMethodDecl = 17,
+    ckObjCImplementationDecl = 18, ckObjCCategoryImplDecl = 19, ckTypedefDecl = 20,
+    ckCXXMethod = 21, ckNamespace = 22, ckLinkageSpec = 23, ckConstructor = 24,
+    ckDestructor = 25, ckConversionFunction = 26, ckTemplateTypeParameter = 27,
+    ckNonTypeTemplateParameter = 28, ckTemplateTemplateParameter = 29,
+    ckFunctionTemplate = 30, ckClassTemplate = 31,
+    ckClassTemplatePartialSpecialization = 32, ckNamespaceAlias = 33,
+    ckUsingDirective = 34, ckUsingDeclaration = 35, ckTypeAliasDecl = 36,
+    ckObjCSynthesizeDecl = 37, ckObjCDynamicDecl = 38, ckCXXAccessSpecifier = 39,
+    ckFirstDecl, ckLastDecl, ckFirstRef = 40, ckObjCSuperClassRef = 40,
+    ckObjCProtocolRef = 41, ckObjCClassRef = 42, ckTypeRef = 43, ckCXXBaseSpecifier = 44,
+    ckTemplateRef = 45, ckNamespaceRef = 46, ckMemberRef = 47, ckLabelRef = 48,
+    ckOverloadedDeclRef = 49, ckVariableRef = 50, ckLastRef, ckFirstInvalid = 70,
+    ckInvalidFile = 70, ckNoDeclFound = 71, ckNotImplemented = 72, ckInvalidCode = 73,
+    ckLastInvalid, ckFirstExpr = 100, ckUnexposedExpr = 100, ckDeclRefExpr = 101,
+    ckMemberRefExpr = 102, ckCallExpr = 103, ckObjCMessageExpr = 104, ckBlockExpr = 105,
+    ckIntegerLiteral = 106, ckFloatingLiteral = 107, ckImaginaryLiteral = 108,
+    ckStringLiteral = 109, ckCharacterLiteral = 110, ckParenExpr = 111,
+    ckUnaryOperator = 112, ckArraySubscriptExpr = 113, ckBinaryOperator = 114,
+    ckCompoundAssignOperator = 115, ckConditionalOperator = 116,
+    ckCStyleCastExpr = 117, ckCompoundLiteralExpr = 118, ckInitListExpr = 119,
+    ckAddrLabelExpr = 120, ckStmtExpr = 121, ckGenericSelectionExpr = 122,
+    ckGNUNullExpr = 123, ckCXXStaticCastExpr = 124, ckCXXDynamicCastExpr = 125,
+    ckCXXReinterpretCastExpr = 126, ckCXXConstCastExpr = 127,
+    ckCXXFunctionalCastExpr = 128, ckCXXTypeidExpr = 129, ckCXXBoolLiteralExpr = 130,
+    ckCXXNullPtrLiteralExpr = 131, ckCXXThisExpr = 132, ckCXXThrowExpr = 133,
+    ckCXXNewExpr = 134, ckCXXDeleteExpr = 135, ckUnaryExpr = 136,
+    ckObjCStringLiteral = 137, ckObjCEncodeExpr = 138, ckObjCSelectorExpr = 139,
+    ckObjCProtocolExpr = 140, ckObjCBridgedCastExpr = 141, ckPackExpansionExpr = 142,
+    ckSizeOfPackExpr = 143, ckLambdaExpr = 144, ckObjCBoolLiteralExpr = 145,
+    ckObjCSelfExpr = 146, ckOMPArraySectionExpr = 147,
+    ckObjCAvailabilityCheckExpr = 148, ckFixedPointLiteral = 149, ckLastExpr,
+    ckFirstStmt = 200, ckUnexposedStmt = 200, ckLabelStmt = 201, ckCompoundStmt = 202,
+    ckCaseStmt = 203, ckDefaultStmt = 204, ckIfStmt = 205, ckSwitchStmt = 206,
+    ckWhileStmt = 207, ckDoStmt = 208, ckForStmt = 209, ckGotoStmt = 210,
+    ckIndirectGotoStmt = 211, ckContinueStmt = 212, ckBreakStmt = 213,
+    ckReturnStmt = 214, ckGCCAsmStmt = 215, ckAsmStmt, ckObjCAtTryStmt = 216,
+    ckObjCAtCatchStmt = 217, ckObjCAtFinallyStmt = 218, ckObjCAtThrowStmt = 219,
+    ckObjCAtSynchronizedStmt = 220, ckObjCAutoreleasePoolStmt = 221,
+    ckObjCForCollectionStmt = 222, ckCXXCatchStmt = 223, ckCXXTryStmt = 224,
+    ckCXXForRangeStmt = 225, ckSEHTryStmt = 226, ckSEHExceptStmt = 227,
+    ckSEHFinallyStmt = 228, ckMSAsmStmt = 229, ckNullStmt = 230, ckDeclStmt = 231,
+    ckOMPParallelDirective = 232, ckOMPSimdDirective = 233, ckOMPForDirective = 234,
+    ckOMPSectionsDirective = 235, ckOMPSectionDirective = 236,
+    ckOMPSingleDirective = 237, ckOMPParallelForDirective = 238,
+    ckOMPParallelSectionsDirective = 239, ckOMPTaskDirective = 240,
+    ckOMPMasterDirective = 241, ckOMPCriticalDirective = 242,
+    ckOMPTaskyieldDirective = 243, ckOMPBarrierDirective = 244,
+    ckOMPTaskwaitDirective = 245, ckOMPFlushDirective = 246, ckSEHLeaveStmt = 247,
+    ckOMPOrderedDirective = 248, ckOMPAtomicDirective = 249,
+    ckOMPForSimdDirective = 250, ckOMPParallelForSimdDirective = 251,
+    ckOMPTargetDirective = 252, ckOMPTeamsDirective = 253,
+    ckOMPTaskgroupDirective = 254, ckOMPCancellationPointDirective = 255,
+    ckOMPCancelDirective = 256, ckOMPTargetDataDirective = 257,
+    ckOMPTaskLoopDirective = 258, ckOMPTaskLoopSimdDirective = 259,
+    ckOMPDistributeDirective = 260, ckOMPTargetEnterDataDirective = 261,
+    ckOMPTargetExitDataDirective = 262, ckOMPTargetParallelDirective = 263,
+    ckOMPTargetParallelForDirective = 264, ckOMPTargetUpdateDirective = 265,
+    ckOMPDistributeParallelForDirective = 266,
+    ckOMPDistributeParallelForSimdDirective = 267,
+    ckOMPDistributeSimdDirective = 268, ckOMPTargetParallelForSimdDirective = 269,
+    ckOMPTargetSimdDirective = 270, ckOMPTeamsDistributeDirective = 271,
+    ckOMPTeamsDistributeSimdDirective = 272,
+    ckOMPTeamsDistributeParallelForSimdDirective = 273,
+    ckOMPTeamsDistributeParallelForDirective = 274,
+    ckOMPTargetTeamsDirective = 275, ckOMPTargetTeamsDistributeDirective = 276,
+    ckOMPTargetTeamsDistributeParallelForDirective = 277,
+    ckOMPTargetTeamsDistributeParallelForSimdDirective = 278,
+    ckOMPTargetTeamsDistributeSimdDirective = 279, ckBuiltinBitCastExpr = 280,
+    ckOMPMasterTaskLoopDirective = 281, ckOMPParallelMasterTaskLoopDirective = 282,
+    ckOMPMasterTaskLoopSimdDirective = 283,
+    ckOMPParallelMasterTaskLoopSimdDirective = 284,
+    ckOMPParallelMasterDirective = 285, ckLastStmt, ckTranslationUnit = 300,
+    ckFirstAttr = 400, ckUnexposedAttr = 400, ckIBActionAttr = 401, ckIBOutletAttr = 402,
+    ckIBOutletCollectionAttr = 403, ckCXXFinalAttr = 404, ckCXXOverrideAttr = 405,
+    ckAnnotateAttr = 406, ckAsmLabelAttr = 407, ckPackedAttr = 408, ckPureAttr = 409,
+    ckConstAttr = 410, ckNoDuplicateAttr = 411, ckCUDAConstantAttr = 412,
+    ckCUDADeviceAttr = 413, ckCUDAGlobalAttr = 414, ckCUDAHostAttr = 415,
+    ckCUDASharedAttr = 416, ckVisibilityAttr = 417, ckDLLExport = 418, ckDLLImport = 419,
+    ckNSReturnsRetained = 420, ckNSReturnsNotRetained = 421,
+    ckNSReturnsAutoreleased = 422, ckNSConsumesSelf = 423, ckNSConsumed = 424,
+    ckObjCException = 425, ckObjCNSObject = 426, ckObjCIndependentClass = 427,
+    ckObjCPreciseLifetime = 428, ckObjCReturnsInnerPointer = 429,
+    ckObjCRequiresSuper = 430, ckObjCRootClass = 431,
+    ckObjCSubclassingRestricted = 432, ckObjCExplicitProtocolImpl = 433,
+    ckObjCDesignatedInitializer = 434, ckObjCRuntimeVisible = 435,
+    ckObjCBoxable = 436, ckFlagEnum = 437, ckConvergentAttr = 438,
+    ckWarnUnusedAttr = 439, ckWarnUnusedResultAttr = 440, ckAlignedAttr = 441,
+    ckLastAttr, ckPreprocessingDirective = 500, ckMacroDefinition = 501,
+    ckMacroExpansion = 502, ckMacroInstantiation, ckInclusionDirective = 503,
+    ckFirstPreprocessing, ckLastPreprocessing, ckModuleImportDecl = 600,
+    ckTypeAliasTemplateDecl = 601, ckStaticAssert = 602, ckFriendDecl = 603,
+    ckFirstExtraDecl, ckLastExtraDecl, ckOverloadCandidate = 700
 proc getNullCursor*(): CXCursor =
   ##  Retrieve the NULL cursor, which represents no entity.
   impl
@@ -394,10 +550,16 @@ proc isUnexposed*(argCXCursorKind: CXCursorKind): cuint =
   ## * Determine whether the given cursor represents a currently  unexposed piece of the AST (e.g., CXCursor_UnexposedStmt).
   impl
 
+type
+  CXLinkageKind = enum
+    lkInvalid, lkNoLinkage, lkInternal, lkUniqueExternal, lkExternal
 proc getCursorLinkage*(cursor: CXCursor): CXLinkageKind =
   ##  Determine the linkage of the entity referred to by a given cursor.
   impl
 
+type
+  CXVisibilityKind = enum
+    vkInvalid, vkHidden, vkProtected, vkDefault
 proc getCursorVisibility*(cursor: CXCursor): CXVisibilityKind =
   ##  Describe the visibility of the entity referred to by a cursor. This returns the default visibility if not explicitly specified by a visibility attribute. The default visibility may be changed by commandline arguments. ** The cursor to query. ** The visibility of the cursor.
   impl
@@ -419,10 +581,16 @@ proc disposeCXPlatformAvailability*(availability: ptr[CXPlatformAvailability]): 
   ##  Free the memory associated with a Error: cannot render: rnLiteralBlock structure.
   impl
 
+type
+  CXLanguageKind = enum
+    lkInvalid = 0, lkC, lkObjC, lkCPlusPlus
 proc getCursorLanguage*(cursor: CXCursor): CXLanguageKind =
   ##  Determine the "language" of the entity referred to by a given cursor.
   impl
 
+type
+  CXTLSKind = enum
+    tlskNone = 0, tlskDynamic, tlskStatic
 proc getCursorTLSKind*(cursor: CXCursor): CXTLSKind =
   ##  Determine the "thread-local storage (TLS) kind" of the declaration referred to by a cursor.
   impl
@@ -481,6 +649,54 @@ proc getCursorExtent*(argCXCursor: CXCursor): CXSourceRange =
   ##  Retrieve the physical extent of the source construct referenced by the given cursor. The extent of a cursor starts with the file/line/column pointing at the first character within the source construct that the cursor refers to and ends with the last character within that source construct. For a declaration, the extent covers the declaration itself. For a reference, the extent covers the location of the reference (e.g., where the referenced entity was actually used).
   impl
 
+type
+  CXTypeKind = enum
+    tkInvalid = 0, tkUnexposed = 1, tkVoid = 2, tkBool = 3, tkChar_U = 4, tkUChar = 5,
+    tkChar16 = 6, tkChar32 = 7, tkUShort = 8, tkUInt = 9, tkULong = 10, tkULongLong = 11,
+    tkUInt128 = 12, tkChar_S = 13, tkSChar = 14, tkWChar = 15, tkShort = 16, tkInt = 17,
+    tkLong = 18, tkLongLong = 19, tkInt128 = 20, tkFloat = 21, tkDouble = 22,
+    tkLongDouble = 23, tkNullPtr = 24, tkOverload = 25, tkDependent = 26, tkObjCId = 27,
+    tkObjCClass = 28, tkObjCSel = 29, tkFloat128 = 30, tkHalf = 31, tkFloat16 = 32,
+    tkShortAccum = 33, tkAccum = 34, tkLongAccum = 35, tkUShortAccum = 36, tkUAccum = 37,
+    tkULongAccum = 38, tkFirstBuiltin, tkLastBuiltin, tkComplex = 100, tkPointer = 101,
+    tkBlockPointer = 102, tkLValueReference = 103, tkRValueReference = 104,
+    tkRecord = 105, tkEnum = 106, tkTypedef = 107, tkObjCInterface = 108,
+    tkObjCObjectPointer = 109, tkFunctionNoProto = 110, tkFunctionProto = 111,
+    tkConstantArray = 112, tkVector = 113, tkIncompleteArray = 114,
+    tkVariableArray = 115, tkDependentSizedArray = 116, tkMemberPointer = 117,
+    tkAuto = 118, tkElaborated = 119, tkPipe = 120, tkOCLImage1dRO = 121,
+    tkOCLImage1dArrayRO = 122, tkOCLImage1dBufferRO = 123, tkOCLImage2dRO = 124,
+    tkOCLImage2dArrayRO = 125, tkOCLImage2dDepthRO = 126,
+    tkOCLImage2dArrayDepthRO = 127, tkOCLImage2dMSAARO = 128,
+    tkOCLImage2dArrayMSAARO = 129, tkOCLImage2dMSAADepthRO = 130,
+    tkOCLImage2dArrayMSAADepthRO = 131, tkOCLImage3dRO = 132, tkOCLImage1dWO = 133,
+    tkOCLImage1dArrayWO = 134, tkOCLImage1dBufferWO = 135, tkOCLImage2dWO = 136,
+    tkOCLImage2dArrayWO = 137, tkOCLImage2dDepthWO = 138,
+    tkOCLImage2dArrayDepthWO = 139, tkOCLImage2dMSAAWO = 140,
+    tkOCLImage2dArrayMSAAWO = 141, tkOCLImage2dMSAADepthWO = 142,
+    tkOCLImage2dArrayMSAADepthWO = 143, tkOCLImage3dWO = 144, tkOCLImage1dRW = 145,
+    tkOCLImage1dArrayRW = 146, tkOCLImage1dBufferRW = 147, tkOCLImage2dRW = 148,
+    tkOCLImage2dArrayRW = 149, tkOCLImage2dDepthRW = 150,
+    tkOCLImage2dArrayDepthRW = 151, tkOCLImage2dMSAARW = 152,
+    tkOCLImage2dArrayMSAARW = 153, tkOCLImage2dMSAADepthRW = 154,
+    tkOCLImage2dArrayMSAADepthRW = 155, tkOCLImage3dRW = 156, tkOCLSampler = 157,
+    tkOCLEvent = 158, tkOCLQueue = 159, tkOCLReserveID = 160, tkObjCObject = 161,
+    tkObjCTypeParam = 162, tkAttributed = 163, tkOCLIntelSubgroupAVCMcePayload = 164,
+    tkOCLIntelSubgroupAVCImePayload = 165, tkOCLIntelSubgroupAVCRefPayload = 166,
+    tkOCLIntelSubgroupAVCSicPayload = 167, tkOCLIntelSubgroupAVCMceResult = 168,
+    tkOCLIntelSubgroupAVCImeResult = 169, tkOCLIntelSubgroupAVCRefResult = 170,
+    tkOCLIntelSubgroupAVCSicResult = 171,
+    tkOCLIntelSubgroupAVCImeResultSingleRefStreamout = 172,
+    tkOCLIntelSubgroupAVCImeResultDualRefStreamout = 173,
+    tkOCLIntelSubgroupAVCImeSingleRefStreamin = 174,
+    tkOCLIntelSubgroupAVCImeDualRefStreamin = 175, tkExtVector = 176
+type
+  CXCallingConv = enum
+    ccDefault = 0, ccC = 1, ccX86StdCall = 2, ccX86FastCall = 3, ccX86ThisCall = 4,
+    ccX86Pascal = 5, ccAAPCS = 6, ccAAPCS_VFP = 7, ccX86RegCall = 8, ccIntelOclBicc = 9,
+    ccWin64 = 10, ccX86_64Win64, ccX86_64SysV = 11, ccX86VectorCall = 12, ccSwift = 13,
+    ccPreserveMost = 14, ccPreserveAll = 15, ccAArch64VectorCall = 16, ccInvalid = 100,
+    ccUnexposed = 200
 proc getCursorType*(C: CXCursor): CXType =
   ##  Retrieve the type of a CXCursor (if any).
   impl
@@ -517,6 +733,10 @@ proc getArgument*(C: CXCursor; i: cuint): CXCursor =
   ##  Retrieve the argument cursor of a function or method. The argument cursor can be determined for calls as well as for declarations of functions or methods. For other cursors and for invalid indices, an invalid cursor is returned.
   impl
 
+type
+  CXTemplateArgumentKind = enum
+    takNull, takType, takDeclaration, takNullPtr, takIntegral, takTemplate,
+    takTemplateExpansion, takExpression, takPack, takInvalid
 proc getNumTemplateArguments*(C: CXCursor): int =
   ## Returns the number of template args of a function decl representing a template specialization. If the argument cursor cannot be converted into a template function declaration, -1 is returned. For example, for the following declaration and specialization:   template <typename T, int kInt, bool kBool>   void foo() { ... }   template <>   void foo<float, -7, true>(); The value 3 would be returned from this call.
   impl
@@ -677,10 +897,17 @@ proc isTransparentTagTypedef*(T: CXType): cuint =
   ##  Determine if a typedef is 'transparent' tag. A typedef is considered 'transparent' if it shares a name and spelling location with its underlying tag type, as is the case with the NS_ENUM macro. ** non-zero if transparent and zero otherwise.
   impl
 
+type
+  CXTypeNullabilityKind = enum
+    tnkNonNull = 0, tnkNullable = 1, tnkUnspecified = 2, tnkInvalid = 3
 proc getNullability*(T: CXType): CXTypeNullabilityKind =
   ##  Retrieve the nullability kind of a pointer type.
   impl
 
+type
+  CXTypeLayoutError = enum
+    tleInvalid, tleIncomplete, tleDependent, tleNotConstantSize,
+    tleInvalidFieldName, tleUndeduced
 proc getAlignOf*(T: CXType): clonglong =
   ##  Return the alignment of a type in bytes as per C++[expr.alignof]   standard. If the type declaration is invalid, CXTypeLayoutError_Invalid is returned. If the type declaration is an incomplete type, CXTypeLayoutError_Incomplete   is returned. If the type declaration is a dependent type, CXTypeLayoutError_Dependent is   returned. If the type declaration is not a constant size type,   CXTypeLayoutError_NotConstantSize is returned.
   impl
@@ -717,6 +944,9 @@ proc isInlineNamespace*(C: CXCursor): cuint =
   ##  Determine whether the given cursor represents an inline namespace declaration.
   impl
 
+type
+  CXRefQualifierKind = enum
+    rqkNone = 0, rqkLValue, rqkRValue
 proc getNumTemplateArguments*(T: CXType): int =
   ##  Returns the number of template arguments for given template specialization, or -1 if type Error: cannot render: rnLiteralBlock is not a template specialization.
   impl
@@ -737,10 +967,17 @@ proc isVirtualBase*(argCXCursor: CXCursor): cuint =
   ##  Returns 1 if the base class specified by the cursor with kind   CX_CXXBaseSpecifier is virtual.
   impl
 
+type
+  CX_CXXAccessSpecifier = enum
+    asInvalidAccessSpecifier, asPublic, asProtected, asPrivate
 proc getCXXAccessSpecifier*(argCXCursor: CXCursor): CX_CXXAccessSpecifier =
   ##  Returns the access control level for the referenced object. If the cursor refers to a C++ declaration, its access control level within its parent scope is returned. Otherwise, if the cursor refers to a base specifier or access specifier, the specifier itself is returned.
   impl
 
+type
+  CX_StorageClass = enum
+    scC_Invalid, scC_None, scC_Extern, scC_Static, scC_PrivateExtern,
+    scC_OpenCLWorkGroupLocal, scC_Auto, scC_Register
 proc getStorageClass*(argCXCursor: CXCursor): CX_StorageClass =
   ##  Returns the storage class for a function or variable declaration. If the passed in Cursor is not a function or variable declaration, CX_SC_Invalid is returned else the storage class.
   impl
@@ -757,6 +994,9 @@ proc getIBOutletCollectionType*(argCXCursor: CXCursor): CXType =
   ##  For cursors representing an iboutletcollection attribute,  this function returns the collection element type. 
   impl
 
+type
+  CXChildVisitResult = enum
+    cvrBreak, cvrContinue, cvrRecurse
 proc visitChildren*(parent: CXCursor; visitor: CXCursorVisitor;
                    client_data: CXClientData): cuint =
   ##  Visit the children of a particular cursor. This function visits all the direct children of the given cursor, invoking the given Error: cannot render: rnLiteralBlock function with the cursors of each visited child. The traversal may be recursive, if the visitor returns Error: cannot render: rnLiteralBlock The traversal may also be ended prematurely, if the visitor returns Error: cannot render: rnLiteralBlock ** the cursor whose child may be visited. All kinds of cursors can be visited, including invalid cursors (which, by definition, have no children). ** the visitor function that will be invoked for each child of Error: cannot render: rnLiteralBlock ** pointer data supplied by the client, which will be passed to the visitor each time it is invoked. ** a non-zero value if the traversal was terminated prematurely by the visitor returning Error: cannot render: rnLiteralBlock 
@@ -798,6 +1038,17 @@ proc getSpellingNameRange*(argCXCursor: CXCursor; pieceIndex: cuint; options: cu
   ##  Retrieve a range for a piece that forms the cursors spelling name. Most of the times there is only one range for the complete spelling but for Objective-C methods and Objective-C message expressions, there are multiple pieces for each selector identifier. ** the index of the spelling name piece. If this is greater than the actual number of pieces, it will return a NULL (invalid) range. ** Reserved.
   impl
 
+type
+  CXPrintingPolicyProperty = enum
+    pppIndentation, pppSuppressSpecifiers, pppSuppressTagKeyword,
+    pppIncludeTagDefinition, pppSuppressScope, pppSuppressUnwrittenScope,
+    pppSuppressInitializers, pppConstantArraySizeAsWritten,
+    pppAnonymousTagLocations, pppSuppressStrongLifetime,
+    pppSuppressLifetimeQualifiers, pppSuppressTemplateArgsInCXXConstructors,
+    pppBool, pppRestrict, pppAlignof, pppUnderscoreAlignof, pppUseVoidForZeroParams,
+    pppTerseOutput, pppPolishForDeclaration, pppHalf, pppMSWChar,
+    pppIncludeNewlines, pppMSVCFormatting, pppConstantsAsWritten,
+    pppSuppressImplicitBase, pppFullyQualifiedName, pppLastProperty
 proc getProperty*(Policy: CXPrintingPolicy; Property: CXPrintingPolicyProperty): cuint =
   ##  Get a property value for the given printing policy.
   impl
@@ -851,6 +1102,18 @@ proc getReceiverType*(C: CXCursor): CXType =
   ##  Given a cursor pointing to an Objective-C message or property reference, or C++ method call, returns the CXType of the receiver.
   impl
 
+type
+  CXObjCPropertyAttrKind = enum
+    ocpaknoattr = 0, ocpakreadonly = 1, ocpakgetter = 2, ocpakassign = 4,
+    ocpakreadwrite = 8, ocpakretain = 16, ocpakcopy = 32, ocpaknonatomic = 64,
+    ocpaksetter = 128, ocpakatomic = 256, ocpakweak = 512, ocpakstrong = 1024,
+    ocpakunsafe_unretained = 2048, ocpakclass = 4096
+type
+  CXObjCPropertyAttrKind = enum
+    ocpaknoattr = 0, ocpakreadonly = 1, ocpakgetter = 2, ocpakassign = 4,
+    ocpakreadwrite = 8, ocpakretain = 16, ocpakcopy = 32, ocpaknonatomic = 64,
+    ocpaksetter = 128, ocpakatomic = 256, ocpakweak = 512, ocpakstrong = 1024,
+    ocpakunsafe_unretained = 2048, ocpakclass = 4096
 proc getObjCPropertyAttributes*(C: CXCursor; reserved: cuint): cuint =
   ##  Given a cursor that represents a property declaration, return the associated property attributes. The bits are formed from Error: cannot render: rnLiteralBlock ** Reserved for future use, pass 0.
   impl
@@ -863,6 +1126,14 @@ proc getObjCPropertySetterName*(C: CXCursor): CXString =
   ##  Given a cursor that represents a property declaration, return the name of the method that implements the setter, if any.
   impl
 
+type
+  CXObjCDeclQualifierKind = enum
+    ocdqkNone = 0, ocdqkIn = 1, ocdqkInout = 2, ocdqkOut = 4, ocdqkBycopy = 8, ocdqkByref = 16,
+    ocdqkOneway = 32
+type
+  CXObjCDeclQualifierKind = enum
+    ocdqkNone = 0, ocdqkIn = 1, ocdqkInout = 2, ocdqkOut = 4, ocdqkBycopy = 8, ocdqkByref = 16,
+    ocdqkOneway = 32
 proc getObjCDeclQualifiers*(C: CXCursor): cuint =
   ##  Given a cursor that represents an Objective-C method or parameter declaration, return the associated Objective-C qualifiers for the return type or the parameter respectively. The bits are formed from CXObjCDeclQualifierKind.
   impl
@@ -1002,6 +1273,16 @@ proc getCursorReferenceNameRange*(C: CXCursor; NameFlags: cuint; PieceIndex: cui
   ##  Given a cursor that references something else, return the source range covering that reference. ** A cursor pointing to a member reference, a declaration reference, or an operator call. ** A bitset with three independent flags: CXNameRange_WantQualifier, CXNameRange_WantTemplateArgs, and CXNameRange_WantSinglePiece. ** For contiguous names or when passing the flag CXNameRange_WantSinglePiece, only one piece with index 0 is available. When the CXNameRange_WantSinglePiece flag is not passed for a non-contiguous names, this index can be used to retrieve the individual pieces of the name. See also CXNameRange_WantSinglePiece. ** The piece of the name pointed to by the given cursor. If there is no name, or if the PieceIndex is out-of-range, a null-cursor will be returned.
   impl
 
+type
+  CXNameRefFlags = enum
+    nrfange_WantQualifier = 1, nrfange_WantTemplateArgs = 2,
+    nrfange_WantSinglePiece = 4
+type
+  CXTokenKind = enum
+    tkPunctuation, tkKeyword, tkIdentifier, tkLiteral, tkComment
+type
+  CXTokenKind = enum
+    tkPunctuation, tkKeyword, tkIdentifier, tkLiteral, tkComment
 proc getToken*(TU: CXTranslationUnit; Location: CXSourceLocation): ptr[CXToken] =
   ##  Get the raw lexical token starting with the given location. ** the translation unit whose text is being tokenized. ** the source location with which the token starts. ** The token starting with the given location or NULL if no such token exist. The returned pointer must be freed with clang_disposeTokens before the translation unit is destroyed.
   impl
@@ -1052,6 +1333,13 @@ proc enableStackTraces*(): void =
 proc *(fn: ptr[!!!]; user_data: ptr[void]; stack_size: cuint): void =
   impl
 
+type
+  CXCompletionChunkKind = enum
+    cckOptional, cckTypedText, cckText, cckPlaceholder, cckInformative,
+    cckCurrentParameter, cckLeftParen, cckRightParen, cckLeftBracket,
+    cckRightBracket, cckLeftBrace, cckRightBrace, cckLeftAngle, cckRightAngle,
+    cckComma, cckResultType, cckColon, cckSemiColon, cckEqual, cckHorizontalSpace,
+    cckVerticalSpace
 proc getCompletionChunkKind*(completion_string: CXCompletionString;
                             chunk_number: cuint): CXCompletionChunkKind =
   ##  Determine the kind of a particular chunk within a completion string. ** the completion string to query. ** the 0-based index of the chunk in the completion string. ** the kind of the chunk at the index Error: cannot render: rnLiteralBlock 
@@ -1112,6 +1400,18 @@ proc getCompletionFixIt*(results: ptr[CXCodeCompleteResults];
   ##  Fix-its that *must* be applied before inserting the text for the corresponding completion. By default, clang_codeCompleteAt() only returns completions with empty fix-its. Extra completions with non-empty fix-its should be explicitly requested by setting CXCodeComplete_IncludeCompletionsWithFixIts. For the clients to be able to compute position of the cursor after applying fix-its, the following conditions are guaranteed to hold for replacement_range of the stored fix-its:  - Ranges in the fix-its are guaranteed to never contain the completion  point (or identifier under completion point, if any) inside them, except  at the start or at the end of the range.  - If a fix-it range starts or ends with completion point (or starts or  ends after the identifier under completion point), it will contain at  least one character. It allows to unambiguously recompute completion  point after applying the fix-it. The intuition is that provided fix-its change code around the identifier we complete, but are not allowed to touch the identifier itself or the completion point. One example of completions with corrections are the ones replacing '.' with '->' and vice versa: std::unique_ptr<std::vector<int>> vec_ptr; In 'vec_ptr.^', one of the completions is 'push_back', it requires replacing '.' with '->'. In 'vec_ptr->^', one of the completions is 'release', it requires replacing '->' with '.'. ** The structure keeping all completion results ** The index of the completion ** The index of the fix-it for the completion at completion_index ** The fix-it range that must be replaced before the completion at completion_index can be applied ** The fix-it string that must replace the code at replacement_range before the completion at completion_index can be applied
   impl
 
+type
+  CXCodeComplete_Flags = enum
+    ccfIncludeMacros = 1, ccfIncludeCodePatterns = 2, ccfIncludeBriefComments = 4,
+    ccfSkipPreamble = 8, ccfIncludeCompletionsWithFixIts = 16
+type
+  CXCompletionContext = enum
+    ccUnexposed = 0, ccAnyType, ccAnyValue, ccObjCObjectValue, ccObjCSelectorValue,
+    ccCXXClassTypeValue, ccDotMemberAccess, ccArrowMemberAccess,
+    ccObjCPropertyAccess, ccEnumTag, ccUnionTag, ccStructTag, ccClassTag,
+    ccNamespace, ccNestedNameSpecifier, ccObjCInterface, ccObjCProtocol,
+    ccObjCCategory, ccObjCInstanceMessage, ccObjCClassMessage, ccObjCSelectorName,
+    ccMacroName, ccNaturalLanguage, ccIncludedFile, ccUnknown
 proc defaultCodeCompleteOptions*(): cuint =
   ##  Returns a default set of code-completion options that can be passed toError: cannot render: rnLiteralBlock 
   impl
@@ -1169,6 +1469,14 @@ proc getInclusions*(tu: CXTranslationUnit; visitor: CXInclusionVisitor;
   ##  Visit the set of preprocessor inclusions in a translation unit.   The visitor function is called with the provided data for every included   file.  This does not include headers included by the PCH file (unless one   is inspecting the inclusions in the PCH file itself).
   impl
 
+type
+  CXEvalResultKind = enum
+    erkInt = 1, erkFloat = 2, erkObjCStrLiteral = 3, erkStrLiteral = 4, erkCFStr = 5,
+    erkOther = 6, erkUnExposed = 0
+type
+  CXEvalResultKind = enum
+    erkInt = 1, erkFloat = 2, erkObjCStrLiteral = 3, erkStrLiteral = 4, erkCFStr = 5,
+    erkOther = 6, erkUnExposed = 0
 proc Evaluate*(C: CXCursor): CXEvalResult =
   ##  If cursor is a statement declaration tries to evaluate the statement and if its variable, tries to evaluate its initializer, into its corresponding type.
   impl
@@ -1226,6 +1534,15 @@ proc remap_dispose*(argCXRemapping: CXRemapping): void =
   ##  Dispose the remapping.
   impl
 
+type
+  CXVisitorResult = enum
+    vrBreak, vrContinue
+type
+  CXResult = enum
+    rSuccess = 0, rInvalid = 1, rVisitBreak = 2
+type
+  CXResult = enum
+    rSuccess = 0, rInvalid = 1, rVisitBreak = 2
 proc findReferencesInFile*(cursor: CXCursor; file: CXFile;
                           visitor: CXCursorAndRangeVisitor): CXResult =
   ##  Find references of a declaration in a specific file. ** pointing to a declaration or a reference of one. ** to search for references. ** callback that will receive pairs of CXCursor/CXSourceRange for each reference found. The CXSourceRange will point inside the file; if the reference is inside a macro (and not a macro argument) the CXSourceRange will be invalid. ** one of the CXResult enumerators.
@@ -1236,6 +1553,72 @@ proc findIncludesInFile*(TU: CXTranslationUnit; file: CXFile;
   ##  Find #import/#include directives in a specific file. ** translation unit containing the file to query. ** to search for #import/#include directives. ** callback that will receive pairs of CXCursor/CXSourceRange for each directive found. ** one of the CXResult enumerators.
   impl
 
+type
+  CXIdxEntityKind = enum
+    iekUnexposed = 0, iekTypedef = 1, iekFunction = 2, iekVariable = 3, iekField = 4,
+    iekEnumConstant = 5, iekObjCClass = 6, iekObjCProtocol = 7, iekObjCCategory = 8,
+    iekObjCInstanceMethod = 9, iekObjCClassMethod = 10, iekObjCProperty = 11,
+    iekObjCIvar = 12, iekEnum = 13, iekStruct = 14, iekUnion = 15, iekCXXClass = 16,
+    iekCXXNamespace = 17, iekCXXNamespaceAlias = 18, iekCXXStaticVariable = 19,
+    iekCXXStaticMethod = 20, iekCXXInstanceMethod = 21, iekCXXConstructor = 22,
+    iekCXXDestructor = 23, iekCXXConversionFunction = 24, iekCXXTypeAlias = 25,
+    iekCXXInterface = 26
+type
+  CXIdxEntityKind = enum
+    iekUnexposed = 0, iekTypedef = 1, iekFunction = 2, iekVariable = 3, iekField = 4,
+    iekEnumConstant = 5, iekObjCClass = 6, iekObjCProtocol = 7, iekObjCCategory = 8,
+    iekObjCInstanceMethod = 9, iekObjCClassMethod = 10, iekObjCProperty = 11,
+    iekObjCIvar = 12, iekEnum = 13, iekStruct = 14, iekUnion = 15, iekCXXClass = 16,
+    iekCXXNamespace = 17, iekCXXNamespaceAlias = 18, iekCXXStaticVariable = 19,
+    iekCXXStaticMethod = 20, iekCXXInstanceMethod = 21, iekCXXConstructor = 22,
+    iekCXXDestructor = 23, iekCXXConversionFunction = 24, iekCXXTypeAlias = 25,
+    iekCXXInterface = 26
+type
+  CXIdxEntityLanguage = enum
+    ielNone = 0, ielC = 1, ielObjC = 2, ielCXX = 3, ielSwift = 4
+type
+  CXIdxEntityLanguage = enum
+    ielNone = 0, ielC = 1, ielObjC = 2, ielCXX = 3, ielSwift = 4
+type
+  CXIdxEntityCXXTemplateKind = enum
+    ietkNonTemplate = 0, ietkTemplate = 1, ietkTemplatePartialSpecialization = 2,
+    ietkTemplateSpecialization = 3
+type
+  CXIdxEntityCXXTemplateKind = enum
+    ietkNonTemplate = 0, ietkTemplate = 1, ietkTemplatePartialSpecialization = 2,
+    ietkTemplateSpecialization = 3
+type
+  CXIdxAttrKind = enum
+    iakUnexposed = 0, iakIBAction = 1, iakIBOutlet = 2, iakIBOutletCollection = 3
+type
+  CXIdxAttrKind = enum
+    iakUnexposed = 0, iakIBAction = 1, iakIBOutlet = 2, iakIBOutletCollection = 3
+type
+  CXIdxDeclInfoFlags = enum
+    idifFlag_Skipped = 1
+type
+  CXIdxDeclInfoFlags = enum
+    idifFlag_Skipped = 1
+type
+  CXIdxObjCContainerKind = enum
+    iocckForwardRef = 0, iocckInterface = 1, iocckImplementation = 2
+type
+  CXIdxObjCContainerKind = enum
+    iocckForwardRef = 0, iocckInterface = 1, iocckImplementation = 2
+type
+  CXIdxEntityRefKind = enum
+    ierkDirect = 1, ierkImplicit = 2
+type
+  CXIdxEntityRefKind = enum
+    ierkDirect = 1, ierkImplicit = 2
+type
+  CXSymbolRole = enum
+    srNone = 0, srDeclaration, srDefinition, srReference, srRead, srWrite, srCall,
+    srDynamic, srAddressOf, srImplicit
+type
+  CXSymbolRole = enum
+    srNone = 0, srDeclaration, srDefinition, srReference, srRead, srWrite, srCall,
+    srDynamic, srAddressOf, srImplicit
 proc index_isEntityObjCContainerKind*(argCXIdxEntityKind: CXIdxEntityKind): int =
   impl
 
@@ -1294,6 +1677,16 @@ proc dispose*(argCXIndexAction: CXIndexAction): void =
   ##  Destroy the given index action. The index action must not be destroyed until all of the translation units created within that index action have been destroyed.
   impl
 
+type
+  CXIndexOptFlags = enum
+    iofNone = 0, iofSuppressRedundantRefs = 1, iofIndexFunctionLocalSymbols = 2,
+    iofIndexImplicitTemplateInstantiations = 4, iofSuppressWarnings = 8,
+    iofSkipParsedBodiesInSession = 16
+type
+  CXIndexOptFlags = enum
+    iofNone = 0, iofSuppressRedundantRefs = 1, iofIndexFunctionLocalSymbols = 2,
+    iofIndexImplicitTemplateInstantiations = 4, iofSuppressWarnings = 8,
+    iofSkipParsedBodiesInSession = 16
 proc indexSourceFile*(argCXIndexAction: CXIndexAction; client_data: CXClientData;
                      index_callbacks: ptr[IndexerCallbacks];
                      index_callbacks_size: cuint; index_options: cuint;
