@@ -243,6 +243,13 @@ proc retType*(cursor: CXCursor): CXType =
   cursor.expectKind(CXCursor_FunctionDecl)
   cursor.cxType().clang_getResultType()
 
+
+proc argTypes*(cursor: CXType): seq[CXType] =
+  # cursor.expectKind(CXCursor_FunctionDecl)
+  for i in 0 ..< cursor.clang_getNumArgTypes():
+    result.add cursor.clang_getArgType(cuint i)
+  # cursor.cxType().clang_getResultType()
+
 proc newRstNode*(
   kind: RstNodeKind, subnodes: varargs[PRstNode]): PRstNode =
   result = rstast.newRstNode(kind)
@@ -303,11 +310,11 @@ proc toNimDoc*(comment: CXComment): string =
 
 #=============================  Converters  ==============================#
 
-proc fromElaboratedNType(cxtype: CXType): NType =
+proc fromElaboratedPType(cxtype: CXType): NType[PNode] =
   ($cxtype).
     dropPrefix("enum ").
     dropPrefix("struct ").
-    mkNType()
+    mkPType()
 
 proc getPointee*(cxType: CXType): CXType =
   cxtype.expectKind(CXType_Pointer)
@@ -349,7 +356,8 @@ proc objTreeRepr*(cursor: CXCursor, tu: CXTranslationUnit): ObjTree =
   else:
     let ctype = pptConst(
       $cursor.cxType,
-      initPrintStyling(fg = fgBlue, style = {styleItalic, styleDim}))
+      initPrintStyling(fg = fgBlue,
+                       style = {styleItalic, styleDim}))
     pptObj(
       ($cursor.cxkind).toMagenta() & " " & $cursor,
       @[ctype] & toSeq(cursor.children).mapIt(it.objTreeRepr(tu))
@@ -364,36 +372,54 @@ proc treeRepr*(cursor: CXCursor): string =
 proc lispRepr*(cxtype: CXType): string =
   cxtype.objTreeRepr().lispRepr()
 
-proc toNType*(cxtype: CXType): NType =
+proc toNType*(cxtype: CXType): NType[PNode] =
   # echo cxtype.objTreeRepr().treeRepr()
   case cxtype.cxKind:
-    of CXType_Bool: mkNType("bool")
-    of CXType_Int: mkNType("int")
-    of CXType_Void: mkNType("void")
-    of CXType_UInt: mkNType("cuint")
-    of CXType_LongLong: mkNType("clonglong")
-    of CXType_ULongLong: mkNType("culonglong")
-    of CXType_Double: mkNType("cdouble")
-    of CXType_Typedef: mkNType($cxtype) # XXX typedef processing -
-    of CXType_Elaborated:
-      fromElaboratedNType(cxtype)
+    of CXType_Bool: mkPType("bool")
+    of CXType_Int: mkPType("int")
+    # of CXType_Record: mkPType()
+    of CXType_Void: mkPType("void")
+    of CXType_UInt: mkPType("cuint")
+    of CXType_LongLong: mkPType("clonglong")
+    of CXType_ULongLong: mkPType("culonglong")
+    of CXType_Double: mkPType("cdouble")
+    of CXType_ULong: mkPType("culong")
+    of CXType_Typedef: mkPType($cxtype) # XXX typedef processing -
+    of CXType_Elaborated, CXType_Record, CXType_Enum:
+      fromElaboratedPType(cxtype)
     of CXType_Pointer:
       let pointee = cxtype.getPointee()
       case pointee.cxkind:
         of CXType_Char_S:
-          mkNType("cstring")
+          mkPType("cstring")
+        of CXType_Void:
+          mkPType("pointer")
         else:
           # echo "NESTED ".toYellow(), cxtype.lispRepr()
           mkNType("ptr", [toNType(pointee)])
+    of CXType_ConstantArray:
+      mkNType(
+        "array",
+        @[
+          mkPType($cxtype.clang_getNumElements()),
+          toNType(cxtype.clang_getElementType())
+        ]
+      )
+    of CXType_FunctionProto:
+      mkProcNType[PNode](
+        rtype = cxtype.clang_getResultType().toNType(),
+        args = cxtype.argTypes.mapIt(it.toNType()),
+        pragma = mkPPragma("cdecl")
+      )
     else:
       echo "CANT CONVERT: ".toRed({styleItalic}),
         cxtype.kind, " ", cxtype.lispRepr().toGreen()
-      mkNType("!!!")
+      mkPType("!!!")
 
 proc dropPOD*(cxtype: CXType): string =
   case cxtype.cxKind:
     of CXType_Elaborated:
-      cxtype.fromElaboratedNType().head
+      cxtype.fromElaboratedPType().head
     of CXType_Pointer:
       cxtype.getPointee().dropPOD()
     of CXType_Typedef:
@@ -401,10 +427,27 @@ proc dropPOD*(cxtype: CXType): string =
     else:
       ""
 
+
+proc fixIdentName(str: string): string =
+  result = if str[0].isLowerAscii():
+    str
+  else:
+    str[0].toLowerAscii() & str[1..^1]
+
+  result = case result:
+    of "set": "cxset"
+    of "type": "cxtype"
+    of "range": "cxrange"
+    of "string": "cxstring"
+    else: result
+
+
 proc toPIdentDefs*(cursor: CXCursor): PIdentDefs =
   result.varname = $cursor
   if result.varname.len == 0:
     result.varname = "arg" & $cursor.cxType().dropPOD()
+
+  result.varname = result.varname.fixIdentName()
 
   result.vtype = cursor.cxType.toNType()
 
@@ -436,13 +479,18 @@ proc simplifyFuncName(cursor: CXCursor, context: var RewriteContext): string =
     return unprefix
 
 proc isAliasTypedef*(cursor: CXCursor): bool =
-  if cursor.len > 0:
-    cursor[0].cxKind in {
+  # echo "IS ALIAS TYPEDEF".toRed()
+  result = true
+  if cursor.len == 1:
+    result = not (cursor[0].cxKind in {
       CXCursor_EnumDecl,
       CXCursor_StructDecl
-    }
-  else:
-    false
+    })
+
+  # echo cursor.treeRepr()
+  # echo result
+
+
 
 proc visitFunction(cursor: CXCursor, context: var RewriteContext) =
   cursor.expectKind(CXCursor_FunctionDecl)
@@ -454,30 +502,66 @@ proc visitFunction(cursor: CXCursor, context: var RewriteContext) =
     head = newPIdent(cursor.simplifyFuncName(context)),
     rtype = some(toNType(cursor.retType())),
     args = arguments,
-    impl = newPIdent("impl"),
+    impl = newEmptyNNode[PNode](),
+    pragma = mkPPragma(
+      newPIdent("cdecl"),
+      nnkExprColonExpr.newPTree(
+        newPIdent("dynlib"),
+        newPIdent("libclang") # XXX
+      ),
+      nnkExprColonExpr.newPTree(
+        newPIdent("importc"),
+        newPLit($cursor)
+      )
+    ),
     comment = cursor.comment().toNimDoc()
   )
 
 proc visitAliasTypedef*(cursor: CXCursor, context: var RewriteContext) =
-  echo "Alias typedef: ", cursor
+  # echo &"{cursor.cxType():25} -> {cursor.cxtype().clang_getCanonicalType()}"
+  # echo cursor.treeRepr(context.translationUnit)
+  context.resultNode.add newPTree(
+    nnkTypeSection,
+    newPTree(
+      nnkTypeDef,
+      newPIdent($cursor.cxType()),
+      newEmptyNNode[PNode](),
+      newPTree(
+        nnkDistinctTy,
+        cursor.cxtype().clang_getCanonicalType().toNType().toNNode()
+      )
+    )
+  )
+
+proc parseInt(tok: string): int =
+  if tok.len > 2 and tok[1] == 'x':
+    discard parseHex(tok, result)
+  else:
+    discard parseInt(tok, result)
+
 
 proc toEnumValue*(cursor: CXCursor, tu: CXTranslationUnit): Option[PNode] =
   cursor.expectKind CXCursor_EnumConstantDecl
   let val = cursor[0]
   case val.cxKind:
     of CXCursor_IntegerLiteral:
-      let tok = val.tokens(tu)[0]
-      var res: int
-      if tok.len > 2 and tok[1] == 'x':
-        discard parseHex(tok, res)
-      else:
-        discard parseInt(tok, res)
-
-      return some(newPLit(res))
+      return some(newPLit(val.tokens(tu)[0].parseInt()))
     of CXCursor_OverloadCandidate:
       return none(PNode)
+    of CXCursor_BinaryOperator:
+      let subn = cursor.children()
+      case cursor.tokens(tu).join(""):
+        of "<<":
+          return some(newPLit(
+            subn[0].tokens(tu)[0].parseInt() shl
+            subn[1].tokens(tu)[0].parseInt(),
+          ))
+        else:
+          discard
+
     else:
-      echo val.treeRepr(tu)
+      discard
+      # echo val.treeRepr(tu)
       # raiseAssert(&"#[ IMPLEMENT {val.cxkind} ]#")
 
 
@@ -508,19 +592,20 @@ proc visitEnumDecl*(cursor: CXCursor, context: var RewriteContext) =
 
 
 proc visitStructDecl*(cursor: CXCursor, context: var RewriteContext) =
-  echo "struct decl: ", cursor
-  echo cursor.treeRepr(context.translationUnit)
+  # echo "struct decl: ", cursor
+  # echo cursor.treeRepr(context.translationUnit)
   let structName = ($cursor.cxType).dropPrefix("struct ")
 
-  var resType = PObject(name: mkNType(structName))
+  var resType = PObject(name: mkPType(structName))
 
   for subn in cursor.children:
     subn.expectKind CXCursor_FieldDecl
 
     resType.flds.add PField(
+      exported: true,
       isKind: false,
       isTuple: false,
-      name: $subn,
+      name: fixIdentName($subn),
       fldType: subn.cxType.toNType()
     )
 
@@ -548,45 +633,58 @@ proc parseTranslationUnit(
 
 
 proc main() =
-  let trIndex = clang_createIndex(0, 0);
-  let unit = parseTranslationUnit(trIndex, "/usr/include/clang-c/Index.h")
-
-
-  if unit.isNil:
-    raiseAssert "Unable to parse translation unit. Quitting."
-
-  let cursor: CXCursor = clang_getTranslationUnitCursor(unit)
-
   var context = RewriteContext(
     resultNode: nkStmtList.newTree(),
     prefix: "clang_",
     typePrefix: "CX",
-    translationUnit: unit,
     dropTypeSubseqs: @["CXX"]
   )
 
-  cursor.clangVisitChildren do:
-    makeVisitor [context]:
-      if cursor.isFromMainFile():
-        case cursor.cxkind:
-          of CXCursor_FunctionDecl:
-            visitFunction(cursor, context)
-            return CXChildVisit_Continue
-          of CXCursor_TypedefDecl:
-            if cursor.isAliasTypedef():
-              visitAliasTypedef(cursor, context)
-            else:
-              return CXChildVisit_Recurse
-          of CXCursor_EnumDecl:
-            visitEnumDecl(cursor, context)
-          of CXCursor_StructDecl:
-            visitStructDecl(cursor, context)
-          else:
-            discard
+  let targetFiles = @[
+    "ExternC.h",
+    "FatalErrorHandler.h",
+    "Platform.h",
+    "CXErrorCode.h",
+    "CXString.h",
+    "Index.h",
+    "Documentation.h"
+  ]
 
-      return CXChildVisit_Recurse
+  for file in targetFiles:
+    let trIndex = clang_createIndex(0, 0);
+    let unit = parseTranslationUnit(
+      trIndex, &"/usr/include/clang-c/{file}")
+
+
+    if unit.isNil:
+      raiseAssert "Unable to parse translation unit. Quitting."
+
+    context.translationUnit = unit
+
+    let cursor: CXCursor = clang_getTranslationUnitCursor(unit)
+    cursor.clangVisitChildren do:
+      makeVisitor [context]:
+        if cursor.isFromMainFile():
+          case cursor.cxkind:
+            of CXCursor_FunctionDecl:
+              visitFunction(cursor, context)
+              return CXChildVisit_Continue
+            of CXCursor_TypedefDecl:
+              if cursor.isAliasTypedef():
+                visitAliasTypedef(cursor, context)
+              else:
+                return CXChildVisit_Recurse
+            of CXCursor_EnumDecl:
+              visitEnumDecl(cursor, context)
+            of CXCursor_StructDecl:
+              visitStructDecl(cursor, context)
+            else:
+              discard
+
+        return CXChildVisit_Recurse
 
   "../libclang.nim".writeFile($context.resultNode)
+  echo "done"
 
 
 when isMainModule:
