@@ -1,7 +1,31 @@
 
 type
+  CXTargetInfoImpl = object
+  
+type
+  CXTranslationUnitImpl = object
+  
+type
+  CXUnsavedFile = object
+    Filename: cstring
+    Contents: cstring
+    Length: !!!
+
+type
   CXAvailabilityKind = enum
     akAvailable, akDeprecated, akNotAvailable, akNotAccessible
+type
+  CXVersion = object
+    Major: int
+    Minor: int
+    Subminor: int
+
+type
+  CXVersion = object
+    Major: int
+    Minor: int
+    Subminor: int
+
 type
   CXCursor_ExceptionSpecificationKind = enum
     ceskNone, ceskDynamicNone, ceskDynamic, ceskMSAny, ceskBasicNoexcept,
@@ -43,6 +67,14 @@ proc getFileTime*(SFile: CXFile): time_t =
   ##  Retrieve the last modification time of the given file.
   impl
 
+type
+  CXFileUniqueID = object
+    data: !!!
+
+type
+  CXFileUniqueID = object
+    data: !!!
+
 proc getFileUniqueID*(file: CXFile; outID: ptr[CXFileUniqueID]): int =
   ##  Retrieve the unique ID for the given Error: cannot render: rnLiteralBlock ** the file to get the ID for. ** stores the returned CXFileUniqueID. ** If there was a failure getting the unique ID, returns non-zero, otherwise returns 0.
   impl
@@ -65,6 +97,28 @@ proc isEqual*(file1: CXFile; file2: CXFile): int =
 proc tryGetRealPathName*(file: CXFile): CXString =
   ##  Returns the real path name of Error: cannot render: rnLiteralBlock An empty string may be returned. Use Error: cannot render: rnLiteralBlock in that case.
   impl
+
+type
+  CXSourceLocation = object
+    ptr_data: !!!
+    int_data: cuint
+
+type
+  CXSourceLocation = object
+    ptr_data: !!!
+    int_data: cuint
+
+type
+  CXSourceRange = object
+    ptr_data: !!!
+    begin_int_data: cuint
+    end_int_data: cuint
+
+type
+  CXSourceRange = object
+    ptr_data: !!!
+    begin_int_data: cuint
+    end_int_data: cuint
 
 proc getNullLocation*(): CXSourceLocation =
   ##  Retrieve a NULL (invalid) source location.
@@ -139,6 +193,16 @@ proc getRangeStart*(range: CXSourceRange): CXSourceLocation =
 proc getRangeEnd*(range: CXSourceRange): CXSourceLocation =
   ##  Retrieve a source location representing the last character within a source range.
   impl
+
+type
+  CXSourceRangeList = object
+    count: cuint
+    ranges: ptr[CXSourceRange]
+
+type
+  CXSourceRangeList = object
+    count: cuint
+    ranges: ptr[CXSourceRange]
 
 proc getSkippedRanges*(tu: CXTranslationUnit; file: CXFile): ptr[CXSourceRangeList] =
   ##  Retrieve all ranges that were skipped by the preprocessor. The preprocessor will skip lines when they are surrounded by an if/ifdef/ifndef directive whose condition does not evaluate to true.
@@ -360,6 +424,28 @@ proc getTUResourceUsageName*(kind: CXTUResourceUsageKind): cstring =
   ##  Returns the human-readable null-terminated C string that represents  the name of the memory category.  This string should never be freed.
   impl
 
+type
+  CXTUResourceUsageEntry = object
+    kind: CXTUResourceUsageKind
+    amount: !!!
+
+type
+  CXTUResourceUsageEntry = object
+    kind: CXTUResourceUsageKind
+    amount: !!!
+
+type
+  CXTUResourceUsage = object
+    data: ptr[void]
+    numEntries: cuint
+    entries: ptr[CXTUResourceUsageEntry]
+
+type
+  CXTUResourceUsage = object
+    data: ptr[void]
+    numEntries: cuint
+    entries: ptr[CXTUResourceUsageEntry]
+
 proc getCXTUResourceUsage*(TU: CXTranslationUnit): CXTUResourceUsage =
   ##  Return the memory usage of a translation unit.  This object  should be released with clang_disposeCXTUResourceUsage().
   impl
@@ -482,6 +568,18 @@ type
     ckFirstPreprocessing, ckLastPreprocessing, ckModuleImportDecl = 600,
     ckTypeAliasTemplateDecl = 601, ckStaticAssert = 602, ckFriendDecl = 603,
     ckFirstExtraDecl, ckLastExtraDecl, ckOverloadCandidate = 700
+type
+  CXCursor = object
+    kind: CXCursorKind
+    xdata: int
+    data: !!!
+
+type
+  CXCursor = object
+    kind: CXCursorKind
+    xdata: int
+    data: !!!
+
 proc getNullCursor*(): CXCursor =
   ##  Retrieve the NULL cursor, which represents no entity.
   impl
@@ -568,6 +666,24 @@ proc getCursorAvailability*(cursor: CXCursor): CXAvailabilityKind =
   ##  Determine the availability of the entity that this cursor refers to, taking the current target platform into account. ** The cursor to query. ** The availability of the cursor.
   impl
 
+type
+  CXPlatformAvailability = object
+    Platform: CXString
+    Introduced: CXVersion
+    Deprecated: CXVersion
+    Obsoleted: CXVersion
+    Unavailable: int
+    Message: CXString
+
+type
+  CXPlatformAvailability = object
+    Platform: CXString
+    Introduced: CXVersion
+    Deprecated: CXVersion
+    Obsoleted: CXVersion
+    Unavailable: int
+    Message: CXString
+
 proc getCursorPlatformAvailability*(cursor: CXCursor; always_deprecated: ptr[int];
                                    deprecated_message: ptr[CXString];
                                    always_unavailable: ptr[int];
@@ -599,6 +715,9 @@ proc getTranslationUnit*(argCXCursor: CXCursor): CXTranslationUnit =
   ##  Returns the translation unit that a cursor originated from.
   impl
 
+type
+  CXCursorSetImpl = object
+  
 proc createCXCursorSet*(): CXCursorSet =
   ##  Creates an empty CXCursorSet.
   impl
@@ -697,6 +816,16 @@ type
     ccWin64 = 10, ccX86_64Win64, ccX86_64SysV = 11, ccX86VectorCall = 12, ccSwift = 13,
     ccPreserveMost = 14, ccPreserveAll = 15, ccAArch64VectorCall = 16, ccInvalid = 100,
     ccUnexposed = 200
+type
+  CXType = object
+    kind: CXTypeKind
+    data: !!!
+
+type
+  CXType = object
+    kind: CXTypeKind
+    data: !!!
+
 proc getCursorType*(C: CXCursor): CXType =
   ##  Retrieve the type of a CXCursor (if any).
   impl
@@ -1283,6 +1412,16 @@ type
 type
   CXTokenKind = enum
     tkPunctuation, tkKeyword, tkIdentifier, tkLiteral, tkComment
+type
+  CXToken = object
+    int_data: !!!
+    ptr_data: ptr[void]
+
+type
+  CXToken = object
+    int_data: !!!
+    ptr_data: ptr[void]
+
 proc getToken*(TU: CXTranslationUnit; Location: CXSourceLocation): ptr[CXToken] =
   ##  Get the raw lexical token starting with the given location. ** the translation unit whose text is being tokenized. ** the source location with which the token starts. ** The token starting with the given location or NULL if no such token exist. The returned pointer must be freed with clang_disposeTokens before the translation unit is destroyed.
   impl
@@ -1332,6 +1471,16 @@ proc enableStackTraces*(): void =
 
 proc *(fn: ptr[!!!]; user_data: ptr[void]; stack_size: cuint): void =
   impl
+
+type
+  CXCompletionResult = object
+    CursorKind: CXCursorKind
+    CompletionString: CXCompletionString
+
+type
+  CXCompletionResult = object
+    CursorKind: CXCursorKind
+    CompletionString: CXCompletionString
 
 type
   CXCompletionChunkKind = enum
@@ -1388,6 +1537,16 @@ proc getCompletionBriefComment*(completion_string: CXCompletionString): CXString
 proc getCursorCompletionString*(cursor: CXCursor): CXCompletionString =
   ##  Retrieve a completion string for an arbitrary declaration or macro definition cursor. ** The cursor to query. ** A non-context-sensitive completion string for declaration and macro definition cursors, or NULL for other kinds of cursors.
   impl
+
+type
+  CXCodeCompleteResults = object
+    Results: ptr[CXCompletionResult]
+    NumResults: cuint
+
+type
+  CXCodeCompleteResults = object
+    Results: ptr[CXCompletionResult]
+    NumResults: cuint
 
 proc getCompletionNumFixIts*(results: ptr[CXCodeCompleteResults];
                             completion_index: cuint): cuint =
@@ -1538,6 +1697,16 @@ type
   CXVisitorResult = enum
     vrBreak, vrContinue
 type
+  CXCursorAndRangeVisitor = object
+    context: ptr[void]
+    visit: ptr[!!!]
+
+type
+  CXCursorAndRangeVisitor = object
+    context: ptr[void]
+    visit: ptr[!!!]
+
+type
   CXResult = enum
     rSuccess = 0, rInvalid = 1, rVisitBreak = 2
 type
@@ -1554,6 +1723,48 @@ proc findIncludesInFile*(TU: CXTranslationUnit; file: CXFile;
   impl
 
 type
+  CXIdxLoc = object
+    ptr_data: !!!
+    int_data: cuint
+
+type
+  CXIdxLoc = object
+    ptr_data: !!!
+    int_data: cuint
+
+type
+  CXIdxIncludedFileInfo = object
+    hashLoc: CXIdxLoc
+    filename: cstring
+    file: CXFile
+    isImport: int
+    isAngled: int
+    isModuleImport: int
+
+type
+  CXIdxIncludedFileInfo = object
+    hashLoc: CXIdxLoc
+    filename: cstring
+    file: CXFile
+    isImport: int
+    isAngled: int
+    isModuleImport: int
+
+type
+  CXIdxImportedASTFileInfo = object
+    file: CXFile
+    module: CXModule
+    loc: CXIdxLoc
+    isImplicit: int
+
+type
+  CXIdxImportedASTFileInfo = object
+    file: CXFile
+    module: CXModule
+    loc: CXIdxLoc
+    isImplicit: int
+
+type
   CXIdxEntityKind = enum
     iekUnexposed = 0, iekTypedef = 1, iekFunction = 2, iekVariable = 3, iekField = 4,
     iekEnumConstant = 5, iekObjCClass = 6, iekObjCProtocol = 7, iekObjCCategory = 8,
@@ -1594,17 +1805,201 @@ type
   CXIdxAttrKind = enum
     iakUnexposed = 0, iakIBAction = 1, iakIBOutlet = 2, iakIBOutletCollection = 3
 type
+  CXIdxAttrInfo = object
+    kind: CXIdxAttrKind
+    cursor: CXCursor
+    loc: CXIdxLoc
+
+type
+  CXIdxAttrInfo = object
+    kind: CXIdxAttrKind
+    cursor: CXCursor
+    loc: CXIdxLoc
+
+type
+  CXIdxEntityInfo = object
+    kind: CXIdxEntityKind
+    templateKind: CXIdxEntityCXXTemplateKind
+    lang: CXIdxEntityLanguage
+    name: cstring
+    USR: cstring
+    cursor: CXCursor
+    attributes: ptr[ptr[const CXIdxAttrInfo]]
+    numAttributes: cuint
+
+type
+  CXIdxEntityInfo = object
+    kind: CXIdxEntityKind
+    templateKind: CXIdxEntityCXXTemplateKind
+    lang: CXIdxEntityLanguage
+    name: cstring
+    USR: cstring
+    cursor: CXCursor
+    attributes: ptr[ptr[const CXIdxAttrInfo]]
+    numAttributes: cuint
+
+type
+  CXIdxContainerInfo = object
+    cursor: CXCursor
+
+type
+  CXIdxContainerInfo = object
+    cursor: CXCursor
+
+type
+  CXIdxIBOutletCollectionAttrInfo = object
+    attrInfo: ptr[const CXIdxAttrInfo]
+    objcClass: ptr[const CXIdxEntityInfo]
+    classCursor: CXCursor
+    classLoc: CXIdxLoc
+
+type
+  CXIdxIBOutletCollectionAttrInfo = object
+    attrInfo: ptr[const CXIdxAttrInfo]
+    objcClass: ptr[const CXIdxEntityInfo]
+    classCursor: CXCursor
+    classLoc: CXIdxLoc
+
+type
   CXIdxDeclInfoFlags = enum
     idifFlag_Skipped = 1
 type
   CXIdxDeclInfoFlags = enum
     idifFlag_Skipped = 1
+type
+  CXIdxDeclInfo = object
+    entityInfo: ptr[const CXIdxEntityInfo]
+    cursor: CXCursor
+    loc: CXIdxLoc
+    semanticContainer: ptr[const CXIdxContainerInfo]
+    lexicalContainer: ptr[const CXIdxContainerInfo]
+    isRedeclaration: int
+    isDefinition: int
+    isContainer: int
+    declAsContainer: ptr[const CXIdxContainerInfo]
+    isImplicit: int
+    attributes: ptr[ptr[const CXIdxAttrInfo]]
+    numAttributes: cuint
+    flags: cuint
+
+type
+  CXIdxDeclInfo = object
+    entityInfo: ptr[const CXIdxEntityInfo]
+    cursor: CXCursor
+    loc: CXIdxLoc
+    semanticContainer: ptr[const CXIdxContainerInfo]
+    lexicalContainer: ptr[const CXIdxContainerInfo]
+    isRedeclaration: int
+    isDefinition: int
+    isContainer: int
+    declAsContainer: ptr[const CXIdxContainerInfo]
+    isImplicit: int
+    attributes: ptr[ptr[const CXIdxAttrInfo]]
+    numAttributes: cuint
+    flags: cuint
+
 type
   CXIdxObjCContainerKind = enum
     iocckForwardRef = 0, iocckInterface = 1, iocckImplementation = 2
 type
   CXIdxObjCContainerKind = enum
     iocckForwardRef = 0, iocckInterface = 1, iocckImplementation = 2
+type
+  CXIdxObjCContainerDeclInfo = object
+    declInfo: ptr[const CXIdxDeclInfo]
+    kind: CXIdxObjCContainerKind
+
+type
+  CXIdxObjCContainerDeclInfo = object
+    declInfo: ptr[const CXIdxDeclInfo]
+    kind: CXIdxObjCContainerKind
+
+type
+  CXIdxBaseClassInfo = object
+    base: ptr[const CXIdxEntityInfo]
+    cursor: CXCursor
+    loc: CXIdxLoc
+
+type
+  CXIdxBaseClassInfo = object
+    base: ptr[const CXIdxEntityInfo]
+    cursor: CXCursor
+    loc: CXIdxLoc
+
+type
+  CXIdxObjCProtocolRefInfo = object
+    protocol: ptr[const CXIdxEntityInfo]
+    cursor: CXCursor
+    loc: CXIdxLoc
+
+type
+  CXIdxObjCProtocolRefInfo = object
+    protocol: ptr[const CXIdxEntityInfo]
+    cursor: CXCursor
+    loc: CXIdxLoc
+
+type
+  CXIdxObjCProtocolRefListInfo = object
+    protocols: ptr[ptr[const CXIdxObjCProtocolRefInfo]]
+    numProtocols: cuint
+
+type
+  CXIdxObjCProtocolRefListInfo = object
+    protocols: ptr[ptr[const CXIdxObjCProtocolRefInfo]]
+    numProtocols: cuint
+
+type
+  CXIdxObjCInterfaceDeclInfo = object
+    containerInfo: ptr[const CXIdxObjCContainerDeclInfo]
+    superInfo: ptr[const CXIdxBaseClassInfo]
+    protocols: ptr[const CXIdxObjCProtocolRefListInfo]
+
+type
+  CXIdxObjCInterfaceDeclInfo = object
+    containerInfo: ptr[const CXIdxObjCContainerDeclInfo]
+    superInfo: ptr[const CXIdxBaseClassInfo]
+    protocols: ptr[const CXIdxObjCProtocolRefListInfo]
+
+type
+  CXIdxObjCCategoryDeclInfo = object
+    containerInfo: ptr[const CXIdxObjCContainerDeclInfo]
+    objcClass: ptr[const CXIdxEntityInfo]
+    classCursor: CXCursor
+    classLoc: CXIdxLoc
+    protocols: ptr[const CXIdxObjCProtocolRefListInfo]
+
+type
+  CXIdxObjCCategoryDeclInfo = object
+    containerInfo: ptr[const CXIdxObjCContainerDeclInfo]
+    objcClass: ptr[const CXIdxEntityInfo]
+    classCursor: CXCursor
+    classLoc: CXIdxLoc
+    protocols: ptr[const CXIdxObjCProtocolRefListInfo]
+
+type
+  CXIdxObjCPropertyDeclInfo = object
+    declInfo: ptr[const CXIdxDeclInfo]
+    getter: ptr[const CXIdxEntityInfo]
+    setter: ptr[const CXIdxEntityInfo]
+
+type
+  CXIdxObjCPropertyDeclInfo = object
+    declInfo: ptr[const CXIdxDeclInfo]
+    getter: ptr[const CXIdxEntityInfo]
+    setter: ptr[const CXIdxEntityInfo]
+
+type
+  CXIdxCXXClassDeclInfo = object
+    declInfo: ptr[const CXIdxDeclInfo]
+    bases: ptr[ptr[const CXIdxBaseClassInfo]]
+    numBases: cuint
+
+type
+  CXIdxCXXClassDeclInfo = object
+    declInfo: ptr[const CXIdxDeclInfo]
+    bases: ptr[ptr[const CXIdxBaseClassInfo]]
+    numBases: cuint
+
 type
   CXIdxEntityRefKind = enum
     ierkDirect = 1, ierkImplicit = 2
@@ -1619,6 +2014,48 @@ type
   CXSymbolRole = enum
     srNone = 0, srDeclaration, srDefinition, srReference, srRead, srWrite, srCall,
     srDynamic, srAddressOf, srImplicit
+type
+  CXIdxEntityRefInfo = object
+    kind: CXIdxEntityRefKind
+    cursor: CXCursor
+    loc: CXIdxLoc
+    referencedEntity: ptr[const CXIdxEntityInfo]
+    parentEntity: ptr[const CXIdxEntityInfo]
+    container: ptr[const CXIdxContainerInfo]
+    role: CXSymbolRole
+
+type
+  CXIdxEntityRefInfo = object
+    kind: CXIdxEntityRefKind
+    cursor: CXCursor
+    loc: CXIdxLoc
+    referencedEntity: ptr[const CXIdxEntityInfo]
+    parentEntity: ptr[const CXIdxEntityInfo]
+    container: ptr[const CXIdxContainerInfo]
+    role: CXSymbolRole
+
+type
+  IndexerCallbacks = object
+    abortQuery: ptr[!!!]
+    diagnostic: ptr[!!!]
+    enteredMainFile: ptr[!!!]
+    ppIncludedFile: ptr[!!!]
+    importedASTFile: ptr[!!!]
+    startedTranslationUnit: ptr[!!!]
+    indexDeclaration: ptr[!!!]
+    indexEntityReference: ptr[!!!]
+
+type
+  IndexerCallbacks = object
+    abortQuery: ptr[!!!]
+    diagnostic: ptr[!!!]
+    enteredMainFile: ptr[!!!]
+    ppIncludedFile: ptr[!!!]
+    importedASTFile: ptr[!!!]
+    startedTranslationUnit: ptr[!!!]
+    indexDeclaration: ptr[!!!]
+    indexEntityReference: ptr[!!!]
+
 proc index_isEntityObjCContainerKind*(argCXIdxEntityKind: CXIdxEntityKind): int =
   impl
 

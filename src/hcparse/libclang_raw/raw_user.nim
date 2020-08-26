@@ -347,7 +347,9 @@ proc objTreeRepr*(cursor: CXCursor, tu: CXTranslationUnit): ObjTree =
            pptConst(cursor.tokens(tu).join(" "),
                     initPrintStyling(fg = fgGreen)))
   else:
-    let ctype = pptConst($cursor.cxType, initPrintStyling(fg = fgBlue))
+    let ctype = pptConst(
+      $cursor.cxType,
+      initPrintStyling(fg = fgBlue, style = {styleItalic, styleDim}))
     pptObj(
       ($cursor.cxkind).toMagenta() & " " & $cursor,
       @[ctype] & toSeq(cursor.children).mapIt(it.objTreeRepr(tu))
@@ -480,8 +482,6 @@ proc toEnumValue*(cursor: CXCursor, tu: CXTranslationUnit): Option[PNode] =
 
 
 proc visitEnumDecl*(cursor: CXCursor, context: var RewriteContext) =
-  # echo "enum decl: ", cursor
-
   let enumName = ($cursor.cxType).dropPrefix("enum ")
 
   let names = @[enumName].concat: collect(newSeq): # NICE
@@ -497,22 +497,12 @@ proc visitEnumDecl*(cursor: CXCursor, context: var RewriteContext) =
     mapIt(it[0].toLowerAscii()).
     join("")
 
-  if enumPref.len > 5:
-    echo cursor.treeRepr(context.translationUnit)
-    echov pref
-    echov names
-    echov enumPref
-    echov enumName
-    raiseAssert("#[ IMPLEMENT ]#")
-
   var en = PEnum(name: enumName)
 
   for elem in cursor.children:
-    # echo elem.treeRepr(context.translationUnit)
     en.values.add (
       name: ($elem).dropPrefix(pref).dropPrefix("_").addPrefix(enumPref),
-      value: elem.toEnumValue(context.translationUnit)
-    )
+      value: elem.toEnumValue(context.translationUnit))
 
   context.resultNode.add en.toNNode(standalone = true)
 
@@ -520,7 +510,21 @@ proc visitEnumDecl*(cursor: CXCursor, context: var RewriteContext) =
 proc visitStructDecl*(cursor: CXCursor, context: var RewriteContext) =
   echo "struct decl: ", cursor
   echo cursor.treeRepr(context.translationUnit)
+  let structName = ($cursor.cxType).dropPrefix("struct ")
 
+  var resType = PObject(name: mkNType(structName))
+
+  for subn in cursor.children:
+    subn.expectKind CXCursor_FieldDecl
+
+    resType.flds.add PField(
+      isKind: false,
+      isTuple: false,
+      name: $subn,
+      fldType: subn.cxType.toNType()
+    )
+
+  context.resultNode.add resType.toNNode(standalone = true)
 
 #================================  Main  =================================#
 
