@@ -2258,7 +2258,7 @@ type
     CXChildVisit_Continue
     CXChildVisit_Recurse
 
-type CXCursorVisitor* = distinct proc(a0: CXCursor, a1: CXCursor, a2: pointer): CXChildVisitResult {.cdecl.} # CXCursorVisitor
+type CXCursorVisitor* = proc(a0: CXCursor, a1: CXCursor, a2: pointer): CXChildVisitResult {.cdecl.} # CXCursorVisitor
 
 proc clang_visitChildren*(
   parent: CXCursor, # `CXCursor`

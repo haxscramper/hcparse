@@ -5,12 +5,10 @@ import hpprint, hpprint/hpprint_repr
 
 import hmisc/[hexceptions, hdebug_misc]
 import hmisc/helpers
-import hmisc/types/[hnim_ast, colorstring]
-# import compiler/[parser, llstream, idents, options,
-#                  pathutils, astalgo, msgs,
-#                  ast, renderer, lineinfos]
+import hnimast
+import hmisc/types/colorstring
 
-import compiler/[ast, renderer, lineinfos]
+import compiler/[ast, lineinfos]
 import packages/docutils/rstast
 import std/decls
 
@@ -120,16 +118,38 @@ macro makeVisitor(captureVars, body: untyped): untyped =
     parentId = ident "parent"
 
   result = quote do:
-    `immutableCopies`
-    var data {.inject.} = `tupleData`
-    type Data = typeof(data)
-    proc visitor(`cursorId`, `parentId`: CXCursor,
-                 clientData: pointer): CXChildVisitResult {.cdecl.} =
-      let data {.inject.} = cast[ptr[Data]](clientData)
-      `dataUnpack`
-      `body`
+    block:
+      `immutableCopies`
+      var data {.inject.} = `tupleData`
+      type Data = typeof(data)
+      proc visitor(`cursorId`, `parentId`: CXCursor,
+                   clientData: pointer): CXChildVisitResult {.cdecl.} =
+        let data {.inject.} = cast[ptr[Data]](clientData)
+        `dataUnpack`
+        `body`
 
-    (data, visitor)
+      (data, visitor)
+
+  # echo $!result
+
+
+proc visitMainFile*[T](
+  cursor: CXCursor,
+  callback: tuple[data: T, impl: CXCursorVisitor]) =
+  var mainParent = cursor
+  cursor.clang_visitChildren do:
+    makeVisitor [callback, mainParent]:
+      echo cursor, " main file: ", cursor.isFromMainFile()
+      if cursor.isFromMainFile():
+        return callback.impl(cursor, mainParent, addr callback.data)
+      else:
+        return CXChildVisit_Recurse
+
+
+      # return CXChildVisit_Recurse
+
+
+
 
 #=========================  Filtering subnodes  ==========================#
 
@@ -631,8 +651,54 @@ proc parseTranslationUnit(
 
   deallocCStringArray(cmdline)
 
+proc parseString() =
+  let str = """
 
-proc main() =
+int main() {
+ 2 + 2;
+}
+
+"""
+
+  let tmpfile = "/tmp/eee.cpp"
+  tmpfile.writeFile(str)
+
+  block:
+    var file = CXUnsavedFile(
+      contents: str.cstring,
+      length: culong(str.len),
+      filename: tmpfile.cstring
+    )
+
+    let trIndex = clang_createIndex(0, 0);
+    var unit: CXTranslationUnit
+
+    let errcode = clang_parseTranslationUnit2(
+      trIndex,
+      sourceFilename     = tmpfile.cstring,
+      commandLineArgs    = nil,
+      numCommandLineArgs = 0,
+      unsavedFiles       = addr file,
+      numUnsavedFiles    = 1,
+      options            = 0,
+      outTU              = addr unit
+    )
+
+    if unit.isNil:
+      raiseAssert "Unable to parse translation unit. Quitting."
+
+    let cursor: CXCursor = clang_getTranslationUnitCursor(unit)
+    cursor.visitMainFile do:
+      makeVisitor [unit]:
+        echo cursor
+        echo cursor.treeRepr(unit)
+        return CXChildVisit_Continue
+
+
+    echo "done"
+
+
+proc parseLibclang() =
   var context = RewriteContext(
     resultNode: nkStmtList.newTree(),
     prefix: "clang_",
@@ -686,6 +752,10 @@ proc main() =
   "../libclang.nim".writeFile($context.resultNode)
   echo "done"
 
+
+proc main() =
+  parseString()
+  # parseLibclang()
 
 when isMainModule:
   try:
