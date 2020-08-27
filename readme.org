@@ -1,75 +1,128 @@
 #+title: readme
 
-Higher-level bindings for libclang in nim. 
+Higher-level bindings for libclang in nim.
 
-Right now this is only proof-of-concept, but it looks promising.
+* Overview
+
+
+This readme provides high-level overview of libclang library and
+several helper functions. For reference manual on the libclang API see
+<link>.
+
+# Documentation for helper functions <here> provided on top of raw libclang bindings.
+
+Libclang is a stable high-level C interface to clang. It provides
+facilities for parsing and introspection of C++ code - iterating
+through all AST elements, determining type of particular node, getting
+associated documentation comments and so on.
+
+For interaction with AST libclang mostly uses /visitors/ - C callback
+function (~{.cdecl.}~ annotation in nim) that don't provide a way to
+easily interact with surrounding scope (e.g. no closure or variable
+capture). In order to make creating visitors easier helper macro
+~makeVisitor~ was introduced - it takes care of all low-level details
+of creating callback functions itself and passing user data to
+callback via ~pointer~ type. It allows to capture external variables
+by reference.
+
+
+* Example
 
 
 #+begin_src nim :exports both
-{.define(plainStdout).}
-import hcparse/libclang_raw/[raw_user, index]
-import std/decls
+  {.define(plainStdout).}
+  import hcparse/libclang_raw/[raw_user, index]
+  import std/decls
+  # import macros
 
-let outfile = "/tmp/file.cpp"
-outfile.writeFile """
-#include <cstring>
-#include <iostream>
-#include <map>
-#include <utility>
+  let outfile = "/tmp/example.cpp"
+  outfile.writeFile """
+  /// Documentation comments for class
+  class MyClass
+  {
+  public:
+    int field;
+    virtual void method() const = 0;
+    static const int static_field;
+    static int static_method();
+  };
 
-class C;
+  /** This is a main function documenation comment */
+  int main() {
 
-int get_number(int val) {
-    return val + 1;
-}
-
-void func_pointer_test() {
-    int (*func)(int) = &get_number;
-    std::cout << " [ " << func(0) << " ] \n";
-}
-"""
+  }
+  """
 
 
-let trIndex = clang_createIndex(0, 0);
-let unit = parseTranslationUnit(trIndex, outfile)
-let topCursor = unit.clang_getTranslationUnitCursor()
-topCursor.visitMainFile do:
-  makeVisitor [unit]:
-    echo cursor.treeRepr(unit)
+  let
+    trIndex = clang_createIndex(0, 0)
+    unit = parseTranslationUnit(trIndex, outfile)
+    topCursor = unit.clang_getTranslationUnitCursor()
 
-    return CXChildVisit_Continue
+  var functionNames: seq[string]
+  topCursor.visitMainFile do: # Visit all ast elements from main translation unit
+    makeVisitor [unit, functionNames]: # Create visitor callback. All
+      # captured variables have to be explicitly declared in capture
+      # list. Two variables are implicitly injected into callback scope
+      # - `cursor` (current AST element being visited) and `parent` -
+      # parent node for cursor.
+      echo cursor.treeRepr(unit)
+      if cursor.cxKind == CXCursor_FunctionDecl:
+        echo cursor.comment().toNimDoc() # Print documentation as RST
+        functionNames.add $cursor
+
+      return CXChildVisit_Continue
+
+  echo "found functions: ", functionNames
 #+end_src
 
 #+RESULTS:
 #+begin_example
-`FunctionDecl get_number`:
-    +-> int (int)
-    +-> ParmDecl:
-    |   +-> int val
-    +-> `CompoundStmt `:
-        +-> 
-        +-> `ReturnStmt `:
-            +-> 
-            +-> `BinaryOperator `:
-                +-> int
-                +-> `UnexposedExpr val`:
-                |   +-> int
-                |   +-> DeclRefExpr:
-                |       +-> val
-                +-> IntegerLiteral:
-                    +-> 1
-`FunctionDecl func_pointer_test`:
-    +-> void ()
-    +-> `CompoundStmt `:
-        +-> 
-        +-> `DeclStmt `:
-            +-> 
-            +-> `VarDecl func`:
-                +-> int (*)(int)
-                +-> ParmDecl:
-                |   +-> int
-                +-> `UnaryOperator `:
-                    +-> int (*)(int)
-                    +-> DeclRefExpr:
-                        +-> get_number
+/tmp/example.cpp:2:7
+`ClassDecl MyClass`:
+    +-> type: MyClass
+    +-> CXXAccessSpecifier:
+    |   +-> type:
+    |   +-> public :
+    +-> FieldDecl:
+    |   +-> type: int
+    |   +-> int field
+    +-> CXXMethod:
+    |   +-> type: void () const
+    |   +-> virtual void method ( ) const = 0
+    +-> VarDecl:
+    |   +-> type: const int
+    |   +-> static const int static_field
+    +-> CXXMethod:
+        +-> type: int ()
+        +-> static int static_method ( )
+/tmp/example.cpp:12:5
+`FunctionDecl main`:
+    +-> type: int ()
+    +-> CompoundStmt:
+        +-> type:
+        +-> { }
+ This is a main function documenation comment
+found functions: @["main"]
 #+end_example
+
+* Contribution & development
+
+Currently only direct bindings
+([[file:src/hcparse/libclang_raw/index.nim]]) for libclang are provided -
+generated directly from header files, no function
+renaming/documentation porting has been done, so all functions have
+~clang_*~ prefix, enums also have pretty long names etc. More
+user-friendly wrappers are currently WIP in
+[[file:src/hcparse/libclang.nim]] with automatically ported documentation,
+better-named enums and functions.
+
+Future plans/goals
+
+- [ ] Provide convinient and stable API for interacting with libclang.
+  C API for clang is stable so it is safe to spend more time improving
+  user experience with the library without worrying about possible API
+  breakage.
+- [ ] Create /fully automatic/ binding generator for libtooling - it
+  has unstable, but much richer API, enabling full access to all
+  internal representation of C++ code, rewriting etc.

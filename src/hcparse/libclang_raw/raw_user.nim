@@ -1,3 +1,4 @@
+# {.define(plainStdout).}
 import macros, sugar, strformat, lenientops, bitops, sequtils, options,
        terminal, shell, strutils, parseutils
 
@@ -20,14 +21,14 @@ proc isNil*(tu: CXTranslationUnit): bool =
 
 #==========================  String conversion  ==========================#
 
-proc `$`(cxstr: CXString): string =
+proc `$`*(cxstr: CXString): string =
   let str = clang_getCString(cxstr)
   result = $str
   clang_disposeString(cxstr)
 
-proc `$`(cursor: CXCursor): string = $clang_getCursorSpelling(cursor)
-proc `$`(cxtype: CXType): string = $clang_getTypeSpelling(cxtype)
-proc `$`(cxkind: CXCursorKind): string =
+proc `$`*(cursor: CXCursor): string = $clang_getCursorSpelling(cursor)
+proc `$`*(cxtype: CXType): string = $clang_getTypeSpelling(cxtype)
+proc `$`*(cxkind: CXCursorKind): string =
   $clang_getCursorKindSpelling(cxkind)
 
 #=====================  Cursor kind/type operations  =====================#
@@ -64,9 +65,26 @@ proc nthArg*(cxtype: CXType, idx: int): CXType =
 #===========================  Location checks  ===========================#
 
 proc isFromMainFile*(cursor: CXCursor): bool =
-  cursor.
-    clang_getCursorLocation().
-    clang_Location_isFromMainFile() != cint(0)
+  let location = cursor.clang_getCursorLocation()
+  var
+    file: CXFIle
+    line: cuint
+    column: cuint
+    offset: cuint
+    # filename: cstring
+
+  clang_getSpellingLocation(
+    location,
+    addr file,
+    addr line,
+    addr column,
+    addr offset
+  )
+
+  result = location.clang_Location_isFromMainFile() != cint(0)
+  let path = $file.clang_File_tryGetRealPathName()
+  if result or path.startsWith("/tmp/"):
+    echo &"{path}:{line}:{column}"
 
 #==========================  Subnode visitors  ===========================#
 
@@ -369,16 +387,18 @@ proc objTreeRepr*(cursor: CXCursor): ObjTree =
 
 proc objTreeRepr*(cursor: CXCursor, tu: CXTranslationUnit): ObjTree =
   const colorize = not defined(plainStdout)
+  let ctype = pptConst(
+    "type: " & $cursor.cxType,
+    initPrintStyling(fg = fgBlue,
+                     style = {styleItalic, styleDim}))
+
   if cursor.len  == 0:
     pptObj($cursor.cxkind,
            initPrintStyling(fg = fgYellow),
-           pptConst(cursor.tokens(tu).join(" "),
-                    initPrintStyling(fg = fgGreen)))
+           ctype,
+           pptConst(
+             cursor.tokens(tu).join(" "), initPrintStyling(fg = fgGreen)))
   else:
-    let ctype = pptConst(
-      $cursor.cxType,
-      initPrintStyling(fg = fgBlue,
-                       style = {styleItalic, styleDim}))
     pptObj(
       ($cursor.cxkind).toMagenta(colorize) & " " & $cursor,
       @[ctype] & toSeq(cursor.children).mapIt(it.objTreeRepr(tu))
@@ -758,40 +778,54 @@ proc parseLibclang() =
   "../libclang.nim".writeFile($context.resultNode)
   echo "done"
 
-proc parseMainFile() =
+proc parseMainFileExample*(withInclude: bool) =
   let outfile = "/tmp/file.cpp"
-  outfile.writeFile """
-#include <cstring>
-#include <iostream>
-#include <map>
-#include <utility>
+  let str = """
 
-class C;
+/// Documentation comments for class
+class MyClass
+{
+public:
+  int field;
+  virtual void method() const = 0;
+  static const int static_field;
+  static int static_method();
+};
 
-int get_number(int val) {
-    return val + 1;
+/** This is a main function documenation comment */
+int main() {
+
 }
 
-void func_pointer_test() {
-    int (*func)(int) = &get_number;
-    std::cout << " [ " << func(0) << " ] \n";
-}
 """
 
+  if withInclude:
+    outfile.writeFile "#include <iostream>\n" & str
+  else:
+    outfile.writeFile str
 
-  let trIndex = clang_createIndex(0, 0);
-  let unit = parseTranslationUnit(trIndex, outfile)
-  let topCursor = unit.clang_getTranslationUnitCursor()
-  topCursor.visitMainFile do:
+
+  let
+    trIndex = clang_createIndex(0, 0)
+    unit = parseTranslationUnit(trIndex, outfile)
+    topCursor = unit.clang_getTranslationUnitCursor()
+
+  topCursor.clangVisitChildren do:
     makeVisitor [unit]:
-      echo cursor.treeRepr(unit)
-
-      return CXChildVisit_Continue
-
+      if cursor.isFromMainFile():
+        echo cursor.comment().toNimDoc()
+        echo cursor.treeRepr(unit)
+        return CXChildVisit_Continue
+      else:
+        return CXChildVisit_Recurse
 
 proc main() =
   # parseString()
-  parseMainFile()
+  echo "main file without include"
+  parseMainFileExample(false)
+
+  echo "main file with include"
+  parseMainFileExample(true)
   # parseLibclang()
 
 when isMainModule:

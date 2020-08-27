@@ -1,0 +1,70 @@
+Input file for parsing
+
+#+begin_src cpp
+/// Documentation comments for class
+class MyClass
+{
+public:
+  int field;
+  virtual void method() const = 0;
+  static const int static_field;
+  static int static_method();
+};
+
+/** This is a main function documenation comment */
+int main() {
+
+}
+#+end_src
+
+If I add ~#include <iostream>~ the class is not recognized.
+
+#+begin_src nim :exports both
+{.define(plainStdout).}
+import hcparse/libclang_raw/raw_user
+
+echo "main file without include"
+parseMainFileExample(false)
+
+echo "main file with include"
+parseMainFileExample(true)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+main file without include
+/tmp/file.cpp:3:7
+ Documentation comments for class
+`ClassDecl MyClass`:
+    +-> type: MyClass
+    +-> CXXAccessSpecifier:
+    |   +-> type:
+    |   +-> public :
+    +-> FieldDecl:
+    |   +-> type: int
+    |   +-> int field
+    +-> CXXMethod:
+    |   +-> type: void () const
+    |   +-> virtual void method ( ) const = 0
+    +-> VarDecl:
+    |   +-> type: const int
+    |   +-> static const int static_field
+    +-> CXXMethod:
+        +-> type: int ()
+        +-> static int static_method ( )
+/tmp/file.cpp:13:5
+ This is a main function documenation comment
+`FunctionDecl main`:
+    +-> type: int ()
+    +-> CompoundStmt:
+        +-> type:
+        +-> { }
+main file with include
+/tmp/file.cpp:14:5
+ This is a main function documenation comment
+`FunctionDecl main`:
+    +-> type: int ()
+    +-> CompoundStmt:
+        +-> type:
+        +-> { }
+#+end_example
