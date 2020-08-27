@@ -451,6 +451,11 @@ proc toNType*(cxtype: CXType): NType[PNode] =
       case pointee.cxkind:
         of CXType_Char_S:
           mkPType("cstring")
+        of CXType_Pointer:
+          if pointee.getPointee().cxKind() == CXType_Char_S:
+            mkPType("cstringArray")
+          else:
+            mkNType("ptr", [toNType(pointee)])
         of CXType_Void:
           mkPType("pointer")
         else:
@@ -573,6 +578,7 @@ proc visitFunction(cursor: CXCursor, context: var RewriteContext) =
           prevName = res.varname
           res
 
+    `rtype=`(it.signature, toNType(cursor.retType()))
     it.signature.pragma = mkPPragma(
       newPIdent("cdecl"),
       nnkExprColonExpr.newPTree(
@@ -762,7 +768,7 @@ proc visitTypedef*(cursor: CXCursor, context: var RewriteContext) =
       nnkTypeSection,
       newPTree(
         nnkTypeDef,
-        newPIdent($cursor.cxType()),
+        newPTree(nnkPostfix, newPIdent("*"), newPIdent($cursor.cxType())),
         newEmptyNNode[PNode](),
         newPTree(
           nnkDistinctTy,
