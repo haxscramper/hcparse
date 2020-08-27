@@ -658,7 +658,8 @@ proc parseTranslationUnit*(
   trIndex: CXIndex,
   filename: string,
   cmdline: seq[string] = @[],
-  trOptions: set[CXTranslationUnit_Flags] = {}): CXTranslationUnit =
+  trOptions: set[CXTranslationUnit_Flags] = {
+    CXTranslationUnit_SingleFileParse}): CXTranslationUnit =
 
   var flags: int
   for opt in trOptions:
@@ -794,7 +795,7 @@ public:
 
 /** This is a main function documenation comment */
 int main() {
-
+  1 + 2;
 }
 
 """
@@ -821,8 +822,8 @@ int main() {
 
 proc main() =
   # parseString()
-  echo "main file without include"
-  parseMainFileExample(false)
+  # echo "main file without include"
+  # parseMainFileExample(false)
 
   echo "main file with include"
   parseMainFileExample(true)

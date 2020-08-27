@@ -5,6 +5,8 @@ import std/decls
 
 let outfile = "/tmp/example.cpp"
 outfile.writeFile """
+#include <iostream>
+
 /// Documentation comments for class
 class MyClass
 {
@@ -17,7 +19,7 @@ public:
 
 /** This is a main function documenation comment */
 int main() {
-
+  1 + 2;
 }
 """
 

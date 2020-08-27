@@ -37,6 +37,8 @@ by reference.
 
   let outfile = "/tmp/example.cpp"
   outfile.writeFile """
+  #include <iostream>
+
   /// Documentation comments for class
   class MyClass
   {
@@ -49,7 +51,7 @@ by reference.
 
   /** This is a main function documenation comment */
   int main() {
-
+    1 + 2;
   }
   """
 
@@ -78,7 +80,7 @@ by reference.
 
 #+RESULTS:
 #+begin_example
-/tmp/example.cpp:2:7
+/tmp/example.cpp:4:7
 `ClassDecl MyClass`:
     +-> type: MyClass
     +-> CXXAccessSpecifier:
@@ -96,12 +98,19 @@ by reference.
     +-> CXXMethod:
         +-> type: int ()
         +-> static int static_method ( )
-/tmp/example.cpp:12:5
+/tmp/example.cpp:14:5
 `FunctionDecl main`:
     +-> type: int ()
-    +-> CompoundStmt:
+    +-> `CompoundStmt `:
         +-> type:
-        +-> { }
+        +-> `BinaryOperator `:
+            +-> type: int
+            +-> IntegerLiteral:
+            |   +-> type: int
+            |   +-> 1
+            +-> IntegerLiteral:
+                +-> type: int
+                +-> 2
  This is a main function documenation comment
 found functions: @["main"]
 #+end_example
@@ -126,3 +135,4 @@ Future plans/goals
 - [ ] Create /fully automatic/ binding generator for libtooling - it
   has unstable, but much richer API, enabling full access to all
   internal representation of C++ code, rewriting etc.
+- [ ] Maybe adopt some workarounds from [[https://github.com/foonathan/cppast][cppast]]?
