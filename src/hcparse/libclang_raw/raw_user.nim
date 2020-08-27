@@ -292,38 +292,39 @@ proc newRstNode*(
   for node in subnodes:
     result.add node
 
+proc `$`(n: PRstNode): string = renderRstToRst(n, result)
+
 proc toRstNode*(comment: CXComment): PRstNode =
   case comment.cxKind:
     of CXComment_Text:
-      return rnLeaf.newRstNode($clang_TextComment_getText(comment))
+      return rnLeaf.newRstNode(
+        $clang_TextComment_getText(comment))
 
     of CXComment_FullComment:
       result = rnInner.newRstNode()
       for subnode in comment.children():
-        result.add subnode.toRstNode()
+        result.add rnParagraph.newRstNode(subnode.toRstNode())
 
     of CXComment_Paragraph:
-      result = rnParagraph.newRstNode()
+      result = rnInner.newRstNode()
       for subnode in comment.children():
-        result.add subnode.toRstNode()
+        result.add rnParagraph.newRstNode(subnode.toRstNode())
 
     of CXComment_Null:
       return rnLeaf.newRstNode("")
 
     of CXComment_InlineCommand:
-      return rnLiteralBlock.newRstNode(
-        "!!! TODO !!!\n" &
-        comment.objTreeRepr().pstring())
+      return rnInner.newRstNode("")
 
     of CXComment_ParamCommand:
-      return rnInner.newRstNode(
-        @[
-          rnEmphasis.newRstNode(
-            rnInner.newRstNode(
-              $clang_ParamCommandComment_getParamName(comment)
-            )
-          )
-        ] & toSeq(comment.children).mapIt(it.toRstNode()))
+      let pn = $clang_ParamCommandComment_getParamName(comment)
+      # echo "param: ", pn
+      result = rnInner.newRstNode(
+        @[ rnStrongEmphasis.newRstNode(rnLeaf.newRstNode(pn)) ] &
+          toSeq(comment.children).mapIt(it.toRstNode())
+      )
+
+      # echo result
 
     of CXComment_BlockCommand:
       return rnParagraph.newRstNode(
@@ -337,6 +338,13 @@ proc toRstNode*(comment: CXComment): PRstNode =
 
     of CXComment_VerbatimBlockCommand:
       return rnCodeBlock.newRstNode(
+        rnDirArg.newRstNode(""),
+        rnFieldList.newRstNode(
+          rnField.newRstNode(
+            rnFieldName.newRstNode(rnLeaf.newRstNode("default-language")),
+            rnFieldBody.newRstNode(rnLeaf.newRstNode("c++"))
+          )
+        ),
         rnLiteralBlock.newRstNode(
           rnLeaf.newRstNode(
             $clang_VerbatimBlockLineComment_getText(comment))))
