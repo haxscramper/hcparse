@@ -550,7 +550,7 @@ proc visitFunction(cursor: CXCursor, context: var RewriteContext) =
   let procdef = ProcDecl[PNode]().withIt do:
     it.exported = true
     it.comment = cursor.comment().toNimDoc()
-    it.name = cursor.simplifyFuncName(context)
+    it.name = cursor.simplifyFuncName(context).fixIdentName()
     it.signature = mkProcNType[PNode](@[])
     it.signature.arguments = collect(newSeq):
       for it in cursor.children:

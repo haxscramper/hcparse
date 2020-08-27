@@ -347,12 +347,12 @@ proc getLocationForOffset*(tu: CXTranslationUnit; file: CXFile; offset: cuint) {
   ## 
   ## 
   ##  Retrieves the source location associated with a given character offset in a particular translation unit.
-proc Location_isInSystemHeader*(location: CXSourceLocation) {.cdecl,
+proc location_isInSystemHeader*(location: CXSourceLocation) {.cdecl,
     dynlib: libclang, importc: "clang_Location_isInSystemHeader".}
   ## 
   ## 
   ##  Returns non-zero if the given source location is in a system header.
-proc Location_isFromMainFile*(location: CXSourceLocation) {.cdecl, dynlib: libclang,
+proc location_isFromMainFile*(location: CXSourceLocation) {.cdecl, dynlib: libclang,
     importc: "clang_Location_isFromMainFile".}
   ## 
   ## 
@@ -377,7 +377,7 @@ proc equalRanges*(range1: CXSourceRange; range2: CXSourceRange) {.cdecl,
   ## **
   ## 
   ##  non-zero if the ranges are the same, zero if they differ.
-proc Range_isNull*(cxrange: CXSourceRange) {.cdecl, dynlib: libclang,
+proc range_isNull*(cxrange: CXSourceRange) {.cdecl, dynlib: libclang,
     importc: "clang_Range_isNull".}
   ## 
   ## 
@@ -4447,7 +4447,7 @@ proc isSystem*(module: CXModule) {.cdecl, dynlib: libclang,
   ## **
   ## 
   ##  non-zero if the module is a system one.
-proc Module_getNumTopLevelHeaders*(argCXTranslationUnit: CXTranslationUnit;
+proc module_getNumTopLevelHeaders*(argCXTranslationUnit: CXTranslationUnit;
                                   module: CXModule) {.cdecl, dynlib: libclang,
     importc: "clang_Module_getNumTopLevelHeaders".}
   ## 
@@ -4461,7 +4461,7 @@ proc Module_getNumTopLevelHeaders*(argCXTranslationUnit: CXTranslationUnit;
   ## **
   ## 
   ##  the number of top level headers associated with this module.
-proc Module_getTopLevelHeader*(argCXTranslationUnit: CXTranslationUnit;
+proc module_getTopLevelHeader*(argCXTranslationUnit: CXTranslationUnit;
                               module: CXModule; index: cuint) {.cdecl,
     dynlib: libclang, importc: "clang_Module_getTopLevelHeader".}
   ## 
@@ -4479,62 +4479,62 @@ proc Module_getTopLevelHeader*(argCXTranslationUnit: CXTranslationUnit;
   ## **
   ## 
   ##  the specified top level header associated with the module.
-proc CXXConstructor_isConvertingConstructor*(c: CXCursor) {.cdecl, dynlib: libclang,
+proc cXXConstructor_isConvertingConstructor*(c: CXCursor) {.cdecl, dynlib: libclang,
     importc: "clang_CXXConstructor_isConvertingConstructor".}
   ## 
   ## 
   ##  Determine if a C++ constructor is a converting constructor.
-proc CXXConstructor_isCopyConstructor*(c: CXCursor) {.cdecl, dynlib: libclang,
+proc cXXConstructor_isCopyConstructor*(c: CXCursor) {.cdecl, dynlib: libclang,
     importc: "clang_CXXConstructor_isCopyConstructor".}
   ## 
   ## 
   ##  Determine if a C++ constructor is a copy constructor.
-proc CXXConstructor_isDefaultConstructor*(c: CXCursor) {.cdecl, dynlib: libclang,
+proc cXXConstructor_isDefaultConstructor*(c: CXCursor) {.cdecl, dynlib: libclang,
     importc: "clang_CXXConstructor_isDefaultConstructor".}
   ## 
   ## 
   ##  Determine if a C++ constructor is the default constructor.
-proc CXXConstructor_isMoveConstructor*(c: CXCursor) {.cdecl, dynlib: libclang,
+proc cXXConstructor_isMoveConstructor*(c: CXCursor) {.cdecl, dynlib: libclang,
     importc: "clang_CXXConstructor_isMoveConstructor".}
   ## 
   ## 
   ##  Determine if a C++ constructor is a move constructor.
-proc CXXField_isMutable*(c: CXCursor) {.cdecl, dynlib: libclang,
+proc cXXField_isMutable*(c: CXCursor) {.cdecl, dynlib: libclang,
                                      importc: "clang_CXXField_isMutable".}
   ## 
   ## 
   ##  Determine if a C++ field is declared 'mutable'.
-proc CXXMethod_isDefaulted*(c: CXCursor) {.cdecl, dynlib: libclang,
+proc cXXMethod_isDefaulted*(c: CXCursor) {.cdecl, dynlib: libclang,
                                         importc: "clang_CXXMethod_isDefaulted".}
   ## 
   ## 
   ##  Determine if a C++ method is declared '= default'.
-proc CXXMethod_isPureVirtual*(c: CXCursor) {.cdecl, dynlib: libclang,
+proc cXXMethod_isPureVirtual*(c: CXCursor) {.cdecl, dynlib: libclang,
     importc: "clang_CXXMethod_isPureVirtual".}
   ## 
   ## 
   ##  Determine if a C++ member function or member function template is pure virtual.
-proc CXXMethod_isStatic*(c: CXCursor) {.cdecl, dynlib: libclang,
+proc cXXMethod_isStatic*(c: CXCursor) {.cdecl, dynlib: libclang,
                                      importc: "clang_CXXMethod_isStatic".}
   ## 
   ## 
   ##  Determine if a C++ member function or member function template is declared 'static'.
-proc CXXMethod_isVirtual*(c: CXCursor) {.cdecl, dynlib: libclang,
+proc cXXMethod_isVirtual*(c: CXCursor) {.cdecl, dynlib: libclang,
                                       importc: "clang_CXXMethod_isVirtual".}
   ## 
   ## 
   ##  Determine if a C++ member function or member function template is explicitly declared 'virtual' or if it overrides a virtual method from one of the base classes.
-proc CXXRecord_isAbstract*(c: CXCursor) {.cdecl, dynlib: libclang,
+proc cXXRecord_isAbstract*(c: CXCursor) {.cdecl, dynlib: libclang,
                                        importc: "clang_CXXRecord_isAbstract".}
   ## 
   ## 
   ##  Determine if a C++ record is abstract, i.e. whether a class or struct has a pure virtual member function.
-proc EnumDecl_isScoped*(c: CXCursor) {.cdecl, dynlib: libclang,
+proc enumDecl_isScoped*(c: CXCursor) {.cdecl, dynlib: libclang,
                                     importc: "clang_EnumDecl_isScoped".}
   ## 
   ## 
   ##  Determine if an enum declaration refers to a scoped enum.
-proc CXXMethod_isConst*(c: CXCursor) {.cdecl, dynlib: libclang,
+proc cXXMethod_isConst*(c: CXCursor) {.cdecl, dynlib: libclang,
                                     importc: "clang_CXXMethod_isConst".}
   ## 
   ## 
@@ -5438,7 +5438,7 @@ type
     erkCFStr = 5, erkOther = 6
 type
   CXEvalResult = distinct pointer
-proc Evaluate*(c: CXCursor) {.cdecl, dynlib: libclang,
+proc evaluate*(c: CXCursor) {.cdecl, dynlib: libclang,
                            importc: "clang_Cursor_Evaluate".}
   ## 
   ## 
@@ -5913,7 +5913,7 @@ proc index_setClientEntity*(argCXIdxEntityInfo: ptr[CXIdxEntityInfo];
   ##  For setting a custom CXIdxClientEntity attached to an entity.
 type
   CXIndexAction = distinct pointer
-proc IndexAction_create*(cIdx: CXIndex) {.cdecl, dynlib: libclang,
+proc indexAction_create*(cIdx: CXIndex) {.cdecl, dynlib: libclang,
                                        importc: "clang_IndexAction_create".}
   ## 
   ## 
@@ -6254,7 +6254,7 @@ proc isWhitespace*(comment: CXComment) {.cdecl, dynlib: libclang,
   ## **
   ## 
   ##  non-zero if Error: cannot render: rnLiteralBlock is whitespace.
-proc InlineContentComment_hasTrailingNewline*(comment: CXComment) {.cdecl,
+proc inlineContentComment_hasTrailingNewline*(comment: CXComment) {.cdecl,
     dynlib: libclang, importc: "clang_InlineContentComment_hasTrailingNewline".}
   ## 
   ## 
@@ -6263,7 +6263,7 @@ proc InlineContentComment_hasTrailingNewline*(comment: CXComment) {.cdecl,
   ## **
   ## 
   ##  non-zero if Error: cannot render: rnLiteralBlock is inline content and has a newline immediately following it in the comment text.  Newlines between paragraphs do not count.
-proc TextComment_getText*(comment: CXComment) {.cdecl, dynlib: libclang,
+proc textComment_getText*(comment: CXComment) {.cdecl, dynlib: libclang,
     importc: "clang_TextComment_getText".}
   ## 
   ## 
@@ -6276,7 +6276,7 @@ proc TextComment_getText*(comment: CXComment) {.cdecl, dynlib: libclang,
   ## **
   ## 
   ##  text contained in the AST node.
-proc InlineCommandComment_getCommandName*(comment: CXComment) {.cdecl,
+proc inlineCommandComment_getCommandName*(comment: CXComment) {.cdecl,
     dynlib: libclang, importc: "clang_InlineCommandComment_getCommandName".}
   ## 
   ## 
@@ -6289,7 +6289,7 @@ proc InlineCommandComment_getCommandName*(comment: CXComment) {.cdecl,
   ## **
   ## 
   ##  name of the inline command.
-proc InlineCommandComment_getRenderKind*(comment: CXComment) {.cdecl,
+proc inlineCommandComment_getRenderKind*(comment: CXComment) {.cdecl,
     dynlib: libclang, importc: "clang_InlineCommandComment_getRenderKind".}
   ## 
   ## 
@@ -6302,7 +6302,7 @@ proc InlineCommandComment_getRenderKind*(comment: CXComment) {.cdecl,
   ## **
   ## 
   ##  the most appropriate rendering mode, chosen on command semantics in Doxygen.
-proc InlineCommandComment_getNumArgs*(comment: CXComment) {.cdecl, dynlib: libclang,
+proc inlineCommandComment_getNumArgs*(comment: CXComment) {.cdecl, dynlib: libclang,
     importc: "clang_InlineCommandComment_getNumArgs".}
   ## 
   ## 
@@ -6315,7 +6315,7 @@ proc InlineCommandComment_getNumArgs*(comment: CXComment) {.cdecl, dynlib: libcl
   ## **
   ## 
   ##  number of command arguments.
-proc InlineCommandComment_getArgText*(comment: CXComment; argIdx: cuint) {.cdecl,
+proc inlineCommandComment_getArgText*(comment: CXComment; argIdx: cuint) {.cdecl,
     dynlib: libclang, importc: "clang_InlineCommandComment_getArgText".}
   ## 
   ## 
@@ -6332,7 +6332,7 @@ proc InlineCommandComment_getArgText*(comment: CXComment; argIdx: cuint) {.cdecl
   ## **
   ## 
   ##  text of the specified argument.
-proc HTMLTagComment_getTagName*(comment: CXComment) {.cdecl, dynlib: libclang,
+proc hTMLTagComment_getTagName*(comment: CXComment) {.cdecl, dynlib: libclang,
     importc: "clang_HTMLTagComment_getTagName".}
   ## 
   ## 
@@ -6345,7 +6345,7 @@ proc HTMLTagComment_getTagName*(comment: CXComment) {.cdecl, dynlib: libclang,
   ## **
   ## 
   ##  HTML tag name.
-proc HTMLStartTagComment_isSelfClosing*(comment: CXComment) {.cdecl,
+proc hTMLStartTagComment_isSelfClosing*(comment: CXComment) {.cdecl,
     dynlib: libclang, importc: "clang_HTMLStartTagComment_isSelfClosing".}
   ## 
   ## 
@@ -6358,7 +6358,7 @@ proc HTMLStartTagComment_isSelfClosing*(comment: CXComment) {.cdecl,
   ## **
   ## 
   ##  non-zero if tag is self-closing (for example, <br />).
-proc HTMLStartTag_getNumAttrs*(comment: CXComment) {.cdecl, dynlib: libclang,
+proc hTMLStartTag_getNumAttrs*(comment: CXComment) {.cdecl, dynlib: libclang,
     importc: "clang_HTMLStartTag_getNumAttrs".}
   ## 
   ## 
@@ -6371,7 +6371,7 @@ proc HTMLStartTag_getNumAttrs*(comment: CXComment) {.cdecl, dynlib: libclang,
   ## **
   ## 
   ##  number of attributes (name-value pairs) attached to the start tag.
-proc HTMLStartTag_getAttrName*(comment: CXComment; attrIdx: cuint) {.cdecl,
+proc hTMLStartTag_getAttrName*(comment: CXComment; attrIdx: cuint) {.cdecl,
     dynlib: libclang, importc: "clang_HTMLStartTag_getAttrName".}
   ## 
   ## 
@@ -6388,7 +6388,7 @@ proc HTMLStartTag_getAttrName*(comment: CXComment; attrIdx: cuint) {.cdecl,
   ## **
   ## 
   ##  name of the specified attribute.
-proc HTMLStartTag_getAttrValue*(comment: CXComment; attrIdx: cuint) {.cdecl,
+proc hTMLStartTag_getAttrValue*(comment: CXComment; attrIdx: cuint) {.cdecl,
     dynlib: libclang, importc: "clang_HTMLStartTag_getAttrValue".}
   ## 
   ## 
@@ -6405,7 +6405,7 @@ proc HTMLStartTag_getAttrValue*(comment: CXComment; attrIdx: cuint) {.cdecl,
   ## **
   ## 
   ##  value of the specified attribute.
-proc BlockCommandComment_getCommandName*(comment: CXComment) {.cdecl,
+proc blockCommandComment_getCommandName*(comment: CXComment) {.cdecl,
     dynlib: libclang, importc: "clang_BlockCommandComment_getCommandName".}
   ## 
   ## 
@@ -6418,7 +6418,7 @@ proc BlockCommandComment_getCommandName*(comment: CXComment) {.cdecl,
   ## **
   ## 
   ##  name of the block command.
-proc BlockCommandComment_getNumArgs*(comment: CXComment) {.cdecl, dynlib: libclang,
+proc blockCommandComment_getNumArgs*(comment: CXComment) {.cdecl, dynlib: libclang,
     importc: "clang_BlockCommandComment_getNumArgs".}
   ## 
   ## 
@@ -6431,7 +6431,7 @@ proc BlockCommandComment_getNumArgs*(comment: CXComment) {.cdecl, dynlib: libcla
   ## **
   ## 
   ##  number of word-like arguments.
-proc BlockCommandComment_getArgText*(comment: CXComment; argIdx: cuint) {.cdecl,
+proc blockCommandComment_getArgText*(comment: CXComment; argIdx: cuint) {.cdecl,
     dynlib: libclang, importc: "clang_BlockCommandComment_getArgText".}
   ## 
   ## 
@@ -6448,7 +6448,7 @@ proc BlockCommandComment_getArgText*(comment: CXComment; argIdx: cuint) {.cdecl,
   ## **
   ## 
   ##  text of the specified word-like argument.
-proc BlockCommandComment_getParagraph*(comment: CXComment) {.cdecl,
+proc blockCommandComment_getParagraph*(comment: CXComment) {.cdecl,
     dynlib: libclang, importc: "clang_BlockCommandComment_getParagraph".}
   ## 
   ## 
@@ -6461,7 +6461,7 @@ proc BlockCommandComment_getParagraph*(comment: CXComment) {.cdecl,
   ## **
   ## 
   ##  paragraph argument of the block command.
-proc ParamCommandComment_getParamName*(comment: CXComment) {.cdecl,
+proc paramCommandComment_getParamName*(comment: CXComment) {.cdecl,
     dynlib: libclang, importc: "clang_ParamCommandComment_getParamName".}
   ## 
   ## 
@@ -6474,7 +6474,7 @@ proc ParamCommandComment_getParamName*(comment: CXComment) {.cdecl,
   ## **
   ## 
   ##  parameter name.
-proc ParamCommandComment_isParamIndexValid*(comment: CXComment) {.cdecl,
+proc paramCommandComment_isParamIndexValid*(comment: CXComment) {.cdecl,
     dynlib: libclang, importc: "clang_ParamCommandComment_isParamIndexValid".}
   ## 
   ## 
@@ -6487,7 +6487,7 @@ proc ParamCommandComment_isParamIndexValid*(comment: CXComment) {.cdecl,
   ## **
   ## 
   ##  non-zero if the parameter that this AST node represents was found in the function prototype and Error: cannot render: rnLiteralBlock function will return a meaningful value.
-proc ParamCommandComment_getParamIndex*(comment: CXComment) {.cdecl,
+proc paramCommandComment_getParamIndex*(comment: CXComment) {.cdecl,
     dynlib: libclang, importc: "clang_ParamCommandComment_getParamIndex".}
   ## 
   ## 
@@ -6500,7 +6500,7 @@ proc ParamCommandComment_getParamIndex*(comment: CXComment) {.cdecl,
   ## **
   ## 
   ##  zero-based parameter index in function prototype.
-proc ParamCommandComment_isDirectionExplicit*(comment: CXComment) {.cdecl,
+proc paramCommandComment_isDirectionExplicit*(comment: CXComment) {.cdecl,
     dynlib: libclang, importc: "clang_ParamCommandComment_isDirectionExplicit".}
   ## 
   ## 
@@ -6513,7 +6513,7 @@ proc ParamCommandComment_isDirectionExplicit*(comment: CXComment) {.cdecl,
   ## **
   ## 
   ##  non-zero if parameter passing direction was specified explicitly in the comment.
-proc ParamCommandComment_getDirection*(comment: CXComment) {.cdecl,
+proc paramCommandComment_getDirection*(comment: CXComment) {.cdecl,
     dynlib: libclang, importc: "clang_ParamCommandComment_getDirection".}
   ## 
   ## 
@@ -6526,7 +6526,7 @@ proc ParamCommandComment_getDirection*(comment: CXComment) {.cdecl,
   ## **
   ## 
   ##  parameter passing direction.
-proc TParamCommandComment_getParamName*(comment: CXComment) {.cdecl,
+proc tParamCommandComment_getParamName*(comment: CXComment) {.cdecl,
     dynlib: libclang, importc: "clang_TParamCommandComment_getParamName".}
   ## 
   ## 
@@ -6539,7 +6539,7 @@ proc TParamCommandComment_getParamName*(comment: CXComment) {.cdecl,
   ## **
   ## 
   ##  template parameter name.
-proc TParamCommandComment_isParamPositionValid*(comment: CXComment) {.cdecl,
+proc tParamCommandComment_isParamPositionValid*(comment: CXComment) {.cdecl,
     dynlib: libclang, importc: "clang_TParamCommandComment_isParamPositionValid".}
   ## 
   ## 
@@ -6552,7 +6552,7 @@ proc TParamCommandComment_isParamPositionValid*(comment: CXComment) {.cdecl,
   ## **
   ## 
   ##  non-zero if the parameter that this AST node represents was found in the template parameter list and Error: cannot render: rnLiteralBlock and Error: cannot render: rnLiteralBlock functions will return a meaningful value.
-proc TParamCommandComment_getDepth*(comment: CXComment) {.cdecl, dynlib: libclang,
+proc tParamCommandComment_getDepth*(comment: CXComment) {.cdecl, dynlib: libclang,
     importc: "clang_TParamCommandComment_getDepth".}
   ## 
   ## 
@@ -6569,7 +6569,7 @@ proc TParamCommandComment_getDepth*(comment: CXComment) {.cdecl, dynlib: libclan
   ##  For example, Error: cannot render: rnCodeBlock
   ## 
   ##  for C and TT nesting depth is 0, for T nesting depth is 1.
-proc TParamCommandComment_getIndex*(comment: CXComment; depth: cuint) {.cdecl,
+proc tParamCommandComment_getIndex*(comment: CXComment; depth: cuint) {.cdecl,
     dynlib: libclang, importc: "clang_TParamCommandComment_getIndex".}
   ## 
   ## 
@@ -6588,7 +6588,7 @@ proc TParamCommandComment_getIndex*(comment: CXComment; depth: cuint) {.cdecl,
   ##  for C and TT nesting depth is 0, so we can ask for index at depth 0: at depth 0 C's index is 0, TT's index is 1.
   ## 
   ##  For T nesting depth is 1, so we can ask for index at depth 0 and 1: at depth 0 T's index is 1 (same as TT's), at depth 1 T's index is 0.
-proc VerbatimBlockLineComment_getText*(comment: CXComment) {.cdecl,
+proc verbatimBlockLineComment_getText*(comment: CXComment) {.cdecl,
     dynlib: libclang, importc: "clang_VerbatimBlockLineComment_getText".}
   ## 
   ## 
@@ -6601,7 +6601,7 @@ proc VerbatimBlockLineComment_getText*(comment: CXComment) {.cdecl,
   ## **
   ## 
   ##  text contained in the AST node.
-proc VerbatimLineComment_getText*(comment: CXComment) {.cdecl, dynlib: libclang,
+proc verbatimLineComment_getText*(comment: CXComment) {.cdecl, dynlib: libclang,
     importc: "clang_VerbatimLineComment_getText".}
   ## 
   ## 
@@ -6614,7 +6614,7 @@ proc VerbatimLineComment_getText*(comment: CXComment) {.cdecl, dynlib: libclang,
   ## **
   ## 
   ##  text contained in the AST node.
-proc HTMLTagComment_getAsString*(comment: CXComment) {.cdecl, dynlib: libclang,
+proc hTMLTagComment_getAsString*(comment: CXComment) {.cdecl, dynlib: libclang,
     importc: "clang_HTMLTagComment_getAsString".}
   ## 
   ## 
@@ -6629,7 +6629,7 @@ proc HTMLTagComment_getAsString*(comment: CXComment) {.cdecl, dynlib: libclang,
   ## **
   ## 
   ##  string containing an HTML tag.
-proc FullComment_getAsHTML*(comment: CXComment) {.cdecl, dynlib: libclang,
+proc fullComment_getAsHTML*(comment: CXComment) {.cdecl, dynlib: libclang,
     importc: "clang_FullComment_getAsHTML".}
   ## 
   ## 
@@ -6694,7 +6694,7 @@ proc FullComment_getAsHTML*(comment: CXComment) {.cdecl, dynlib: libclang,
   ## **
   ## 
   ##  string containing an HTML fragment.
-proc FullComment_getAsXML*(comment: CXComment) {.cdecl, dynlib: libclang,
+proc fullComment_getAsXML*(comment: CXComment) {.cdecl, dynlib: libclang,
     importc: "clang_FullComment_getAsXML".}
   ## 
   ## 
