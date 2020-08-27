@@ -360,6 +360,9 @@ proc toNimDoc*(comment: CXComment): string =
   # echo comment.objTreeRepr().pstring()
   comment.toRstNode().renderRstToRst(result)
 
+  result = result.split("\n").filterIt(
+    not it.allOfIt(it in Whitespace)).join("\n")
+
 #=============================  Converters  ==============================#
 
 proc fromElaboratedPType(cxtype: CXType): NType[PNode] =
@@ -722,6 +725,7 @@ proc visitEnumDecl*(cursor: CXCursor, context: var RewriteContext) =
     else:
       0
 
+  en.exported = true
 
   context.resultNode.add en.toNNode(standalone = true)
 
