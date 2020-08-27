@@ -83,8 +83,6 @@ proc isFromMainFile*(cursor: CXCursor): bool =
 
   result = location.clang_Location_isFromMainFile() != cint(0)
   let path = $file.clang_File_tryGetRealPathName()
-  if result or path.startsWith("/tmp/"):
-    echo &"{path}:{line}:{column}"
 
 #==========================  Subnode visitors  ===========================#
 
@@ -298,17 +296,25 @@ proc toRstNode*(comment: CXComment): PRstNode =
   case comment.cxKind:
     of CXComment_Text:
       return rnLeaf.newRstNode($clang_TextComment_getText(comment))
-    of CXComment_FullComment, CXComment_Paragraph:
+
+    of CXComment_FullComment:
       result = rnInner.newRstNode()
       for subnode in comment.children():
         result.add subnode.toRstNode()
+
+    of CXComment_Paragraph:
+      result = rnParagraph.newRstNode()
+      for subnode in comment.children():
+        result.add subnode.toRstNode()
+
     of CXComment_Null:
       return rnLeaf.newRstNode("")
+
     of CXComment_InlineCommand:
       return rnLiteralBlock.newRstNode(
         "!!! TODO !!!\n" &
-        comment.objTreeRepr().pstring()
-      )
+        comment.objTreeRepr().pstring())
+
     of CXComment_ParamCommand:
       return rnInner.newRstNode(
         @[
@@ -317,18 +323,18 @@ proc toRstNode*(comment: CXComment): PRstNode =
               $clang_ParamCommandComment_getParamName(comment)
             )
           )
-        ] & toSeq(comment.children).mapIt(it.toRstNode())
-      )
+        ] & toSeq(comment.children).mapIt(it.toRstNode()))
+
     of CXComment_BlockCommand:
-      return rnInner.newRstNode(
+      return rnParagraph.newRstNode(
         @[
           rnEmphasis.newRstNode(
             rnInner.newRstNode(
               $clang_BlockCommandComment_getCommandName(comment)
             )
           )
-        ] & toSeq(comment.children).mapIt(it.toRstNode())
-      )
+        ] & toSeq(comment.children).mapIt(it.toRstNode()))
+
     of CXComment_VerbatimBlockCommand:
       return rnCodeBlock.newRstNode(
         rnLiteralBlock.newRstNode(
@@ -480,6 +486,8 @@ proc fixIdentName(str: string): string =
     of "type": "cxtype"
     of "range": "cxrange"
     of "string": "cxstring"
+    of "begin": "cxbegin"
+    of "end": "cxend"
     else: result
 
 
@@ -516,6 +524,12 @@ proc simplifyFuncName(cursor: CXCursor, context: var RewriteContext): string =
       return unprefix.
         dropPrefix(name & "_").
         dropPrefix(rawName & "_")
+    else:
+      # echov first
+      # echov rawName
+      # echov name
+      # echov unprefix
+      return unprefix
   else:
     return unprefix
 
@@ -535,16 +549,17 @@ proc isAliasTypedef*(cursor: CXCursor): bool =
 
 proc visitFunction(cursor: CXCursor, context: var RewriteContext) =
   cursor.expectKind(CXCursor_FunctionDecl)
-  let arguments = cursor.children.
-    filterIt(it.cxKind == CXCursor_ParmDecl).
-    mapIt(it.toPIdentDefs())
 
-  context.resultNode.add mkProcDeclNode(
-    head = newPIdent(cursor.simplifyFuncName(context)),
-    rtype = some(toNType(cursor.retType())),
-    args = arguments,
-    impl = newEmptyNNode[PNode](),
-    pragma = mkPPragma(
+  let procdef = ProcDecl[PNode]().withIt do:
+    it.exported = true
+    it.comment = cursor.comment().toNimDoc()
+    it.name = cursor.simplifyFuncName(context)
+    it.signature = mkProcNType[PNode](@[])
+    it.signature.arguments = cursor.children.
+      filterIt(it.cxKind == CXCursor_ParmDecl).
+      mapIt(it.toPIdentDefs())
+
+    it.signature.pragma = mkPPragma(
       newPIdent("cdecl"),
       nnkExprColonExpr.newPTree(
         newPIdent("dynlib"),
@@ -554,25 +569,33 @@ proc visitFunction(cursor: CXCursor, context: var RewriteContext) =
         newPIdent("importc"),
         newPLit($cursor)
       )
-    ),
-    comment = cursor.comment().toNimDoc()
-  )
-
-proc visitAliasTypedef*(cursor: CXCursor, context: var RewriteContext) =
-  # echo &"{cursor.cxType():25} -> {cursor.cxtype().clang_getCanonicalType()}"
-  # echo cursor.treeRepr(context.translationUnit)
-  context.resultNode.add newPTree(
-    nnkTypeSection,
-    newPTree(
-      nnkTypeDef,
-      newPIdent($cursor.cxType()),
-      newEmptyNNode[PNode](),
-      newPTree(
-        nnkDistinctTy,
-        cursor.cxtype().clang_getCanonicalType().toNType().toNNode()
-      )
     )
-  )
+
+  context.resultNode.add procdef.toNNode()
+
+  # var signature = mkProcNType(
+  #   args = cursor.children.,
+  #   pragma = mkPPragma(
+  #     newPIdent("cdecl"),
+  #     nnkExprColonExpr.newPTree(
+  #       newPIdent("dynlib"),
+  #       newPIdent("libclang") # XXX
+  #     ),
+  #     nnkExprColonExpr.newPTree(
+  #       newPIdent("importc"),
+  #       newPLit($cursor)
+  #     )
+  #   )
+  # )
+
+  # context.resultNode.add mkProcDeclNode(
+  #   # head = newPIdent(),
+  #   rtype = some(toNType(cursor.retType())),
+  #   args = arguments,
+  #   impl = newEmptyNNode[PNode](),
+  #   # pragma = ,
+  #   # comment = cursor.comment().toNimDoc()
+  # )
 
 proc parseInt(tok: string): int =
   if tok.len > 2 and tok[1] == 'x':
@@ -602,8 +625,6 @@ proc toEnumValue*(cursor: CXCursor, tu: CXTranslationUnit): Option[PNode] =
 
     else:
       discard
-      # echo val.treeRepr(tu)
-      # raiseAssert(&"#[ IMPLEMENT {val.cxkind} ]#")
 
 
 proc visitEnumDecl*(cursor: CXCursor, context: var RewriteContext) =
@@ -625,9 +646,11 @@ proc visitEnumDecl*(cursor: CXCursor, context: var RewriteContext) =
   var en = PEnum(name: enumName)
 
   for elem in cursor.children:
-    en.values.add (
-      name: ($elem).dropPrefix(pref).dropPrefix("_").addPrefix(enumPref),
-      value: elem.toEnumValue(context.translationUnit))
+    en.values.add makeEnumField[PNode](
+      name = ($elem).dropPrefix(pref).dropPrefix("_").addPrefix(enumPref),
+      value =  elem.toEnumValue(context.translationUnit),
+      comment = elem.comment().toNimDoc()
+    )
 
   context.resultNode.add en.toNNode(standalone = true)
 
@@ -651,6 +674,36 @@ proc visitStructDecl*(cursor: CXCursor, context: var RewriteContext) =
     )
 
   context.resultNode.add resType.toNNode(standalone = true)
+
+
+proc visitTypedef*(cursor: CXCursor, context: var RewriteContext) =
+  var isTypeDef = true
+
+  if cursor.len == 1:
+    if cursor[0].cxKind in {CXCursor_EnumDecl, CXCursor_StructDecl}:
+      isTypeDef = false
+
+
+  if isTypedef:
+    context.resultNode.add newPTree(
+      nnkTypeSection,
+      newPTree(
+        nnkTypeDef,
+        newPIdent($cursor.cxType()),
+        newEmptyNNode[PNode](),
+        newPTree(
+          nnkDistinctTy,
+          cursor.cxtype().clang_getCanonicalType().toNType().toNNode())))
+  else:
+    for subn in cursor.children:
+      case subn.cxKind:
+        of CXCursor_StructDecl:
+          visitStructDecl(subn, context)
+        of CXCursor_EnumDecl:
+          visitEnumDecl(subn, context)
+        else:
+          discard
+
 
 #================================  Main  =================================#
 
@@ -703,6 +756,7 @@ proc parseCXXString*(
 
 
 proc parseString() =
+
   let str = """
 int main() {
  2 + 2;
@@ -743,10 +797,32 @@ proc parseLibclang() =
     "Documentation.h"
   ]
 
+  context.resultNode.add parsePNodeStr """
+{.deadCodeElim: on.}
+{.push callconv: cdecl.}
+
+when defined(windows):
+  const
+    libclang = "libclang.dll"
+elif defined(macosx):
+  const
+    libclang = "libclang.dylib"
+else:
+  const
+    libclang = "libclang.so"
+
+type
+  CXTargetInfoImpl* = object
+  CXTranslationUnitImpl* = object
+  CXVirtualFileOverlayImpl* = object
+  CXModuleMapDescriptorImpl* = object
+  time_t* = clong
+"""
+
   for file in targetFiles:
     let trIndex = clang_createIndex(0, 0);
     let unit = parseTranslationUnit(
-      trIndex, &"/usr/include/clang-c/{file}")
+      trIndex, &"/usr/include/clang-c/{file}", trOptions = {})
 
 
     if unit.isNil:
@@ -763,21 +839,17 @@ proc parseLibclang() =
               visitFunction(cursor, context)
               return CXChildVisit_Continue
             of CXCursor_TypedefDecl:
-              if cursor.isAliasTypedef():
-                visitAliasTypedef(cursor, context)
-              else:
-                return CXChildVisit_Recurse
-            of CXCursor_EnumDecl:
-              visitEnumDecl(cursor, context)
-            of CXCursor_StructDecl:
-              visitStructDecl(cursor, context)
+              visitTypedef(cursor, context)
+              return CXChildVisit_Continue
             else:
               discard
 
         return CXChildVisit_Recurse
 
   "../libclang.nim".writeFile($context.resultNode)
-  echo "done"
+  shell:
+    nim c "../libclang.nim"
+
 
 proc parseMainFileExample*(withInclude: bool) =
   let outfile = "/tmp/file.cpp"
@@ -825,9 +897,9 @@ proc main() =
   # echo "main file without include"
   # parseMainFileExample(false)
 
-  echo "main file with include"
-  parseMainFileExample(true)
-  # parseLibclang()
+  # echo "main file with include"
+  # parseMainFileExample(true)
+  parseLibclang()
 
 when isMainModule:
   try:
