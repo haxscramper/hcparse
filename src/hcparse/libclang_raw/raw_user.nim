@@ -356,12 +356,18 @@ proc toRstNode*(comment: CXComment): PRstNode =
       echo comment.objTreeRepr().pstring()
       raiseAssert("#[ IMPLEMENT ]#")
 
+func dropEmptyLines*(str: string): string =
+  str.split("\n").filterIt(not it.allOfIt(it in Whitespace)).join("\n")
+
+
+func dropEmptyLines*(str: var string): void =
+  str = str.split("\n").filterIt(
+    not it.allOfIt(it in Whitespace)).join("\n")
+
 proc toNimDoc*(comment: CXComment): string =
   # echo comment.objTreeRepr().pstring()
   comment.toRstNode().renderRstToRst(result)
-
-  result = result.split("\n").filterIt(
-    not it.allOfIt(it in Whitespace)).join("\n")
+  result.dropEmptyLines()
 
 #=============================  Converters  ==============================#
 
@@ -645,13 +651,20 @@ proc visitEnumDecl*(cursor: CXCursor, context: var RewriteContext) =
     fld.dropPrefix(pref).dropPrefix("_").addPrefix(enumPref)
 
   var prevVal: BiggestInt = -123124912
+  var prevComment = ""
   for elem in cursor.children:
+    let comment =
+      block:
+        let new = elem.comment().toNimDoc()
+        if new == prevComment:
+          ""
+        else:
+          prevComment = new
+          new
+
     let name = renameField($elem)
     var fld = EnumField[PNode](
-      name: name,
-      kind: efvOrdinal,
-      comment: elem.comment().toNimDoc()
-    )
+      name: name, kind: efvOrdinal, comment: comment)
 
     var skip = false
     let val = elem[0]
@@ -699,11 +712,11 @@ proc visitEnumDecl*(cursor: CXCursor, context: var RewriteContext) =
       else:
         if $val.kind == "OverloadCandidate":
           fld = EnumField[PNode](
-            name: name, kind: efvNone, comment: elem.comment().toNimDoc())
+            name: name, kind: efvNone, comment: comment)
         else:
           echo val.kind, " ", elem.tokens(tu)
           fld = EnumField[PNode](
-            name: name, kind: efvNone, comment: elem.comment().toNimDoc())
+            name: name, kind: efvNone, comment: comment)
 
 
     if not skip:
@@ -713,14 +726,14 @@ proc visitEnumDecl*(cursor: CXCursor, context: var RewriteContext) =
           prevVal = fld.ordVal.intVal
         else:
           # Node skip enum with the same value
-          skipped.add elem.tokens(tu)
+          skipped.add "- " & elem.tokens(tu).join(" ")
       else:
         inc prevVal
         en.values.add fld
 
 
-      en.comment.add("\n" & skipped.joinl)
-      skipped = @[]
+  if skipped.len > 0:
+    en.comment.add("\n**SKipped enum values**\n" & skipped.joinl)
     # en.values.add toEnumField(en, elem, context.translationUnit)
 
   en.values.sort do(f1, f2: EnumField[PNode]) -> int:
@@ -732,6 +745,7 @@ proc visitEnumDecl*(cursor: CXCursor, context: var RewriteContext) =
       0
 
   en.exported = true
+  en.comment.dropEmptyLines()
 
   context.resultNode.add en.toNNode(standalone = true)
 

@@ -24,15 +24,10 @@ proc uninstall_llvm_fatal_error_handler*(): void {.cdecl, dynlib: libclang,
   ##  If no error handler is intalled, the default strategy is to print error
   ##  message to stderr and call exit(1).
 type
-  CXErrorCode* = enum ##  Error codes returned by libclang routines.
+  CXErrorCode* = enum           ##  Error codes returned by libclang routines.
                    ##  Zero (
                    ##  is the only error code indicating success.  Other
                    ##  error codes, including not yet assigned non-zero values, indicate errors.
-                   ## 
-                   ## 
-                   ## 
-                   ## 
-                   ## 
     ecSuccess = 0,              ##  No error.
     ecFailure = 1, ##  A generic error code, no further details are available.
                 ##  Errors of this kind can get their own specific error codes in future
@@ -84,10 +79,6 @@ type
   CXAvailabilityKind* = enum ##  Describes the availability of a particular entity, which indicates
                           ##  whether the use of this entity will result in a warning or error due to
                           ##  it being deprecated or unavailable.
-                          ## 
-                          ## 
-                          ## 
-                          ## 
     akAvailable,              ##  The entity is available.
     akDeprecated, ##  The entity is available, but has been deprecated (and its use is
                  ##  not recommended).
@@ -103,16 +94,6 @@ type
 type
   CXCursor_ExceptionSpecificationKind* = enum ##  Describes the exception specification of a cursor.
                                            ##  A negative value indicates that the cursor is not a function declaration.
-                                           ## 
-                                           ## 
-                                           ## 
-                                           ## 
-                                           ## 
-                                           ## 
-                                           ## 
-                                           ## 
-                                           ## 
-                                           ## 
     ceskNone,                 ##  The cursor has no exception specification.
     ceskDynamicNone,          ##  The cursor has exception specification throw()
     ceskDynamic,              ##  The cursor has exception specification throw(T1, T2)
@@ -143,11 +124,7 @@ proc disposeIndex*(index: CXIndex): void {.cdecl, dynlib: libclang,
   ##  The index must not be destroyed until all of the translation units created
   ##  within that index have been destroyed.
 type
-  CXGlobalOptFlags* = enum      ## 
-                        ## 
-                        ## 
-                        ## 
-                        ## 
+  CXGlobalOptFlags* = enum
     gofNone = 0,                ##  Used to indicate that no special CXIndex options are needed.
     gofThreadBackgroundPriorityForIndexing = 1, ##  Used to indicate that threads that libclang creates for indexing
                                              ##  purposes should use background priority.
@@ -422,12 +399,7 @@ proc disposeSourceRangeList*(ranges: ptr[CXSourceRangeList]): void {.cdecl,
     dynlib: libclang, importc: "clang_disposeSourceRangeList".}
   ##  Destroy the given 
 type
-  CXDiagnosticSeverity* = enum ##  Describes the severity of a particular diagnostic.
-                            ## 
-                            ## 
-                            ## 
-                            ## 
-                            ## 
+  CXDiagnosticSeverity* = enum  ##  Describes the severity of a particular diagnostic.
     dsIgnored = 0, ##  A diagnostic that has been suppressed, e.g., by a command-line
                 ##  option.
     dsNote = 1, ##  This diagnostic is a note that should be attached to the
@@ -456,11 +428,7 @@ proc getDiagnosticInSet*(diags: CXDiagnosticSet; index: cuint): CXDiagnostic {.c
   ##  the requested diagnostic. This diagnostic must be freed
   ##  via a call to 
 type
-  CXLoadDiag_Error* = enum ##  Describes the kind of error that occurred (if any) in a call to
-                        ## 
-                        ## 
-                        ## 
-                        ## 
+  CXLoadDiag_Error* = enum      ##  Describes the kind of error that occurred (if any) in a call to
     ldeNone = 0,                ##  Indicates that no error occurred.
     ldeUnknown = 1, ##  Indicates that an unknown error occurred while attempting to
                  ##  deserialize diagnostics.
@@ -519,12 +487,6 @@ type
   CXDiagnosticDisplayOptions* = enum ##  Options to control the display of diagnostics.
                                   ##  The values in this enum are meant to be combined to customize the
                                   ##  behavior of 
-                                  ## 
-                                  ## 
-                                  ## 
-                                  ## 
-                                  ## 
-                                  ## 
     ddoDisplaySourceLocation = 1, ##  Display the source-location information where the
                                ##  diagnostic was located.
                                ##  When set, diagnostics will be prefixed by the file, line, and
@@ -728,23 +690,6 @@ type
                                ##  The enumerators in this enumeration type are meant to be bitwise
                                ##  ORed together to specify which options should be used when
                                ##  constructing the translation unit.
-                               ## 
-                               ## 
-                               ## 
-                               ## 
-                               ## 
-                               ## 
-                               ## 
-                               ## 
-                               ## 
-                               ## 
-                               ## 
-                               ## 
-                               ## 
-                               ## 
-                               ## 
-                               ## 
-                               ## 
     tufNone = 0, ##  Used to indicate that no special translation-unit options are
               ##  needed.
     tufDetailedPreprocessingRecord = 1, ##  Used to indicate that the parser should construct a "detailed"
@@ -904,7 +849,6 @@ type
                                    ##  The enumerators in this enumeration type are meant to be bitwise
                                    ##  ORed together to specify which options should be used when
                                    ##  saving the translation unit.
-                                   ## 
     stufNone = 0                ##  Used to indicate that no special saving options are needed.
 proc defaultSaveOptions*(tU: CXTranslationUnit): cuint {.cdecl, dynlib: libclang,
     importc: "clang_defaultSaveOptions".}
@@ -915,11 +859,7 @@ proc defaultSaveOptions*(tU: CXTranslationUnit): cuint {.cdecl, dynlib: libclang
   ##  set contains an unspecified set of options that save translation units with
   ##  the most commonly-requested data.
 type
-  CXSaveError* = enum ##  Describes the kind of error that occurred (if any) in a call to
-                   ## 
-                   ## 
-                   ## 
-                   ## 
+  CXSaveError* = enum           ##  Describes the kind of error that occurred (if any) in a call to
     seNone = 0,                 ##  Indicates that no error occurred while saving a translation unit.
     seUnknown = 1, ##  Indicates that an unknown error occurred while attempting to save
                 ##  the file.
@@ -971,7 +911,6 @@ type
                        ##  The enumerators in this enumeration type are meant to be bitwise
                        ##  ORed together to specify which options should be used when
                        ##  reparsing the translation unit.
-                       ## 
     rfNone = 0                  ##  Used to indicate that no special reparsing options are needed.
 proc defaultReparseOptions*(tU: CXTranslationUnit): cuint {.cdecl, dynlib: libclang,
     importc: "clang_defaultReparseOptions".}
@@ -1024,20 +963,11 @@ proc reparseTranslationUnit*(tU: CXTranslationUnit; num_unsaved_files: cuint;
   ##  enum.
 type
   CXTUResourceUsageKind* = enum ##  Categorizes how memory is being used by a translation unit.
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
+                             ## **SKipped enum values**
+                             ## - CXTUResourceUsage_MEMORY_IN_BYTES_BEGIN = CXTUResourceUsage_AST
+                             ## - CXTUResourceUsage_MEMORY_IN_BYTES_END = CXTUResourceUsage_Preprocessor_HeaderSearch
+                             ## - CXTUResourceUsage_First = CXTUResourceUsage_AST
+                             ## - CXTUResourceUsage_Last = CXTUResourceUsage_Preprocessor_HeaderSearch
     turukAST = 1, turukIdentifiers = 2, turukSelectors = 3,
     turukGlobalCompletionResults = 4, turukSourceManagerContentCache = 5,
     turukAST_SideTables = 6, turukSourceManager_Membuffer_Malloc = 7,
@@ -1084,264 +1014,23 @@ proc getPointerWidth*(info: CXTargetInfo): int {.cdecl, dynlib: libclang,
   ##  Returns -1 in case of error.
 type
   CXCursorKind* = enum ##  Describes the kind of entity that a cursor refers to.
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
+                    ## **SKipped enum values**
                     ## - CXCursor_FirstDecl = CXCursor_UnexposedDecl
                     ## - CXCursor_LastDecl = CXCursor_CXXAccessSpecifier
-                    ## CXCursor_ObjCSuperClassRef
-                    ## =
-                    ## 40
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
+                    ## - CXCursor_ObjCSuperClassRef = 40
                     ## - CXCursor_LastRef = CXCursor_VariableRef
-                    ## CXCursor_InvalidFile
-                    ## =
-                    ## 70
-                    ## 
-                    ## 
-                    ## 
+                    ## - CXCursor_InvalidFile = 70
                     ## - CXCursor_LastInvalid = CXCursor_InvalidCode
-                    ## CXCursor_UnexposedExpr
-                    ## =
-                    ## 100
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
+                    ## - CXCursor_UnexposedExpr = 100
                     ## - CXCursor_LastExpr = CXCursor_FixedPointLiteral
-                    ## CXCursor_UnexposedStmt
-                    ## =
-                    ## 200
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
+                    ## - CXCursor_UnexposedStmt = 200
                     ## - CXCursor_AsmStmt = CXCursor_GCCAsmStmt
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
                     ## - CXCursor_LastStmt = CXCursor_OMPParallelMasterDirective
-                    ## 
-                    ## CXCursor_UnexposedAttr
-                    ## =
-                    ## 400
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
+                    ## - CXCursor_UnexposedAttr = 400
                     ## - CXCursor_LastAttr = CXCursor_AlignedAttr
-                    ## 
-                    ## 
                     ## - CXCursor_MacroInstantiation = CXCursor_MacroExpansion
                     ## - CXCursor_FirstPreprocessing = CXCursor_PreprocessingDirective
                     ## - CXCursor_LastPreprocessing = CXCursor_InclusionDirective
-                    ## 
-                    ## 
-                    ## 
                     ## - CXCursor_FirstExtraDecl = CXCursor_ModuleImportDecl
                     ## - CXCursor_LastExtraDecl = CXCursor_FriendDecl
     ckUnexposedDecl = 1, ##  A declaration whose specific kind is not exposed via this
@@ -1405,25 +1094,15 @@ type
                          ## @
                          ## dynamic definition. 
     ckCXXAccessSpecifier = 39,  ##  An access specifier. 
-    ckFirstRef = 40,            ##  An access specifier. 
-    ckObjCProtocolRef = 41,     ##  An access specifier. 
-    ckObjCClassRef = 42,        ##  An access specifier. 
-    ckTypeRef = 43, ##  A reference to a type declaration.
-                 ##  A type reference occurs anywhere where a type is named but not
-                 ##  declared. For example, given:
-                 ## Error: cannot render: rnCodeBlock
-                 ##  The typedef is a declaration of size_type (CXCursor_TypedefDecl),
-                 ##  while the type of the variable "size" is referenced. The cursor
-                 ##  referenced by the type of size is the typedef for size_type.
-    ckCXXBaseSpecifier = 44, ##  A reference to a type declaration.
-                          ##  A type reference occurs anywhere where a type is named but not
-                          ##  declared. For example, given:
-                          ## Error: cannot render: rnCodeBlock
-                          ##  The typedef is a declaration of size_type (CXCursor_TypedefDecl),
-                          ##  while the type of the variable "size" is referenced. The cursor
-                          ##  referenced by the type of size is the typedef for size_type.
-    ckTemplateRef = 45, ##  A reference to a class template, function template, template
-                     ##  template parameter, or class template partial specialization.
+    ckFirstRef = 40, ckObjCProtocolRef = 41, ckObjCClassRef = 42, ckTypeRef = 43, ##  A reference to a type declaration.
+                                                                      ##  A type reference occurs anywhere where a type is named but not
+                                                                      ##  declared. For example, given:
+                                                                      ## Error: cannot render: rnCodeBlock
+                                                                      ##  The typedef is a declaration of size_type (CXCursor_TypedefDecl),
+                                                                      ##  while the type of the variable "size" is referenced. The cursor
+                                                                      ##  referenced by the type of size is the typedef for size_type.
+    ckCXXBaseSpecifier = 44, ckTemplateRef = 45, ##  A reference to a class template, function template, template
+                                           ##  template parameter, or class template partial specialization.
     ckNamespaceRef = 46,        ##  A reference to a namespace or namespace alias.
     ckMemberRef = 47, ##  A reference to a member of a struct, union, or class that occurs in
                    ##  some non-expression context, e.g., a designated initializer.
@@ -1449,18 +1128,9 @@ type
                            ##  referenced by this cursor.
     ckVariableRef = 50, ##  A reference to a variable that occurs in some non-expression
                      ##  context, e.g., a C++ lambda capture list.
-    ckFirstInvalid = 70, ##  A reference to a variable that occurs in some non-expression
-                      ##  context, e.g., a C++ lambda capture list.
-    ckNoDeclFound = 71, ##  A reference to a variable that occurs in some non-expression
-                     ##  context, e.g., a C++ lambda capture list.
-    ckNotImplemented = 72, ##  A reference to a variable that occurs in some non-expression
-                        ##  context, e.g., a C++ lambda capture list.
-    ckInvalidCode = 73, ##  A reference to a variable that occurs in some non-expression
-                     ##  context, e.g., a C++ lambda capture list.
-    ckFirstExpr = 100, ##  A reference to a variable that occurs in some non-expression
-                    ##  context, e.g., a C++ lambda capture list.
-    ckDeclRefExpr = 101, ##  An expression that refers to some value declaration, such
-                      ##  as a function, variable, or enumerator.
+    ckFirstInvalid = 70, ckNoDeclFound = 71, ckNotImplemented = 72, ckInvalidCode = 73,
+    ckFirstExpr = 100, ckDeclRefExpr = 101, ##  An expression that refers to some value declaration, such
+                                      ##  as a function, variable, or enumerator.
     ckMemberRefExpr = 102, ##  An expression that refers to a member of a struct, union,
                         ##  class, Objective-C class, etc.
     ckCallExpr = 103,           ##  An expression that calls a function. 
@@ -1557,11 +1227,10 @@ type
     ckObjCAvailabilityCheckExpr = 148, ##  Represents an 
                                     ## (...) check.
     ckFixedPointLiteral = 149,  ##  Fixed point literal
-    ckFirstStmt = 200,          ##  Fixed point literal
-    ckLabelStmt = 201, ##  A labelled statement in a function.
-                    ##  This cursor kind is used to describe the "start_over:" label statement in
-                    ##  the following example:
-                    ## Error: cannot render: rnCodeBlock
+    ckFirstStmt = 200, ckLabelStmt = 201, ##  A labelled statement in a function.
+                                    ##  This cursor kind is used to describe the "start_over:" label statement in
+                                    ##  the following example:
+                                    ## Error: cannot render: rnCodeBlock
     ckCompoundStmt = 202, ##  A group of statements like { stmt stmt }.
                        ##  This cursor kind is used to describe compound statements, e.g. function
                        ##  bodies.
@@ -1667,102 +1336,24 @@ type
     ckTranslationUnit = 300, ##  Cursor that represents the translation unit itself.
                           ##  The translation unit cursor exists primarily to act as the root
                           ##  cursor for traversing the contents of a translation unit.
-    ckFirstAttr = 400, ##  Cursor that represents the translation unit itself.
-                    ##  The translation unit cursor exists primarily to act as the root
-                    ##  cursor for traversing the contents of a translation unit.
-    ckIBActionAttr = 401, ##  An attribute whose specific kind is not exposed via this
-                       ##  interface.
-    ckIBOutletAttr = 402, ##  An attribute whose specific kind is not exposed via this
-                       ##  interface.
-    ckIBOutletCollectionAttr = 403, ##  An attribute whose specific kind is not exposed via this
-                                 ##  interface.
-    ckCXXFinalAttr = 404, ##  An attribute whose specific kind is not exposed via this
-                       ##  interface.
-    ckCXXOverrideAttr = 405, ##  An attribute whose specific kind is not exposed via this
-                          ##  interface.
-    ckAnnotateAttr = 406, ##  An attribute whose specific kind is not exposed via this
-                       ##  interface.
-    ckAsmLabelAttr = 407, ##  An attribute whose specific kind is not exposed via this
-                       ##  interface.
-    ckPackedAttr = 408, ##  An attribute whose specific kind is not exposed via this
-                     ##  interface.
-    ckPureAttr = 409, ##  An attribute whose specific kind is not exposed via this
-                   ##  interface.
-    ckConstAttr = 410, ##  An attribute whose specific kind is not exposed via this
-                    ##  interface.
-    ckNoDuplicateAttr = 411, ##  An attribute whose specific kind is not exposed via this
-                          ##  interface.
-    ckCUDAConstantAttr = 412, ##  An attribute whose specific kind is not exposed via this
-                           ##  interface.
-    ckCUDADeviceAttr = 413, ##  An attribute whose specific kind is not exposed via this
-                         ##  interface.
-    ckCUDAGlobalAttr = 414, ##  An attribute whose specific kind is not exposed via this
-                         ##  interface.
-    ckCUDAHostAttr = 415, ##  An attribute whose specific kind is not exposed via this
-                       ##  interface.
-    ckCUDASharedAttr = 416, ##  An attribute whose specific kind is not exposed via this
-                         ##  interface.
-    ckVisibilityAttr = 417, ##  An attribute whose specific kind is not exposed via this
-                         ##  interface.
-    ckDLLExport = 418, ##  An attribute whose specific kind is not exposed via this
-                    ##  interface.
-    ckDLLImport = 419, ##  An attribute whose specific kind is not exposed via this
-                    ##  interface.
-    ckNSReturnsRetained = 420, ##  An attribute whose specific kind is not exposed via this
-                            ##  interface.
-    ckNSReturnsNotRetained = 421, ##  An attribute whose specific kind is not exposed via this
-                               ##  interface.
-    ckNSReturnsAutoreleased = 422, ##  An attribute whose specific kind is not exposed via this
-                                ##  interface.
-    ckNSConsumesSelf = 423, ##  An attribute whose specific kind is not exposed via this
-                         ##  interface.
-    ckNSConsumed = 424, ##  An attribute whose specific kind is not exposed via this
-                     ##  interface.
-    ckObjCException = 425, ##  An attribute whose specific kind is not exposed via this
-                        ##  interface.
-    ckObjCNSObject = 426, ##  An attribute whose specific kind is not exposed via this
-                       ##  interface.
-    ckObjCIndependentClass = 427, ##  An attribute whose specific kind is not exposed via this
-                               ##  interface.
-    ckObjCPreciseLifetime = 428, ##  An attribute whose specific kind is not exposed via this
-                              ##  interface.
-    ckObjCReturnsInnerPointer = 429, ##  An attribute whose specific kind is not exposed via this
-                                  ##  interface.
-    ckObjCRequiresSuper = 430, ##  An attribute whose specific kind is not exposed via this
-                            ##  interface.
-    ckObjCRootClass = 431, ##  An attribute whose specific kind is not exposed via this
-                        ##  interface.
-    ckObjCSubclassingRestricted = 432, ##  An attribute whose specific kind is not exposed via this
-                                    ##  interface.
-    ckObjCExplicitProtocolImpl = 433, ##  An attribute whose specific kind is not exposed via this
-                                   ##  interface.
-    ckObjCDesignatedInitializer = 434, ##  An attribute whose specific kind is not exposed via this
-                                    ##  interface.
-    ckObjCRuntimeVisible = 435, ##  An attribute whose specific kind is not exposed via this
-                             ##  interface.
-    ckObjCBoxable = 436, ##  An attribute whose specific kind is not exposed via this
-                      ##  interface.
-    ckFlagEnum = 437, ##  An attribute whose specific kind is not exposed via this
-                   ##  interface.
-    ckConvergentAttr = 438, ##  An attribute whose specific kind is not exposed via this
-                         ##  interface.
-    ckWarnUnusedAttr = 439, ##  An attribute whose specific kind is not exposed via this
-                         ##  interface.
-    ckWarnUnusedResultAttr = 440, ##  An attribute whose specific kind is not exposed via this
-                               ##  interface.
-    ckAlignedAttr = 441, ##  An attribute whose specific kind is not exposed via this
-                      ##  interface.
-    ckPreprocessingDirective = 500, ##  An attribute whose specific kind is not exposed via this
-                                 ##  interface.
-    ckMacroDefinition = 501, ##  An attribute whose specific kind is not exposed via this
-                          ##  interface.
-    ckMacroExpansion = 502, ##  An attribute whose specific kind is not exposed via this
-                         ##  interface.
-    ckInclusionDirective = 503, ##  An attribute whose specific kind is not exposed via this
-                             ##  interface.
-    ckModuleImportDecl = 600,   ##  A module import declaration.
-    ckTypeAliasTemplateDecl = 601, ##  A module import declaration.
-    ckStaticAssert = 602,       ##  A static_assert or _Static_assert node
+    ckFirstAttr = 400, ckIBActionAttr = 401, ckIBOutletAttr = 402,
+    ckIBOutletCollectionAttr = 403, ckCXXFinalAttr = 404, ckCXXOverrideAttr = 405,
+    ckAnnotateAttr = 406, ckAsmLabelAttr = 407, ckPackedAttr = 408, ckPureAttr = 409,
+    ckConstAttr = 410, ckNoDuplicateAttr = 411, ckCUDAConstantAttr = 412,
+    ckCUDADeviceAttr = 413, ckCUDAGlobalAttr = 414, ckCUDAHostAttr = 415,
+    ckCUDASharedAttr = 416, ckVisibilityAttr = 417, ckDLLExport = 418, ckDLLImport = 419,
+    ckNSReturnsRetained = 420, ckNSReturnsNotRetained = 421,
+    ckNSReturnsAutoreleased = 422, ckNSConsumesSelf = 423, ckNSConsumed = 424,
+    ckObjCException = 425, ckObjCNSObject = 426, ckObjCIndependentClass = 427,
+    ckObjCPreciseLifetime = 428, ckObjCReturnsInnerPointer = 429,
+    ckObjCRequiresSuper = 430, ckObjCRootClass = 431,
+    ckObjCSubclassingRestricted = 432, ckObjCExplicitProtocolImpl = 433,
+    ckObjCDesignatedInitializer = 434, ckObjCRuntimeVisible = 435,
+    ckObjCBoxable = 436, ckFlagEnum = 437, ckConvergentAttr = 438,
+    ckWarnUnusedAttr = 439, ckWarnUnusedResultAttr = 440, ckAlignedAttr = 441,
+    ckPreprocessingDirective = 500, ckMacroDefinition = 501, ckMacroExpansion = 502,
+    ckInclusionDirective = 503, ckModuleImportDecl = 600, ##  A module import declaration.
+    ckTypeAliasTemplateDecl = 601, ckStaticAssert = 602, ##  A static_assert or _Static_assert node
     ckFriendDecl = 603,         ##  a friend declaration.
     ckOverloadCandidate = 700   ##  A code completion overload candidate.
 type
@@ -1840,12 +1431,7 @@ proc isUnexposed*(argCXCursorKind: CXCursorKind): cuint {.cdecl, dynlib: libclan
   ##  Determine whether the given cursor represents a currently
   ##   unexposed piece of the AST (e.g., CXCursor_UnexposedStmt).
 type
-  CXLinkageKind* = enum ##  Describe the linkage of the entity referred to by a cursor.
-                     ## 
-                     ## 
-                     ## 
-                     ## 
-                     ## 
+  CXLinkageKind* = enum         ##  Describe the linkage of the entity referred to by a cursor.
     lkInvalid, ##  This value indicates that no linkage information is available
               ##  for a provided CXCursor. 
     lkNoLinkage, ##  This is the linkage for variables, parameters, and so on that
@@ -1858,11 +1444,7 @@ proc getCursorLinkage*(cursor: CXCursor): CXLinkageKind {.cdecl, dynlib: libclan
     importc: "clang_getCursorLinkage".}
   ##  Determine the linkage of the entity referred to by a given cursor.
 type
-  CXVisibilityKind* = enum      ## 
-                        ## 
-                        ## 
-                        ## 
-                        ## 
+  CXVisibilityKind* = enum
     vkInvalid, ##  This value indicates that no visibility information is available
               ##  for a provided CXCursor. 
     vkHidden,                 ##  Symbol not seen by the linker. 
@@ -1941,11 +1523,7 @@ proc disposeCXPlatformAvailability*(availability: ptr[CXPlatformAvailability]): 
   ##  Free the memory associated with a 
   ##  structure.
 type
-  CXLanguageKind* = enum ##  Describe the "language" of the entity referred to by a cursor.
-                      ## 
-                      ## 
-                      ## 
-                      ## 
+  CXLanguageKind* = enum        ##  Describe the "language" of the entity referred to by a cursor.
     lakInvalid = 0, lakC, lakObjC, lakCPlusPlus
 proc getCursorLanguage*(cursor: CXCursor): CXLanguageKind {.cdecl, dynlib: libclang,
     importc: "clang_getCursorLanguage".}
@@ -1953,9 +1531,6 @@ proc getCursorLanguage*(cursor: CXCursor): CXLanguageKind {.cdecl, dynlib: libcl
 type
   CXTLSKind* = enum ##  Describe the "thread-local storage (TLS) kind" of the declaration
                  ##  referred to by a cursor.
-                 ## 
-                 ## 
-                 ## 
     tlskNone = 0, tlskDynamic, tlskStatic
 proc getCursorTLSKind*(cursor: CXCursor): CXTLSKind {.cdecl, dynlib: libclang,
     importc: "clang_getCursorTLSKind".}
@@ -2127,375 +1702,55 @@ proc getCursorExtent*(argCXCursor: CXCursor): CXSourceRange {.cdecl,
   ##  entity was actually used).
 type
   CXTypeKind* = enum            ##  Describes the kind of type
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
+                  ## **SKipped enum values**
                   ## - CXType_FirstBuiltin = CXType_Void
                   ## - CXType_LastBuiltin = CXType_ULongAccum
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
-                  ## 
     tkInvalid = 0,              ##  Represents an invalid type (e.g., where no type is available).
     tkUnexposed = 1, ##  A type whose specific kind is not exposed via this
                   ##  interface.
-    tkVoid = 2, ##  A type whose specific kind is not exposed via this
-             ##  interface.
-    tkBool = 3, ##  A type whose specific kind is not exposed via this
-             ##  interface.
-    tkChar_U = 4, ##  A type whose specific kind is not exposed via this
-               ##  interface.
-    tkUChar = 5, ##  A type whose specific kind is not exposed via this
-              ##  interface.
-    tkChar16 = 6, ##  A type whose specific kind is not exposed via this
-               ##  interface.
-    tkChar32 = 7, ##  A type whose specific kind is not exposed via this
-               ##  interface.
-    tkUShort = 8, ##  A type whose specific kind is not exposed via this
-               ##  interface.
-    tkUInt = 9, ##  A type whose specific kind is not exposed via this
-             ##  interface.
-    tkULong = 10, ##  A type whose specific kind is not exposed via this
-               ##  interface.
-    tkULongLong = 11, ##  A type whose specific kind is not exposed via this
-                   ##  interface.
-    tkUInt128 = 12, ##  A type whose specific kind is not exposed via this
-                 ##  interface.
-    tkChar_S = 13, ##  A type whose specific kind is not exposed via this
-                ##  interface.
-    tkSChar = 14, ##  A type whose specific kind is not exposed via this
-               ##  interface.
-    tkWChar = 15, ##  A type whose specific kind is not exposed via this
-               ##  interface.
-    tkShort = 16, ##  A type whose specific kind is not exposed via this
-               ##  interface.
-    tkInt = 17, ##  A type whose specific kind is not exposed via this
-             ##  interface.
-    tkLong = 18, ##  A type whose specific kind is not exposed via this
-              ##  interface.
-    tkLongLong = 19, ##  A type whose specific kind is not exposed via this
-                  ##  interface.
-    tkInt128 = 20, ##  A type whose specific kind is not exposed via this
-                ##  interface.
-    tkFloat = 21, ##  A type whose specific kind is not exposed via this
-               ##  interface.
-    tkDouble = 22, ##  A type whose specific kind is not exposed via this
-                ##  interface.
-    tkLongDouble = 23, ##  A type whose specific kind is not exposed via this
-                    ##  interface.
-    tkNullPtr = 24, ##  A type whose specific kind is not exposed via this
-                 ##  interface.
-    tkOverload = 25, ##  A type whose specific kind is not exposed via this
-                  ##  interface.
-    tkDependent = 26, ##  A type whose specific kind is not exposed via this
-                   ##  interface.
-    tkObjCId = 27, ##  A type whose specific kind is not exposed via this
-                ##  interface.
-    tkObjCClass = 28, ##  A type whose specific kind is not exposed via this
-                   ##  interface.
-    tkObjCSel = 29, ##  A type whose specific kind is not exposed via this
-                 ##  interface.
-    tkFloat128 = 30, ##  A type whose specific kind is not exposed via this
-                  ##  interface.
-    tkHalf = 31, ##  A type whose specific kind is not exposed via this
-              ##  interface.
-    tkFloat16 = 32, ##  A type whose specific kind is not exposed via this
-                 ##  interface.
-    tkShortAccum = 33, ##  A type whose specific kind is not exposed via this
-                    ##  interface.
-    tkAccum = 34, ##  A type whose specific kind is not exposed via this
-               ##  interface.
-    tkLongAccum = 35, ##  A type whose specific kind is not exposed via this
-                   ##  interface.
-    tkUShortAccum = 36, ##  A type whose specific kind is not exposed via this
-                     ##  interface.
-    tkUAccum = 37, ##  A type whose specific kind is not exposed via this
-                ##  interface.
-    tkULongAccum = 38, ##  A type whose specific kind is not exposed via this
-                    ##  interface.
-    tkComplex = 100, ##  A type whose specific kind is not exposed via this
-                  ##  interface.
-    tkPointer = 101, ##  A type whose specific kind is not exposed via this
-                  ##  interface.
-    tkBlockPointer = 102, ##  A type whose specific kind is not exposed via this
-                       ##  interface.
-    tkLValueReference = 103, ##  A type whose specific kind is not exposed via this
-                          ##  interface.
-    tkRValueReference = 104, ##  A type whose specific kind is not exposed via this
-                          ##  interface.
-    tkRecord = 105, ##  A type whose specific kind is not exposed via this
-                 ##  interface.
-    tkEnum = 106, ##  A type whose specific kind is not exposed via this
-               ##  interface.
-    tkTypedef = 107, ##  A type whose specific kind is not exposed via this
-                  ##  interface.
-    tkObjCInterface = 108, ##  A type whose specific kind is not exposed via this
-                        ##  interface.
-    tkObjCObjectPointer = 109, ##  A type whose specific kind is not exposed via this
-                            ##  interface.
-    tkFunctionNoProto = 110, ##  A type whose specific kind is not exposed via this
-                          ##  interface.
-    tkFunctionProto = 111, ##  A type whose specific kind is not exposed via this
-                        ##  interface.
-    tkConstantArray = 112, ##  A type whose specific kind is not exposed via this
-                        ##  interface.
-    tkVector = 113, ##  A type whose specific kind is not exposed via this
-                 ##  interface.
-    tkIncompleteArray = 114, ##  A type whose specific kind is not exposed via this
-                          ##  interface.
-    tkVariableArray = 115, ##  A type whose specific kind is not exposed via this
-                        ##  interface.
-    tkDependentSizedArray = 116, ##  A type whose specific kind is not exposed via this
-                              ##  interface.
-    tkMemberPointer = 117, ##  A type whose specific kind is not exposed via this
-                        ##  interface.
-    tkAuto = 118, ##  A type whose specific kind is not exposed via this
-               ##  interface.
-    tkElaborated = 119, ##  Represents a type that was referred to using an elaborated type keyword.
-                     ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkPipe = 120, ##  Represents a type that was referred to using an elaborated type keyword.
-               ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage1dRO = 121, ##  Represents a type that was referred to using an elaborated type keyword.
-                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage1dArrayRO = 122, ##  Represents a type that was referred to using an elaborated type keyword.
-                            ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage1dBufferRO = 123, ##  Represents a type that was referred to using an elaborated type keyword.
-                             ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dRO = 124, ##  Represents a type that was referred to using an elaborated type keyword.
-                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dArrayRO = 125, ##  Represents a type that was referred to using an elaborated type keyword.
-                            ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dDepthRO = 126, ##  Represents a type that was referred to using an elaborated type keyword.
-                            ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dArrayDepthRO = 127, ##  Represents a type that was referred to using an elaborated type keyword.
-                                 ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dMSAARO = 128, ##  Represents a type that was referred to using an elaborated type keyword.
-                           ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dArrayMSAARO = 129, ##  Represents a type that was referred to using an elaborated type keyword.
+    tkVoid = 2, tkBool = 3, tkChar_U = 4, tkUChar = 5, tkChar16 = 6, tkChar32 = 7, tkUShort = 8,
+    tkUInt = 9, tkULong = 10, tkULongLong = 11, tkUInt128 = 12, tkChar_S = 13, tkSChar = 14,
+    tkWChar = 15, tkShort = 16, tkInt = 17, tkLong = 18, tkLongLong = 19, tkInt128 = 20,
+    tkFloat = 21, tkDouble = 22, tkLongDouble = 23, tkNullPtr = 24, tkOverload = 25,
+    tkDependent = 26, tkObjCId = 27, tkObjCClass = 28, tkObjCSel = 29, tkFloat128 = 30,
+    tkHalf = 31, tkFloat16 = 32, tkShortAccum = 33, tkAccum = 34, tkLongAccum = 35,
+    tkUShortAccum = 36, tkUAccum = 37, tkULongAccum = 38, tkComplex = 100, tkPointer = 101,
+    tkBlockPointer = 102, tkLValueReference = 103, tkRValueReference = 104,
+    tkRecord = 105, tkEnum = 106, tkTypedef = 107, tkObjCInterface = 108,
+    tkObjCObjectPointer = 109, tkFunctionNoProto = 110, tkFunctionProto = 111,
+    tkConstantArray = 112, tkVector = 113, tkIncompleteArray = 114,
+    tkVariableArray = 115, tkDependentSizedArray = 116, tkMemberPointer = 117,
+    tkAuto = 118, tkElaborated = 119, ##  Represents a type that was referred to using an elaborated type keyword.
                                 ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dMSAADepthRO = 130, ##  Represents a type that was referred to using an elaborated type keyword.
-                                ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dArrayMSAADepthRO = 131, ##  Represents a type that was referred to using an elaborated type keyword.
-                                     ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage3dRO = 132, ##  Represents a type that was referred to using an elaborated type keyword.
-                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage1dWO = 133, ##  Represents a type that was referred to using an elaborated type keyword.
-                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage1dArrayWO = 134, ##  Represents a type that was referred to using an elaborated type keyword.
-                            ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage1dBufferWO = 135, ##  Represents a type that was referred to using an elaborated type keyword.
-                             ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dWO = 136, ##  Represents a type that was referred to using an elaborated type keyword.
-                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dArrayWO = 137, ##  Represents a type that was referred to using an elaborated type keyword.
-                            ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dDepthWO = 138, ##  Represents a type that was referred to using an elaborated type keyword.
-                            ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dArrayDepthWO = 139, ##  Represents a type that was referred to using an elaborated type keyword.
-                                 ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dMSAAWO = 140, ##  Represents a type that was referred to using an elaborated type keyword.
-                           ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dArrayMSAAWO = 141, ##  Represents a type that was referred to using an elaborated type keyword.
-                                ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dMSAADepthWO = 142, ##  Represents a type that was referred to using an elaborated type keyword.
-                                ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dArrayMSAADepthWO = 143, ##  Represents a type that was referred to using an elaborated type keyword.
-                                     ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage3dWO = 144, ##  Represents a type that was referred to using an elaborated type keyword.
-                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage1dRW = 145, ##  Represents a type that was referred to using an elaborated type keyword.
-                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage1dArrayRW = 146, ##  Represents a type that was referred to using an elaborated type keyword.
-                            ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage1dBufferRW = 147, ##  Represents a type that was referred to using an elaborated type keyword.
-                             ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dRW = 148, ##  Represents a type that was referred to using an elaborated type keyword.
-                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dArrayRW = 149, ##  Represents a type that was referred to using an elaborated type keyword.
-                            ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dDepthRW = 150, ##  Represents a type that was referred to using an elaborated type keyword.
-                            ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dArrayDepthRW = 151, ##  Represents a type that was referred to using an elaborated type keyword.
-                                 ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dMSAARW = 152, ##  Represents a type that was referred to using an elaborated type keyword.
-                           ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dArrayMSAARW = 153, ##  Represents a type that was referred to using an elaborated type keyword.
-                                ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dMSAADepthRW = 154, ##  Represents a type that was referred to using an elaborated type keyword.
-                                ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage2dArrayMSAADepthRW = 155, ##  Represents a type that was referred to using an elaborated type keyword.
-                                     ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLImage3dRW = 156, ##  Represents a type that was referred to using an elaborated type keyword.
-                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLSampler = 157, ##  Represents a type that was referred to using an elaborated type keyword.
-                     ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLEvent = 158, ##  Represents a type that was referred to using an elaborated type keyword.
-                   ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLQueue = 159, ##  Represents a type that was referred to using an elaborated type keyword.
-                   ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLReserveID = 160, ##  Represents a type that was referred to using an elaborated type keyword.
-                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkObjCObject = 161, ##  Represents a type that was referred to using an elaborated type keyword.
-                     ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkObjCTypeParam = 162, ##  Represents a type that was referred to using an elaborated type keyword.
-                        ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkAttributed = 163, ##  Represents a type that was referred to using an elaborated type keyword.
-                     ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLIntelSubgroupAVCMcePayload = 164, ##  Represents a type that was referred to using an elaborated type keyword.
-                                        ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLIntelSubgroupAVCImePayload = 165, ##  Represents a type that was referred to using an elaborated type keyword.
-                                        ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLIntelSubgroupAVCRefPayload = 166, ##  Represents a type that was referred to using an elaborated type keyword.
-                                        ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLIntelSubgroupAVCSicPayload = 167, ##  Represents a type that was referred to using an elaborated type keyword.
-                                        ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLIntelSubgroupAVCMceResult = 168, ##  Represents a type that was referred to using an elaborated type keyword.
-                                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLIntelSubgroupAVCImeResult = 169, ##  Represents a type that was referred to using an elaborated type keyword.
-                                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLIntelSubgroupAVCRefResult = 170, ##  Represents a type that was referred to using an elaborated type keyword.
-                                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLIntelSubgroupAVCSicResult = 171, ##  Represents a type that was referred to using an elaborated type keyword.
-                                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLIntelSubgroupAVCImeResultSingleRefStreamout = 172, ##  Represents a type that was referred to using an elaborated type keyword.
-                                                         ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLIntelSubgroupAVCImeResultDualRefStreamout = 173, ##  Represents a type that was referred to using an elaborated type keyword.
-                                                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLIntelSubgroupAVCImeSingleRefStreamin = 174, ##  Represents a type that was referred to using an elaborated type keyword.
-                                                  ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkOCLIntelSubgroupAVCImeDualRefStreamin = 175, ##  Represents a type that was referred to using an elaborated type keyword.
-                                                ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
-    tkExtVector = 176 ##  Represents a type that was referred to using an elaborated type keyword.
-                   ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkPipe = 120, tkOCLImage1dRO = 121, tkOCLImage1dArrayRO = 122,
+    tkOCLImage1dBufferRO = 123, tkOCLImage2dRO = 124, tkOCLImage2dArrayRO = 125,
+    tkOCLImage2dDepthRO = 126, tkOCLImage2dArrayDepthRO = 127,
+    tkOCLImage2dMSAARO = 128, tkOCLImage2dArrayMSAARO = 129,
+    tkOCLImage2dMSAADepthRO = 130, tkOCLImage2dArrayMSAADepthRO = 131,
+    tkOCLImage3dRO = 132, tkOCLImage1dWO = 133, tkOCLImage1dArrayWO = 134,
+    tkOCLImage1dBufferWO = 135, tkOCLImage2dWO = 136, tkOCLImage2dArrayWO = 137,
+    tkOCLImage2dDepthWO = 138, tkOCLImage2dArrayDepthWO = 139,
+    tkOCLImage2dMSAAWO = 140, tkOCLImage2dArrayMSAAWO = 141,
+    tkOCLImage2dMSAADepthWO = 142, tkOCLImage2dArrayMSAADepthWO = 143,
+    tkOCLImage3dWO = 144, tkOCLImage1dRW = 145, tkOCLImage1dArrayRW = 146,
+    tkOCLImage1dBufferRW = 147, tkOCLImage2dRW = 148, tkOCLImage2dArrayRW = 149,
+    tkOCLImage2dDepthRW = 150, tkOCLImage2dArrayDepthRW = 151,
+    tkOCLImage2dMSAARW = 152, tkOCLImage2dArrayMSAARW = 153,
+    tkOCLImage2dMSAADepthRW = 154, tkOCLImage2dArrayMSAADepthRW = 155,
+    tkOCLImage3dRW = 156, tkOCLSampler = 157, tkOCLEvent = 158, tkOCLQueue = 159,
+    tkOCLReserveID = 160, tkObjCObject = 161, tkObjCTypeParam = 162, tkAttributed = 163,
+    tkOCLIntelSubgroupAVCMcePayload = 164, tkOCLIntelSubgroupAVCImePayload = 165,
+    tkOCLIntelSubgroupAVCRefPayload = 166, tkOCLIntelSubgroupAVCSicPayload = 167,
+    tkOCLIntelSubgroupAVCMceResult = 168, tkOCLIntelSubgroupAVCImeResult = 169,
+    tkOCLIntelSubgroupAVCRefResult = 170, tkOCLIntelSubgroupAVCSicResult = 171,
+    tkOCLIntelSubgroupAVCImeResultSingleRefStreamout = 172,
+    tkOCLIntelSubgroupAVCImeResultDualRefStreamout = 173,
+    tkOCLIntelSubgroupAVCImeSingleRefStreamin = 174,
+    tkOCLIntelSubgroupAVCImeDualRefStreamin = 175, tkExtVector = 176
 type
   CXCallingConv* = enum ##  Describes the calling convention of a function type
-                     ## 
-                     ## 
-                     ## 
-                     ## 
-                     ## 
-                     ## 
-                     ## 
-                     ## 
-                     ## 
-                     ## 
-                     ## 
+                     ## **SKipped enum values**
                      ## - CXCallingConv_X86_64Win64 = CXCallingConv_Win64
-                     ## 
-                     ## 
-                     ## 
-                     ## 
-                     ## 
-                     ## 
-                     ## 
     ccDefault = 0, ccC = 1, ccX86StdCall = 2, ccX86FastCall = 3, ccX86ThisCall = 4,
     ccX86Pascal = 5, ccAAPCS = 6, ccAAPCS_VFP = 7, ccX86RegCall = 8, ccIntelOclBicc = 9,
     ccWin64 = 10, ccX86_64SysV = 11, ccX86VectorCall = 12, ccSwift = 13,
@@ -2558,16 +1813,6 @@ type
   CXTemplateArgumentKind* = enum ##  Describes the kind of a template argument.
                               ##  See the definition of llvm::clang::TemplateArgument::ArgKind for full
                               ##  element descriptions.
-                              ## 
-                              ## 
-                              ## 
-                              ## 
-                              ## 
-                              ## 
-                              ## 
-                              ## 
-                              ## 
-                              ## 
     takNull, takType, takDeclaration, takNullPtr, takIntegral, takTemplate,
     takTemplateExpansion, takExpression, takPack, takInvalid
 proc getNumTemplateArguments*(c: CXCursor): int {.cdecl, dynlib: libclang,
@@ -2815,11 +2060,7 @@ proc isTransparentTagTypedef*(t: CXType): cuint {.cdecl, dynlib: libclang,
   ## **
   ##  non-zero if transparent and zero otherwise.
 type
-  CXTypeNullabilityKind* = enum ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
+  CXTypeNullabilityKind* = enum
     tnkNonNull = 0,             ##  Values of this type can never be null.
     tnkNullable = 1,            ##  Values of this type can be null.
     tnkUnspecified = 2, ##  Whether values of this type can be null is (explicitly)
@@ -2835,12 +2076,6 @@ type
                          ##  and
                          ##  A value of this enumeration type can be returned if the target type is not
                          ##  a valid argument to sizeof, alignof or offsetof.
-                         ## 
-                         ## 
-                         ## 
-                         ## 
-                         ## 
-                         ## 
     tleInvalid = 1,             ##  Type is of kind CXType_Invalid.
     tleIncomplete = 2,          ##  The type is an incomplete Type.
     tleDependent = 3,           ##  The type is a dependent Type.
@@ -2911,10 +2146,7 @@ proc isInlineNamespace*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
   ##  Determine whether the given cursor represents an inline namespace
   ##  declaration.
 type
-  CXRefQualifierKind* = enum    ## 
-                          ## 
-                          ## 
-                          ## 
+  CXRefQualifierKind* = enum
     rqkNone = 0,                ##  No ref-qualifier was provided. 
     rqkLValue,                ##  An lvalue ref-qualifier was provided (
     rqkRValue                 ##  An rvalue ref-qualifier was provided (
@@ -2945,10 +2177,6 @@ proc isVirtualBase*(argCXCursor: CXCursor): cuint {.cdecl, dynlib: libclang,
 type
   CX_CXXAccessSpecifier* = enum ##  Represents the C++ access control level to a base class for a
                              ##  cursor with kind CX_CXXBaseSpecifier.
-                             ## 
-                             ## 
-                             ## 
-                             ## 
     asInvalidAccessSpecifier, asPublic, asProtected, asPrivate
 proc getCXXAccessSpecifier*(argCXCursor: CXCursor): CX_CXXAccessSpecifier {.cdecl,
     dynlib: libclang, importc: "clang_getCXXAccessSpecifier".}
@@ -2959,14 +2187,6 @@ proc getCXXAccessSpecifier*(argCXCursor: CXCursor): CX_CXXAccessSpecifier {.cdec
 type
   CX_StorageClass* = enum ##  Represents the storage classes as declared in the source. CX_SC_Invalid
                        ##  was added for the case that the passed cursor in not a declaration.
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
     scC_Invalid, scC_None, scC_Extern, scC_Static, scC_PrivateExtern,
     scC_OpenCLWorkGroupLocal, scC_Auto, scC_Register
 proc getStorageClass*(argCXCursor: CXCursor): CX_StorageClass {.cdecl,
@@ -3010,9 +2230,6 @@ type
                           ##  cursor should proceed after visiting a particular child cursor.
                           ##  A value of this enumeration type should be returned by each
                           ##  to indicate how clang_visitChildren() proceed.
-                          ## 
-                          ## 
-                          ## 
     cvrBreak,                 ##  Terminates the cursor traversal.
     cvrContinue, ##  Continues the cursor traversal with the next sibling of
                 ##  the cursor just visited, without visiting its children.
@@ -3094,32 +2311,8 @@ type
   CXPrintingPolicyProperty* = enum ##  Properties for the printing policy.
                                 ##  See 
                                 ##  for more information.
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
-                                ## 
+                                ## **SKipped enum values**
+                                ## - CXPrintingPolicy_LastProperty = CXPrintingPolicy_FullyQualifiedName
     pppIndentation, pppSuppressSpecifiers, pppSuppressTagKeyword,
     pppIncludeTagDefinition, pppSuppressScope, pppSuppressUnwrittenScope,
     pppSuppressInitializers, pppConstantArraySizeAsWritten,
@@ -3234,20 +2427,6 @@ proc getReceiverType*(c: CXCursor): CXType {.cdecl, dynlib: libclang,
   ##  reference, or C++ method call, returns the CXType of the receiver.
 type
   CXObjCPropertyAttrKind* = enum ##  Property attributes for a 
-                              ## 
-                              ## 
-                              ## 
-                              ## 
-                              ## 
-                              ## 
-                              ## 
-                              ## 
-                              ## 
-                              ## 
-                              ## 
-                              ## 
-                              ## 
-                              ## 
     ocpaknoattr = 0, ocpakreadonly = 1, ocpakgetter = 2, ocpakassign = 4,
     ocpakreadwrite = 8, ocpakretain = 16, ocpakcopy = 32, ocpaknonatomic = 64,
     ocpaksetter = 128, ocpakatomic = 256, ocpakweak = 512, ocpakstrong = 1024,
@@ -3269,13 +2448,6 @@ proc getObjCPropertySetterName*(c: CXCursor): CXString {.cdecl, dynlib: libclang
 type
   CXObjCDeclQualifierKind* = enum ##  'Qualifiers' written next to the return and parameter types in
                                ##  Objective-C method declarations.
-                               ## 
-                               ## 
-                               ## 
-                               ## 
-                               ## 
-                               ## 
-                               ## 
     ocdqkNone = 0, ocdqkIn = 1, ocdqkInout = 2, ocdqkOut = 4, ocdqkBycopy = 8, ocdqkByref = 16,
     ocdqkOneway = 32
 proc getObjCDeclQualifiers*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
@@ -3501,10 +2673,7 @@ proc getCursorReferenceNameRange*(c: CXCursor; nameFlags: cuint; pieceIndex: cui
   ##  The piece of the name pointed to by the given cursor. If there is no
   ##  name, or if the PieceIndex is out-of-range, a null-cursor will be returned.
 type
-  CXNameRefFlags* = enum        ## 
-                      ## 
-                      ## 
-                      ## 
+  CXNameRefFlags* = enum
     nrfange_WantQualifier = 1, ##  Include the nested-name-specifier, e.g. Foo:: in x.Foo::y, in the
                             ##  range.
     nrfange_WantTemplateArgs = 2, ##  Include the explicit template arguments, e.g. 
@@ -3519,11 +2688,6 @@ type
                              ## Error: cannot render: rnCodeBlock
 type
   CXTokenKind* = enum           ##  Describes a kind of token.
-                   ## 
-                   ## 
-                   ## 
-                   ## 
-                   ## 
     tokPunctuation,           ##  A token that contains some kind of punctuation.
     tokKeyword,               ##  A language keyword.
     tokIdentifier,            ##  An identifier (that is not a keyword).
@@ -3638,27 +2802,6 @@ type
                              ##  is
                              ##  either a piece of text with a specific "kind" that describes how that text
                              ##  should be interpreted by the client or is another completion string.
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
-                             ## 
     cckOptional, ##  A code-completion string that describes "optional" text that
                 ##  could be a part of the template (but is not required).
                 ##  The Optional chunk is the only kind of chunk that has a code-completion
@@ -3920,11 +3063,6 @@ type
                             ##  modify its behavior.
                             ##  The enumerators in this enumeration can be bitwise-OR'd together to
                             ##  provide multiple options to 
-                            ## 
-                            ## 
-                            ## 
-                            ## 
-                            ## 
     ccfIncludeMacros = 1,       ##  Whether to include macros within the set of code
                        ##  completions returned.
     ccfIncludeCodePatterns = 2, ##  Whether to include code patterns for language constructs
@@ -3940,31 +3078,6 @@ type
   CXCompletionContext* = enum ##  Bits that represent the context under which completion is occurring.
                            ##  The enumerators in this enumeration may be bitwise-OR'd together if multiple
                            ##  contexts are occurring simultaneously.
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
     cocUnexposed = 0, ##  The context for completions is unexposed, as only Clang results
                    ##  should be included. (This is equivalent to having no context bits set.)
     cocAnyType = 1,             ##  Completions for any possible type should be included in the results.
@@ -4177,14 +3290,7 @@ proc getInclusions*(tu: CXTranslationUnit; visitor: CXInclusionVisitor;
   ##    file.  This does not include headers included by the PCH file (unless one
   ##    is inspecting the inclusions in the PCH file itself).
 type
-  CXEvalResultKind* = enum      ## 
-                        ## 
-                        ## 
-                        ## 
-                        ## 
-                        ## 
-                        ## 
-                        ## 
+  CXEvalResultKind* = enum
     erkUnExposed = 0, erkInt = 1, erkFloat = 2, erkObjCStrLiteral = 3, erkStrLiteral = 4,
     erkCFStr = 5, erkOther = 6
 type
@@ -4268,8 +3374,6 @@ type
   CXVisitorResult* = enum       ## ``
                        ## @
                        ## {
-                       ## 
-                       ## 
     vrBreak, vrContinue
 type
   CXCursorAndRangeVisitor = object
@@ -4278,10 +3382,7 @@ type
         cdecl.}]
 
 type
-  CXResult* = enum              ## 
-                ## 
-                ## 
-                ## 
+  CXResult* = enum
     rSuccess = 0,               ##  Function returned successfully.
     rInvalid = 1,               ##  One of the parameters was invalid for the function.
     rVisitBreak = 2 ##  The function was terminated by a callback (e.g. it returned
@@ -4344,34 +3445,7 @@ type
     isImplicit*: int
 
 type
-  CXIdxEntityKind* = enum       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
+  CXIdxEntityKind* = enum
     iekUnexposed = 0, iekTypedef = 1, iekFunction = 2, iekVariable = 3, iekField = 4,
     iekEnumConstant = 5, iekObjCClass = 6, iekObjCProtocol = 7, iekObjCCategory = 8,
     iekObjCInstanceMethod = 9, iekObjCClassMethod = 10, iekObjCProperty = 11,
@@ -4381,12 +3455,7 @@ type
     iekCXXDestructor = 23, iekCXXConversionFunction = 24, iekCXXTypeAlias = 25,
     iekCXXInterface = 26
 type
-  CXIdxEntityLanguage* = enum   ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
-                           ## 
+  CXIdxEntityLanguage* = enum
     ielNone = 0, ielC = 1, ielObjC = 2, ielCXX = 3, ielSwift = 4
 type
   CXIdxEntityCXXTemplateKind* = enum ##  Extra C++ template information for an entity. This can apply to:
@@ -4397,18 +3466,10 @@ type
                                   ##  CXIdxEntity_CXXConstructor
                                   ##  CXIdxEntity_CXXConversionFunction
                                   ##  CXIdxEntity_CXXTypeAlias
-                                  ## 
-                                  ## 
-                                  ## 
-                                  ## 
     ietkNonTemplate = 0, ietkTemplate = 1, ietkTemplatePartialSpecialization = 2,
     ietkTemplateSpecialization = 3
 type
-  CXIdxAttrKind* = enum         ## 
-                     ## 
-                     ## 
-                     ## 
-                     ## 
+  CXIdxAttrKind* = enum
     iakUnexposed = 0, iakIBAction = 1, iakIBOutlet = 2, iakIBOutletCollection = 3
 type
   CXIdxAttrInfo = object
@@ -4439,8 +3500,7 @@ type
     classLoc*: CXIdxLoc
 
 type
-  CXIdxDeclInfoFlags* = enum    ## 
-                          ## 
+  CXIdxDeclInfoFlags* = enum
     idifFlag_Skipped = 1
 type
   CXIdxDeclInfo = object
@@ -4459,10 +3519,7 @@ type
     flags*: cuint
 
 type
-  CXIdxObjCContainerKind* = enum ## 
-                              ## 
-                              ## 
-                              ## 
+  CXIdxObjCContainerKind* = enum
     iocckForwardRef = 0, iocckInterface = 1, iocckImplementation = 2
 type
   CXIdxObjCContainerDeclInfo = object
@@ -4517,8 +3574,6 @@ type
                           ##  This may be deprecated in a future version as this duplicates
                           ##  the 
                           ##  bit in 
-                          ## 
-                          ## 
     ierkDirect = 1,             ##  The entity is referenced directly in user's code.
     ierkImplicit = 2 ##  An implicit reference, e.g. a reference of an Objective-C method
                   ##  via the dot syntax.
@@ -4526,16 +3581,6 @@ type
   CXSymbolRole* = enum ##  Roles that are attributed to symbol occurrences.
                     ##  Internal: this currently mirrors low 9 bits of clang::index::SymbolRole with
                     ##  higher bits zeroed. These high bits may be exposed in the future.
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
-                    ## 
     srNone = 0, srDeclaration = 1, srDefinition = 2, srReference = 4, srRead = 8, srWrite = 16,
     srCall = 32, srDynamic = 64, srAddressOf = 128, srImplicit = 256
 type
@@ -4615,13 +3660,7 @@ proc dispose*(argCXIndexAction: CXIndexAction): void {.cdecl, dynlib: libclang,
   ##  The index action must not be destroyed until all of the translation units
   ##  created within that index action have been destroyed.
 type
-  CXIndexOptFlags* = enum       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
-                       ## 
+  CXIndexOptFlags* = enum
     iofNone = 0,                ##  Used to indicate that no special indexing options are needed.
     iofSuppressRedundantRefs = 1, ##  Used to indicate that IndexerCallbacks#indexEntityReference should
                                ##  be invoked for only one reference of an entity per source file that does
@@ -4748,19 +3787,6 @@ type
                      ##   A comment
                      ##  node can be considered block content (e. g., paragraph), inline content
                      ##  (plain text) or neither (the root AST node).
-                     ## 
-                     ## 
-                     ## 
-                     ## 
-                     ## 
-                     ## 
-                     ## 
-                     ## 
-                     ## 
-                     ## 
-                     ## 
-                     ## 
-                     ## 
     cokNull = 0, ##  Null comment.  No AST node is constructed at the requested location
               ##  because there is no text or a syntax error.
     cokText = 1,                ##  Plain text.  Inline content.
@@ -4822,11 +3848,6 @@ type
 type
   CXCommentInlineCommandRenderKind* = enum ##  The most appropriate rendering mode for an inline command, chosen on
                                         ##  command semantics in Doxygen.
-                                        ## 
-                                        ## 
-                                        ## 
-                                        ## 
-                                        ## 
     cicrkNormal,              ##  Command argument should be rendered in a normal font.
     cicrkBold,                ##  Command argument should be rendered in a bold font.
     cicrkMonospaced,          ##  Command argument should be rendered in a monospaced font.
@@ -4839,9 +3860,6 @@ type
                                    ## param or 
                                    ## \\
                                    ## arg command.
-                                   ## 
-                                   ## 
-                                   ## 
     cppdIn,                   ##  The parameter is an input parameter.
     cppdOut,                  ##  The parameter is an output parameter.
     cppdInOut                 ##  The parameter is an input and output parameter.
