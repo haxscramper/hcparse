@@ -11,8 +11,6 @@ else:
   const
     libclang = "libclang.so"
 type
-  CXTargetInfoImpl* = object
-  CXTranslationUnitImpl* = object
   CXVirtualFileOverlayImpl* = object
   CXModuleMapDescriptorImpl* = object
   time_t* = clong
@@ -26,6 +24,34 @@ proc uninstall_llvm_fatal_error_handler*() {.cdecl, dynlib: libclang,
   ## 
   ## 
   ##  Removes currently installed error handler (if any). If no error handler is intalled, the default strategy is to print error message to stderr and call exit(1).
+type
+  CXErrorCode = enum ## 
+                  ## 
+                  ##  Error codes returned by libclang routines.
+                  ## 
+                  ##  Zero (Error: cannot render: rnLiteralBlock is the only error code indicating success.  Other error codes, including not yet assigned non-zero values, indicate errors.
+                  ## 
+                  ## 
+                  ## 
+                  ## 
+                  ## 
+    ecSuccess = 0,              ## 
+                ## 
+                ##  No error.
+    ecFailure = 1, ## 
+                ## 
+                ##  A generic error code, no further details are available.
+                ## 
+                ##  Errors of this kind can get their own specific error codes in future libclang versions.
+    ecCrashed = 2,              ## 
+                ## 
+                ##  libclang crashed while performing the requested operation.
+    ecInvalidArguments = 3,     ## 
+                         ## 
+                         ##  The function detected that the arguments violate the function contract.
+    ecASTReadError = 4          ## 
+                    ## 
+                    ##  An AST deserialization error has occurred.
 type
   CXString = object
     data*: pointer
@@ -54,17 +80,95 @@ proc disposeStringSet*(cxset: ptr[CXStringSet]) {.cdecl, dynlib: libclang,
 type
   CXIndex = distinct pointer
 type
+  CXTargetInfoImpl = object
+  
+type
   CXTargetInfo = distinct ptr[CXTargetInfoImpl]
+type
+  CXTranslationUnitImpl = object
+  
 type
   CXTranslationUnit = distinct ptr[CXTranslationUnitImpl]
 type
   CXClientData = distinct pointer
+type
+  CXUnsavedFile = object
+    filename*: cstring
+    contents*: cstring
+    length*: culong
+
+type
+  CXAvailabilityKind = enum ## 
+                         ## 
+                         ##  Describes the availability of a particular entity, which indicates whether the use of this entity will result in a warning or error due to it being deprecated or unavailable.
+                         ## 
+                         ## 
+                         ## 
+                         ## 
+    akAvailable,              ## 
+                ## 
+                ##  The entity is available.
+    akDeprecated,             ## 
+                 ## 
+                 ##  The entity is available, but has been deprecated (and its use is not recommended).
+    akNotAvailable,           ## 
+                   ## 
+                   ##  The entity is not available; any use of it will be an error.
+    akNotAccessible           ## 
+                   ## 
+                   ##  The entity is available, but not accessible; any use of it will be an error.
 type
   CXVersion = object
     major*: int
     minor*: int
     subminor*: int
 
+type
+  CXCursor_ExceptionSpecificationKind = enum ## 
+                                          ## 
+                                          ##  Describes the exception specification of a cursor.
+                                          ## 
+                                          ##  A negative value indicates that the cursor is not a function declaration.
+                                          ## 
+                                          ## 
+                                          ## 
+                                          ## 
+                                          ## 
+                                          ## 
+                                          ## 
+                                          ## 
+                                          ## 
+                                          ## 
+    ceskNone,                 ## 
+             ## 
+             ##  The cursor has no exception specification.
+    ceskDynamicNone,          ## 
+                    ## 
+                    ##  The cursor has exception specification throw()
+    ceskDynamic,              ## 
+                ## 
+                ##  The cursor has exception specification throw(T1, T2)
+    ceskMSAny,                ## 
+              ## 
+              ##  The cursor has exception specification throw(...).
+    ceskBasicNoexcept,        ## 
+                      ## 
+                      ##  The cursor has exception specification basic noexcept.
+    ceskComputedNoexcept,     ## 
+                         ## 
+                         ##  The cursor has exception specification computed noexcept.
+    ceskUnevaluated,          ## 
+                    ## 
+                    ##  The exception specification has not yet been evaluated.
+    ceskUninstantiated,       ## 
+                       ## 
+                       ##  The exception specification has not yet been instantiated.
+    ceskUnparsed,             ## 
+                 ## 
+                 ##  The exception specification has not been parsed yet.
+    ceskNoThrow               ## 
+               ## 
+               ##  The cursor has a __declspec(nothrow) exception specification.
 proc createIndex*(excludeDeclarationsFromPCH: int; displayDiagnostics: int) {.cdecl,
     dynlib: libclang, importc: "clang_createIndex".}
   ## 
@@ -88,7 +192,11 @@ proc disposeIndex*(index: CXIndex) {.cdecl, dynlib: libclang,
   ## 
   ##  The index must not be destroyed until all of the translation units created within that index have been destroyed.
 type
-  CXGlobalOptFlags = enum
+  CXGlobalOptFlags = enum       ## 
+                       ## 
+                       ## 
+                       ## 
+                       ## 
     gofNone = 0,                ## 
               ## 
               ##  Used to indicate that no special CXIndex options are needed.
@@ -102,9 +210,9 @@ type
                                             ##  Used to indicate that threads that libclang creates for editing purposes should use background priority.
                                             ## 
                                             ##  Affects #clang_reparseTranslationUnit, #clang_codeCompleteAt, #clang_annotateTokens
-    gofThreadBackgroundPriorityForAll ## 
-                                     ## 
-                                     ##  Used to indicate that all threads that libclang creates should use background priority.
+    gofThreadBackgroundPriorityForAll = 3 ## 
+                                       ## 
+                                       ##  Used to indicate that all threads that libclang creates should use background priority.
 proc setGlobalOptions*(argCXIndex: CXIndex; options: cuint) {.cdecl, dynlib: libclang,
     importc: "clang_CXIndex_setGlobalOptions".}
   ## 
@@ -436,6 +544,30 @@ proc disposeSourceRangeList*(ranges: ptr[CXSourceRangeList]) {.cdecl,
   ## 
   ##  Destroy the given Error: cannot render: rnLiteralBlock 
 type
+  CXDiagnosticSeverity = enum ## 
+                           ## 
+                           ##  Describes the severity of a particular diagnostic.
+                           ## 
+                           ## 
+                           ## 
+                           ## 
+                           ## 
+    dsIgnored = 0,              ## 
+                ## 
+                ##  A diagnostic that has been suppressed, e.g., by a command-line option.
+    dsNote = 1,                 ## 
+             ## 
+             ##  This diagnostic is a note that should be attached to the previous (non-note) diagnostic.
+    dsWarning = 2,              ## 
+                ## 
+                ##  This diagnostic indicates suspicious code that may not be wrong.
+    dsError = 3,                ## 
+              ## 
+              ##  This diagnostic indicates that the code is ill-formed.
+    dsFatal = 4                 ## 
+             ## 
+             ##  This diagnostic indicates that the code is ill-formed such that future parser recovery is unlikely to produce useful results.
+type
   CXDiagnostic = distinct pointer
 type
   CXDiagnosticSet = distinct pointer
@@ -461,6 +593,26 @@ proc getDiagnosticInSet*(diags: CXDiagnosticSet; index: cuint) {.cdecl,
   ## **
   ## 
   ##  the requested diagnostic. This diagnostic must be freed via a call to Error: cannot render: rnLiteralBlock 
+type
+  CXLoadDiag_Error = enum ## 
+                       ## 
+                       ##  Describes the kind of error that occurred (if any) in a call to Error: cannot render: rnLiteralBlock 
+                       ## 
+                       ## 
+                       ## 
+                       ## 
+    ldeNone = 0,                ## 
+              ## 
+              ##  Indicates that no error occurred.
+    ldeUnknown = 1,             ## 
+                 ## 
+                 ##  Indicates that an unknown error occurred while attempting to deserialize diagnostics.
+    ldeCannotLoad = 2,          ## 
+                    ## 
+                    ##  Indicates that the file containing the serialized diagnostics could not be opened.
+    ldeInvalidFile = 3          ## 
+                    ## 
+                    ##  Indicates that the serialized diagnostics file is invalid or corrupt.
 proc loadDiagnostics*(file: cstring; error: ptr[CXLoadDiag_Error];
                      errorString: ptr[CXString]) {.cdecl, dynlib: libclang,
     importc: "clang_loadDiagnostics".}
@@ -529,6 +681,52 @@ proc disposeDiagnostic*(diagnostic: CXDiagnostic) {.cdecl, dynlib: libclang,
   ## 
   ## 
   ##  Destroy a diagnostic.
+type
+  CXDiagnosticDisplayOptions = enum ## 
+                                 ## 
+                                 ##  Options to control the display of diagnostics.
+                                 ## 
+                                 ##  The values in this enum are meant to be combined to customize the behavior of Error: cannot render: rnLiteralBlock 
+                                 ## 
+                                 ## 
+                                 ## 
+                                 ## 
+                                 ## 
+                                 ## 
+    ddoDisplaySourceLocation = 1, ## 
+                               ## 
+                               ##  Display the source-location information where the diagnostic was located.
+                               ## 
+                               ##  When set, diagnostics will be prefixed by the file, line, and (optionally) column to which the diagnostic refers. For example,
+                               ## 
+                               ##  Error: cannot render: rnCodeBlock
+                               ## 
+                               ##  This option corresponds to the clang flag Error: cannot render: rnLiteralBlock   
+    ddoDisplayColumn = 2, ## 
+                       ## 
+                       ##  If displaying the source-location information of the diagnostic, also include the column number.
+                       ## 
+                       ##  This option corresponds to the clang flag Error: cannot render: rnLiteralBlock   
+    ddoDisplaySourceRanges = 4, ## 
+                             ## 
+                             ##  If displaying the source-location information of the diagnostic, also include information about source ranges in a machine-parsable format.
+                             ## 
+                             ##  This option corresponds to the clang flag Error: cannot render: rnLiteralBlock   
+    ddoDisplayOption = 8, ## 
+                       ## 
+                       ##  Display the option name associated with this diagnostic, if any.
+                       ## 
+                       ##  The option name displayed (e.g., -Wconversion) will be placed in brackets after the diagnostic text. This option corresponds to the clang flag Error: cannot render: rnLiteralBlock   
+    ddoDisplayCategoryId = 16, ## 
+                            ## 
+                            ##  Display the category number associated with this diagnostic, if any.
+                            ## 
+                            ##  The category number is displayed within brackets after the diagnostic text. This option corresponds to the clang flag Error: cannot render: rnLiteralBlock   
+    ddoDisplayCategoryName = 32 ## 
+                             ## 
+                             ##  Display the category name associated with this diagnostic, if any.
+                             ## 
+                             ##  The category name is displayed within brackets after the diagnostic text. This option corresponds to the clang flag Error: cannot render: rnLiteralBlock   
 proc formatDiagnostic*(diagnostic: CXDiagnostic; options: cuint) {.cdecl,
     dynlib: libclang, importc: "clang_formatDiagnostic".}
   ## 
@@ -755,6 +953,100 @@ proc createTranslationUnit2*(cIdx: CXIndex; ast_filename: cstring;
   ## **
   ## 
   ##  Zero on success, otherwise returns an error code.
+type
+  CXTranslationUnit_Flags = enum ## 
+                              ## 
+                              ##  Flags that control the creation of translation units.
+                              ## 
+                              ##  The enumerators in this enumeration type are meant to be bitwise ORed together to specify which options should be used when constructing the translation unit.
+                              ## 
+                              ## 
+                              ## 
+                              ## 
+                              ## 
+                              ## 
+                              ## 
+                              ## 
+                              ## 
+                              ## 
+                              ## 
+                              ## 
+                              ## 
+                              ## 
+                              ## 
+                              ## 
+                              ## 
+    tufNone = 0,                ## 
+              ## 
+              ##  Used to indicate that no special translation-unit options are needed.
+    tufDetailedPreprocessingRecord = 1, ## 
+                                     ## 
+                                     ##  Used to indicate that the parser should construct a "detailed" preprocessing record, including all macro definitions and instantiations.
+                                     ## 
+                                     ##  Constructing a detailed preprocessing record requires more memory and time to parse, since the information contained in the record is usually not retained. However, it can be useful for applications that require more detailed information about the behavior of the preprocessor.
+    tufIncomplete = 2, ## 
+                    ## 
+                    ##  Used to indicate that the translation unit is incomplete.
+                    ## 
+                    ##  When a translation unit is considered "incomplete", semantic analysis that is typically performed at the end of the translation unit will be suppressed. For example, this suppresses the completion of tentative declarations in C and of instantiation of implicitly-instantiation function templates in C++. This option is typically used when parsing a header with the intent of producing a precompiled header.
+    tufPrecompiledPreamble = 4, ## 
+                             ## 
+                             ##  Used to indicate that the translation unit should be built with an implicit precompiled header for the preamble.
+                             ## 
+                             ##  An implicit precompiled header is used as an optimization when a particular translation unit is likely to be reparsed many times when the sources aren't changing that often. In this case, an implicit precompiled header will be built containing all of the initial includes at the top of the main file (what we refer to as the "preamble" of the file). In subsequent parses, if the preamble or the files in it have not changed, Error: cannot render: rnLiteralBlock will re-use the implicit precompiled header to improve parsing performance.
+    tufCacheCompletionResults = 8, ## 
+                                ## 
+                                ##  Used to indicate that the translation unit should cache some code-completion results with each reparse of the source file.
+                                ## 
+                                ##  Caching of code-completion results is a performance optimization that introduces some overhead to reparsing but improves the performance of code-completion operations.
+    tufForSerialization = 16, ## 
+                           ## 
+                           ##  Used to indicate that the translation unit will be serialized with Error: cannot render: rnLiteralBlock
+                           ## 
+                           ##  This option is typically used when parsing a header with the intent of producing a precompiled header.
+    tufCXXChainedPCH = 32, ## 
+                        ## 
+                        ##  DEPRECATED: Enabled chained precompiled preambles in C++.
+                        ## 
+                        ##  Note: this is a *temporary* option that is available only while we are testing C++ precompiled preamble support. It is deprecated.
+    tufSkipFunctionBodies = 64, ## 
+                             ## 
+                             ##  Used to indicate that function/method bodies should be skipped while parsing.
+                             ## 
+                             ##  This option can be used to search for declarations/definitions while ignoring the usages.
+    tufIncludeBriefCommentsInCodeCompletion = 128, ## 
+                                                ## 
+                                                ##  Used to indicate that brief documentation comments should be included into the set of code completions returned from this translation unit.
+    tufCreatePreambleOnFirstParse = 256, ## 
+                                      ## 
+                                      ##  Used to indicate that the precompiled preamble should be created on the first parse. Otherwise it will be created on the first reparse. This trades runtime on the first parse (serializing the preamble takes time) for reduced runtime on the second parse (can now reuse the preamble).
+    tufKeepGoing = 512, ## 
+                     ## 
+                     ##  Do not stop processing when fatal errors are encountered.
+                     ## 
+                     ##  When fatal errors are encountered while parsing a translation unit, semantic analysis is typically stopped early when compiling code. A common source for fatal errors are unresolvable include files. For the purposes of an IDE, this is undesirable behavior and as much information as possible should be reported. Use this flag to enable this behavior.
+    tufSingleFileParse = 1024,  ## 
+                            ## 
+                            ##  Sets the preprocessor in a mode for parsing a single file only.
+    tufLimitSkipFunctionBodiesToPreamble = 2048, ## 
+                                              ## 
+                                              ##  Used in combination with CXTranslationUnit_SkipFunctionBodies to constrain the skipping of function bodies to the preamble.
+                                              ## 
+                                              ##  The function bodies of the main file are not skipped.
+    tufIncludeAttributedTypes = 4096, ## 
+                                   ## 
+                                   ##  Used to indicate that attributed types should be included in CXType.
+    tufVisitImplicitAttributes = 8192, ## 
+                                    ## 
+                                    ##  Used to indicate that implicit attributes should be visited.
+    tufIgnoreNonErrorsFromIncludedFiles = 16384, ## 
+                                              ## 
+                                              ##  Used to indicate that non-errors from included files should be ignored.
+                                              ## 
+                                              ##  If set, clang_getDiagnosticSetFromTU() will not report e.g. warnings from included files anymore. This speeds up clang_getDiagnosticSetFromTU() for the case where these warnings are not of interest, as for an IDE for example, which typically shows only the diagnostics in the main file.
+    tufRetainExcludedConditionalBlocks = 32768 ## 
+                                            ## 
+                                            ##  Tells the preprocessor not to skip excluded conditional blocks.
 proc defaultEditingTranslationUnitOptions*() {.cdecl, dynlib: libclang,
     importc: "clang_defaultEditingTranslationUnitOptions".}
   ## 
@@ -831,6 +1123,16 @@ proc parseTranslationUnit2FullArgv*(cIdx: CXIndex; source_filename: cstring;
   ## 
   ## 
   ##  Same as clang_parseTranslationUnit2 but requires a full command line for Error: cannot render: rnLiteralBlock including argv[0]. This is useful if the standard library paths are relative to the binary.
+type
+  CXSaveTranslationUnit_Flags = enum ## 
+                                  ## 
+                                  ##  Flags that control how translation units are saved.
+                                  ## 
+                                  ##  The enumerators in this enumeration type are meant to be bitwise ORed together to specify which options should be used when saving the translation unit.
+                                  ## 
+    stufNone = 0                ## 
+              ## 
+              ##  Used to indicate that no special saving options are needed.
 proc defaultSaveOptions*(tU: CXTranslationUnit) {.cdecl, dynlib: libclang,
     importc: "clang_defaultSaveOptions".}
   ## 
@@ -838,6 +1140,30 @@ proc defaultSaveOptions*(tU: CXTranslationUnit) {.cdecl, dynlib: libclang,
   ##  Returns the set of flags that is suitable for saving a translation unit.
   ## 
   ##  The set of flags returned provide options for Error: cannot render: rnLiteralBlock by default. The returned flag set contains an unspecified set of options that save translation units with the most commonly-requested data.
+type
+  CXSaveError = enum ## 
+                  ## 
+                  ##  Describes the kind of error that occurred (if any) in a call to Error: cannot render: rnLiteralBlock 
+                  ## 
+                  ## 
+                  ## 
+                  ## 
+    seNone = 0,                 ## 
+             ## 
+             ##  Indicates that no error occurred while saving a translation unit.
+    seUnknown = 1, ## 
+                ## 
+                ##  Indicates that an unknown error occurred while attempting to save the file.
+                ## 
+                ##  This error typically indicates that file I/O failed when attempting to write the file.
+    seTranslationErrors = 2, ## 
+                          ## 
+                          ##  Indicates that errors during translation prevented this attempt to save the translation unit.
+                          ## 
+                          ##  Errors that prevent the translation unit from being saved can be extracted using Error: cannot render: rnLiteralBlock and Error: cannot render: rnLiteralBlock   
+    seInvalidTU = 3             ## 
+                 ## 
+                 ##  Indicates that the translation unit to be saved was somehow invalid (e.g., NULL).
 proc saveTranslationUnit*(tU: CXTranslationUnit; fileName: cstring; options: cuint) {.
     cdecl, dynlib: libclang, importc: "clang_saveTranslationUnit".}
   ## 
@@ -875,6 +1201,16 @@ proc disposeTranslationUnit*(argCXTranslationUnit: CXTranslationUnit) {.cdecl,
   ## 
   ## 
   ##  Destroy the specified CXTranslationUnit object.
+type
+  CXReparse_Flags = enum ## 
+                      ## 
+                      ##  Flags that control the reparsing of translation units.
+                      ## 
+                      ##  The enumerators in this enumeration type are meant to be bitwise ORed together to specify which options should be used when reparsing the translation unit.
+                      ## 
+    rfNone = 0                  ## 
+            ## 
+            ##  Used to indicate that no special reparsing options are needed.
 proc defaultReparseOptions*(tU: CXTranslationUnit) {.cdecl, dynlib: libclang,
     importc: "clang_defaultReparseOptions".}
   ## 
@@ -914,6 +1250,32 @@ proc reparseTranslationUnit*(tU: CXTranslationUnit; num_unsaved_files: cuint;
   ## **
   ## 
   ##  0 if the sources could be reparsed.  A non-zero error code will be returned if reparsing was impossible, such that the translation unit is invalid. In such cases, the only valid call for Error: cannot render: rnLiteralBlock is Error: cannot render: rnLiteralBlock  The error codes returned by this routine are described by the Error: cannot render: rnLiteralBlock enum.
+type
+  CXTUResourceUsageKind = enum ## 
+                            ## 
+                            ##  Categorizes how memory is being used by a translation unit.
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+    turukAST = 1, turukIdentifiers = 2, turukSelectors = 3,
+    turukGlobalCompletionResults = 4, turukSourceManagerContentCache = 5,
+    turukAST_SideTables = 6, turukSourceManager_Membuffer_Malloc = 7,
+    turukSourceManager_Membuffer_MMap = 8,
+    turukExternalASTSource_Membuffer_Malloc = 9,
+    turukExternalASTSource_Membuffer_MMap = 10, turukPreprocessor = 11,
+    turukPreprocessingRecord = 12, turukSourceManager_DataStructures = 13,
+    turukPreprocessor_HeaderSearch = 14
 proc getTUResourceUsageName*(kind: CXTUResourceUsageKind) {.cdecl, dynlib: libclang,
     importc: "clang_getTUResourceUsageName".}
   ## 
@@ -964,6 +1326,1061 @@ proc getPointerWidth*(info: CXTargetInfo) {.cdecl, dynlib: libclang,
   ## 
   ##  Returns -1 in case of error.
 type
+  CXCursorKind = enum ## 
+                   ## 
+                   ##  Describes the kind of entity that a cursor refers to.
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## - CXCursor_FirstDecl = CXCursor_UnexposedDecl
+                   ## - CXCursor_LastDecl = CXCursor_CXXAccessSpecifier
+                   ## CXCursor_ObjCSuperClassRef
+                   ## =
+                   ## 40
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## - CXCursor_LastRef = CXCursor_VariableRef
+                   ## CXCursor_InvalidFile
+                   ## =
+                   ## 70
+                   ## 
+                   ## 
+                   ## 
+                   ## - CXCursor_LastInvalid = CXCursor_InvalidCode
+                   ## CXCursor_UnexposedExpr
+                   ## =
+                   ## 100
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## - CXCursor_LastExpr = CXCursor_FixedPointLiteral
+                   ## CXCursor_UnexposedStmt
+                   ## =
+                   ## 200
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## - CXCursor_AsmStmt = CXCursor_GCCAsmStmt
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## - CXCursor_LastStmt = CXCursor_OMPParallelMasterDirective
+                   ## 
+                   ## CXCursor_UnexposedAttr
+                   ## =
+                   ## 400
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## - CXCursor_LastAttr = CXCursor_AlignedAttr
+                   ## 
+                   ## 
+                   ## - CXCursor_MacroInstantiation = CXCursor_MacroExpansion
+                   ## - CXCursor_FirstPreprocessing = CXCursor_PreprocessingDirective
+                   ## - CXCursor_LastPreprocessing = CXCursor_InclusionDirective
+                   ## 
+                   ## 
+                   ## 
+                   ## - CXCursor_FirstExtraDecl = CXCursor_ModuleImportDecl
+                   ## - CXCursor_LastExtraDecl = CXCursor_FriendDecl
+    ckUnexposedDecl = 1, ## 
+                      ## 
+                      ##  A declaration whose specific kind is not exposed via this interface.
+                      ## 
+                      ##  Unexposed declarations have the same operations as any other kind of declaration; one can extract their location information, spelling, find their definitions, etc. However, the specific kind of the declaration is not reported.
+    ckStructDecl = 2,           ## 
+                   ## 
+                   ##  A C or C++ struct. 
+    ckUnionDecl = 3,            ## 
+                  ## 
+                  ##  A C or C++ union. 
+    ckClassDecl = 4,            ## 
+                  ## 
+                  ##  A C++ class. 
+    ckEnumDecl = 5,             ## 
+                 ## 
+                 ##  An enumeration. 
+    ckFieldDecl = 6,            ## 
+                  ## 
+                  ##  A field (in C) or non-static data member (in C++) in a struct, union, or C++ class.
+    ckEnumConstantDecl = 7,     ## 
+                         ## 
+                         ##  An enumerator constant. 
+    ckFunctionDecl = 8,         ## 
+                     ## 
+                     ##  A function. 
+    ckVarDecl = 9,              ## 
+                ## 
+                ##  A variable. 
+    ckParmDecl = 10,            ## 
+                  ## 
+                  ##  A function or method parameter. 
+    ckObjCInterfaceDecl = 11,   ## 
+                           ## 
+                           ##  An Objective-C @interface. 
+    ckObjCCategoryDecl = 12,    ## 
+                          ## 
+                          ##  An Objective-C @interface for a category. 
+    ckObjCProtocolDecl = 13,    ## 
+                          ## 
+                          ##  An Objective-C @protocol declaration. 
+    ckObjCPropertyDecl = 14,    ## 
+                          ## 
+                          ##  An Objective-C @property declaration. 
+    ckObjCIvarDecl = 15,        ## 
+                      ## 
+                      ##  An Objective-C instance variable. 
+    ckObjCInstanceMethodDecl = 16, ## 
+                                ## 
+                                ##  An Objective-C instance method. 
+    ckObjCClassMethodDecl = 17, ## 
+                             ## 
+                             ##  An Objective-C class method. 
+    ckObjCImplementationDecl = 18, ## 
+                                ## 
+                                ##  An Objective-C @implementation. 
+    ckObjCCategoryImplDecl = 19, ## 
+                              ## 
+                              ##  An Objective-C @implementation for a category. 
+    ckTypedefDecl = 20,         ## 
+                     ## 
+                     ##  A typedef. 
+    ckCXXMethod = 21,           ## 
+                   ## 
+                   ##  A C++ class method. 
+    ckNamespace = 22,           ## 
+                   ## 
+                   ##  A C++ namespace. 
+    ckLinkageSpec = 23,         ## 
+                     ## 
+                     ##  A linkage specification, e.g. 'extern "C"'. 
+    ckConstructor = 24,         ## 
+                     ## 
+                     ##  A C++ constructor. 
+    ckDestructor = 25,          ## 
+                    ## 
+                    ##  A C++ destructor. 
+    ckConversionFunction = 26,  ## 
+                            ## 
+                            ##  A C++ conversion function. 
+    ckTemplateTypeParameter = 27, ## 
+                               ## 
+                               ##  A C++ template type parameter. 
+    ckNonTypeTemplateParameter = 28, ## 
+                                  ## 
+                                  ##  A C++ non-type template parameter. 
+    ckTemplateTemplateParameter = 29, ## 
+                                   ## 
+                                   ##  A C++ template template parameter. 
+    ckFunctionTemplate = 30,    ## 
+                          ## 
+                          ##  A C++ function template. 
+    ckClassTemplate = 31,       ## 
+                       ## 
+                       ##  A C++ class template. 
+    ckClassTemplatePartialSpecialization = 32, ## 
+                                            ## 
+                                            ##  A C++ class template partial specialization. 
+    ckNamespaceAlias = 33,      ## 
+                        ## 
+                        ##  A C++ namespace alias declaration. 
+    ckUsingDirective = 34,      ## 
+                        ## 
+                        ##  A C++ using directive. 
+    ckUsingDeclaration = 35,    ## 
+                          ## 
+                          ##  A C++ using declaration. 
+    ckTypeAliasDecl = 36,       ## 
+                       ## 
+                       ##  A C++ alias declaration 
+    ckObjCSynthesizeDecl = 37,  ## 
+                            ## 
+                            ##  An Objective-C @synthesize definition. 
+    ckObjCDynamicDecl = 38,     ## 
+                         ## 
+                         ##  An Objective-C @dynamic definition. 
+    ckCXXAccessSpecifier = 39,  ## 
+                            ## 
+                            ##  An access specifier. 
+    ckFirstRef = 40,            ## 
+                  ## 
+                  ##  An access specifier. 
+    ckObjCProtocolRef = 41,     ## 
+                         ## 
+                         ##  An access specifier. 
+    ckObjCClassRef = 42,        ## 
+                      ## 
+                      ##  An access specifier. 
+    ckTypeRef = 43, ## 
+                 ## 
+                 ##  A reference to a type declaration.
+                 ## 
+                 ##  A type reference occurs anywhere where a type is named but not declared. For example, given:
+                 ## 
+                 ##  Error: cannot render: rnCodeBlock
+                 ## 
+                 ##  The typedef is a declaration of size_type (CXCursor_TypedefDecl), while the type of the variable "size" is referenced. The cursor referenced by the type of size is the typedef for size_type.
+    ckCXXBaseSpecifier = 44, ## 
+                          ## 
+                          ##  A reference to a type declaration.
+                          ## 
+                          ##  A type reference occurs anywhere where a type is named but not declared. For example, given:
+                          ## 
+                          ##  Error: cannot render: rnCodeBlock
+                          ## 
+                          ##  The typedef is a declaration of size_type (CXCursor_TypedefDecl), while the type of the variable "size" is referenced. The cursor referenced by the type of size is the typedef for size_type.
+    ckTemplateRef = 45,         ## 
+                     ## 
+                     ##  A reference to a class template, function template, template template parameter, or class template partial specialization.
+    ckNamespaceRef = 46,        ## 
+                      ## 
+                      ##  A reference to a namespace or namespace alias.
+    ckMemberRef = 47,           ## 
+                   ## 
+                   ##  A reference to a member of a struct, union, or class that occurs in some non-expression context, e.g., a designated initializer.
+    ckLabelRef = 48, ## 
+                  ## 
+                  ##  A reference to a labeled statement.
+                  ## 
+                  ##  This cursor kind is used to describe the jump to "start_over" in the goto statement in the following example:
+                  ## 
+                  ##  Error: cannot render: rnCodeBlock
+                  ## 
+                  ##  A label reference cursor refers to a label statement.
+    ckOverloadedDeclRef = 49, ## 
+                           ## 
+                           ##  A reference to a set of overloaded functions or function templates that has not yet been resolved to a specific function or function template.
+                           ## 
+                           ##  An overloaded declaration reference cursor occurs in C++ templates where a dependent name refers to a function. For example:
+                           ## 
+                           ##  Error: cannot render: rnCodeBlock
+                           ## 
+                           ##  Here, the identifier "swap" is associated with an overloaded declaration reference. In the template definition, "swap" refers to either of the two "swap" functions declared above, so both results will be available. At instantiation time, "swap" may also refer to other functions found via argument-dependent lookup (e.g., the "swap" function at the end of the example).
+                           ## 
+                           ##  The functions Error: cannot render: rnLiteralBlock and Error: cannot render: rnLiteralBlock can be used to retrieve the definitions referenced by this cursor.
+    ckVariableRef = 50,         ## 
+                     ## 
+                     ##  A reference to a variable that occurs in some non-expression context, e.g., a C++ lambda capture list.
+    ckFirstInvalid = 70,        ## 
+                      ## 
+                      ##  A reference to a variable that occurs in some non-expression context, e.g., a C++ lambda capture list.
+    ckNoDeclFound = 71,         ## 
+                     ## 
+                     ##  A reference to a variable that occurs in some non-expression context, e.g., a C++ lambda capture list.
+    ckNotImplemented = 72,      ## 
+                        ## 
+                        ##  A reference to a variable that occurs in some non-expression context, e.g., a C++ lambda capture list.
+    ckInvalidCode = 73,         ## 
+                     ## 
+                     ##  A reference to a variable that occurs in some non-expression context, e.g., a C++ lambda capture list.
+    ckFirstExpr = 100,          ## 
+                    ## 
+                    ##  A reference to a variable that occurs in some non-expression context, e.g., a C++ lambda capture list.
+    ckDeclRefExpr = 101,        ## 
+                      ## 
+                      ##  An expression that refers to some value declaration, such as a function, variable, or enumerator.
+    ckMemberRefExpr = 102,      ## 
+                        ## 
+                        ##  An expression that refers to a member of a struct, union, class, Objective-C class, etc.
+    ckCallExpr = 103,           ## 
+                   ## 
+                   ##  An expression that calls a function. 
+    ckObjCMessageExpr = 104,    ## 
+                          ## 
+                          ##  An expression that sends a message to an Objective-C   object or class. 
+    ckBlockExpr = 105,          ## 
+                    ## 
+                    ##  An expression that represents a block literal. 
+    ckIntegerLiteral = 106,     ## 
+                         ## 
+                         ##  An integer literal.
+    ckFloatingLiteral = 107,    ## 
+                          ## 
+                          ##  A floating point number literal.
+    ckImaginaryLiteral = 108,   ## 
+                           ## 
+                           ##  An imaginary number literal.
+    ckStringLiteral = 109,      ## 
+                        ## 
+                        ##  A string literal.
+    ckCharacterLiteral = 110,   ## 
+                           ## 
+                           ##  A character literal.
+    ckParenExpr = 111,          ## 
+                    ## 
+                    ##  A parenthesized expression, e.g. "(1)".
+                    ## 
+                    ##  This AST node is only formed if full location information is requested.
+    ckUnaryOperator = 112,      ## 
+                        ## 
+                        ##  This represents the unary-expression's (except sizeof and alignof).
+    ckArraySubscriptExpr = 113, ## 
+                             ## 
+                             ##  [C99 6.5.2.1] Array Subscripting.
+    ckBinaryOperator = 114,     ## 
+                         ## 
+                         ##  A builtin binary operation expression such as "x + y" or "x <= y".
+    ckCompoundAssignOperator = 115, ## 
+                                 ## 
+                                 ##  Compound assignment such as "+=".
+    ckConditionalOperator = 116, ## 
+                              ## 
+                              ##  The ?: ternary operator.
+    ckCStyleCastExpr = 117, ## 
+                         ## 
+                         ##  An explicit cast in C (C99 6.5.4) or a C-style cast in C++ (C++ [expr.cast]), which uses the syntax (Type)expr.
+                         ## 
+                         ##  For example: (int)f.
+    ckCompoundLiteralExpr = 118, ## 
+                              ## 
+                              ##  [C99 6.5.2.5]
+    ckInitListExpr = 119,       ## 
+                       ## 
+                       ##  Describes an C or C++ initializer list.
+    ckAddrLabelExpr = 120,      ## 
+                        ## 
+                        ##  The GNU address of label extension, representing &&label.
+    ckStmtExpr = 121,           ## 
+                   ## 
+                   ##  This is the GNU Statement Expression extension: ({int X=4; X;})
+    ckGenericSelectionExpr = 122, ## 
+                               ## 
+                               ##  Represents a C11 generic selection.
+    ckGNUNullExpr = 123, ## 
+                      ## 
+                      ##  Implements the GNU __null extension, which is a name for a null pointer constant that has integral type (e.g., int or long) and is the same size and alignment as a pointer.
+                      ## 
+                      ##  The __null extension is typically only used by system headers, which define NULL as __null in C++ rather than using 0 (which is an integer that may not match the size of a pointer).
+    ckCXXStaticCastExpr = 124,  ## 
+                            ## 
+                            ##  C++'s static_cast<> expression.
+    ckCXXDynamicCastExpr = 125, ## 
+                             ## 
+                             ##  C++'s dynamic_cast<> expression.
+    ckCXXReinterpretCastExpr = 126, ## 
+                                 ## 
+                                 ##  C++'s reinterpret_cast<> expression.
+    ckCXXConstCastExpr = 127,   ## 
+                           ## 
+                           ##  C++'s const_cast<> expression.
+    ckCXXFunctionalCastExpr = 128, ## 
+                                ## 
+                                ##  Represents an explicit C++ type conversion that uses "functional" notion (C++ [expr.type.conv]).
+                                ## 
+                                ##  Example: Error: cannot render: rnCodeBlock
+                                ## 
+                                ##    
+    ckCXXTypeidExpr = 129,      ## 
+                        ## 
+                        ##  A C++ typeid expression (C++ [expr.typeid]).
+    ckCXXBoolLiteralExpr = 130, ## 
+                             ## 
+                             ##  [C++ 2.13.5] C++ Boolean Literal.
+    ckCXXNullPtrLiteralExpr = 131, ## 
+                                ## 
+                                ##  [C++0x 2.14.7] C++ Pointer Literal.
+    ckCXXThisExpr = 132,        ## 
+                      ## 
+                      ##  Represents the "this" expression in C++
+    ckCXXThrowExpr = 133,       ## 
+                       ## 
+                       ##  [C++ 15] C++ Throw Expression.
+                       ## 
+                       ##  This handles 'throw' and 'throw' assignment-expression. When assignment-expression isn't present, Op will be null.
+    ckCXXNewExpr = 134,         ## 
+                     ## 
+                     ##  A new expression for memory allocation and constructor calls, e.g: "new CXXNewExpr(foo)".
+    ckCXXDeleteExpr = 135,      ## 
+                        ## 
+                        ##  A delete expression for memory deallocation and destructor calls, e.g. "delete[] pArray".
+    ckUnaryExpr = 136,          ## 
+                    ## 
+                    ##  A unary expression. (noexcept, sizeof, or other traits)
+    ckObjCStringLiteral = 137,  ## 
+                            ## 
+                            ##  An Objective-C string literal i.e. "foo".
+    ckObjCEncodeExpr = 138,     ## 
+                         ## 
+                         ##  An Objective-C @encode expression.
+    ckObjCSelectorExpr = 139,   ## 
+                           ## 
+                           ##  An Objective-C @selector expression.
+    ckObjCProtocolExpr = 140,   ## 
+                           ## 
+                           ##  An Objective-C @protocol expression.
+    ckObjCBridgedCastExpr = 141, ## 
+                              ## 
+                              ##  An Objective-C "bridged" cast expression, which casts between Objective-C pointers and C pointers, transferring ownership in the process.
+                              ## 
+                              ##  Error: cannot render: rnCodeBlock
+                              ## 
+                              ##    
+    ckPackExpansionExpr = 142, ## 
+                            ## 
+                            ##  Represents a C++0x pack expansion that produces a sequence of expressions.
+                            ## 
+                            ##  A pack expansion expression contains a pattern (which itself is an expression) followed by an ellipsis. For example:
+                            ## 
+                            ##  Error: cannot render: rnCodeBlock
+                            ## 
+                            ##    
+    ckSizeOfPackExpr = 143, ## 
+                         ## 
+                         ##  Represents an expression that computes the length of a parameter pack.
+                         ## 
+                         ##  Error: cannot render: rnCodeBlock
+                         ## 
+                         ##    
+    ckLambdaExpr = 144, ckObjCBoolLiteralExpr = 145, ## 
+                                               ## 
+                                               ##  Objective-c Boolean Literal.
+    ckObjCSelfExpr = 146,       ## 
+                       ## 
+                       ##  Represents the "self" expression in an Objective-C method.
+    ckOMPArraySectionExpr = 147, ## 
+                              ## 
+                              ##  OpenMP 4.0 [2.4, Array Section].
+    ckObjCAvailabilityCheckExpr = 148, ## 
+                                    ## 
+                                    ##  Represents an Error: cannot render: rnLiteralBlock(...) check.
+    ckFixedPointLiteral = 149,  ## 
+                            ## 
+                            ##  Fixed point literal
+    ckFirstStmt = 200,          ## 
+                    ## 
+                    ##  Fixed point literal
+    ckLabelStmt = 201, ## 
+                    ## 
+                    ##  A labelled statement in a function.
+                    ## 
+                    ##  This cursor kind is used to describe the "start_over:" label statement in the following example:
+                    ## 
+                    ##  Error: cannot render: rnCodeBlock
+                    ## 
+                    ##    
+    ckCompoundStmt = 202,       ## 
+                       ## 
+                       ##  A group of statements like { stmt stmt }.
+                       ## 
+                       ##  This cursor kind is used to describe compound statements, e.g. function bodies.
+    ckCaseStmt = 203,           ## 
+                   ## 
+                   ##  A case statement.
+    ckDefaultStmt = 204,        ## 
+                      ## 
+                      ##  A default statement.
+    ckIfStmt = 205,             ## 
+                 ## 
+                 ##  An if statement
+    ckSwitchStmt = 206,         ## 
+                     ## 
+                     ##  A switch statement.
+    ckWhileStmt = 207,          ## 
+                    ## 
+                    ##  A while statement.
+    ckDoStmt = 208,             ## 
+                 ## 
+                 ##  A do statement.
+    ckForStmt = 209,            ## 
+                  ## 
+                  ##  A for statement.
+    ckGotoStmt = 210,           ## 
+                   ## 
+                   ##  A goto statement.
+    ckIndirectGotoStmt = 211,   ## 
+                           ## 
+                           ##  An indirect goto statement.
+    ckContinueStmt = 212,       ## 
+                       ## 
+                       ##  A continue statement.
+    ckBreakStmt = 213,          ## 
+                    ## 
+                    ##  A break statement.
+    ckReturnStmt = 214,         ## 
+                     ## 
+                     ##  A return statement.
+    ckGCCAsmStmt = 215,         ## 
+                     ## 
+                     ##  A GCC inline assembly statement extension.
+    ckObjCAtTryStmt = 216,      ## 
+                        ## 
+                        ##  Objective-C's overall @try-@catch-@finally statement.
+    ckObjCAtCatchStmt = 217,    ## 
+                          ## 
+                          ##  Objective-C's @catch statement.
+    ckObjCAtFinallyStmt = 218,  ## 
+                            ## 
+                            ##  Objective-C's @finally statement.
+    ckObjCAtThrowStmt = 219,    ## 
+                          ## 
+                          ##  Objective-C's @throw statement.
+    ckObjCAtSynchronizedStmt = 220, ## 
+                                 ## 
+                                 ##  Objective-C's @synchronized statement.
+    ckObjCAutoreleasePoolStmt = 221, ## 
+                                  ## 
+                                  ##  Objective-C's autorelease pool statement.
+    ckObjCForCollectionStmt = 222, ## 
+                                ## 
+                                ##  Objective-C's collection statement.
+    ckCXXCatchStmt = 223,       ## 
+                       ## 
+                       ##  C++'s catch statement.
+    ckCXXTryStmt = 224,         ## 
+                     ## 
+                     ##  C++'s try statement.
+    ckCXXForRangeStmt = 225,    ## 
+                          ## 
+                          ##  C++'s for (* : *) statement.
+    ckSEHTryStmt = 226,         ## 
+                     ## 
+                     ##  Windows Structured Exception Handling's try statement.
+    ckSEHExceptStmt = 227,      ## 
+                        ## 
+                        ##  Windows Structured Exception Handling's except statement.
+    ckSEHFinallyStmt = 228,     ## 
+                         ## 
+                         ##  Windows Structured Exception Handling's finally statement.
+    ckMSAsmStmt = 229,          ## 
+                    ## 
+                    ##  A MS inline assembly statement extension.
+    ckNullStmt = 230,           ## 
+                   ## 
+                   ##  The null statement ";": C99 6.8.3p3.
+                   ## 
+                   ##  This cursor kind is used to describe the null statement.
+    ckDeclStmt = 231,           ## 
+                   ## 
+                   ##  Adaptor class for mixing declarations with statements and expressions.
+    ckOMPParallelDirective = 232, ## 
+                               ## 
+                               ##  OpenMP parallel directive.
+    ckOMPSimdDirective = 233,   ## 
+                           ## 
+                           ##  OpenMP SIMD directive.
+    ckOMPForDirective = 234,    ## 
+                          ## 
+                          ##  OpenMP for directive.
+    ckOMPSectionsDirective = 235, ## 
+                               ## 
+                               ##  OpenMP sections directive.
+    ckOMPSectionDirective = 236, ## 
+                              ## 
+                              ##  OpenMP section directive.
+    ckOMPSingleDirective = 237, ## 
+                             ## 
+                             ##  OpenMP single directive.
+    ckOMPParallelForDirective = 238, ## 
+                                  ## 
+                                  ##  OpenMP parallel for directive.
+    ckOMPParallelSectionsDirective = 239, ## 
+                                       ## 
+                                       ##  OpenMP parallel sections directive.
+    ckOMPTaskDirective = 240,   ## 
+                           ## 
+                           ##  OpenMP task directive.
+    ckOMPMasterDirective = 241, ## 
+                             ## 
+                             ##  OpenMP master directive.
+    ckOMPCriticalDirective = 242, ## 
+                               ## 
+                               ##  OpenMP critical directive.
+    ckOMPTaskyieldDirective = 243, ## 
+                                ## 
+                                ##  OpenMP taskyield directive.
+    ckOMPBarrierDirective = 244, ## 
+                              ## 
+                              ##  OpenMP barrier directive.
+    ckOMPTaskwaitDirective = 245, ## 
+                               ## 
+                               ##  OpenMP taskwait directive.
+    ckOMPFlushDirective = 246,  ## 
+                            ## 
+                            ##  OpenMP flush directive.
+    ckSEHLeaveStmt = 247,       ## 
+                       ## 
+                       ##  Windows Structured Exception Handling's leave statement.
+    ckOMPOrderedDirective = 248, ## 
+                              ## 
+                              ##  OpenMP ordered directive.
+    ckOMPAtomicDirective = 249, ## 
+                             ## 
+                             ##  OpenMP atomic directive.
+    ckOMPForSimdDirective = 250, ## 
+                              ## 
+                              ##  OpenMP for SIMD directive.
+    ckOMPParallelForSimdDirective = 251, ## 
+                                      ## 
+                                      ##  OpenMP parallel for SIMD directive.
+    ckOMPTargetDirective = 252, ## 
+                             ## 
+                             ##  OpenMP target directive.
+    ckOMPTeamsDirective = 253,  ## 
+                            ## 
+                            ##  OpenMP teams directive.
+    ckOMPTaskgroupDirective = 254, ## 
+                                ## 
+                                ##  OpenMP taskgroup directive.
+    ckOMPCancellationPointDirective = 255, ## 
+                                        ## 
+                                        ##  OpenMP cancellation point directive.
+    ckOMPCancelDirective = 256, ## 
+                             ## 
+                             ##  OpenMP cancel directive.
+    ckOMPTargetDataDirective = 257, ## 
+                                 ## 
+                                 ##  OpenMP target data directive.
+    ckOMPTaskLoopDirective = 258, ## 
+                               ## 
+                               ##  OpenMP taskloop directive.
+    ckOMPTaskLoopSimdDirective = 259, ## 
+                                   ## 
+                                   ##  OpenMP taskloop simd directive.
+    ckOMPDistributeDirective = 260, ## 
+                                 ## 
+                                 ##  OpenMP distribute directive.
+    ckOMPTargetEnterDataDirective = 261, ## 
+                                      ## 
+                                      ##  OpenMP target enter data directive.
+    ckOMPTargetExitDataDirective = 262, ## 
+                                     ## 
+                                     ##  OpenMP target exit data directive.
+    ckOMPTargetParallelDirective = 263, ## 
+                                     ## 
+                                     ##  OpenMP target parallel directive.
+    ckOMPTargetParallelForDirective = 264, ## 
+                                        ## 
+                                        ##  OpenMP target parallel for directive.
+    ckOMPTargetUpdateDirective = 265, ## 
+                                   ## 
+                                   ##  OpenMP target update directive.
+    ckOMPDistributeParallelForDirective = 266, ## 
+                                            ## 
+                                            ##  OpenMP distribute parallel for directive.
+    ckOMPDistributeParallelForSimdDirective = 267, ## 
+                                                ## 
+                                                ##  OpenMP distribute parallel for simd directive.
+    ckOMPDistributeSimdDirective = 268, ## 
+                                     ## 
+                                     ##  OpenMP distribute simd directive.
+    ckOMPTargetParallelForSimdDirective = 269, ## 
+                                            ## 
+                                            ##  OpenMP target parallel for simd directive.
+    ckOMPTargetSimdDirective = 270, ## 
+                                 ## 
+                                 ##  OpenMP target simd directive.
+    ckOMPTeamsDistributeDirective = 271, ## 
+                                      ## 
+                                      ##  OpenMP teams distribute directive.
+    ckOMPTeamsDistributeSimdDirective = 272, ## 
+                                          ## 
+                                          ##  OpenMP teams distribute simd directive.
+    ckOMPTeamsDistributeParallelForSimdDirective = 273, ## 
+                                                     ## 
+                                                     ##  OpenMP teams distribute parallel for simd directive.
+    ckOMPTeamsDistributeParallelForDirective = 274, ## 
+                                                 ## 
+                                                 ##  OpenMP teams distribute parallel for directive.
+    ckOMPTargetTeamsDirective = 275, ## 
+                                  ## 
+                                  ##  OpenMP target teams directive.
+    ckOMPTargetTeamsDistributeDirective = 276, ## 
+                                            ## 
+                                            ##  OpenMP target teams distribute directive.
+    ckOMPTargetTeamsDistributeParallelForDirective = 277, ## 
+                                                       ## 
+                                                       ##  OpenMP target teams distribute parallel for directive.
+    ckOMPTargetTeamsDistributeParallelForSimdDirective = 278, ## 
+                                                           ## 
+                                                           ##  OpenMP target teams distribute parallel for simd directive.
+    ckOMPTargetTeamsDistributeSimdDirective = 279, ## 
+                                                ## 
+                                                ##  OpenMP target teams distribute simd directive.
+    ckBuiltinBitCastExpr = 280, ## 
+                             ## 
+                             ##  C++2a std::bit_cast expression.
+    ckOMPMasterTaskLoopDirective = 281, ## 
+                                     ## 
+                                     ##  OpenMP master taskloop directive.
+    ckOMPParallelMasterTaskLoopDirective = 282, ## 
+                                             ## 
+                                             ##  OpenMP parallel master taskloop directive.
+    ckOMPMasterTaskLoopSimdDirective = 283, ## 
+                                         ## 
+                                         ##  OpenMP master taskloop simd directive.
+    ckOMPParallelMasterTaskLoopSimdDirective = 284, ## 
+                                                 ## 
+                                                 ##  OpenMP parallel master taskloop simd directive.
+    ckOMPParallelMasterDirective = 285, ## 
+                                     ## 
+                                     ##  OpenMP parallel master directive.
+    ckTranslationUnit = 300, ## 
+                          ## 
+                          ##  Cursor that represents the translation unit itself.
+                          ## 
+                          ##  The translation unit cursor exists primarily to act as the root cursor for traversing the contents of a translation unit.
+    ckFirstAttr = 400, ## 
+                    ## 
+                    ##  Cursor that represents the translation unit itself.
+                    ## 
+                    ##  The translation unit cursor exists primarily to act as the root cursor for traversing the contents of a translation unit.
+    ckIBActionAttr = 401,       ## 
+                       ## 
+                       ##  An attribute whose specific kind is not exposed via this interface.
+    ckIBOutletAttr = 402,       ## 
+                       ## 
+                       ##  An attribute whose specific kind is not exposed via this interface.
+    ckIBOutletCollectionAttr = 403, ## 
+                                 ## 
+                                 ##  An attribute whose specific kind is not exposed via this interface.
+    ckCXXFinalAttr = 404,       ## 
+                       ## 
+                       ##  An attribute whose specific kind is not exposed via this interface.
+    ckCXXOverrideAttr = 405,    ## 
+                          ## 
+                          ##  An attribute whose specific kind is not exposed via this interface.
+    ckAnnotateAttr = 406,       ## 
+                       ## 
+                       ##  An attribute whose specific kind is not exposed via this interface.
+    ckAsmLabelAttr = 407,       ## 
+                       ## 
+                       ##  An attribute whose specific kind is not exposed via this interface.
+    ckPackedAttr = 408,         ## 
+                     ## 
+                     ##  An attribute whose specific kind is not exposed via this interface.
+    ckPureAttr = 409,           ## 
+                   ## 
+                   ##  An attribute whose specific kind is not exposed via this interface.
+    ckConstAttr = 410,          ## 
+                    ## 
+                    ##  An attribute whose specific kind is not exposed via this interface.
+    ckNoDuplicateAttr = 411,    ## 
+                          ## 
+                          ##  An attribute whose specific kind is not exposed via this interface.
+    ckCUDAConstantAttr = 412,   ## 
+                           ## 
+                           ##  An attribute whose specific kind is not exposed via this interface.
+    ckCUDADeviceAttr = 413,     ## 
+                         ## 
+                         ##  An attribute whose specific kind is not exposed via this interface.
+    ckCUDAGlobalAttr = 414,     ## 
+                         ## 
+                         ##  An attribute whose specific kind is not exposed via this interface.
+    ckCUDAHostAttr = 415,       ## 
+                       ## 
+                       ##  An attribute whose specific kind is not exposed via this interface.
+    ckCUDASharedAttr = 416,     ## 
+                         ## 
+                         ##  An attribute whose specific kind is not exposed via this interface.
+    ckVisibilityAttr = 417,     ## 
+                         ## 
+                         ##  An attribute whose specific kind is not exposed via this interface.
+    ckDLLExport = 418,          ## 
+                    ## 
+                    ##  An attribute whose specific kind is not exposed via this interface.
+    ckDLLImport = 419,          ## 
+                    ## 
+                    ##  An attribute whose specific kind is not exposed via this interface.
+    ckNSReturnsRetained = 420,  ## 
+                            ## 
+                            ##  An attribute whose specific kind is not exposed via this interface.
+    ckNSReturnsNotRetained = 421, ## 
+                               ## 
+                               ##  An attribute whose specific kind is not exposed via this interface.
+    ckNSReturnsAutoreleased = 422, ## 
+                                ## 
+                                ##  An attribute whose specific kind is not exposed via this interface.
+    ckNSConsumesSelf = 423,     ## 
+                         ## 
+                         ##  An attribute whose specific kind is not exposed via this interface.
+    ckNSConsumed = 424,         ## 
+                     ## 
+                     ##  An attribute whose specific kind is not exposed via this interface.
+    ckObjCException = 425,      ## 
+                        ## 
+                        ##  An attribute whose specific kind is not exposed via this interface.
+    ckObjCNSObject = 426,       ## 
+                       ## 
+                       ##  An attribute whose specific kind is not exposed via this interface.
+    ckObjCIndependentClass = 427, ## 
+                               ## 
+                               ##  An attribute whose specific kind is not exposed via this interface.
+    ckObjCPreciseLifetime = 428, ## 
+                              ## 
+                              ##  An attribute whose specific kind is not exposed via this interface.
+    ckObjCReturnsInnerPointer = 429, ## 
+                                  ## 
+                                  ##  An attribute whose specific kind is not exposed via this interface.
+    ckObjCRequiresSuper = 430,  ## 
+                            ## 
+                            ##  An attribute whose specific kind is not exposed via this interface.
+    ckObjCRootClass = 431,      ## 
+                        ## 
+                        ##  An attribute whose specific kind is not exposed via this interface.
+    ckObjCSubclassingRestricted = 432, ## 
+                                    ## 
+                                    ##  An attribute whose specific kind is not exposed via this interface.
+    ckObjCExplicitProtocolImpl = 433, ## 
+                                   ## 
+                                   ##  An attribute whose specific kind is not exposed via this interface.
+    ckObjCDesignatedInitializer = 434, ## 
+                                    ## 
+                                    ##  An attribute whose specific kind is not exposed via this interface.
+    ckObjCRuntimeVisible = 435, ## 
+                             ## 
+                             ##  An attribute whose specific kind is not exposed via this interface.
+    ckObjCBoxable = 436,        ## 
+                      ## 
+                      ##  An attribute whose specific kind is not exposed via this interface.
+    ckFlagEnum = 437,           ## 
+                   ## 
+                   ##  An attribute whose specific kind is not exposed via this interface.
+    ckConvergentAttr = 438,     ## 
+                         ## 
+                         ##  An attribute whose specific kind is not exposed via this interface.
+    ckWarnUnusedAttr = 439,     ## 
+                         ## 
+                         ##  An attribute whose specific kind is not exposed via this interface.
+    ckWarnUnusedResultAttr = 440, ## 
+                               ## 
+                               ##  An attribute whose specific kind is not exposed via this interface.
+    ckAlignedAttr = 441,        ## 
+                      ## 
+                      ##  An attribute whose specific kind is not exposed via this interface.
+    ckPreprocessingDirective = 500, ## 
+                                 ## 
+                                 ##  An attribute whose specific kind is not exposed via this interface.
+    ckMacroDefinition = 501,    ## 
+                          ## 
+                          ##  An attribute whose specific kind is not exposed via this interface.
+    ckMacroExpansion = 502,     ## 
+                         ## 
+                         ##  An attribute whose specific kind is not exposed via this interface.
+    ckInclusionDirective = 503, ## 
+                             ## 
+                             ##  An attribute whose specific kind is not exposed via this interface.
+    ckModuleImportDecl = 600,   ## 
+                           ## 
+                           ##  A module import declaration.
+    ckTypeAliasTemplateDecl = 601, ## 
+                                ## 
+                                ##  A module import declaration.
+    ckStaticAssert = 602,       ## 
+                       ## 
+                       ##  A static_assert or _Static_assert node
+    ckFriendDecl = 603,         ## 
+                     ## 
+                     ##  a friend declaration.
+    ckOverloadCandidate = 700   ## 
+                           ## 
+                           ##  A code completion overload candidate.
+type
   CXCursor = object
     kind*: CXCursorKind
     xdata*: int
@@ -980,7 +2397,7 @@ proc getTranslationUnitCursor*(argCXTranslationUnit: CXTranslationUnit) {.cdecl,
   ##  Retrieve the cursor that represents the given translation unit.
   ## 
   ##  The translation unit cursor can be used to start traversing the various declarations within the given translation unit.
-proc equalCursors*(argCXCursor: CXCursor; argCXCursor: CXCursor) {.cdecl,
+proc equalCursors*(argCXCursor: CXCursor; argCXCursor1: CXCursor) {.cdecl,
     dynlib: libclang, importc: "clang_equalCursors".}
   ## 
   ## 
@@ -1065,11 +2482,53 @@ proc isUnexposed*(argCXCursorKind: CXCursorKind) {.cdecl, dynlib: libclang,
   ## 
   ## 
   ## * Determine whether the given cursor represents a currently  unexposed piece of the AST (e.g., CXCursor_UnexposedStmt).
+type
+  CXLinkageKind = enum ## 
+                    ## 
+                    ##  Describe the linkage of the entity referred to by a cursor.
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+    lkInvalid,                ## 
+              ## 
+              ##  This value indicates that no linkage information is available for a provided CXCursor. 
+    lkNoLinkage,              ## 
+                ## 
+                ##  This is the linkage for variables, parameters, and so on that  have automatic storage.  This covers normal (non-extern) local variables.
+    lkInternal,               ## 
+               ## 
+               ##  This is the linkage for static variables and static functions. 
+    lkUniqueExternal,         ## 
+                     ## 
+                     ##  This is the linkage for entities with external linkage that live in C++ anonymous namespaces.
+    lkExternal                ## 
+              ## 
+              ##  This is the linkage for entities with true, external linkage. 
 proc getCursorLinkage*(cursor: CXCursor) {.cdecl, dynlib: libclang,
                                         importc: "clang_getCursorLinkage".}
   ## 
   ## 
   ##  Determine the linkage of the entity referred to by a given cursor.
+type
+  CXVisibilityKind = enum       ## 
+                       ## 
+                       ## 
+                       ## 
+                       ## 
+    vkInvalid,                ## 
+              ## 
+              ##  This value indicates that no visibility information is available for a provided CXCursor. 
+    vkHidden,                 ## 
+             ## 
+             ##  Symbol not seen by the linker. 
+    vkProtected,              ## 
+                ## 
+                ##  Symbol seen by the linker but resolves to a symbol inside this object. 
+    vkDefault                 ## 
+             ## 
+             ##  Symbol seen by the linker and acts like a normal symbol. 
 proc getCursorVisibility*(cursor: CXCursor) {.cdecl, dynlib: libclang,
     importc: "clang_getCursorVisibility".}
   ## 
@@ -1162,11 +2621,28 @@ proc disposeCXPlatformAvailability*(availability: ptr[CXPlatformAvailability]) {
   ## 
   ## 
   ##  Free the memory associated with a Error: cannot render: rnLiteralBlock structure.
+type
+  CXLanguageKind = enum ## 
+                     ## 
+                     ##  Describe the "language" of the entity referred to by a cursor.
+                     ## 
+                     ## 
+                     ## 
+                     ## 
+    lakInvalid = 0, lakC, lakObjC, lakCPlusPlus
 proc getCursorLanguage*(cursor: CXCursor) {.cdecl, dynlib: libclang,
     importc: "clang_getCursorLanguage".}
   ## 
   ## 
   ##  Determine the "language" of the entity referred to by a given cursor.
+type
+  CXTLSKind = enum ## 
+                ## 
+                ##  Describe the "thread-local storage (TLS) kind" of the declaration referred to by a cursor.
+                ## 
+                ## 
+                ## 
+    tlskNone = 0, tlskDynamic, tlskStatic
 proc getCursorTLSKind*(cursor: CXCursor) {.cdecl, dynlib: libclang,
                                         importc: "clang_getCursorTLSKind".}
   ## 
@@ -1177,6 +2653,9 @@ proc getTranslationUnit*(argCXCursor: CXCursor) {.cdecl, dynlib: libclang,
   ## 
   ## 
   ##  Returns the translation unit that a cursor originated from.
+type
+  CXCursorSetImpl = object
+  
 type
   CXCursorSet = distinct ptr[CXCursorSetImpl]
 proc createCXCursorSet*() {.cdecl, dynlib: libclang,
@@ -1304,6 +2783,619 @@ proc getCursorExtent*(argCXCursor: CXCursor) {.cdecl, dynlib: libclang,
   ## 
   ##  The extent of a cursor starts with the file/line/column pointing at the first character within the source construct that the cursor refers to and ends with the last character within that source construct. For a declaration, the extent covers the declaration itself. For a reference, the extent covers the location of the reference (e.g., where the referenced entity was actually used).
 type
+  CXTypeKind = enum             ## 
+                 ## 
+                 ##  Describes the kind of type
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## - CXType_FirstBuiltin = CXType_Void
+                 ## - CXType_LastBuiltin = CXType_ULongAccum
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+                 ## 
+    tkInvalid = 0,              ## 
+                ## 
+                ##  Represents an invalid type (e.g., where no type is available).
+    tkUnexposed = 1,            ## 
+                  ## 
+                  ##  A type whose specific kind is not exposed via this interface.
+    tkVoid = 2,                 ## 
+             ## 
+             ##  A type whose specific kind is not exposed via this interface.
+    tkBool = 3,                 ## 
+             ## 
+             ##  A type whose specific kind is not exposed via this interface.
+    tkChar_U = 4,               ## 
+               ## 
+               ##  A type whose specific kind is not exposed via this interface.
+    tkUChar = 5,                ## 
+              ## 
+              ##  A type whose specific kind is not exposed via this interface.
+    tkChar16 = 6,               ## 
+               ## 
+               ##  A type whose specific kind is not exposed via this interface.
+    tkChar32 = 7,               ## 
+               ## 
+               ##  A type whose specific kind is not exposed via this interface.
+    tkUShort = 8,               ## 
+               ## 
+               ##  A type whose specific kind is not exposed via this interface.
+    tkUInt = 9,                 ## 
+             ## 
+             ##  A type whose specific kind is not exposed via this interface.
+    tkULong = 10,               ## 
+               ## 
+               ##  A type whose specific kind is not exposed via this interface.
+    tkULongLong = 11,           ## 
+                   ## 
+                   ##  A type whose specific kind is not exposed via this interface.
+    tkUInt128 = 12,             ## 
+                 ## 
+                 ##  A type whose specific kind is not exposed via this interface.
+    tkChar_S = 13,              ## 
+                ## 
+                ##  A type whose specific kind is not exposed via this interface.
+    tkSChar = 14,               ## 
+               ## 
+               ##  A type whose specific kind is not exposed via this interface.
+    tkWChar = 15,               ## 
+               ## 
+               ##  A type whose specific kind is not exposed via this interface.
+    tkShort = 16,               ## 
+               ## 
+               ##  A type whose specific kind is not exposed via this interface.
+    tkInt = 17,                 ## 
+             ## 
+             ##  A type whose specific kind is not exposed via this interface.
+    tkLong = 18,                ## 
+              ## 
+              ##  A type whose specific kind is not exposed via this interface.
+    tkLongLong = 19,            ## 
+                  ## 
+                  ##  A type whose specific kind is not exposed via this interface.
+    tkInt128 = 20,              ## 
+                ## 
+                ##  A type whose specific kind is not exposed via this interface.
+    tkFloat = 21,               ## 
+               ## 
+               ##  A type whose specific kind is not exposed via this interface.
+    tkDouble = 22,              ## 
+                ## 
+                ##  A type whose specific kind is not exposed via this interface.
+    tkLongDouble = 23,          ## 
+                    ## 
+                    ##  A type whose specific kind is not exposed via this interface.
+    tkNullPtr = 24,             ## 
+                 ## 
+                 ##  A type whose specific kind is not exposed via this interface.
+    tkOverload = 25,            ## 
+                  ## 
+                  ##  A type whose specific kind is not exposed via this interface.
+    tkDependent = 26,           ## 
+                   ## 
+                   ##  A type whose specific kind is not exposed via this interface.
+    tkObjCId = 27,              ## 
+                ## 
+                ##  A type whose specific kind is not exposed via this interface.
+    tkObjCClass = 28,           ## 
+                   ## 
+                   ##  A type whose specific kind is not exposed via this interface.
+    tkObjCSel = 29,             ## 
+                 ## 
+                 ##  A type whose specific kind is not exposed via this interface.
+    tkFloat128 = 30,            ## 
+                  ## 
+                  ##  A type whose specific kind is not exposed via this interface.
+    tkHalf = 31,                ## 
+              ## 
+              ##  A type whose specific kind is not exposed via this interface.
+    tkFloat16 = 32,             ## 
+                 ## 
+                 ##  A type whose specific kind is not exposed via this interface.
+    tkShortAccum = 33,          ## 
+                    ## 
+                    ##  A type whose specific kind is not exposed via this interface.
+    tkAccum = 34,               ## 
+               ## 
+               ##  A type whose specific kind is not exposed via this interface.
+    tkLongAccum = 35,           ## 
+                   ## 
+                   ##  A type whose specific kind is not exposed via this interface.
+    tkUShortAccum = 36,         ## 
+                     ## 
+                     ##  A type whose specific kind is not exposed via this interface.
+    tkUAccum = 37,              ## 
+                ## 
+                ##  A type whose specific kind is not exposed via this interface.
+    tkULongAccum = 38,          ## 
+                    ## 
+                    ##  A type whose specific kind is not exposed via this interface.
+    tkComplex = 100,            ## 
+                  ## 
+                  ##  A type whose specific kind is not exposed via this interface.
+    tkPointer = 101,            ## 
+                  ## 
+                  ##  A type whose specific kind is not exposed via this interface.
+    tkBlockPointer = 102,       ## 
+                       ## 
+                       ##  A type whose specific kind is not exposed via this interface.
+    tkLValueReference = 103,    ## 
+                          ## 
+                          ##  A type whose specific kind is not exposed via this interface.
+    tkRValueReference = 104,    ## 
+                          ## 
+                          ##  A type whose specific kind is not exposed via this interface.
+    tkRecord = 105,             ## 
+                 ## 
+                 ##  A type whose specific kind is not exposed via this interface.
+    tkEnum = 106,               ## 
+               ## 
+               ##  A type whose specific kind is not exposed via this interface.
+    tkTypedef = 107,            ## 
+                  ## 
+                  ##  A type whose specific kind is not exposed via this interface.
+    tkObjCInterface = 108,      ## 
+                        ## 
+                        ##  A type whose specific kind is not exposed via this interface.
+    tkObjCObjectPointer = 109,  ## 
+                            ## 
+                            ##  A type whose specific kind is not exposed via this interface.
+    tkFunctionNoProto = 110,    ## 
+                          ## 
+                          ##  A type whose specific kind is not exposed via this interface.
+    tkFunctionProto = 111,      ## 
+                        ## 
+                        ##  A type whose specific kind is not exposed via this interface.
+    tkConstantArray = 112,      ## 
+                        ## 
+                        ##  A type whose specific kind is not exposed via this interface.
+    tkVector = 113,             ## 
+                 ## 
+                 ##  A type whose specific kind is not exposed via this interface.
+    tkIncompleteArray = 114,    ## 
+                          ## 
+                          ##  A type whose specific kind is not exposed via this interface.
+    tkVariableArray = 115,      ## 
+                        ## 
+                        ##  A type whose specific kind is not exposed via this interface.
+    tkDependentSizedArray = 116, ## 
+                              ## 
+                              ##  A type whose specific kind is not exposed via this interface.
+    tkMemberPointer = 117,      ## 
+                        ## 
+                        ##  A type whose specific kind is not exposed via this interface.
+    tkAuto = 118,               ## 
+               ## 
+               ##  A type whose specific kind is not exposed via this interface.
+    tkElaborated = 119, ## 
+                     ## 
+                     ##  Represents a type that was referred to using an elaborated type keyword.
+                     ## 
+                     ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkPipe = 120, ## 
+               ## 
+               ##  Represents a type that was referred to using an elaborated type keyword.
+               ## 
+               ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage1dRO = 121, ## 
+                       ## 
+                       ##  Represents a type that was referred to using an elaborated type keyword.
+                       ## 
+                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage1dArrayRO = 122, ## 
+                            ## 
+                            ##  Represents a type that was referred to using an elaborated type keyword.
+                            ## 
+                            ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage1dBufferRO = 123, ## 
+                             ## 
+                             ##  Represents a type that was referred to using an elaborated type keyword.
+                             ## 
+                             ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dRO = 124, ## 
+                       ## 
+                       ##  Represents a type that was referred to using an elaborated type keyword.
+                       ## 
+                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dArrayRO = 125, ## 
+                            ## 
+                            ##  Represents a type that was referred to using an elaborated type keyword.
+                            ## 
+                            ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dDepthRO = 126, ## 
+                            ## 
+                            ##  Represents a type that was referred to using an elaborated type keyword.
+                            ## 
+                            ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dArrayDepthRO = 127, ## 
+                                 ## 
+                                 ##  Represents a type that was referred to using an elaborated type keyword.
+                                 ## 
+                                 ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dMSAARO = 128, ## 
+                           ## 
+                           ##  Represents a type that was referred to using an elaborated type keyword.
+                           ## 
+                           ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dArrayMSAARO = 129, ## 
+                                ## 
+                                ##  Represents a type that was referred to using an elaborated type keyword.
+                                ## 
+                                ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dMSAADepthRO = 130, ## 
+                                ## 
+                                ##  Represents a type that was referred to using an elaborated type keyword.
+                                ## 
+                                ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dArrayMSAADepthRO = 131, ## 
+                                     ## 
+                                     ##  Represents a type that was referred to using an elaborated type keyword.
+                                     ## 
+                                     ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage3dRO = 132, ## 
+                       ## 
+                       ##  Represents a type that was referred to using an elaborated type keyword.
+                       ## 
+                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage1dWO = 133, ## 
+                       ## 
+                       ##  Represents a type that was referred to using an elaborated type keyword.
+                       ## 
+                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage1dArrayWO = 134, ## 
+                            ## 
+                            ##  Represents a type that was referred to using an elaborated type keyword.
+                            ## 
+                            ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage1dBufferWO = 135, ## 
+                             ## 
+                             ##  Represents a type that was referred to using an elaborated type keyword.
+                             ## 
+                             ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dWO = 136, ## 
+                       ## 
+                       ##  Represents a type that was referred to using an elaborated type keyword.
+                       ## 
+                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dArrayWO = 137, ## 
+                            ## 
+                            ##  Represents a type that was referred to using an elaborated type keyword.
+                            ## 
+                            ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dDepthWO = 138, ## 
+                            ## 
+                            ##  Represents a type that was referred to using an elaborated type keyword.
+                            ## 
+                            ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dArrayDepthWO = 139, ## 
+                                 ## 
+                                 ##  Represents a type that was referred to using an elaborated type keyword.
+                                 ## 
+                                 ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dMSAAWO = 140, ## 
+                           ## 
+                           ##  Represents a type that was referred to using an elaborated type keyword.
+                           ## 
+                           ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dArrayMSAAWO = 141, ## 
+                                ## 
+                                ##  Represents a type that was referred to using an elaborated type keyword.
+                                ## 
+                                ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dMSAADepthWO = 142, ## 
+                                ## 
+                                ##  Represents a type that was referred to using an elaborated type keyword.
+                                ## 
+                                ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dArrayMSAADepthWO = 143, ## 
+                                     ## 
+                                     ##  Represents a type that was referred to using an elaborated type keyword.
+                                     ## 
+                                     ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage3dWO = 144, ## 
+                       ## 
+                       ##  Represents a type that was referred to using an elaborated type keyword.
+                       ## 
+                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage1dRW = 145, ## 
+                       ## 
+                       ##  Represents a type that was referred to using an elaborated type keyword.
+                       ## 
+                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage1dArrayRW = 146, ## 
+                            ## 
+                            ##  Represents a type that was referred to using an elaborated type keyword.
+                            ## 
+                            ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage1dBufferRW = 147, ## 
+                             ## 
+                             ##  Represents a type that was referred to using an elaborated type keyword.
+                             ## 
+                             ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dRW = 148, ## 
+                       ## 
+                       ##  Represents a type that was referred to using an elaborated type keyword.
+                       ## 
+                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dArrayRW = 149, ## 
+                            ## 
+                            ##  Represents a type that was referred to using an elaborated type keyword.
+                            ## 
+                            ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dDepthRW = 150, ## 
+                            ## 
+                            ##  Represents a type that was referred to using an elaborated type keyword.
+                            ## 
+                            ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dArrayDepthRW = 151, ## 
+                                 ## 
+                                 ##  Represents a type that was referred to using an elaborated type keyword.
+                                 ## 
+                                 ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dMSAARW = 152, ## 
+                           ## 
+                           ##  Represents a type that was referred to using an elaborated type keyword.
+                           ## 
+                           ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dArrayMSAARW = 153, ## 
+                                ## 
+                                ##  Represents a type that was referred to using an elaborated type keyword.
+                                ## 
+                                ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dMSAADepthRW = 154, ## 
+                                ## 
+                                ##  Represents a type that was referred to using an elaborated type keyword.
+                                ## 
+                                ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage2dArrayMSAADepthRW = 155, ## 
+                                     ## 
+                                     ##  Represents a type that was referred to using an elaborated type keyword.
+                                     ## 
+                                     ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLImage3dRW = 156, ## 
+                       ## 
+                       ##  Represents a type that was referred to using an elaborated type keyword.
+                       ## 
+                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLSampler = 157, ## 
+                     ## 
+                     ##  Represents a type that was referred to using an elaborated type keyword.
+                     ## 
+                     ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLEvent = 158, ## 
+                   ## 
+                   ##  Represents a type that was referred to using an elaborated type keyword.
+                   ## 
+                   ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLQueue = 159, ## 
+                   ## 
+                   ##  Represents a type that was referred to using an elaborated type keyword.
+                   ## 
+                   ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLReserveID = 160, ## 
+                       ## 
+                       ##  Represents a type that was referred to using an elaborated type keyword.
+                       ## 
+                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkObjCObject = 161, ## 
+                     ## 
+                     ##  Represents a type that was referred to using an elaborated type keyword.
+                     ## 
+                     ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkObjCTypeParam = 162, ## 
+                        ## 
+                        ##  Represents a type that was referred to using an elaborated type keyword.
+                        ## 
+                        ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkAttributed = 163, ## 
+                     ## 
+                     ##  Represents a type that was referred to using an elaborated type keyword.
+                     ## 
+                     ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLIntelSubgroupAVCMcePayload = 164, ## 
+                                        ## 
+                                        ##  Represents a type that was referred to using an elaborated type keyword.
+                                        ## 
+                                        ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLIntelSubgroupAVCImePayload = 165, ## 
+                                        ## 
+                                        ##  Represents a type that was referred to using an elaborated type keyword.
+                                        ## 
+                                        ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLIntelSubgroupAVCRefPayload = 166, ## 
+                                        ## 
+                                        ##  Represents a type that was referred to using an elaborated type keyword.
+                                        ## 
+                                        ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLIntelSubgroupAVCSicPayload = 167, ## 
+                                        ## 
+                                        ##  Represents a type that was referred to using an elaborated type keyword.
+                                        ## 
+                                        ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLIntelSubgroupAVCMceResult = 168, ## 
+                                       ## 
+                                       ##  Represents a type that was referred to using an elaborated type keyword.
+                                       ## 
+                                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLIntelSubgroupAVCImeResult = 169, ## 
+                                       ## 
+                                       ##  Represents a type that was referred to using an elaborated type keyword.
+                                       ## 
+                                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLIntelSubgroupAVCRefResult = 170, ## 
+                                       ## 
+                                       ##  Represents a type that was referred to using an elaborated type keyword.
+                                       ## 
+                                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLIntelSubgroupAVCSicResult = 171, ## 
+                                       ## 
+                                       ##  Represents a type that was referred to using an elaborated type keyword.
+                                       ## 
+                                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLIntelSubgroupAVCImeResultSingleRefStreamout = 172, ## 
+                                                         ## 
+                                                         ##  Represents a type that was referred to using an elaborated type keyword.
+                                                         ## 
+                                                         ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLIntelSubgroupAVCImeResultDualRefStreamout = 173, ## 
+                                                       ## 
+                                                       ##  Represents a type that was referred to using an elaborated type keyword.
+                                                       ## 
+                                                       ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLIntelSubgroupAVCImeSingleRefStreamin = 174, ## 
+                                                  ## 
+                                                  ##  Represents a type that was referred to using an elaborated type keyword.
+                                                  ## 
+                                                  ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkOCLIntelSubgroupAVCImeDualRefStreamin = 175, ## 
+                                                ## 
+                                                ##  Represents a type that was referred to using an elaborated type keyword.
+                                                ## 
+                                                ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+    tkExtVector = 176 ## 
+                   ## 
+                   ##  Represents a type that was referred to using an elaborated type keyword.
+                   ## 
+                   ##  E.g., struct S, or via a qualified name, e.g., N::M::type, or both.
+type
+  CXCallingConv = enum ## 
+                    ## 
+                    ##  Describes the calling convention of a function type
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## - CXCallingConv_X86_64Win64 = CXCallingConv_Win64
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+    ccDefault = 0, ccC = 1, ccX86StdCall = 2, ccX86FastCall = 3, ccX86ThisCall = 4,
+    ccX86Pascal = 5, ccAAPCS = 6, ccAAPCS_VFP = 7, ccX86RegCall = 8, ccIntelOclBicc = 9,
+    ccWin64 = 10, ccX86_64SysV = 11, ccX86VectorCall = 12, ccSwift = 13,
+    ccPreserveMost = 14, ccPreserveAll = 15, ccAArch64VectorCall = 16, ccInvalid = 100,
+    ccUnexposed = 200
+type
   CXType = object
     kind*: CXTypeKind
     data*: array[2, pointer]
@@ -1369,6 +3461,24 @@ proc getArgument*(c: CXCursor; i: cuint) {.cdecl, dynlib: libclang,
   ##  Retrieve the argument cursor of a function or method.
   ## 
   ##  The argument cursor can be determined for calls as well as for declarations of functions or methods. For other cursors and for invalid indices, an invalid cursor is returned.
+type
+  CXTemplateArgumentKind = enum ## 
+                             ## 
+                             ##  Describes the kind of a template argument.
+                             ## 
+                             ##  See the definition of llvm::clang::TemplateArgument::ArgKind for full element descriptions.
+                             ## 
+                             ## 
+                             ## 
+                             ## 
+                             ## 
+                             ## 
+                             ## 
+                             ## 
+                             ## 
+                             ## 
+    takNull, takType, takDeclaration, takNullPtr, takIntegral, takTemplate,
+    takTemplateExpansion, takExpression, takPack, takInvalid
 proc getNumTemplateArguments*(c: CXCursor) {.cdecl, dynlib: libclang,
     importc: "clang_Cursor_getNumTemplateArguments".}
   ## 
@@ -1651,11 +3761,59 @@ proc isTransparentTagTypedef*(t: CXType) {.cdecl, dynlib: libclang, importc: "cl
   ## **
   ## 
   ##  non-zero if transparent and zero otherwise.
+type
+  CXTypeNullabilityKind = enum  ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+    tnkNonNull = 0,             ## 
+                 ## 
+                 ##  Values of this type can never be null.
+    tnkNullable = 1,            ## 
+                  ## 
+                  ##  Values of this type can be null.
+    tnkUnspecified = 2,         ## 
+                     ## 
+                     ##  Whether values of this type can be null is (explicitly) unspecified. This captures a (fairly rare) case where we can't conclude anything about the nullability of the type even though it has been considered.
+    tnkInvalid = 3              ## 
+                ## 
+                ##  Nullability is not applicable to this type.
 proc getNullability*(t: CXType) {.cdecl, dynlib: libclang,
                                importc: "clang_Type_getNullability".}
   ## 
   ## 
   ##  Retrieve the nullability kind of a pointer type.
+type
+  CXTypeLayoutError = enum ## 
+                        ## 
+                        ##  List the possible error codes for Error: cannot render: rnLiteralBlock   Error: cannot render: rnLiteralBlock Error: cannot render: rnLiteralBlock and   Error: cannot render: rnLiteralBlock
+                        ## 
+                        ##  A value of this enumeration type can be returned if the target type is not a valid argument to sizeof, alignof or offsetof.
+                        ## 
+                        ## 
+                        ## 
+                        ## 
+                        ## 
+                        ## 
+    tleInvalid = 1,             ## 
+                 ## 
+                 ##  Type is of kind CXType_Invalid.
+    tleIncomplete = 2,          ## 
+                    ## 
+                    ##  The type is an incomplete Type.
+    tleDependent = 3,           ## 
+                   ## 
+                   ##  The type is a dependent Type.
+    tleNotConstantSize = 4,     ## 
+                         ## 
+                         ##  The type is not a constant size type.
+    tleInvalidFieldName = 5,    ## 
+                          ## 
+                          ##  The Field name is not valid for this record.
+    tleUndeduced = 6            ## 
+                  ## 
+                  ##  The type is undeduced.
 proc getAlignOf*(t: CXType) {.cdecl, dynlib: libclang,
                            importc: "clang_Type_getAlignOf".}
   ## 
@@ -1711,6 +3869,20 @@ proc isInlineNamespace*(c: CXCursor) {.cdecl, dynlib: libclang,
   ## 
   ## 
   ##  Determine whether the given cursor represents an inline namespace declaration.
+type
+  CXRefQualifierKind = enum     ## 
+                         ## 
+                         ## 
+                         ## 
+    rqkNone = 0,                ## 
+              ## 
+              ##  No ref-qualifier was provided. 
+    rqkLValue,                ## 
+              ## 
+              ##  An lvalue ref-qualifier was provided (Error: cannot render: rnLiteralBlock 
+    rqkRValue                 ## 
+             ## 
+             ##  An rvalue ref-qualifier was provided (Error: cannot render: rnLiteralBlock 
 proc getNumTemplateArguments*(t: CXType) {.cdecl, dynlib: libclang, importc: "clang_Type_getNumTemplateArguments".}
   ## 
   ## 
@@ -1739,6 +3911,15 @@ proc isVirtualBase*(argCXCursor: CXCursor) {.cdecl, dynlib: libclang,
   ## 
   ## 
   ##  Returns 1 if the base class specified by the cursor with kind   CX_CXXBaseSpecifier is virtual.
+type
+  CX_CXXAccessSpecifier = enum ## 
+                            ## 
+                            ##  Represents the C++ access control level to a base class for a cursor with kind CX_CXXBaseSpecifier.
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+    asInvalidAccessSpecifier, asPublic, asProtected, asPrivate
 proc getCXXAccessSpecifier*(argCXCursor: CXCursor) {.cdecl, dynlib: libclang,
     importc: "clang_getCXXAccessSpecifier".}
   ## 
@@ -1746,6 +3927,20 @@ proc getCXXAccessSpecifier*(argCXCursor: CXCursor) {.cdecl, dynlib: libclang,
   ##  Returns the access control level for the referenced object.
   ## 
   ##  If the cursor refers to a C++ declaration, its access control level within its parent scope is returned. Otherwise, if the cursor refers to a base specifier or access specifier, the specifier itself is returned.
+type
+  CX_StorageClass = enum ## 
+                      ## 
+                      ##  Represents the storage classes as declared in the source. CX_SC_Invalid was added for the case that the passed cursor in not a declaration.
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+    scC_Invalid, scC_None, scC_Extern, scC_Static, scC_PrivateExtern,
+    scC_OpenCLWorkGroupLocal, scC_Auto, scC_Register
 proc getStorageClass*(argCXCursor: CXCursor) {.cdecl, dynlib: libclang,
     importc: "clang_Cursor_getStorageClass".}
   ## 
@@ -1794,6 +3989,24 @@ proc getIBOutletCollectionType*(argCXCursor: CXCursor) {.cdecl, dynlib: libclang
   ##  For cursors representing an iboutletcollection attribute,  this function returns the collection element type.
   ## 
   ##  
+type
+  CXChildVisitResult = enum ## 
+                         ## 
+                         ##  Describes how the traversal of the children of a particular cursor should proceed after visiting a particular child cursor.
+                         ## 
+                         ##  A value of this enumeration type should be returned by each Error: cannot render: rnLiteralBlock to indicate how clang_visitChildren() proceed.
+                         ## 
+                         ## 
+                         ## 
+    cvrBreak,                 ## 
+             ## 
+             ##  Terminates the cursor traversal.
+    cvrContinue,              ## 
+                ## 
+                ##  Continues the cursor traversal with the next sibling of the cursor just visited, without visiting its children.
+    cvrRecurse                ## 
+              ## 
+              ##  Recursively traverse the children of this cursor, using the same visitor and client data.
 type
   CXCursorVisitor = distinct ptr[proc (a0: CXCursor; a1: CXCursor; a2: pointer): CXChildVisitResult {.
       cdecl.}]
@@ -1881,6 +4094,47 @@ proc getSpellingNameRange*(argCXCursor: CXCursor; pieceIndex: cuint; options: cu
   ##  Reserved.
 type
   CXPrintingPolicy = distinct pointer
+type
+  CXPrintingPolicyProperty = enum ## 
+                               ## 
+                               ##  Properties for the printing policy.
+                               ## 
+                               ##  See Error: cannot render: rnLiteralBlock for more information.
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+                               ## 
+    pppIndentation, pppSuppressSpecifiers, pppSuppressTagKeyword,
+    pppIncludeTagDefinition, pppSuppressScope, pppSuppressUnwrittenScope,
+    pppSuppressInitializers, pppConstantArraySizeAsWritten,
+    pppAnonymousTagLocations, pppSuppressStrongLifetime,
+    pppSuppressLifetimeQualifiers, pppSuppressTemplateArgsInCXXConstructors,
+    pppBool, pppRestrict, pppAlignof, pppUnderscoreAlignof, pppUseVoidForZeroParams,
+    pppTerseOutput, pppPolishForDeclaration, pppHalf, pppMSWChar,
+    pppIncludeNewlines, pppMSVCFormatting, pppConstantsAsWritten,
+    pppSuppressImplicitBase, pppFullyQualifiedName
 proc getProperty*(policy: CXPrintingPolicy; property: CXPrintingPolicyProperty) {.
     cdecl, dynlib: libclang, importc: "clang_PrintingPolicy_getProperty".}
   ## 
@@ -2000,7 +4254,23 @@ proc getReceiverType*(c: CXCursor) {.cdecl, dynlib: libclang,
   ## 
   ##  Given a cursor pointing to an Objective-C message or property reference, or C++ method call, returns the CXType of the receiver.
 type
-  CXObjCPropertyAttrKind = enum
+  CXObjCPropertyAttrKind = enum ## 
+                             ## 
+                             ##  Property attributes for a Error: cannot render: rnLiteralBlock 
+                             ## 
+                             ## 
+                             ## 
+                             ## 
+                             ## 
+                             ## 
+                             ## 
+                             ## 
+                             ## 
+                             ## 
+                             ## 
+                             ## 
+                             ## 
+                             ## 
     ocpaknoattr = 0, ocpakreadonly = 1, ocpakgetter = 2, ocpakassign = 4,
     ocpakreadwrite = 8, ocpakretain = 16, ocpakcopy = 32, ocpaknonatomic = 64,
     ocpaksetter = 128, ocpakatomic = 256, ocpakweak = 512, ocpakstrong = 1024,
@@ -2025,7 +4295,16 @@ proc getObjCPropertySetterName*(c: CXCursor) {.cdecl, dynlib: libclang,
   ## 
   ##  Given a cursor that represents a property declaration, return the name of the method that implements the setter, if any.
 type
-  CXObjCDeclQualifierKind = enum
+  CXObjCDeclQualifierKind = enum ## 
+                              ## 
+                              ##  'Qualifiers' written next to the return and parameter types in Objective-C method declarations.
+                              ## 
+                              ## 
+                              ## 
+                              ## 
+                              ## 
+                              ## 
+                              ## 
     ocdqkNone = 0, ocdqkIn = 1, ocdqkInout = 2, ocdqkOut = 4, ocdqkBycopy = 8, ocdqkByref = 16,
     ocdqkOneway = 32
 proc getObjCDeclQualifiers*(c: CXCursor) {.cdecl, dynlib: libclang, importc: "clang_Cursor_getObjCDeclQualifiers".}
@@ -2316,22 +4595,47 @@ proc getCursorReferenceNameRange*(c: CXCursor; nameFlags: cuint; pieceIndex: cui
   ## 
   ##  The piece of the name pointed to by the given cursor. If there is no name, or if the PieceIndex is out-of-range, a null-cursor will be returned.
 type
-  CXTokenKind = enum
-    tkPunctuation,            ## 
+  CXNameRefFlags = enum         ## 
+                     ## 
+                     ## 
+                     ## 
+    nrfange_WantQualifier = 1,  ## 
+                            ## 
+                            ##  Include the nested-name-specifier, e.g. Foo:: in x.Foo::y, in the range.
+    nrfange_WantTemplateArgs = 2, ## 
+                               ## 
+                               ##  Include the explicit template arguments, e.g. <int> in x.f<int>, in the range.
+    nrfange_WantSinglePiece = 4 ## 
+                             ## 
+                             ##  If the name is non-contiguous, return the full spanning range.
+                             ## 
+                             ##  Non-contiguous names occur in Objective-C when a selector with two or more parameters is used, or in C++ when using an operator: Error: cannot render: rnCodeBlock
+                             ## 
+                             ##    
+type
+  CXTokenKind = enum            ## 
                   ## 
-                  ##  A token that contains some kind of punctuation.
-    tkKeyword,                ## 
+                  ##  Describes a kind of token.
+                  ## 
+                  ## 
+                  ## 
+                  ## 
+                  ## 
+    tokPunctuation,           ## 
+                   ## 
+                   ##  A token that contains some kind of punctuation.
+    tokKeyword,               ## 
+               ## 
+               ##  A language keyword.
+    tokIdentifier,            ## 
+                  ## 
+                  ##  An identifier (that is not a keyword).
+    tokLiteral,               ## 
+               ## 
+               ##  A numeric, string, or character literal.
+    tokComment                ## 
               ## 
-              ##  A language keyword.
-    tkIdentifier,             ## 
-                 ## 
-                 ##  An identifier (that is not a keyword).
-    tkLiteral,                ## 
-              ## 
-              ##  A numeric, string, or character literal.
-    tkComment                 ## 
-             ## 
-             ##  A comment.
+              ##  A comment.
 type
   CXToken = object
     int_data*: array[4, cuint]
@@ -2461,6 +4765,120 @@ type
     cursorKind*: CXCursorKind
     completionString*: CXCompletionString
 
+type
+  CXCompletionChunkKind = enum ## 
+                            ## 
+                            ##  Describes a single piece of text within a code-completion string.
+                            ## 
+                            ##  Each "chunk" within a code-completion string (Error: cannot render: rnLiteralBlock is either a piece of text with a specific "kind" that describes how that text should be interpreted by the client or is another completion string.
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+                            ## 
+    cckOptional, ## 
+                ## 
+                ##  A code-completion string that describes "optional" text that could be a part of the template (but is not required).
+                ## 
+                ##  The Optional chunk is the only kind of chunk that has a code-completion string for its representation, which is accessible via Error: cannot render: rnLiteralBlock The code-completion string describes an additional part of the template that is completely optional. For example, optional chunks can be used to describe the placeholders for arguments that match up with defaulted function parameters, e.g. given:
+                ## 
+                ##  Error: cannot render: rnCodeBlock
+                ## 
+                ##  The code-completion string for this function would contain:   - a TypedText chunk for "f".   - a LeftParen chunk for "(".   - a Placeholder chunk for "int x"   - an Optional chunk containing the remaining defaulted arguments, e.g.,       - a Comma chunk for ","       - a Placeholder chunk for "float y"       - an Optional chunk containing the last defaulted argument:           - a Comma chunk for ","           - a Placeholder chunk for "double z"   - a RightParen chunk for ")"
+                ## 
+                ##  There are many ways to handle Optional chunks. Two simple approaches are:   - Completely ignore optional chunks, in which case the template for the     function "f" would only include the first parameter ("int x").   - Fully expand all optional chunks, in which case the template for the     function "f" would have all of the parameters.
+    cckTypedText, ## 
+                 ## 
+                 ##  Text that a user would be expected to type to get this code-completion result.
+                 ## 
+                 ##  There will be exactly one "typed text" chunk in a semantic string, which will typically provide the spelling of a keyword or the name of a declaration that could be used at the current code point. Clients are expected to filter the code-completion results based on the text in this chunk.
+    cckText, ## 
+            ## 
+            ##  Text that should be inserted as part of a code-completion result.
+            ## 
+            ##  A "text" chunk represents text that is part of the template to be inserted into user code should this particular code-completion result be selected.
+    cckPlaceholder, ## 
+                   ## 
+                   ##  Placeholder text that should be replaced by the user.
+                   ## 
+                   ##  A "placeholder" chunk marks a place where the user should insert text into the code-completion template. For example, placeholders might mark the function parameters for a function declaration, to indicate that the user should provide arguments for each of those parameters. The actual text in a placeholder is a suggestion for the text to display before the user replaces the placeholder with real code.
+    cckInformative, ## 
+                   ## 
+                   ##  Informative text that should be displayed but never inserted as part of the template.
+                   ## 
+                   ##  An "informative" chunk contains annotations that can be displayed to help the user decide whether a particular code-completion result is the right option, but which is not part of the actual template to be inserted by code completion.
+    cckCurrentParameter, ## 
+                        ## 
+                        ##  Text that describes the current parameter when code-completion is referring to function call, message send, or template specialization.
+                        ## 
+                        ##  A "current parameter" chunk occurs when code-completion is providing information about a parameter corresponding to the argument at the code-completion point. For example, given a function
+                        ## 
+                        ##  Error: cannot render: rnCodeBlock
+                        ## 
+                        ##  and the source code Error: cannot render: rnLiteralBlock where the code-completion point is after the "(", the code-completion string will contain a "current parameter" chunk for "int x", indicating that the current argument will initialize that parameter. After typing further, to Error: cannot render: rnLiteralBlock (where the code-completion point is after the ","), the code-completion string will contain a "current parameter" chunk to "int y".
+    cckLeftParen,             ## 
+                 ## 
+                 ##  A left parenthesis ('('), used to initiate a function call or signal the beginning of a function parameter list.
+    cckRightParen,            ## 
+                  ## 
+                  ##  A right parenthesis (')'), used to finish a function call or signal the end of a function parameter list.
+    cckLeftBracket,           ## 
+                   ## 
+                   ##  A left bracket ('[').
+    cckRightBracket,          ## 
+                    ## 
+                    ##  A right bracket (']').
+    cckLeftBrace,             ## 
+                 ## 
+                 ##  A left brace ('{').
+    cckRightBrace,            ## 
+                  ## 
+                  ##  A right brace ('}').
+    cckLeftAngle,             ## 
+                 ## 
+                 ##  A left angle bracket ('<').
+    cckRightAngle,            ## 
+                  ## 
+                  ##  A right angle bracket ('>').
+    cckComma,                 ## 
+             ## 
+             ##  A comma separator (',').
+    cckResultType, ## 
+                  ## 
+                  ##  Text that specifies the result type of a given result.
+                  ## 
+                  ##  This special kind of informative chunk is not meant to be inserted into the text buffer. Rather, it is meant to illustrate the type that an expression using the given completion string would have.
+    cckColon,                 ## 
+             ## 
+             ##  A colon (':').
+    cckSemiColon,             ## 
+                 ## 
+                 ##  A semicolon (';').
+    cckEqual,                 ## 
+             ## 
+             ##  An '=' sign.
+    cckHorizontalSpace,       ## 
+                       ## 
+                       ##  Horizontal space (' ').
+    cckVerticalSpace          ## 
+                    ## 
+                    ##  Vertical space ('\\n'), after which it is generally a good idea to perform indentation.
 proc getCompletionChunkKind*(completion_string: CXCompletionString;
                             chunk_number: cuint) {.cdecl, dynlib: libclang,
     importc: "clang_getCompletionChunkKind".}
@@ -2699,6 +5117,138 @@ proc getCompletionFixIt*(results: ptr[CXCodeCompleteResults];
   ## **
   ## 
   ##  The fix-it string that must replace the code at replacement_range before the completion at completion_index can be applied
+type
+  CXCodeComplete_Flags = enum ## 
+                           ## 
+                           ##  Flags that can be passed to Error: cannot render: rnLiteralBlock to modify its behavior.
+                           ## 
+                           ##  The enumerators in this enumeration can be bitwise-OR'd together to provide multiple options to Error: cannot render: rnLiteralBlock 
+                           ## 
+                           ## 
+                           ## 
+                           ## 
+                           ## 
+    ccfIncludeMacros = 1,       ## 
+                       ## 
+                       ##  Whether to include macros within the set of code completions returned.
+    ccfIncludeCodePatterns = 2, ## 
+                             ## 
+                             ##  Whether to include code patterns for language constructs within the set of code completions, e.g., for loops.
+    ccfIncludeBriefComments = 4, ## 
+                              ## 
+                              ##  Whether to include brief documentation within the set of code completions returned.
+    ccfSkipPreamble = 8,        ## 
+                      ## 
+                      ##  Whether to speed up completion by omitting top- or namespace-level entities defined in the preamble. There's no guarantee any particular entity is omitted. This may be useful if the headers are indexed externally.
+    ccfIncludeCompletionsWithFixIts = 16 ## 
+                                      ## 
+                                      ##  Whether to include completions with small fix-its, e.g. change '.' to '->' on member access, etc.
+type
+  CXCompletionContext = enum ## 
+                          ## 
+                          ##  Bits that represent the context under which completion is occurring.
+                          ## 
+                          ##  The enumerators in this enumeration may be bitwise-OR'd together if multiple contexts are occurring simultaneously.
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+    cocUnexposed = 0,           ## 
+                   ## 
+                   ##  The context for completions is unexposed, as only Clang results should be included. (This is equivalent to having no context bits set.)
+    cocAnyType = 1,             ## 
+                 ## 
+                 ##  Completions for any possible type should be included in the results.
+    cocAnyValue = 2,            ## 
+                  ## 
+                  ##  Completions for any possible value (variables, function calls, etc.) should be included in the results.
+    cocObjCObjectValue = 4,     ## 
+                         ## 
+                         ##  Completions for values that resolve to an Objective-C object should be included in the results.
+    cocObjCSelectorValue = 8,   ## 
+                           ## 
+                           ##  Completions for values that resolve to an Objective-C selector should be included in the results.
+    cocCXXClassTypeValue = 16,  ## 
+                            ## 
+                            ##  Completions for values that resolve to a C++ class type should be included in the results.
+    cocDotMemberAccess = 32,    ## 
+                          ## 
+                          ##  Completions for fields of the member being accessed using the dot operator should be included in the results.
+    cocArrowMemberAccess = 64,  ## 
+                            ## 
+                            ##  Completions for fields of the member being accessed using the arrow operator should be included in the results.
+    cocObjCPropertyAccess = 128, ## 
+                              ## 
+                              ##  Completions for properties of the Objective-C object being accessed using the dot operator should be included in the results.
+    cocEnumTag = 256,           ## 
+                   ## 
+                   ##  Completions for enum tags should be included in the results.
+    cocUnionTag = 512,          ## 
+                    ## 
+                    ##  Completions for union tags should be included in the results.
+    cocStructTag = 1024,        ## 
+                      ## 
+                      ##  Completions for struct tags should be included in the results.
+    cocClassTag = 2048,         ## 
+                     ## 
+                     ##  Completions for C++ class names should be included in the results.
+    cocNamespace = 4096,        ## 
+                      ## 
+                      ##  Completions for C++ namespaces and namespace aliases should be included in the results.
+    cocNestedNameSpecifier = 8192, ## 
+                                ## 
+                                ##  Completions for C++ nested name specifiers should be included in the results.
+    cocObjCInterface = 16384,   ## 
+                           ## 
+                           ##  Completions for Objective-C interfaces (classes) should be included in the results.
+    cocObjCProtocol = 32768,    ## 
+                          ## 
+                          ##  Completions for Objective-C protocols should be included in the results.
+    cocObjCCategory = 65536,    ## 
+                          ## 
+                          ##  Completions for Objective-C categories should be included in the results.
+    cocObjCInstanceMessage = 131072, ## 
+                                  ## 
+                                  ##  Completions for Objective-C instance messages should be included in the results.
+    cocObjCClassMessage = 262144, ## 
+                               ## 
+                               ##  Completions for Objective-C class messages should be included in the results.
+    cocObjCSelectorName = 524288, ## 
+                               ## 
+                               ##  Completions for Objective-C selector names should be included in the results.
+    cocMacroName = 1048576,     ## 
+                         ## 
+                         ##  Completions for preprocessor macro names should be included in the results.
+    cocNaturalLanguage = 2097152, ## 
+                               ## 
+                               ##  Natural language completions should be included in the results.
+    cocIncludedFile = 4194304,  ## 
+                            ## 
+                            ##  #include file completions should be included in the results.
+    cocUnknown                ## 
+              ## 
+              ##  The current context is unknown, so set all contexts.
 proc defaultCodeCompleteOptions*() {.cdecl, dynlib: libclang,
                                    importc: "clang_defaultCodeCompleteOptions".}
   ## 
@@ -2876,9 +5426,16 @@ proc getInclusions*(tu: CXTranslationUnit; visitor: CXInclusionVisitor;
   ## 
   ##  Visit the set of preprocessor inclusions in a translation unit.   The visitor function is called with the provided data for every included   file.  This does not include headers included by the PCH file (unless one   is inspecting the inclusions in the PCH file itself).
 type
-  CXEvalResultKind = enum
-    erkInt = 1, erkFloat = 2, erkObjCStrLiteral = 3, erkStrLiteral = 4, erkCFStr = 5,
-    erkOther = 6, erkUnExposed = 0
+  CXEvalResultKind = enum       ## 
+                       ## 
+                       ## 
+                       ## 
+                       ## 
+                       ## 
+                       ## 
+                       ## 
+    erkUnExposed = 0, erkInt = 1, erkFloat = 2, erkObjCStrLiteral = 3, erkStrLiteral = 4,
+    erkCFStr = 5, erkOther = 6
 type
   CXEvalResult = distinct pointer
 proc Evaluate*(c: CXCursor) {.cdecl, dynlib: libclang,
@@ -2987,13 +5544,25 @@ proc remap_dispose*(argCXRemapping: CXRemapping) {.cdecl, dynlib: libclang,
   ## 
   ##  Dispose the remapping.
 type
+  CXVisitorResult = enum        ## 
+                      ## 
+                      ##  ``
+                      ## 
+                      ##  @{
+                      ## 
+                      ## 
+    vrBreak, vrContinue
+type
   CXCursorAndRangeVisitor = object
     context*: pointer
     visit*: ptr[proc (a0: pointer; a1: CXCursor; a2: CXSourceRange): CXVisitorResult {.
         cdecl.}]
 
 type
-  CXResult = enum
+  CXResult = enum               ## 
+               ## 
+               ## 
+               ## 
     rSuccess = 0,               ## 
                ## 
                ##  Function returned successfully.
@@ -3081,7 +5650,34 @@ type
     isImplicit*: int
 
 type
-  CXIdxEntityKind = enum
+  CXIdxEntityKind = enum        ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
     iekUnexposed = 0, iekTypedef = 1, iekFunction = 2, iekVariable = 3, iekField = 4,
     iekEnumConstant = 5, iekObjCClass = 6, iekObjCProtocol = 7, iekObjCCategory = 8,
     iekObjCInstanceMethod = 9, iekObjCClassMethod = 10, iekObjCProperty = 11,
@@ -3091,14 +5687,29 @@ type
     iekCXXDestructor = 23, iekCXXConversionFunction = 24, iekCXXTypeAlias = 25,
     iekCXXInterface = 26
 type
-  CXIdxEntityLanguage = enum
+  CXIdxEntityLanguage = enum    ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
+                          ## 
     ielNone = 0, ielC = 1, ielObjC = 2, ielCXX = 3, ielSwift = 4
 type
-  CXIdxEntityCXXTemplateKind = enum
+  CXIdxEntityCXXTemplateKind = enum ## 
+                                 ## 
+                                 ##  Extra C++ template information for an entity. This can apply to: CXIdxEntity_Function CXIdxEntity_CXXClass CXIdxEntity_CXXStaticMethod CXIdxEntity_CXXInstanceMethod CXIdxEntity_CXXConstructor CXIdxEntity_CXXConversionFunction CXIdxEntity_CXXTypeAlias
+                                 ## 
+                                 ## 
+                                 ## 
+                                 ## 
     ietkNonTemplate = 0, ietkTemplate = 1, ietkTemplatePartialSpecialization = 2,
     ietkTemplateSpecialization = 3
 type
-  CXIdxAttrKind = enum
+  CXIdxAttrKind = enum          ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## 
     iakUnexposed = 0, iakIBAction = 1, iakIBOutlet = 2, iakIBOutletCollection = 3
 type
   CXIdxAttrInfo = object
@@ -3114,7 +5725,7 @@ type
     name*: cstring
     uSR*: cstring
     cursor*: CXCursor
-    attributes*: ptr[ptr[const CXIdxAttrInfo]]
+    attributes*: ptr[ptr[CXIdxAttrInfo]]
     numAttributes*: cuint
 
 type
@@ -3123,83 +5734,93 @@ type
 
 type
   CXIdxIBOutletCollectionAttrInfo = object
-    attrInfo*: ptr[const CXIdxAttrInfo]
-    objcClass*: ptr[const CXIdxEntityInfo]
+    attrInfo*: ptr[CXIdxAttrInfo]
+    objcClass*: ptr[CXIdxEntityInfo]
     classCursor*: CXCursor
     classLoc*: CXIdxLoc
 
 type
-  CXIdxDeclInfoFlags = enum
+  CXIdxDeclInfoFlags = enum     ## 
+                         ## 
     idifFlag_Skipped = 1
 type
   CXIdxDeclInfo = object
-    entityInfo*: ptr[const CXIdxEntityInfo]
+    entityInfo*: ptr[CXIdxEntityInfo]
     cursor*: CXCursor
     loc*: CXIdxLoc
-    semanticContainer*: ptr[const CXIdxContainerInfo]
-    lexicalContainer*: ptr[const CXIdxContainerInfo]
+    semanticContainer*: ptr[CXIdxContainerInfo]
+    lexicalContainer*: ptr[CXIdxContainerInfo]
     isRedeclaration*: int
     isDefinition*: int
     isContainer*: int
-    declAsContainer*: ptr[const CXIdxContainerInfo]
+    declAsContainer*: ptr[CXIdxContainerInfo]
     isImplicit*: int
-    attributes*: ptr[ptr[const CXIdxAttrInfo]]
+    attributes*: ptr[ptr[CXIdxAttrInfo]]
     numAttributes*: cuint
     flags*: cuint
 
 type
-  CXIdxObjCContainerKind = enum
+  CXIdxObjCContainerKind = enum ## 
+                             ## 
+                             ## 
+                             ## 
     iocckForwardRef = 0, iocckInterface = 1, iocckImplementation = 2
 type
   CXIdxObjCContainerDeclInfo = object
-    declInfo*: ptr[const CXIdxDeclInfo]
+    declInfo*: ptr[CXIdxDeclInfo]
     kind*: CXIdxObjCContainerKind
 
 type
   CXIdxBaseClassInfo = object
-    base*: ptr[const CXIdxEntityInfo]
+    base*: ptr[CXIdxEntityInfo]
     cursor*: CXCursor
     loc*: CXIdxLoc
 
 type
   CXIdxObjCProtocolRefInfo = object
-    protocol*: ptr[const CXIdxEntityInfo]
+    protocol*: ptr[CXIdxEntityInfo]
     cursor*: CXCursor
     loc*: CXIdxLoc
 
 type
   CXIdxObjCProtocolRefListInfo = object
-    protocols*: ptr[ptr[const CXIdxObjCProtocolRefInfo]]
+    protocols*: ptr[ptr[CXIdxObjCProtocolRefInfo]]
     numProtocols*: cuint
 
 type
   CXIdxObjCInterfaceDeclInfo = object
-    containerInfo*: ptr[const CXIdxObjCContainerDeclInfo]
-    superInfo*: ptr[const CXIdxBaseClassInfo]
-    protocols*: ptr[const CXIdxObjCProtocolRefListInfo]
+    containerInfo*: ptr[CXIdxObjCContainerDeclInfo]
+    superInfo*: ptr[CXIdxBaseClassInfo]
+    protocols*: ptr[CXIdxObjCProtocolRefListInfo]
 
 type
   CXIdxObjCCategoryDeclInfo = object
-    containerInfo*: ptr[const CXIdxObjCContainerDeclInfo]
-    objcClass*: ptr[const CXIdxEntityInfo]
+    containerInfo*: ptr[CXIdxObjCContainerDeclInfo]
+    objcClass*: ptr[CXIdxEntityInfo]
     classCursor*: CXCursor
     classLoc*: CXIdxLoc
-    protocols*: ptr[const CXIdxObjCProtocolRefListInfo]
+    protocols*: ptr[CXIdxObjCProtocolRefListInfo]
 
 type
   CXIdxObjCPropertyDeclInfo = object
-    declInfo*: ptr[const CXIdxDeclInfo]
-    getter*: ptr[const CXIdxEntityInfo]
-    setter*: ptr[const CXIdxEntityInfo]
+    declInfo*: ptr[CXIdxDeclInfo]
+    getter*: ptr[CXIdxEntityInfo]
+    setter*: ptr[CXIdxEntityInfo]
 
 type
   CXIdxCXXClassDeclInfo = object
-    declInfo*: ptr[const CXIdxDeclInfo]
-    bases*: ptr[ptr[const CXIdxBaseClassInfo]]
+    declInfo*: ptr[CXIdxDeclInfo]
+    bases*: ptr[ptr[CXIdxBaseClassInfo]]
     numBases*: cuint
 
 type
-  CXIdxEntityRefKind = enum
+  CXIdxEntityRefKind = enum ## 
+                         ## 
+                         ##  Data for IndexerCallbacks#indexEntityReference.
+                         ## 
+                         ##  This may be deprecated in a future version as this duplicates the Error: cannot render: rnLiteralBlock bit in Error: cannot render: rnLiteralBlock 
+                         ## 
+                         ## 
     ierkDirect = 1,             ## 
                  ## 
                  ##  The entity is referenced directly in user's code.
@@ -3207,17 +5828,31 @@ type
                   ## 
                   ##  An implicit reference, e.g. a reference of an Objective-C method via the dot syntax.
 type
-  CXSymbolRole = enum
-    srNone = 0, srDeclaration, srDefinition, srReference, srRead, srWrite, srCall,
-    srDynamic, srAddressOf, srImplicit
+  CXSymbolRole = enum ## 
+                   ## 
+                   ##  Roles that are attributed to symbol occurrences.
+                   ## 
+                   ##  Internal: this currently mirrors low 9 bits of clang::index::SymbolRole with higher bits zeroed. These high bits may be exposed in the future.
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+                   ## 
+    srNone = 0, srDeclaration = 1, srDefinition = 2, srReference = 4, srRead = 8, srWrite = 16,
+    srCall = 32, srDynamic = 64, srAddressOf = 128, srImplicit = 256
 type
   CXIdxEntityRefInfo = object
     kind*: CXIdxEntityRefKind
     cursor*: CXCursor
     loc*: CXIdxLoc
-    referencedEntity*: ptr[const CXIdxEntityInfo]
-    parentEntity*: ptr[const CXIdxEntityInfo]
-    container*: ptr[const CXIdxContainerInfo]
+    referencedEntity*: ptr[CXIdxEntityInfo]
+    parentEntity*: ptr[CXIdxEntityInfo]
+    container*: ptr[CXIdxContainerInfo]
     role*: CXSymbolRole
 
 type
@@ -3227,53 +5862,50 @@ type
         cdecl.}]
     enteredMainFile*: ptr[proc (a0: CXClientData; a1: CXFile; a2: pointer): CXIdxClientFile {.
         cdecl.}]
-    ppIncludedFile*: ptr[proc (a0: CXClientData;
-                             a1: ptr[const CXIdxIncludedFileInfo]): CXIdxClientFile {.
+    ppIncludedFile*: ptr[proc (a0: CXClientData; a1: ptr[CXIdxIncludedFileInfo]): CXIdxClientFile {.
         cdecl.}]
-    importedASTFile*: ptr[proc (a0: CXClientData;
-                              a1: ptr[const CXIdxImportedASTFileInfo]): CXIdxClientASTFile {.
+    importedASTFile*: ptr[proc (a0: CXClientData; a1: ptr[CXIdxImportedASTFileInfo]): CXIdxClientASTFile {.
         cdecl.}]
     startedTranslationUnit*: ptr[proc (a0: CXClientData; a1: pointer): CXIdxClientContainer {.
         cdecl.}]
-    indexDeclaration*: ptr[proc (a0: CXClientData; a1: ptr[const CXIdxDeclInfo]): void {.
+    indexDeclaration*: ptr[proc (a0: CXClientData; a1: ptr[CXIdxDeclInfo]): void {.
         cdecl.}]
-    indexEntityReference*: ptr[proc (a0: CXClientData;
-                                   a1: ptr[const CXIdxEntityRefInfo]): void {.cdecl.}]
+    indexEntityReference*: ptr[proc (a0: CXClientData; a1: ptr[CXIdxEntityRefInfo]): void {.
+        cdecl.}]
 
 proc index_isEntityObjCContainerKind*(argCXIdxEntityKind: CXIdxEntityKind) {.cdecl,
     dynlib: libclang, importc: "clang_index_isEntityObjCContainerKind".}
-proc index_getObjCContainerDeclInfo*(argCXIdxDeclInfo: ptr[const CXIdxDeclInfo]) {.
-    cdecl, dynlib: libclang, importc: "clang_index_getObjCContainerDeclInfo".}
-proc index_getObjCInterfaceDeclInfo*(argCXIdxDeclInfo: ptr[const CXIdxDeclInfo]) {.
-    cdecl, dynlib: libclang, importc: "clang_index_getObjCInterfaceDeclInfo".}
-proc index_getObjCCategoryDeclInfo*(argCXIdxDeclInfo: ptr[const CXIdxDeclInfo]) {.
-    cdecl, dynlib: libclang, importc: "clang_index_getObjCCategoryDeclInfo".}
-proc index_getObjCProtocolRefListInfo*(argCXIdxDeclInfo: ptr[const CXIdxDeclInfo]) {.
+proc index_getObjCContainerDeclInfo*(argCXIdxDeclInfo: ptr[CXIdxDeclInfo]) {.cdecl,
+    dynlib: libclang, importc: "clang_index_getObjCContainerDeclInfo".}
+proc index_getObjCInterfaceDeclInfo*(argCXIdxDeclInfo: ptr[CXIdxDeclInfo]) {.cdecl,
+    dynlib: libclang, importc: "clang_index_getObjCInterfaceDeclInfo".}
+proc index_getObjCCategoryDeclInfo*(argCXIdxDeclInfo: ptr[CXIdxDeclInfo]) {.cdecl,
+    dynlib: libclang, importc: "clang_index_getObjCCategoryDeclInfo".}
+proc index_getObjCProtocolRefListInfo*(argCXIdxDeclInfo: ptr[CXIdxDeclInfo]) {.
     cdecl, dynlib: libclang, importc: "clang_index_getObjCProtocolRefListInfo".}
-proc index_getObjCPropertyDeclInfo*(argCXIdxDeclInfo: ptr[const CXIdxDeclInfo]) {.
-    cdecl, dynlib: libclang, importc: "clang_index_getObjCPropertyDeclInfo".}
-proc index_getIBOutletCollectionAttrInfo*(
-    argCXIdxAttrInfo: ptr[const CXIdxAttrInfo]) {.cdecl, dynlib: libclang,
-    importc: "clang_index_getIBOutletCollectionAttrInfo".}
-proc index_getCXXClassDeclInfo*(argCXIdxDeclInfo: ptr[const CXIdxDeclInfo]) {.
-    cdecl, dynlib: libclang, importc: "clang_index_getCXXClassDeclInfo".}
-proc index_getClientContainer*(argCXIdxContainerInfo: ptr[const CXIdxContainerInfo]) {.
+proc index_getObjCPropertyDeclInfo*(argCXIdxDeclInfo: ptr[CXIdxDeclInfo]) {.cdecl,
+    dynlib: libclang, importc: "clang_index_getObjCPropertyDeclInfo".}
+proc index_getIBOutletCollectionAttrInfo*(argCXIdxAttrInfo: ptr[CXIdxAttrInfo]) {.
+    cdecl, dynlib: libclang, importc: "clang_index_getIBOutletCollectionAttrInfo".}
+proc index_getCXXClassDeclInfo*(argCXIdxDeclInfo: ptr[CXIdxDeclInfo]) {.cdecl,
+    dynlib: libclang, importc: "clang_index_getCXXClassDeclInfo".}
+proc index_getClientContainer*(argCXIdxContainerInfo: ptr[CXIdxContainerInfo]) {.
     cdecl, dynlib: libclang, importc: "clang_index_getClientContainer".}
   ## 
   ## 
   ##  For retrieving a custom CXIdxClientContainer attached to a container.
-proc index_setClientContainer*(argCXIdxContainerInfo: ptr[const CXIdxContainerInfo];
+proc index_setClientContainer*(argCXIdxContainerInfo: ptr[CXIdxContainerInfo];
                               argCXIdxClientContainer: CXIdxClientContainer) {.
     cdecl, dynlib: libclang, importc: "clang_index_setClientContainer".}
   ## 
   ## 
   ##  For setting a custom CXIdxClientContainer attached to a container.
-proc index_getClientEntity*(argCXIdxEntityInfo: ptr[const CXIdxEntityInfo]) {.
-    cdecl, dynlib: libclang, importc: "clang_index_getClientEntity".}
+proc index_getClientEntity*(argCXIdxEntityInfo: ptr[CXIdxEntityInfo]) {.cdecl,
+    dynlib: libclang, importc: "clang_index_getClientEntity".}
   ## 
   ## 
   ##  For retrieving a custom CXIdxClientEntity attached to an entity.
-proc index_setClientEntity*(argCXIdxEntityInfo: ptr[const CXIdxEntityInfo];
+proc index_setClientEntity*(argCXIdxEntityInfo: ptr[CXIdxEntityInfo];
                            argCXIdxClientEntity: CXIdxClientEntity) {.cdecl,
     dynlib: libclang, importc: "clang_index_setClientEntity".}
   ## 
@@ -3298,7 +5930,13 @@ proc dispose*(argCXIndexAction: CXIndexAction) {.cdecl, dynlib: libclang,
   ## 
   ##  The index action must not be destroyed until all of the translation units created within that index action have been destroyed.
 type
-  CXIndexOptFlags = enum
+  CXIndexOptFlags = enum        ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
+                      ## 
     iofNone = 0,                ## 
               ## 
               ##  Used to indicate that no special indexing options are needed.
@@ -3442,6 +6080,124 @@ proc getParsedComment*(c: CXCursor) {.cdecl, dynlib: libclang,
   ## 
   ## 
   ##  Given a cursor that represents a documentable entity (e.g., declaration), return the associated parsed comment as a Error: cannot render: rnLiteralBlock AST node.
+type
+  CXCommentKind = enum ## 
+                    ## 
+                    ##  Describes the type of the comment AST node (Error: cannot render: rnLiteralBlock  A comment node can be considered block content (e. g., paragraph), inline content (plain text) or neither (the root AST node).
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+                    ## 
+    cokNull = 0,                ## 
+              ## 
+              ##  Null comment.  No AST node is constructed at the requested location because there is no text or a syntax error.
+    cokText = 1,                ## 
+              ## 
+              ##  Plain text.  Inline content.
+    cokInlineCommand = 2, ## 
+                       ## 
+                       ##  A command with word-like arguments that is considered inline content.
+                       ## 
+                       ##  For example: \\c command.
+    cokHTMLStartTag = 3, ## 
+                      ## 
+                      ##  HTML start tag with attributes (name-value pairs).  Considered inline content.
+                      ## 
+                      ##  For example: Error: cannot render: rnCodeBlock
+                      ## 
+                      ##    
+    cokHTMLEndTag = 4,          ## 
+                    ## 
+                    ##  HTML end tag.  Considered inline content.
+                    ## 
+                    ##  For example: Error: cannot render: rnCodeBlock
+                    ## 
+                    ##    
+    cokParagraph = 5,           ## 
+                   ## 
+                   ##  A paragraph, contains inline comment.  The paragraph itself is block content.
+    cokBlockCommand = 6, ## 
+                      ## 
+                      ##  A command that has zero or more word-like arguments (number of word-like arguments depends on command name) and a paragraph as an argument.  Block command is block content.
+                      ## 
+                      ##  Paragraph argument is also a child of the block command.
+                      ## 
+                      ##  For example: Error: cannot render: rnLiteralBlock 0 word-like arguments and a paragraph argument.
+                      ## 
+                      ##  AST nodes of special kinds that parser knows about (e. g., \\param command) have their own node kinds.
+    cokParamCommand = 7, ## 
+                      ## 
+                      ##  A \\param or \\arg command that describes the function parameter (name, passing direction, description).
+                      ## 
+                      ##  For example: \\param [in] ParamName description.
+    cokTParamCommand = 8, ## 
+                       ## 
+                       ##  A \\tparam command that describes a template parameter (name and description).
+                       ## 
+                       ##  For example: \\tparam T description.
+    cokVerbatimBlockCommand = 9, ## 
+                              ## 
+                              ##  A verbatim block command (e. g., preformatted code).  Verbatim block has an opening and a closing command and contains multiple lines of text (Error: cannot render: rnLiteralBlock child nodes).
+                              ## 
+                              ##  For example: \\verbatim aaa \\endverbatim
+    cokVerbatimBlockLine = 10,  ## 
+                            ## 
+                            ##  A line of text that is contained within a CXComment_VerbatimBlockCommand node.
+    cokVerbatimLine = 11,       ## 
+                       ## 
+                       ##  A verbatim line command.  Verbatim line has an opening command, a single line of text (up to the newline after the opening command) and has no closing command.
+    cokFullComment = 12         ## 
+                     ## 
+                     ##  A full comment attached to a declaration, contains block content.
+type
+  CXCommentInlineCommandRenderKind = enum ## 
+                                       ## 
+                                       ##  The most appropriate rendering mode for an inline command, chosen on command semantics in Doxygen.
+                                       ## 
+                                       ## 
+                                       ## 
+                                       ## 
+                                       ## 
+    cicrkNormal,              ## 
+                ## 
+                ##  Command argument should be rendered in a normal font.
+    cicrkBold,                ## 
+              ## 
+              ##  Command argument should be rendered in a bold font.
+    cicrkMonospaced,          ## 
+                    ## 
+                    ##  Command argument should be rendered in a monospaced font.
+    cicrkEmphasized,          ## 
+                    ## 
+                    ##  Command argument should be rendered emphasized (typically italic font).
+    cicrkAnchor               ## 
+               ## 
+               ##  Command argument should not be rendered (since it only defines an anchor).
+type
+  CXCommentParamPassDirection = enum ## 
+                                  ## 
+                                  ##  Describes parameter passing direction for \\param or \\arg command.
+                                  ## 
+                                  ## 
+                                  ## 
+    cppdIn,                   ## 
+           ## 
+           ##  The parameter is an input parameter.
+    cppdOut,                  ## 
+            ## 
+            ##  The parameter is an output parameter.
+    cppdInOut                 ## 
+             ## 
+             ##  The parameter is an input and output parameter.
 proc getKind*(comment: CXComment) {.cdecl, dynlib: libclang,
                                  importc: "clang_Comment_getKind".}
   ## 

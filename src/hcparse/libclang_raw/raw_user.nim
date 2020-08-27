@@ -1,6 +1,6 @@
 # {.define(plainStdout).}
 import macros, sugar, strformat, lenientops, bitops, sequtils, options,
-       terminal, shell, strutils, parseutils
+       terminal, shell, strutils, parseutils, sets
 
 import hpprint, hpprint/hpprint_repr
 
@@ -358,6 +358,7 @@ proc fromElaboratedPType(cxtype: CXType): NType[PNode] =
   ($cxtype).
     dropPrefix("enum ").
     dropPrefix("struct ").
+    dropPrefix("const "). # XXXX
     mkPType()
 
 proc getPointee*(cxType: CXType): CXType =
@@ -421,7 +422,7 @@ proc lispRepr*(cxtype: CXType): string =
 
 proc toNType*(cxtype: CXType): NType[PNode] =
   # echo cxtype.objTreeRepr().treeRepr()
-  case cxtype.cxKind:
+  result = case cxtype.cxKind:
     of CXType_Bool: mkPType("bool")
     of CXType_Int: mkPType("int")
     # of CXType_Record: mkPType()
@@ -431,7 +432,7 @@ proc toNType*(cxtype: CXType): NType[PNode] =
     of CXType_ULongLong: mkPType("culonglong")
     of CXType_Double: mkPType("cdouble")
     of CXType_ULong: mkPType("culong")
-    of CXType_Typedef: mkPType($cxtype) # XXX typedef processing -
+    of CXType_Typedef: mkPType(($cxtype).dropPrefix("const ")) # XXX typedef processing -
     of CXType_Elaborated, CXType_Record, CXType_Enum:
       fromElaboratedPType(cxtype)
     of CXType_Pointer:
@@ -462,6 +463,8 @@ proc toNType*(cxtype: CXType): NType[PNode] =
       echo "CANT CONVERT: ".toRed({styleItalic}),
         cxtype.kind, " ", cxtype.lispRepr().toGreen()
       mkPType("!!!")
+
+  # echo cxtype.cxkind, " ", result.toNNode()
 
 proc dropPOD*(cxtype: CXType): string =
   case cxtype.cxKind:
@@ -510,6 +513,7 @@ type
     typePrefix*: string
     translationUnit*: CXTranslationUnit
     dropTypeSubseqs*: seq[string]
+    usedPrefixes*: HashSet[string]
 
 proc simplifyFuncName(cursor: CXCursor, context: var RewriteContext): string =
   let unprefix = ($cursor).dropPrefix(context.prefix)
@@ -525,10 +529,6 @@ proc simplifyFuncName(cursor: CXCursor, context: var RewriteContext): string =
         dropPrefix(name & "_").
         dropPrefix(rawName & "_")
     else:
-      # echov first
-      # echov rawName
-      # echov name
-      # echov unprefix
       return unprefix
   else:
     return unprefix
@@ -542,22 +542,25 @@ proc isAliasTypedef*(cursor: CXCursor): bool =
       CXCursor_StructDecl
     })
 
-  # echo cursor.treeRepr()
-  # echo result
-
 
 
 proc visitFunction(cursor: CXCursor, context: var RewriteContext) =
   cursor.expectKind(CXCursor_FunctionDecl)
-
+  var prevName = ""
   let procdef = ProcDecl[PNode]().withIt do:
     it.exported = true
     it.comment = cursor.comment().toNimDoc()
     it.name = cursor.simplifyFuncName(context)
     it.signature = mkProcNType[PNode](@[])
-    it.signature.arguments = cursor.children.
-      filterIt(it.cxKind == CXCursor_ParmDecl).
-      mapIt(it.toPIdentDefs())
+    it.signature.arguments = collect(newSeq):
+      for it in cursor.children:
+        if it.cxKind == CXCursor_ParmDecl:
+          var res = it.toPIdentDefs()
+          if res.varname == prevName:
+            res.varname &= "1"
+
+          prevName = res.varname
+          res
 
     it.signature.pragma = mkPPragma(
       newPIdent("cdecl"),
@@ -573,58 +576,11 @@ proc visitFunction(cursor: CXCursor, context: var RewriteContext) =
 
   context.resultNode.add procdef.toNNode()
 
-  # var signature = mkProcNType(
-  #   args = cursor.children.,
-  #   pragma = mkPPragma(
-  #     newPIdent("cdecl"),
-  #     nnkExprColonExpr.newPTree(
-  #       newPIdent("dynlib"),
-  #       newPIdent("libclang") # XXX
-  #     ),
-  #     nnkExprColonExpr.newPTree(
-  #       newPIdent("importc"),
-  #       newPLit($cursor)
-  #     )
-  #   )
-  # )
-
-  # context.resultNode.add mkProcDeclNode(
-  #   # head = newPIdent(),
-  #   rtype = some(toNType(cursor.retType())),
-  #   args = arguments,
-  #   impl = newEmptyNNode[PNode](),
-  #   # pragma = ,
-  #   # comment = cursor.comment().toNimDoc()
-  # )
-
 proc parseInt(tok: string): int =
   if tok.len > 2 and tok[1] == 'x':
     discard parseHex(tok, result)
   else:
     discard parseInt(tok, result)
-
-
-proc toEnumValue*(cursor: CXCursor, tu: CXTranslationUnit): Option[PNode] =
-  cursor.expectKind CXCursor_EnumConstantDecl
-  let val = cursor[0]
-  case val.cxKind:
-    of CXCursor_IntegerLiteral:
-      return some(newPLit(val.tokens(tu)[0].parseInt()))
-    of CXCursor_OverloadCandidate:
-      return none(PNode)
-    of CXCursor_BinaryOperator:
-      let subn = cursor.children()
-      case cursor.tokens(tu).join(""):
-        of "<<":
-          return some(newPLit(
-            subn[0].tokens(tu)[0].parseInt() shl
-            subn[1].tokens(tu)[0].parseInt(),
-          ))
-        else:
-          discard
-
-    else:
-      discard
 
 
 proc visitEnumDecl*(cursor: CXCursor, context: var RewriteContext) =
@@ -636,28 +592,133 @@ proc visitEnumDecl*(cursor: CXCursor, context: var RewriteContext) =
 
   let pref = names.commonPrefix()
 
-  let enumPref = enumName.
-    dropLongestSubseq(context.dropTypeSubseqs).
-    dropPrefix(context.typePrefix).
-    splitCamel().
-    mapIt(it[0].toLowerAscii()).
-    join("")
+  let enumPref =
+    block:
+      var split: seq[(int, string)] = enumName.
+        dropLongestSubseq(context.dropTypeSubseqs).
+        dropPrefix(context.typePrefix).
+        splitCamel().
+        mapIt((0, it))
+
+      var res: string
+      while true:
+        res = ""
+        for (pref, str) in split:
+          res &= str[0 .. pref].toLowerAscii()
+
+        # res = split.mapIt(it[1][it[0]].toLowerAscii())
+        if res in context.usedPrefixes:
+          echo "using extended prefix"
+          for val in mitems(split):
+            if val[0] < val[1].len:
+              inc val[0]
+              break
+        else:
+          break
+
+      context.usedPrefixes.incl res
+      res
 
   var en = PEnum(name: enumName)
+  en.comment = cursor.comment().toNimDoc()
 
+  var skipped: seq[string]
+  let tu = context.translationUnit
+  proc renameField(fld: string): string =
+    fld.dropPrefix(pref).dropPrefix("_").addPrefix(enumPref)
+
+  var prevVal: BiggestInt = -123124912
   for elem in cursor.children:
-    en.values.add makeEnumField[PNode](
-      name = ($elem).dropPrefix(pref).dropPrefix("_").addPrefix(enumPref),
-      value =  elem.toEnumValue(context.translationUnit),
-      comment = elem.comment().toNimDoc()
+    let name = renameField($elem)
+    var fld = EnumField[PNode](
+      name: name,
+      kind: efvOrdinal,
+      comment: elem.comment().toNimDoc()
     )
+
+    var skip = false
+    let val = elem[0]
+    case val.kind:
+      of CXCursor_IntegerLiteral:
+        fld.ordVal = makeRTOrdinal(val.tokens(tu)[0].parseInt())
+      of CXCursor_BinaryOperator:
+        let subn = val.children()
+        let toks = val.tokens(tu)[1]
+        case toks:
+          of "<<":
+            fld.ordVal = makeRTOrdinal(
+              subn[0].tokens(tu)[0].parseInt() shl
+              subn[1].tokens(tu)[0].parseInt(),
+            )
+          of "|":
+            let toks = val.tokens(tu)
+            # NOTE assuming `EnumField | OtherField` for now
+            let
+              lhs = renameField(toks[0])
+              rhs = renameField(toks[2])
+              lhsVal = en.values.findItFirst(it.name == lhs)
+              rhsVal = en.values.findItFirst(it.name == rhs)
+
+            fld.ordVal = makeRTOrdinal(
+              bitor(
+                lhsVal.ordVal.intVal,
+                rhsVal.ordVal.intVal,
+              )
+            )
+
+          else:
+            echo toks
+
+      of CXCursor_UnaryOperator:
+        let toks = val.tokens(tu)
+        case toks[0]:
+          of "-":
+            fld.ordVal = makeRTOrdinal(toks[1].parseInt())
+          else:
+            raiseAssert("#[ IMPLEMENT ]#")
+      of CXCursor_DeclRefExpr:
+        skipped.add &"- {elem.tokens(tu).joinw()}"
+        skip = true
+      else:
+        if $val.kind == "OverloadCandidate":
+          fld = EnumField[PNode](
+            name: name, kind: efvNone, comment: elem.comment().toNimDoc())
+        else:
+          echo val.kind, " ", elem.tokens(tu)
+          fld = EnumField[PNode](
+            name: name, kind: efvNone, comment: elem.comment().toNimDoc())
+
+
+    if not skip:
+      if fld.kind == efvOrdinal:
+        if fld.ordVal.intVal != prevVal:
+          en.values.add fld
+          prevVal = fld.ordVal.intVal
+        else:
+          # Node skip enum with the same value
+          skipped.add elem.tokens(tu)
+      else:
+        inc prevVal
+        en.values.add fld
+
+
+      en.comment.add("\n" & skipped.joinl)
+      skipped = @[]
+    # en.values.add toEnumField(en, elem, context.translationUnit)
+
+  en.values.sort do(f1, f2: EnumField[PNode]) -> int:
+    # NOTE possible source of incompatibility - only fields with
+    # specified ordinal values should be sorted.
+    if f1.kind == f2.kind and f1.kind == efvOrdinal: 
+      cmp(f1.ordVal.intVal, f2.ordVal.intVal)
+    else:
+      0
+
 
   context.resultNode.add en.toNNode(standalone = true)
 
 
 proc visitStructDecl*(cursor: CXCursor, context: var RewriteContext) =
-  # echo "struct decl: ", cursor
-  # echo cursor.treeRepr(context.translationUnit)
   let structName = ($cursor.cxType).dropPrefix("struct ")
 
   var resType = PObject(name: mkPType(structName))
@@ -695,14 +756,15 @@ proc visitTypedef*(cursor: CXCursor, context: var RewriteContext) =
           nnkDistinctTy,
           cursor.cxtype().clang_getCanonicalType().toNType().toNNode())))
   else:
-    for subn in cursor.children:
-      case subn.cxKind:
-        of CXCursor_StructDecl:
-          visitStructDecl(subn, context)
-        of CXCursor_EnumDecl:
-          visitEnumDecl(subn, context)
-        else:
-          discard
+    when false:
+      for subn in cursor.children:
+        case subn.cxKind:
+          of CXCursor_StructDecl:
+            visitStructDecl(subn, context)
+          of CXCursor_EnumDecl:
+            visitEnumDecl(subn, context)
+          else:
+            discard
 
 
 #================================  Main  =================================#
@@ -812,8 +874,6 @@ else:
     libclang = "libclang.so"
 
 type
-  CXTargetInfoImpl* = object
-  CXTranslationUnitImpl* = object
   CXVirtualFileOverlayImpl* = object
   CXModuleMapDescriptorImpl* = object
   time_t* = clong
@@ -840,6 +900,12 @@ type
               return CXChildVisit_Continue
             of CXCursor_TypedefDecl:
               visitTypedef(cursor, context)
+              return CXChildVisit_Continue
+            of CXCursor_EnumDecl:
+              visitEnumDecl(cursor, context)
+              return CXChildVisit_Continue
+            of CXCursor_StructDecl:
+              visitStructDecl(cursor, context)
               return CXChildVisit_Continue
             else:
               discard
