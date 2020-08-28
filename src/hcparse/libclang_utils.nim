@@ -4,83 +4,22 @@
 when not defined(libclangIncludeUtils):
   import libclang
 
+
+#==============================  includes  ===============================#
 import bitops, strformat, macros, terminal, sugar, std/decls, strutils,
        sequtils
 
 import hpprint, hpprint/hpprint_repr
 import hnimast
+import nimtraits
 import hmisc/types/colorstring
 import hmisc/[hexceptions, helpers]
 import compiler/ast
 
-
-proc `$`*(cxstr: CXString): string =
-  let str = getCString(cxstr)
-  result = $str
-  disposeString(cxstr)
-
-proc `$`*(cursor: CXCursor): string = $getCursorSpelling(cursor)
-proc `$`*(cxtype: CXType): string = $getTypeSpelling(cxtype)
-proc `$`*(cxkind: CXCursorKind): string = $getCursorKindSpelling(cxkind)
-proc `==`*(t1, t2: CXType): bool = (equalTypes(t1, t2) != 0)
-proc isConstQualified*(t: CXType): bool = isConstQualifiedType(t) != 0
-proc `[]`*(t: CXType): CXType = getPointeeType(t)
-
-proc cxKind*(cursor: CXCursor): CXCursorKind =
-  ## Get kind of cursor
-  getCursorKind(cursor)
-
-proc expectKind*(cursor: CXCursor, kind: CXCursorKind) =
-  ## Raise assertion if cursor kind does not match
-  if cursor.cxKind != kind:
-    raiseAssert(&"Expected cursor kind {kind}, but got {cursor.cxKind()}")
-
-
-proc cxType*(cursor: CXCursor): CXType =
-  ## Get type of the cursor
-  getCursorType(cursor)
-
-
-proc comment*(cursor: CXCursor): CXComment =
-  cursor.getParsedComment()
-
-proc cxKind*(cxtype: CXType): CXTypeKind =
-  ## Get type kind
-  cxtype.kind
-
-proc expectKind*(cxtype: CXType, kind: CXTypeKind) =
-  ## Raise assertion if cursor kind does not match
-  if cxtype.cxKind != kind:
-    raiseAssert(&"Expected type kind {kind}, but got {cxtype.cxKind()}")
-
-proc argc*(cxtype: CXType): int =
-  ## Get numbler of arguments in function type
-  cxtype.expectKind(tkFunctionProto)
-  getNumArgTypes(cxtype).int
-
-
-proc argTypes*(cursor: CXType): seq[CXType] =
-  for i in 0 ..< cursor.getNumArgTypes():
-    result.add cursor.getArgType(cuint i)
-
-proc retType*(cursor: CXCursor): CXType =
-  cursor.expectKind(ckFunctionDecl)
-  cursor.cxType().getResultType()
-
-proc argc*(cursor: CXCursor): int =
-  ## Get number of arguments in cursor pointing to function
-  cursor.cxType().argc()
-
-proc nthArg*(cxtype: CXType, idx: int): CXType =
-  ## Retrieve type nth argument of function type
-  assert idx < cxtype.argc()
-  getArgType(cxtype, cuint(idx))
-
-
-proc isFromMainFile*(cursor: CXCursor): bool =
-  ## Return true if cursor posints to main file
-  let location = cursor.getCursorLocation()
-  result = location.locationIsFromMainFile() != cint(0)
+#*************************************************************************#
+#***************  Translation unit construction wrappers  ****************#
+#*************************************************************************#
+#=============================  Diagnostics  =============================#
 
 
 proc getDiagnostics*(unit: CXTranslationUnit): seq[CXDiagnostic] =
@@ -90,46 +29,130 @@ proc getDiagnostics*(unit: CXTranslationUnit): seq[CXDiagnostic] =
 proc `$`*(diag: CXDiagnostic): string =
   $diag.formatDiagnostic(0)
 
+#================================  Index  ================================#
+
+proc createIndex*(
+  excludeDeclarations: bool = false,
+  showDiagnostics: bool = false): CXIndex =
+
+  createIndex(excludeDeclarations.int, showDiagnostics.int)
+
+#=====================  Compile commands & database  =====================#
+
+proc createDatabase*(directory: string): CXCompilationDatabase =
+  ## Create compilation database from database found in directory
+  ## `directory`. On failure `IOError` is raised.
+  var err: CXCompilationDatabase_Error # NOTE might use to provide
+  # better diagnostics/exceptions
+
+  result = compilationDatabase_fromDirectory(directory.cstring, addr err)
+  if err == cdeCanNotLoadDatabase:
+    raise newException(
+      IOError,
+      &"Failed to find compilation database in directory {directory}")
+
+proc getArgs*(command: CXCompileCommand): seq[string] =
+  ## Get arguments for compile command `command`
+  for i in 0 ..< command.getNumArgs():
+    result.add $command.getArg(i)
+
+#==========================  Translation unit  ===========================#
+
+proc parseTranslationUnit*(
+  trIndex: CXIndex,
+  filename: string,
+  cmdline: seq[string] = @[],
+  trOptions: set[CXTranslationUnit_Flags] = {
+    tufSingleFileParse}): CXTranslationUnit =
+
+  var flags: int
+  for opt in trOptions:
+    flags = bitor(flags, int(opt))
+
+  let argc = cmdline.len
+  let cmdline = allocCSTringArray(cmdline)
+
+  result = parseTranslationUnit(
+    trIndex, filename.cstring, cmdline, cint(argc), nil, 0, cuint(flags))
+
+  var hadErrors = false
+  for diag in result.getDiagnostics():
+    if diag.getDiagnosticSeverity() in {dsError, dsFatal}:
+      hadErrors = true
+      echo diag
+
+
+  deallocCStringArray(cmdline)
+
+  if hadErrors:
+    raiseAssert("Translation unit parse failed")
+
+proc getBuiltinHeaders*(): seq[string] =
+  ## According to clang `documentation <https://clang.llvm.org/docs/LibTooling.html#builtin-includes>`_
+  ## libclang is needs additional precompiled headers paths in
+  ## addition to default include.
+  ##
+  ## NOTE right now I have zero idea how it works on windows, so I
+  ## will just hardcode unix-like paths.
+
+  let version = ($getClangVersion()).split(" ")[2] # WARNING
+  @[
+    &"/usr/lib/clang/{version}/include"
+  ]
+
+
+proc parseTranslationUnit*(
+  index: CXIndex,
+  command: CXCompileCommand): CXTranslationUnit =
+  ## Get file and compilation flags from compilation command `command`
+  ## and parse translation unit.
+
+  var args = collect(newSeq):
+    for arg in command.getArgs():
+      let match = arg.startsWith("-I", "-std=")
+
+      if match:
+        arg
+
+  args = getBuiltinHeaders().mapIt(&"-I{it}") & args
+
+  let file = $command.getFilename()
+  # echo file, "\n", args.joinl()
+  index.parseTranslationUnit(file, args, {})
+
+proc isNil*(tu: CXTranslationUnit): bool =
+  cast[ptr[CXTranslationUnitImpl]](tu) == nil
+
+
+
+
+
+#*************************************************************************#
+#**************************  Visitor wrappers  ***************************#
+#*************************************************************************#
+
 proc toClientData*[T](val: var T): CXClientData =
   CXClientData(addr val)
 
-proc toCursorVisitor*(
-  impl: proc(
-    cursor, parent: CXCursor,
-    clientData: pointer): CXChildVisitResult {.cdecl.}): CXCursorVisitor =
+type CXVisitor = proc(
+  cursor, parent: CXCursor,
+  clientData: pointer): CXChildVisitResult {.cdecl.}
+
+proc toCursorVisitor*(impl: CXVisitor): CXCursorVisitor =
   CXCursorVisitor(impl)
 
 proc visitChildren*[T](
-  cursor: CXCursor,
-  callback: tuple[
-    data: T,
-    impl: proc(cursor, parent: CXCursor,
-               clientData: pointer): CXChildVisitResult {.cdecl.}]) =
+  cursor: CXCursor, callback: tuple[data: T, impl: CXVisitor]) =
   ## Overload for child visit used by `makeVisitor` macro
   var data = callback.data
   discard cursor.visitChildren(
     toCursorVisitor(callback.impl),
     toClientData(data))
 
-
-
-macro makeVisitor*(captureVars, body: untyped): untyped =
-  ## Create `{.cdecl.}` callback for child visit. Macro head is a
-  ## `[var1, var2, ...]` list - all variables that are available in
-  ## the visitor body must be listed explicitly.
-  ##
-  ## .. code-block:: Nim
-  ##
-  ##    var buf:  seq[string]
-  ##    makeVisitor [unit, functionNames]:
-  ##      if cursor.cxKind == CXCursor_FunctionDecl:
-  ##        buf.add $cursor
-
-
+func makeVisitorImpl*(varnames: seq[NimNode], body: NimNode): NimNode =
   var immutableCopies = newStmtList()
-  captureVars.assertNodeKind({nnkBracket})
   let tupleData = nnkPar.newTree: collect(newSeq):
-    for capture in captureVars:
+    for capture in varnames:
       capture.assertNodeKind({nnkIdent})
       immutableCopies.add quote do:
         when not isMutable(`capture`):
@@ -139,7 +162,7 @@ macro makeVisitor*(captureVars, body: untyped): untyped =
 
   let byaddrid = ident "byaddr"
   let dataUnpack = newStmtList: collect(newSeq):
-    for capture in captureVars:
+    for capture in varnames:
       quote do:
         var `capture` {.`byaddrid`.} = data[].`capture`[]
 
@@ -160,19 +183,227 @@ macro makeVisitor*(captureVars, body: untyped): untyped =
 
       (data, visitor)
 
-  # echo $!result
+
+macro makeVisitor*(captureVars, body: untyped): untyped =
+  ## Create `{.cdecl.}` callback for child visit. Macro head is a
+  ## `[var1, var2, ...]` list - all variables that are available in
+  ## the visitor body must be listed explicitly.
+  ##
+  ## .. code-block:: Nim
+  ##
+  ##    var buf:  seq[string]
+  ##    makeVisitor [unit, functionNames]:
+  ##      if cursor.cxKind == CXCursor_FunctionDecl:
+  ##        buf.add $cursor
+  captureVars.assertNodeKind({nnkBracket})
+  return makeVisitorImpl(toSeq(captureVars), body)
 
 
-proc objTreeRepr*(cxtype: CXType): ObjTree =
-  case cxtype.cxKind:
-    of tkPointer:
-      pptObj("ptr", cxtype[].objTreeRepr())
-    else:
-      pptObj($cxtype.cxkind, pptConst($cxtype))
+
+#*************************************************************************#
+#****************  Convinience wrappers for clang types  *****************#
+#*************************************************************************#
+
+#==========================  String conversion  ==========================#
+
+proc `$`*(cxstr: CXString): string =
+  let str = getCString(cxstr)
+  result = $str
+  disposeString(cxstr)
+
+proc `$`*(cursor: CXCursor): string = $getCursorSpelling(cursor)
+proc `$`*(cxtype: CXType): string = $getTypeSpelling(cxtype)
+proc `$`*(cxkind: CXCursorKind): string = $getCursorKindSpelling(cxkind)
 
 
-proc lispRepr*(cxtype: CXType): string =
-  cxtype.objTreeRepr().lispRepr()
+
+
+#=============================  Predicates  ==============================#
+
+
+proc `==`*(t1, t2: CXType): bool = (equalTypes(t1, t2) != 0)
+proc isConstQualified*(t: CXType): bool = isConstQualifiedType(t) != 0
+proc `[]`*(t: CXType): CXType = getPointeeType(t)
+
+#*************************************************************************#
+#***************************  Cursor wrappers  ***************************#
+#*************************************************************************#
+
+#===========================  Kind/Type acess  ===========================#
+
+# ~~~~ Cursor ~~~~ #
+
+proc cxKind*(cursor: CXCursor): CXCursorKind =
+  ## Get kind of cursor
+  getCursorKind(cursor)
+
+proc expectKind*(cursor: CXCursor, kind: CXCursorKind) =
+  ## Raise assertion if cursor kind does not match
+  if cursor.cxKind != kind:
+    raiseAssert(&"Expected cursor kind {kind}, but got {cursor.cxKind()}")
+
+
+proc cxType*(cursor: CXCursor): CXType =
+  ## Get type of the cursor
+  getCursorType(cursor)
+
+proc comment*(cursor: CXCursor): CXComment =
+  cursor.getParsedComment()
+
+
+#=========================  Accessing subnodes  ==========================#
+
+proc children*(cursor: CXCursor): seq[CXCursor] =
+  ## Get sequence of subnodes for cursor
+  var buf: seq[CXCursor]
+  var ddd: int
+  cursor.visitChildren do:
+    makeVisitor [buf, ddd]:
+      buf.add cursor
+      return cvrContinue
+
+  return buf
+
+iterator items*(cursor: CXCursor): CXCursor =
+  for child in cursor.children():
+    yield child
+
+proc `[]`*(cursor: CXCursor, idx: int): CXCursor =
+  ## Get `idx`'th subnode of cursor. If index is greater than number
+  ## of available subnodes `IndexError` is raised.
+  var
+    res: CXCursor
+    cnt = 0
+
+  cursor.visitChildren do:
+    makeVisitor [res, cnt, idx]:
+      if cnt == idx:
+        res = cursor
+        return cvrBreak
+      else:
+        inc cnt
+        return cvrContinue
+
+  if cnt < idx:
+    raise newException(IndexError,
+                       "Cursor {cursor} no child at index {idx}")
+  else:
+    return res
+
+proc len*(cursor: CXCursor): int =
+  ## Get number of subnodes in cursor
+  var cnt = 0
+  cursor.visitChildren do:
+    makeVisitor [cnt]:
+      inc cnt
+      return cvrContinue
+
+  return cnt
+
+proc tokens*(cursor: CXCursor, tu: CXTranslationUnit): seq[string] =
+  ## Get sequence of tokens that make up cursor.
+  let range: CXSourceRange   = getCursorExtent(cursor);
+  var tokens: ptr[CXToken]
+  var nTokens: cuint = 0
+  tokenize(tu, range, addr tokens, addr nTokens)
+
+  for i in 0 ..< nTokens:
+    result.add $getTokenSpelling(
+      tu, (cast[ptr UncheckedArray[CXToken]](tokens))[i])
+
+proc visitMainFile*[T](
+  cursor: CXCursor,
+  callback: tuple[
+    data: T,
+    impl: proc(a, b: CXCursor,
+               clientData: pointer): CXChildVisitResult {.cdecl.}
+  ]) =
+  ## Call visitor in each subnode if it is in main file
+  var mainParent = cursor
+  cursor.visitChildren do:
+    makeVisitor [callback, mainParent]:
+      if cursor.isFromMainFile():
+        return callback.impl(cursor, mainParent, addr callback.data)
+      else:
+        return cvrRecurse
+
+proc getFirstOfKind*(
+  cursor: CXCursor,
+  kindSet: set[CXCursorKind], recurse: bool = true): CXCursor =
+  var
+    found = false
+    res: CXCursor
+
+  cursor.visitChildren do:
+    makeVisitor [found, res, kindSet, recurse]:
+      if cursor.kind in kindSet:
+        res = cursor
+        found = true
+        return cvrBreak
+      else:
+        if recurse:
+          return cvrRecurse
+        else:
+          return cvrBreak
+
+  if found:
+    return res
+  else:
+    raise newException(
+      KeyError,
+      &"Could not find cursor of kind {kindSet} in subnodes")
+
+
+
+
+#========================  Location information  =========================#
+
+
+proc isFromMainFile*(cursor: CXCursor): bool =
+  ## Return true if cursor posints to main file
+  let location = cursor.getCursorLocation()
+  result = location.locationIsFromMainFile() != cint(0)
+
+
+
+
+
+#*************************************************************************#
+#****************************  Type wrappers  ****************************#
+#*************************************************************************#
+
+proc cxKind*(cxtype: CXType): CXTypeKind =
+  ## Get type kind
+  cxtype.kind
+
+proc expectKind*(cxtype: CXType, kind: CXTypeKind) =
+  ## Raise assertion if cursor kind does not match
+  if cxtype.cxKind != kind:
+    raiseAssert(&"Expected type kind {kind}, but got {cxtype.cxKind()}")
+
+proc argc*(cxtype: CXType): int =
+  ## Get numbler of arguments in function type
+  cxtype.expectKind(tkFunctionProto)
+  getNumArgTypes(cxtype).int
+
+proc argTypes*(cursor: CXType): seq[CXType] =
+  for i in 0 ..< cursor.getNumArgTypes():
+    result.add cursor.getArgType(cuint i)
+
+proc retType*(cursor: CXCursor): CXType =
+  cursor.expectKind(ckFunctionDecl)
+  cursor.cxType().getResultType()
+
+proc argc*(cursor: CXCursor): int =
+  ## Get number of arguments in cursor pointing to function
+  cursor.cxType().argc()
+
+proc nthArg*(cxtype: CXType, idx: int): CXType =
+  ## Retrieve type nth argument of function type
+  assert idx < cxtype.argc()
+  getArgType(cxtype, cuint(idx))
+
+#===========================  Type conversion  ===========================#
 
 
 proc fromElaboratedPType*(cxtype: CXType): NType[PNode] =
@@ -245,7 +476,7 @@ proc toNType*(cxtype: CXType): tuple[ntype: NType[PNode], mutable: bool] =
       )
     else:
       echo "CANT CONVERT: ".toRed({styleItalic}),
-        cxtype.kind, " ", cxtype.lispRepr().toGreen()
+        cxtype.kind, " ", ($cxtype).toGreen()
       mkPType("!!!")
 
   result.ntype = restype
@@ -253,60 +484,20 @@ proc toNType*(cxtype: CXType): tuple[ntype: NType[PNode], mutable: bool] =
   # echo cxtype.cxkind, " ", result.toNNode()
 
 
-proc children*(cursor: CXCursor): seq[CXCursor] =
-  ## Get sequence of subnodes for cursor
-  var buf: seq[CXCursor]
-  var ddd: int
-  cursor.visitChildren do:
-    makeVisitor [buf, ddd]:
-      buf.add cursor
-      return cvrContinue
-
-  return buf
-
-proc `[]`*(cursor: CXCursor, idx: int): CXCursor =
-  ## Get `idx`'th subnode of cursor. If index is greater than number
-  ## of available subnodes `IndexError` is raised.
-  var
-    res: CXCursor
-    cnt = 0
-
-  cursor.visitChildren do:
-    makeVisitor [res, cnt, idx]:
-      if cnt == idx:
-        res = cursor
-        return cvrBreak
-      else:
-        inc cnt
-        return cvrContinue
-
-  if cnt < idx:
-    raise newException(IndexError,
-                       "Cursor {cursor} no child at index {idx}")
-  else:
-    return res
-
-proc len*(cursor: CXCursor): int =
-  ## Get number of subnodes in cursor
-  var cnt = 0
-  cursor.visitChildren do:
-    makeVisitor [cnt]:
-      inc cnt
-      return cvrContinue
-
-  return cnt
 
 
-proc tokens*(cursor: CXCursor, tu: CXTranslationUnit): seq[string] =
-  ## Get sequence of tokens that make up cursor.
-  let range: CXSourceRange   = getCursorExtent(cursor);
-  var tokens: ptr[CXToken]
-  var nTokens: cuint = 0
-  tokenize(tu, range, addr tokens, addr nTokens)
+#===========================  Pretty-printing  ===========================#
 
-  for i in 0 ..< nTokens:
-    result.add $getTokenSpelling(
-      tu, (cast[ptr UncheckedArray[CXToken]](tokens))[i])
+proc objTreeRepr*(cxtype: CXType): ObjTree =
+  case cxtype.cxKind:
+    of tkPointer:
+      pptObj("ptr", cxtype[].objTreeRepr())
+    else:
+      pptObj($cxtype.cxkind, pptConst($cxtype))
+
+
+proc lispRepr*(cxtype: CXType): string =
+  cxtype.objTreeRepr().lispRepr()
 
 
 proc objTreeRepr*(cursor: CXCursor, tu: CXTranslationUnit): ObjTree =
@@ -334,49 +525,51 @@ proc treeRepr*(cursor: CXCursor, tu: CXTranslationUnit): string =
   ## Generate pretty-printed tree representation of cursor.
   cursor.objTreeRepr(tu).treeRepr()
 
+#*************************************************************************#
+#***********************  Declaration conversion  ************************#
+#*************************************************************************#
+#=========================  C entry declaration  =========================#
+when true:
+  derive commonDerives:
+    type
+      CDeclKind* = enum
+        cdkClass
+        cdkStruct
+        cdkEnum
+        cdkFunction
+        cdkMethod
+        cdkField
 
-proc visitMainFile*[T](
-  cursor: CXCursor,
-  callback: tuple[
-    data: T,
-    impl: proc(a, b: CXCursor,
-               clientData: pointer): CXChildVisitResult {.cdecl.}
-  ]) =
-  ## Call visitor in each subnode if it is in main file
-  var mainParent = cursor
-  cursor.visitChildren do:
-    makeVisitor [callback, mainParent]:
-      if cursor.isFromMainFile():
-        return callback.impl(cursor, mainParent, addr callback.data)
-      else:
-        return cvrRecurse
+      CArg* = object
+        name*: string
+        cursor*: CXCursor
 
-proc getFirstOfKind*(
-  cursor: CXCursor,
-  kindSet: set[CXCursorKind], recurse: bool = true): CXCursor =
-  var
-    found = false
-    res: CXCursor
+      CDecl* {.derive(GetSet).} = object
+        name*: string
+        namespace*: seq[string]
+        cursor*: CXCursor
+        case kind*: CDeclKind
+          of cdkField:
+            fldAccs* {.name(accs).}: CX_CXXAccessSpecifier
+          of cdkMethod:
+            metAccs* {.name(accs).}: CX_CXXAccessSpecifier
+            metArgs* {.name(args).}: seq[CArg]
+          of cdkFunction:
+            funArgs* {.name(args).}: seq[CArg]
+          of cdkClass, cdkStruct:
+            members*: seq[CDecl]
+          else:
+            nil
 
-  cursor.visitChildren do:
-    makeVisitor [found, res, kindSet, recurse]:
-      if cursor.kind in kindSet:
-        res = cursor
-        found = true
-        return cvrBreak
-      else:
-        if recurse:
-          return cvrRecurse
-        else:
-          return cvrBreak
+#======================  Accessing CDecl elements  =======================#
+func arg*(cd: CDecl, idx: int): CArg = cd.args()[idx]
+func member*(cd: CDecl, idx: int): CDecl = cd.members[idx]
 
-  if found:
-    return res
-  else:
-    raise newException(
-      KeyError,
-      &"Could not find cursor of kind {kindSet} in subnodes")
 
+
+
+
+#======================  Converting to nim entries  ======================#
 
 proc fixIdentName(str: string): string =
   result = if str[0].isLowerAscii():
@@ -440,104 +633,77 @@ proc convertCFunction*(cursor: CXCursor): ProcDecl[PNode] =
     # WARNING temprarily disabled pragma annotations
     # it.signature.pragma = mkPPragma()
 
-proc createIndex*(
-  excludeDeclarations: bool = false,
-  showDiagnostics: bool = false): CXIndex =
+#*************************************************************************#
+#*********************  Translation unit conversion  *********************#
+#*************************************************************************#
+proc getArguments(cursor: CXCursor): seq[CArg] =
+  for idx, subn in cursor.children():
+    var name = $subn
+    if name.len == 0:
+      name = "a" & $idx
 
-  createIndex(excludeDeclarations.int, showDiagnostics.int)
+    result.add CArg(name: name, cursor: subn)
 
-proc createDatabase*(directory: string): CXCompilationDatabase =
-  ## Create compilation database from database found in directory
-  ## `directory`. On failure `IOError` is raised.
-  var err: CXCompilationDatabase_Error # NOTE might use to provide
-  # better diagnostics/exceptions
+proc visitMethod(cursor: CXCursor, accs: CX_CXXAccessSpecifier): CDecl =
+  result = CDecl(kind: cdkMethod)
+  result.name = $cursor
+  result.accs = accs
+  result.args = cursor.getArguments()
 
-  result = compilationDatabase_fromDirectory(directory.cstring, addr err)
-  if err == cdeCanNotLoadDatabase:
-    raise newException(
-      IOError,
-      &"Failed to find compilation database in directory {directory}")
+proc visitClass(cursor: CXCursor, parent: seq[string]): CDecl =
+  ## Convert class under cursor to `CDecl`
+  result = CDecl(kind: cdkClass)
+  result.name = $cursor
+  result.namespace = parent
 
-proc getArgs*(command: CXCompileCommand): seq[string] =
-  ## Get arguments for compile command `command`
-  for i in 0 ..< command.getNumArgs():
-    result.add $command.getArg(i)
-
-# proc commandsForFile*(
-#   dbase: CXCompilationDatabase, file: string): seq[CXCompileCommand] =
-#   ## Get compilation commands for file
-#   let commands = dbase.getCompileCommands(file.cstring)
-#   for i in 0 ..< commands.getSize():
-#     result.add commands.getCommand(i)
-
-# proc getAllCommands*(dbase: CXCompilationDatabase): seq[tuple[
-#   file: string, commands: seq[CXCompileCommand]]] =
-
-#   let commands = dbase.getAllCompileCommands()
-#   for i in 0 ..< coommands.getSize():
+  var currentAccs = asPrivate
+  for subn in cursor:
+    case subn.cxKind:
+      of ckCXXMethod:
+        result.members.add visitMethod(subn, currentAccs)
+      of ckCXXAccessSpecifier:
+        currentAccs = subn.getCXXAccessSpecifier()
+      else:
+        echo ($subn.cxKind).toRed(), " ", subn
+        discard
 
 
-proc parseTranslationUnit*(
-  trIndex: CXIndex,
-  filename: string,
-  cmdline: seq[string] = @[],
-  trOptions: set[CXTranslationUnit_Flags] = {
-    tufSingleFileParse}): CXTranslationUnit =
+proc visitCursor(cursor: CXCursor, parent: seq[string]): tuple[
+  decls: seq[CDecl], recurse: bool]
 
-  var flags: int
-  for opt in trOptions:
-    flags = bitor(flags, int(opt))
+proc visitNamespace(cursor: CXCursor, parent: seq[string]): seq[CDecl] =
+  ## Convert all elements in namespace into sequence of `CDecl`
+  ## elements.
+  for subn in cursor:
+    result = visitCursor(subn, parent & @[ $cursor ]).decls
 
-  let argc = cmdline.len
-  let cmdline = allocCSTringArray(cmdline)
+proc visitCursor(cursor: CXCursor, parent: seq[string]): tuple[
+  decls: seq[CDecl], recurse: bool] =
 
-  result = parseTranslationUnit(
-    trIndex, filename.cstring, cmdline, cint(argc), nil, 0, cuint(flags))
-
-  var hadErrors = false
-  for diag in result.getDiagnostics():
-    if diag.getDiagnosticSeverity() in {dsError, dsFatal}:
-      hadErrors = true
-      echo diag
+  result.decls.add case cursor.cxKind:
+    of ckNamespace:
+      visitNamespace(cursor, parent)
+    of ckClassDecl:
+      @[ visitClass(cursor, parent) ]
+    else:
+      result.recurse = true
+      return
 
 
-  deallocCStringArray(cmdline)
+proc splitDeclarations*(tu: CXTranslationUnit): seq[CDecl] =
+  ## Convert main file of translation unit into flattened sequence of
+  ## high-level declarations. All cursors for objects/structs are
+  ## retained.
+  assert not tu.isNil
+  let cursor = tu.getTranslationUnitCursor()
+  var res: seq[CDecl]
+  cursor.visitMainFile do:
+    makeVisitor [tu, res]:
+      let (decls, rec) = visitCursor(cursor, @[])
+      if rec:
+        return cvrRecurse
+      else:
+        res.add decls
+        return cvrContinue
 
-  if hadErrors:
-    raiseAssert("Translation unit parse failed")
-
-proc getBuiltinHeaders*(): seq[string] =
-  ## According to clang `documentation <https://clang.llvm.org/docs/LibTooling.html#builtin-includes>`_
-  ## libclang is needs additional precompiled headers paths in
-  ## addition to default include.
-  ##
-  ## NOTE right now I have zero idea how it works on windows, so I
-  ## will just hardcode unix-like paths.
-
-  let version = ($getClangVersion()).split(" ")[2] # WARNING
-  @[
-    &"/usr/lib/clang/{version}/include"
-  ]
-
-
-proc parseTranslationUnit*(
-  index: CXIndex,
-  command: CXCompileCommand): CXTranslationUnit =
-  ## Get file and compilation flags from compilation command `command`
-  ## and parse translation unit.
-
-  var args = collect(newSeq):
-    for arg in command.getArgs():
-      let match = arg.startsWith("-I", "-std=")
-
-      if match:
-        arg
-
-  args = getBuiltinHeaders().mapIt(&"-I{it}") & args
-
-  let file = $command.getFilename()
-  # echo file, "\n", args.joinl()
-  index.parseTranslationUnit(file, args, {})
-
-proc isNil*(tu: CXTranslationUnit): bool =
-  cast[ptr[CXTranslationUnitImpl]](tu) == nil
+  return res

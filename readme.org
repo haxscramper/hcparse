@@ -141,3 +141,8 @@ Future plans/goals
   has unstable, but much richer API, enabling full access to all
   internal representation of C++ code, rewriting etc.
 - [ ] Maybe adopt some workarounds from [[https://github.com/foonathan/cppast][cppast]]?
+- [ ] Create bindings for libtooling
+- [ ] Use [[https://github.com/haxscramper/nimtrs][nimtrs]] to generate matcher API calls
+  http://clang.llvm.org/docs/LibASTMatchers.html
+- [ ] Use nimtrs to provide pattern-based rewriting rules for types.
+  Requires implementation of rewriting for differently-typed AST.
