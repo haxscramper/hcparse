@@ -108,9 +108,6 @@ proc clang_visitChildren*[T](
     toClientData(data)
   )
 
-func takesOnlyMutable*[T](v: var T) = discard
-template isMutable*(v: typed): untyped = compiles(takesOnlyMutable(v))
-
 macro makeVisitor*(captureVars, body: untyped): untyped =
   var immutableCopies = newStmtList()
   captureVars.assertNodeKind({nnkBracket})
@@ -464,6 +461,8 @@ proc toNType*(cxtype: CXType): NType[PNode] =
             mkNType("ptr", [toNType(pointee)])
         of CXType_Void:
           mkPType("pointer")
+        of CXType_FunctionProto:
+          toNType(pointee)
         else:
           # echo "NESTED ".toYellow(), cxtype.lispRepr()
           mkNType("ptr", [toNType(pointee)])
@@ -739,7 +738,7 @@ proc visitEnumDecl*(cursor: CXCursor, context: var RewriteContext) =
   en.values.sort do(f1, f2: EnumField[PNode]) -> int:
     # NOTE possible source of incompatibility - only fields with
     # specified ordinal values should be sorted.
-    if f1.kind == f2.kind and f1.kind == efvOrdinal: 
+    if f1.kind == f2.kind and f1.kind == efvOrdinal:
       cmp(f1.ordVal.intVal, f2.ordVal.intVal)
     else:
       0
@@ -766,6 +765,8 @@ proc visitStructDecl*(cursor: CXCursor, context: var RewriteContext) =
       fldType: subn.cxType.toNType()
     )
 
+  resType.exported = true
+  resType.annotation = some(mkPPragma("pure", "bycopy"))
   context.resultNode.add resType.toNNode(standalone = true)
 
 
@@ -887,6 +888,7 @@ proc parseLibclang() =
     "Platform.h",
     "CXErrorCode.h",
     "CXString.h",
+    "CXCompilationDatabase.h",
     "Index.h",
     "Documentation.h"
   ]
@@ -944,6 +946,13 @@ type
 
         return CXChildVisit_Recurse
 
+
+  context.resultNode.add parsePNodeStr """
+{.define(libclangIncludeUtils).}
+include libclang_utils
+"""
+
+
   "../libclang.nim".writeFile($context.resultNode)
   shell:
     nim c "../libclang.nim"
@@ -980,6 +989,9 @@ int main() {
     trIndex = clang_createIndex(0, 0)
     unit = parseTranslationUnit(trIndex, outfile)
     topCursor = unit.clang_getTranslationUnitCursor()
+
+  echo unit.isNil
+  echo topCursor.cxKind
 
   topCursor.clangVisitChildren do:
     makeVisitor [unit]:

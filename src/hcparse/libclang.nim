@@ -37,12 +37,12 @@ type
                          ##  contract.
     ecASTReadError = 4          ##  An AST deserialization error has occurred.
 type
-  CXString = object
+  CXString* {.pure, bycopy.} = object
     data*: pointer
     private_flags*: cuint
 
 type
-  CXStringSet = object
+  CXStringSet* {.pure, bycopy.} = object
     strings*: ptr[CXString]
     count*: cuint
 
@@ -56,21 +56,86 @@ proc disposeStringSet*(cxset: ptr[CXStringSet]): void {.cdecl, dynlib: libclang,
     importc: "clang_disposeStringSet".}
   ##  Free the given string set.
 type
+  CXCompilationDatabase* = distinct pointer
+type
+  CXCompileCommands* = distinct pointer
+type
+  CXCompileCommand* = distinct pointer
+type
+  CXCompilationDatabase_Error* = enum ##  Error codes for Compilation Database
+    cdeNoError = 0, cdeCanNotLoadDatabase = 1
+proc compilationDatabase_fromDirectory*(buildDir: cstring; errorCode: ptr[
+    CXCompilationDatabase_Error]): CXCompilationDatabase {.cdecl, dynlib: libclang,
+    importc: "clang_CompilationDatabase_fromDirectory".}
+  ##  Creates a compilation database from the database found in directory
+  ##  buildDir. For example, CMake can output a compile_commands.json which can
+  ##  be used to build the database.
+  ##  It must be freed by 
+proc dispose*(argCXCompilationDatabase: CXCompilationDatabase): void {.cdecl,
+    dynlib: libclang, importc: "clang_CompilationDatabase_dispose".}
+  ##  Free the given compilation database
+proc getCompileCommands*(argCXCompilationDatabase: CXCompilationDatabase;
+                        completeFileName: cstring): CXCompileCommands {.cdecl,
+    dynlib: libclang, importc: "clang_CompilationDatabase_getCompileCommands".}
+  ##  Find the compile commands used for a file. The compile commands
+  ##  must be freed by 
+proc getAllCompileCommands*(argCXCompilationDatabase: CXCompilationDatabase): CXCompileCommands {.
+    cdecl, dynlib: libclang,
+    importc: "clang_CompilationDatabase_getAllCompileCommands".}
+  ##  Get all the compile commands in the given compilation database.
+proc dispose*(argCXCompileCommands: CXCompileCommands): void {.cdecl,
+    dynlib: libclang, importc: "clang_CompileCommands_dispose".}
+  ##  Free the given CompileCommands
+proc getSize*(argCXCompileCommands: CXCompileCommands): cuint {.cdecl,
+    dynlib: libclang, importc: "clang_CompileCommands_getSize".}
+  ##  Get the number of CompileCommand we have for a file
+proc getCommand*(argCXCompileCommands: CXCompileCommands; i: cuint): CXCompileCommand {.
+    cdecl, dynlib: libclang, importc: "clang_CompileCommands_getCommand".}
+  ##  Get the I'th CompileCommand for a file
+  ##  Note : 0 
+  ## <
+  ## = i 
+  ## <
+  ##  clang_CompileCommands_getSize(CXCompileCommands)
+proc getDirectory*(argCXCompileCommand: CXCompileCommand): CXString {.cdecl,
+    dynlib: libclang, importc: "clang_CompileCommand_getDirectory".}
+  ##  Get the working directory where the CompileCommand was executed from
+proc getFilename*(argCXCompileCommand: CXCompileCommand): CXString {.cdecl,
+    dynlib: libclang, importc: "clang_CompileCommand_getFilename".}
+  ##  Get the filename associated with the CompileCommand.
+proc getNumArgs*(argCXCompileCommand: CXCompileCommand): cuint {.cdecl,
+    dynlib: libclang, importc: "clang_CompileCommand_getNumArgs".}
+  ##  Get the number of arguments in the compiler invocation.
+proc getArg*(argCXCompileCommand: CXCompileCommand; i: cuint): CXString {.cdecl,
+    dynlib: libclang, importc: "clang_CompileCommand_getArg".}
+  ##  Get the I'th argument value in the compiler invocations
+  ##  Invariant :
+  ##   - argument 0 is the compiler executable
+proc getNumMappedSources*(argCXCompileCommand: CXCompileCommand): cuint {.cdecl,
+    dynlib: libclang, importc: "clang_CompileCommand_getNumMappedSources".}
+  ##  Get the number of source mappings for the compiler invocation.
+proc getMappedSourcePath*(argCXCompileCommand: CXCompileCommand; i: cuint): CXString {.
+    cdecl, dynlib: libclang, importc: "clang_CompileCommand_getMappedSourcePath".}
+  ##  Get the I'th mapped source path for the compiler invocation.
+proc getMappedSourceContent*(argCXCompileCommand: CXCompileCommand; i: cuint): CXString {.
+    cdecl, dynlib: libclang, importc: "clang_CompileCommand_getMappedSourceContent".}
+  ##  Get the I'th mapped source content for the compiler invocation.
+type
   CXIndex* = distinct pointer
 type
-  CXTargetInfoImpl = object
+  CXTargetInfoImpl* {.pure, bycopy.} = object
   
 type
   CXTargetInfo* = distinct ptr[CXTargetInfoImpl]
 type
-  CXTranslationUnitImpl = object
+  CXTranslationUnitImpl* {.pure, bycopy.} = object
   
 type
   CXTranslationUnit* = distinct ptr[CXTranslationUnitImpl]
 type
   CXClientData* = distinct pointer
 type
-  CXUnsavedFile = object
+  CXUnsavedFile* {.pure, bycopy.} = object
     filename*: cstring
     contents*: cstring
     length*: culong
@@ -86,7 +151,7 @@ type
     akNotAccessible ##  The entity is available, but not accessible; any use of it will be
                    ##  an error.
 type
-  CXVersion = object
+  CXVersion* {.pure, bycopy.} = object
     major*: int
     minor*: int
     subminor*: int
@@ -165,7 +230,7 @@ proc getFileTime*(sFile: CXFile): time_t {.cdecl, dynlib: libclang,
                                        importc: "clang_getFileTime".}
   ##  Retrieve the last modification time of the given file.
 type
-  CXFileUniqueID = object
+  CXFileUniqueID* {.pure, bycopy.} = object
     data*: array[3, culonglong]
 
 proc getFileUniqueID*(file: CXFile; outID: ptr[CXFileUniqueID]): int {.cdecl,
@@ -214,12 +279,12 @@ proc tryGetRealPathName*(file: CXFile): CXString {.cdecl, dynlib: libclang,
   ##  An empty string may be returned. Use 
   ##  in that case.
 type
-  CXSourceLocation = object
+  CXSourceLocation* {.pure, bycopy.} = object
     ptr_data*: array[2, pointer]
     int_data*: cuint
 
 type
-  CXSourceRange = object
+  CXSourceRange* {.pure, bycopy.} = object
     ptr_data*: array[2, pointer]
     begin_int_data*: cuint
     end_int_data*: cuint
@@ -380,7 +445,7 @@ proc getRangeEnd*(cxrange: CXSourceRange): CXSourceLocation {.cdecl,
   ##  Retrieve a source location representing the last character within a
   ##  source range.
 type
-  CXSourceRangeList = object
+  CXSourceRangeList* {.pure, bycopy.} = object
     count*: cuint
     ranges*: ptr[CXSourceRange]
 
@@ -981,12 +1046,12 @@ proc getTUResourceUsageName*(kind: CXTUResourceUsageKind): cstring {.cdecl,
   ##  Returns the human-readable null-terminated C string that represents
   ##   the name of the memory category.  This string should never be freed.
 type
-  CXTUResourceUsageEntry = object
+  CXTUResourceUsageEntry* {.pure, bycopy.} = object
     kind*: CXTUResourceUsageKind
     amount*: culong
 
 type
-  CXTUResourceUsage = object
+  CXTUResourceUsage* {.pure, bycopy.} = object
     data*: pointer
     numEntries*: cuint
     entries*: ptr[CXTUResourceUsageEntry]
@@ -1357,7 +1422,7 @@ type
     ckFriendDecl = 603,         ##  a friend declaration.
     ckOverloadCandidate = 700   ##  A code completion overload candidate.
 type
-  CXCursor = object
+  CXCursor* {.pure, bycopy.} = object
     kind*: CXCursorKind
     xdata*: int
     data*: array[3, pointer]
@@ -1469,7 +1534,7 @@ proc getCursorAvailability*(cursor: CXCursor): CXAvailabilityKind {.cdecl,
   ## **
   ##  The availability of the cursor.
 type
-  CXPlatformAvailability = object
+  CXPlatformAvailability* {.pure, bycopy.} = object
     platform*: CXString
     introduced*: CXVersion
     deprecated*: CXVersion
@@ -1540,7 +1605,7 @@ proc getTranslationUnit*(argCXCursor: CXCursor): CXTranslationUnit {.cdecl,
     dynlib: libclang, importc: "clang_Cursor_getTranslationUnit".}
   ##  Returns the translation unit that a cursor originated from.
 type
-  CXCursorSetImpl = object
+  CXCursorSetImpl* {.pure, bycopy.} = object
   
 type
   CXCursorSet* = distinct ptr[CXCursorSetImpl]
@@ -1757,7 +1822,7 @@ type
     ccPreserveMost = 14, ccPreserveAll = 15, ccAArch64VectorCall = 16, ccInvalid = 100,
     ccUnexposed = 200
 type
-  CXType = object
+  CXType* {.pure, bycopy.} = object
     kind*: CXTypeKind
     data*: array[2, pointer]
 
@@ -2236,8 +2301,8 @@ type
     cvrRecurse ##  Recursively traverse the children of this cursor, using
               ##  the same visitor and client data.
 type
-  CXCursorVisitor* = distinct ptr[proc (a0: CXCursor; a1: CXCursor; a2: pointer): CXChildVisitResult {.
-      cdecl.}]
+  CXCursorVisitor* = distinct proc (a0: CXCursor; a1: CXCursor; a2: pointer): CXChildVisitResult {.
+      cdecl.}
 proc visitChildren*(parent: CXCursor; visitor: CXCursorVisitor;
                    client_data: CXClientData): cuint {.cdecl, dynlib: libclang,
     importc: "clang_visitChildren".}
@@ -2694,7 +2759,7 @@ type
     tokLiteral,               ##  A numeric, string, or character literal.
     tokComment                ##  A comment.
 type
-  CXToken = object
+  CXToken* {.pure, bycopy.} = object
     int_data*: array[4, cuint]
     ptr_data*: pointer
 
@@ -2786,13 +2851,13 @@ proc getDefinitionSpellingAndExtent*(argCXCursor: CXCursor; startBuf: cstringArr
     dynlib: libclang, importc: "clang_getDefinitionSpellingAndExtent".}
 proc enableStackTraces*(): void {.cdecl, dynlib: libclang,
                                importc: "clang_enableStackTraces".}
-proc executeOnThread*(fn: ptr[proc (a0: pointer): void {.cdecl.}]; user_data: pointer;
+proc executeOnThread*(fn: proc (a0: pointer): void {.cdecl.}; user_data: pointer;
                      stack_size: cuint): void {.cdecl, dynlib: libclang,
     importc: "clang_executeOnThread".}
 type
   CXCompletionString* = distinct pointer
 type
-  CXCompletionResult = object
+  CXCompletionResult* {.pure, bycopy.} = object
     cursorKind*: CXCursorKind
     completionString*: CXCompletionString
 
@@ -2995,7 +3060,7 @@ proc getCursorCompletionString*(cursor: CXCursor): CXCompletionString {.cdecl,
   ##  A non-context-sensitive completion string for declaration and macro
   ##  definition cursors, or NULL for other kinds of cursors.
 type
-  CXCodeCompleteResults = object
+  CXCodeCompleteResults* {.pure, bycopy.} = object
     results*: ptr[CXCompletionResult]
     numResults*: cuint
 
@@ -3280,8 +3345,8 @@ proc toggleCrashRecovery*(isEnabled: cuint): void {.cdecl, dynlib: libclang,
   ##  Flag to indicate if crash recovery is enabled.  A non-zero
   ##         value enables crash recovery, while 0 disables it.
 type
-  CXInclusionVisitor* = distinct ptr[proc (a0: pointer; a1: ptr[CXSourceLocation];
-                                       a2: cuint; a3: pointer): void {.cdecl.}]
+  CXInclusionVisitor* = distinct proc (a0: pointer; a1: ptr[CXSourceLocation];
+                                   a2: cuint; a3: pointer): void {.cdecl.}
 proc getInclusions*(tu: CXTranslationUnit; visitor: CXInclusionVisitor;
                    client_data: CXClientData): void {.cdecl, dynlib: libclang,
     importc: "clang_getInclusions".}
@@ -3376,10 +3441,9 @@ type
                        ## {
     vrBreak, vrContinue
 type
-  CXCursorAndRangeVisitor = object
+  CXCursorAndRangeVisitor* {.pure, bycopy.} = object
     context*: pointer
-    visit*: ptr[proc (a0: pointer; a1: CXCursor; a2: CXSourceRange): CXVisitorResult {.
-        cdecl.}]
+    visit*: proc (a0: pointer; a1: CXCursor; a2: CXSourceRange): CXVisitorResult {.cdecl.}
 
 type
   CXResult* = enum
@@ -3424,12 +3488,12 @@ type
 type
   CXIdxClientASTFile* = distinct pointer
 type
-  CXIdxLoc = object
+  CXIdxLoc* {.pure, bycopy.} = object
     ptr_data*: array[2, pointer]
     int_data*: cuint
 
 type
-  CXIdxIncludedFileInfo = object
+  CXIdxIncludedFileInfo* {.pure, bycopy.} = object
     hashLoc*: CXIdxLoc
     filename*: cstring
     file*: CXFile
@@ -3438,7 +3502,7 @@ type
     isModuleImport*: int
 
 type
-  CXIdxImportedASTFileInfo = object
+  CXIdxImportedASTFileInfo* {.pure, bycopy.} = object
     file*: CXFile
     module*: CXModule
     loc*: CXIdxLoc
@@ -3472,13 +3536,13 @@ type
   CXIdxAttrKind* = enum
     iakUnexposed = 0, iakIBAction = 1, iakIBOutlet = 2, iakIBOutletCollection = 3
 type
-  CXIdxAttrInfo = object
+  CXIdxAttrInfo* {.pure, bycopy.} = object
     kind*: CXIdxAttrKind
     cursor*: CXCursor
     loc*: CXIdxLoc
 
 type
-  CXIdxEntityInfo = object
+  CXIdxEntityInfo* {.pure, bycopy.} = object
     kind*: CXIdxEntityKind
     templateKind*: CXIdxEntityCXXTemplateKind
     lang*: CXIdxEntityLanguage
@@ -3489,11 +3553,11 @@ type
     numAttributes*: cuint
 
 type
-  CXIdxContainerInfo = object
+  CXIdxContainerInfo* {.pure, bycopy.} = object
     cursor*: CXCursor
 
 type
-  CXIdxIBOutletCollectionAttrInfo = object
+  CXIdxIBOutletCollectionAttrInfo* {.pure, bycopy.} = object
     attrInfo*: ptr[CXIdxAttrInfo]
     objcClass*: ptr[CXIdxEntityInfo]
     classCursor*: CXCursor
@@ -3503,7 +3567,7 @@ type
   CXIdxDeclInfoFlags* = enum
     idifFlag_Skipped = 1
 type
-  CXIdxDeclInfo = object
+  CXIdxDeclInfo* {.pure, bycopy.} = object
     entityInfo*: ptr[CXIdxEntityInfo]
     cursor*: CXCursor
     loc*: CXIdxLoc
@@ -3522,35 +3586,35 @@ type
   CXIdxObjCContainerKind* = enum
     iocckForwardRef = 0, iocckInterface = 1, iocckImplementation = 2
 type
-  CXIdxObjCContainerDeclInfo = object
+  CXIdxObjCContainerDeclInfo* {.pure, bycopy.} = object
     declInfo*: ptr[CXIdxDeclInfo]
     kind*: CXIdxObjCContainerKind
 
 type
-  CXIdxBaseClassInfo = object
+  CXIdxBaseClassInfo* {.pure, bycopy.} = object
     base*: ptr[CXIdxEntityInfo]
     cursor*: CXCursor
     loc*: CXIdxLoc
 
 type
-  CXIdxObjCProtocolRefInfo = object
+  CXIdxObjCProtocolRefInfo* {.pure, bycopy.} = object
     protocol*: ptr[CXIdxEntityInfo]
     cursor*: CXCursor
     loc*: CXIdxLoc
 
 type
-  CXIdxObjCProtocolRefListInfo = object
+  CXIdxObjCProtocolRefListInfo* {.pure, bycopy.} = object
     protocols*: ptr[ptr[CXIdxObjCProtocolRefInfo]]
     numProtocols*: cuint
 
 type
-  CXIdxObjCInterfaceDeclInfo = object
+  CXIdxObjCInterfaceDeclInfo* {.pure, bycopy.} = object
     containerInfo*: ptr[CXIdxObjCContainerDeclInfo]
     superInfo*: ptr[CXIdxBaseClassInfo]
     protocols*: ptr[CXIdxObjCProtocolRefListInfo]
 
 type
-  CXIdxObjCCategoryDeclInfo = object
+  CXIdxObjCCategoryDeclInfo* {.pure, bycopy.} = object
     containerInfo*: ptr[CXIdxObjCContainerDeclInfo]
     objcClass*: ptr[CXIdxEntityInfo]
     classCursor*: CXCursor
@@ -3558,13 +3622,13 @@ type
     protocols*: ptr[CXIdxObjCProtocolRefListInfo]
 
 type
-  CXIdxObjCPropertyDeclInfo = object
+  CXIdxObjCPropertyDeclInfo* {.pure, bycopy.} = object
     declInfo*: ptr[CXIdxDeclInfo]
     getter*: ptr[CXIdxEntityInfo]
     setter*: ptr[CXIdxEntityInfo]
 
 type
-  CXIdxCXXClassDeclInfo = object
+  CXIdxCXXClassDeclInfo* {.pure, bycopy.} = object
     declInfo*: ptr[CXIdxDeclInfo]
     bases*: ptr[ptr[CXIdxBaseClassInfo]]
     numBases*: cuint
@@ -3584,7 +3648,7 @@ type
     srNone = 0, srDeclaration = 1, srDefinition = 2, srReference = 4, srRead = 8, srWrite = 16,
     srCall = 32, srDynamic = 64, srAddressOf = 128, srImplicit = 256
 type
-  CXIdxEntityRefInfo = object
+  CXIdxEntityRefInfo* {.pure, bycopy.} = object
     kind*: CXIdxEntityRefKind
     cursor*: CXCursor
     loc*: CXIdxLoc
@@ -3594,22 +3658,20 @@ type
     role*: CXSymbolRole
 
 type
-  IndexerCallbacks = object
-    abortQuery*: ptr[proc (a0: CXClientData; a1: pointer): int {.cdecl.}]
-    diagnostic*: ptr[proc (a0: CXClientData; a1: CXDiagnosticSet; a2: pointer): void {.
-        cdecl.}]
-    enteredMainFile*: ptr[proc (a0: CXClientData; a1: CXFile; a2: pointer): CXIdxClientFile {.
-        cdecl.}]
-    ppIncludedFile*: ptr[proc (a0: CXClientData; a1: ptr[CXIdxIncludedFileInfo]): CXIdxClientFile {.
-        cdecl.}]
-    importedASTFile*: ptr[proc (a0: CXClientData; a1: ptr[CXIdxImportedASTFileInfo]): CXIdxClientASTFile {.
-        cdecl.}]
-    startedTranslationUnit*: ptr[proc (a0: CXClientData; a1: pointer): CXIdxClientContainer {.
-        cdecl.}]
-    indexDeclaration*: ptr[proc (a0: CXClientData; a1: ptr[CXIdxDeclInfo]): void {.
-        cdecl.}]
-    indexEntityReference*: ptr[proc (a0: CXClientData; a1: ptr[CXIdxEntityRefInfo]): void {.
-        cdecl.}]
+  IndexerCallbacks* {.pure, bycopy.} = object
+    abortQuery*: proc (a0: CXClientData; a1: pointer): int {.cdecl.}
+    diagnostic*: proc (a0: CXClientData; a1: CXDiagnosticSet; a2: pointer): void {.cdecl.}
+    enteredMainFile*: proc (a0: CXClientData; a1: CXFile; a2: pointer): CXIdxClientFile {.
+        cdecl.}
+    ppIncludedFile*: proc (a0: CXClientData; a1: ptr[CXIdxIncludedFileInfo]): CXIdxClientFile {.
+        cdecl.}
+    importedASTFile*: proc (a0: CXClientData; a1: ptr[CXIdxImportedASTFileInfo]): CXIdxClientASTFile {.
+        cdecl.}
+    startedTranslationUnit*: proc (a0: CXClientData; a1: pointer): CXIdxClientContainer {.
+        cdecl.}
+    indexDeclaration*: proc (a0: CXClientData; a1: ptr[CXIdxDeclInfo]): void {.cdecl.}
+    indexEntityReference*: proc (a0: CXClientData; a1: ptr[CXIdxEntityRefInfo]): void {.
+        cdecl.}
 
 proc index_isEntityObjCContainerKind*(argCXIdxEntityKind: CXIdxEntityKind): int {.
     cdecl, dynlib: libclang, importc: "clang_index_isEntityObjCContainerKind".}
@@ -3751,8 +3813,7 @@ proc indexLoc_getCXSourceLocation*(loc: CXIdxLoc): CXSourceLocation {.cdecl,
     dynlib: libclang, importc: "clang_indexLoc_getCXSourceLocation".}
   ##  Retrieve the CXSourceLocation represented by the given CXIdxLoc.
 type
-  CXFieldVisitor* = distinct ptr[proc (a0: CXCursor; a1: pointer): CXVisitorResult {.
-      cdecl.}]
+  CXFieldVisitor* = distinct proc (a0: CXCursor; a1: pointer): CXVisitorResult {.cdecl.}
 proc visitFields*(t: CXType; visitor: CXFieldVisitor; client_data: CXClientData): cuint {.
     cdecl, dynlib: libclang, importc: "clang_Type_visitFields".}
   ##  Visit the fields of a particular type.
@@ -3773,7 +3834,7 @@ proc visitFields*(t: CXType; visitor: CXFieldVisitor; client_data: CXClientData)
   ##  a non-zero value if the traversal was terminated
   ##  prematurely by the visitor returning 
 type
-  CXComment = object
+  CXComment* {.pure, bycopy.} = object
     aSTNode*: pointer
     translationUnit*: CXTranslationUnit
 
@@ -4200,3 +4261,6 @@ proc fullComment_getAsXML*(comment: CXComment): CXString {.cdecl, dynlib: libcla
   ##  AST node.
   ## **
   ##  string containing an XML document.
+{.define(libclangIncludeUtils).}
+include
+  libclang_utils

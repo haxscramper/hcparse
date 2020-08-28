@@ -1,7 +1,6 @@
 {.define(plainStdout).}
 import hcparse/libclang_raw/[raw_user, index]
 import std/decls
-# import macros
 
 let outfile = "/tmp/example.cpp"
 outfile.writeFile """
@@ -28,6 +27,9 @@ let
   trIndex = clang_createIndex(0, 0)
   unit = parseTranslationUnit(trIndex, outfile)
   topCursor = unit.clang_getTranslationUnitCursor()
+
+echo unit.isNil
+echo topCursor.cxKind
 
 var functionNames: seq[string]
 topCursor.visitMainFile do: # Visit all ast elements from main translation unit

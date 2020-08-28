@@ -126,6 +126,11 @@ user-friendly wrappers are currently WIP in
 [[file:src/hcparse/libclang.nim]] with automatically ported documentation,
 better-named enums and functions.
 
+Must-have todo things
+
+- [ ] Add destructors/finalizers for clang objects - right now none of
+  the ~dispose*()~ functions are called.
+
 Future plans/goals
 
 - [ ] Provide convinient and stable API for interacting with libclang.
