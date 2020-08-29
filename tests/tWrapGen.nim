@@ -15,8 +15,10 @@ import hmisc/other/hshell
 
 type
   ColorLogger = ref object of Logger
+    ident: int
 
 method log(logger: ColorLogger, level: Level, args: varargs[string, `$`]) =
+  let ident = "  ".repeat(logger.ident)
   let prefix =
     case level:
       of lvlDebug: "DEBUG"
@@ -28,9 +30,9 @@ method log(logger: ColorLogger, level: Level, args: varargs[string, `$`]) =
       of lvlAll: "ALL"
       of lvlNone: ""
 
-  echo prefix, " ", args.join(" ")
+  echo ident, prefix, " ", args.join(" ")
 
-var logger = ColorLogger()
+var logger = ColorLogger(ident: 2)
 addHandler logger
 
 macro err(args: varargs[untyped]): untyped =
@@ -38,35 +40,44 @@ macro err(args: varargs[untyped]): untyped =
   for arg in args:
     result.add arg
 
-func toAssgnKV(nodes: seq[NimNode]): seq[NimNode] =
+macro kvCall(head, nodes: untyped): untyped =
+  result = newCall(head)
   for node in nodes:
     node.assertNodeKind({nnkCall})
     node[1].assertNodeKind({nnkStmtList})
     result.add nnkExprEqExpr.newTree(node[0], node[1][0])
 
-macro wrapgenTest(body: untyped): untyped =
-  result = newCall("wrapgen", toSeq(body).toAssgnKV())
+# macro wrapgenTest(body: untyped): untyped =
+#   result = newCall("wrapgen", toSeq(body).toAssgnKV())
 
 proc wrapgen(
   cpp, nim: string,
   dirname: string = "/tmp",
   cppfile: string = "wrapgen-test",
-  nimfile: string = "wrapgen_test"): void =
+  nimfile: string = "wrapgen_test",
+  nimcache: string = "nimcache.d",
+  stdout: string = ""): void =
 
   let
     wrapfile = dirname / nimfile & "_wrap.nim"
     cppfile = dirname / cppfile & ".cpp"
     nimfile = dirname / nimfile & ".nim"
+    nimcache = dirname / nimcache
 
-  echo cpp
+  createDir nimcache
+
+  info "Nimcache directory", nimcache
   info "Writing CPP file", cppfile
   cppfile.writeFile(cpp)
-  nimfile.writeFile(nim)
+  nimfile.writeFile(&"import \"{wrapfile}\"\n" & nim)
 
   let index = createIndex()
-  let unit = parseTranslationUnit(index, cppfile)
+  let unit = parseTranslationUnit(
+    index, cppfile, @[], {tufSkipFunctionBodies})
+
   if unit.isNil:
     err "Translation unit parse failed"
+    echo cpp
     fail()
   else:
     info "Parsed file", cppfile
@@ -75,26 +86,86 @@ proc wrapgen(
   info "Wrapper file is", wrapfile
   var outwrap = ""
 
+  let conf = WrapConfig(
+    header: cppfile
+  )
+
   let decls = unit.splitDeclarations()
   for decl in decls:
     case decl.kind:
       of cdkClass:
         outwrap &= makeCommentSection("Type definition", 1) & "\n"
-        outwrap &= $decl.wrapObject().toNNode() & "\n"
+        outwrap &= $decl.wrapObject(conf).toNNode(true) & "\n"
         outwrap &= makeCommentSection("Methods", 1) & "\n"
-        outwrap &= decl.wrapMethods().mapIt(
+        outwrap &= decl.wrapMethods(conf).mapIt(
           $it.toNNode()).joinl()
       else:
         discard
 
   wrapfile.writeFile(outwrap)
-  echo outwrap
+  let binfile = nimfile & ".bin"
+  block:
+    let command = &"nim cpp -o:{binfile} \"{nimfile}\""
+    info &"Compiling nim file '{command}'"
+    let (stdout, err, code) = runShell(command)
+    if code != 0:
+      err "Compilation failed"
+
+      echo "Generated nim wrapper:\n", outwrap
+      echo stdout
+      echo err
+      fail()
+
+  block:
+    let command = binfile
+    info "Running", command
+    let (outstr, err, code) = runShell(command)
+    if stdout.len > 0:
+      assertEq outstr.strip(), stdout.strip()
+    else:
+      echo outstr
+
+
 
 
 suite "Wrapgen":
   test "single method":
-    wrapgenTest:
+    kvCall wrapgen:
       cpp:
-        "class Q { int hhh(); };"
+        """
+        class Q {
+          public:
+            int a;
+            void hhh() { a += 2; };
+            int qq() { return 1; };
+        };
+        """.dedent()
       nim:
-        ""
+        """
+        var q: Q
+        q.hhh()
+        echo q.qq()
+        """.dedent()
+      stdout:
+        "1"
+
+  test "Namespaces & includes":
+    kvCall wrapgen:
+      cpp:
+        """
+        #include <iostream>
+
+        namespace Q {
+          class Z {
+            public:
+              void hello() const { std::cout << "Hello from C++ code"; };
+          };
+        }
+        """.dedent()
+      nim:
+        """
+        let z = Z()
+        z.hello()
+        """.dedent()
+      stdout:
+        "Hello from C++ code"

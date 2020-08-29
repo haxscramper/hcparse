@@ -103,6 +103,20 @@ proc isNil*(tu: CXTranslationUnit): bool =
   cast[ptr[CXTranslationUnitImpl]](tu) == nil
 
 
+
+proc getBuiltinHeaders*(): seq[string] =
+  ## According to clang `documentation <https://clang.llvm.org/docs/LibTooling.html#builtin-includes>`_
+  ## libclang is needs additional precompiled headers paths in
+  ## addition to default include.
+  ##
+  ## NOTE right now I have zero idea how it works on windows, so I
+  ## will just hardcode unix-like paths.
+
+  let version = ($getClangVersion()).split(" ")[2] # WARNING
+  @[
+    &"/usr/lib/clang/{version}/include"
+  ]
+
 proc parseTranslationUnit*(
   trIndex: CXIndex,
   filename: string,
@@ -110,8 +124,7 @@ proc parseTranslationUnit*(
   trOptions: set[CXTranslationUnit_Flags] = {tufSingleFileParse},
   reparseOnNil: bool = true): CXTranslationUnit =
 
-  # var cmdline = cmdline
-  # if
+  let cmdline = getBuiltinHeaders().mapIt(&"-I{it}") & cmdline
 
   var flags: int
   for opt in trOptions:
@@ -129,12 +142,12 @@ proc parseTranslationUnit*(
   for diag in result.getDiagnostics():
     if diag.getDiagnosticSeverity() in {dsError, dsFatal}:
       hadErrors = true
-      echo diag
+      echo ($diag).toRed()
+    else:
+      echo ($diag).toYellow()
 
-
-
-  if hadErrors:
-    raiseAssert(&"""
+  if hadErrors or (reparseOnNil and result.isNil):
+    echo(&"""
 Translation unit parse failed due to errors.
 Compilation flags:
 {cmdline.joinql()}
@@ -142,10 +155,8 @@ File:
   {filename}
       """)
 
-  if reparseOnNil and result.isNil:
+
     echo "Translation unit parse failed, repeating parse in verbose mode"
-    echo "Command line arguments:"
-    echo cmdline.joinl()
 
     let cmdline = @["-v"] & cmdline
     let argc = cmdline.len
@@ -157,20 +168,6 @@ File:
     deallocCStringArray(cmdlineC)
 
     raiseAssert("Translation unit parse failed")
-
-
-proc getBuiltinHeaders*(): seq[string] =
-  ## According to clang `documentation <https://clang.llvm.org/docs/LibTooling.html#builtin-includes>`_
-  ## libclang is needs additional precompiled headers paths in
-  ## addition to default include.
-  ##
-  ## NOTE right now I have zero idea how it works on windows, so I
-  ## will just hardcode unix-like paths.
-
-  let version = ($getClangVersion()).split(" ")[2] # WARNING
-  @[
-    &"/usr/lib/clang/{version}/include"
-  ]
 
 
 proc parseTranslationUnit*(
@@ -814,14 +811,18 @@ proc splitDeclarations*(tu: CXTranslationUnit): seq[CDecl] =
 #*************************************************************************#
 #*************************  Wrapper generation  **************************#
 #*************************************************************************#
-proc wrapMethods*(cd: CDecl): seq[PProcDecl] =
+type
+  WrapConfig* = object
+    header*: string
+
+proc wrapMethods*(cd: CDecl, conf: WrapConfig): seq[PProcDecl] =
   assert cd.kind in {cdkClass, cdkStruct}
   for meth in cd.methods({ckCXXMethod}):
     let procdef = PProcDecl().withIt do:
       # TODO set `exported` and `comment`
       it.name = meth.name
       it.signature = newProcNType[PNode](@[])
-      # it.signature.arguments.add
+      it.exported = (meth.accs == asPublic)
 
       it.signature.arguments.add PIdentDefs(
         varname: "this",
@@ -832,15 +833,17 @@ proc wrapMethods*(cd: CDecl): seq[PProcDecl] =
       it.signature.setRtype toNType(meth.cursor.retType()).ntype
 
       it.signature.pragma = newPPragma(
-        newPIdentColonString("importcpp", &"#.{it.name}(@)")
+        newPIdentColonString("importcpp", &"#.{it.name}(@)"),
+        newPIdentColonString("header", conf.header)
       )
 
     result.add procdef
 
-proc wrapObject*(cd: CDecl): PObject =
+proc wrapObject*(cd: CDecl, conf: WrapConfig): PObject =
   assert cd.kind in {cdkClass, cdkStruct}
-  result = PObject(name: newPType(cd.name))
+  result = PObject(name: newPType(cd.name), exported: true)
 
   result.annotation = some(newPPragma(
-    newPIdentColonString("importcpp", cd.namespaceName())
+    newPIdentColonString("importcpp", cd.namespaceName()),
+    newPIdentColonString("header", conf.header),
   ))
