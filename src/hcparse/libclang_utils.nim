@@ -347,6 +347,12 @@ proc children*(cursor: CXCursor): seq[CXCursor] =
 
   return buf
 
+proc children*(cursor: CXCursor, kind: set[CXCursorKind]): seq[CXCursor] =
+  for ch in cursor.children:
+    if ch.cxKind in kind:
+      result.add ch
+
+
 iterator items*(cursor: CXCursor): CXCursor =
   for child in cursor.children():
     yield child
@@ -793,7 +799,8 @@ proc visitField(cursor: CXCursor, accs: CX_CXXAccessSpecifier): CDecl =
 
 proc visitClass(cursor: CXCursor, parent: seq[string]): CDecl =
   ## Convert class under cursor to `CDecl`
-  cursor.expectKind({ckClassDecl})
+  cursor.expectKind({ckClassDecl, ckClassTemplate,
+                      ckClassTemplatePartialSpecialization})
   result = CDecl(kind: cdkClass, cursor: cursor)
   result.name = $cursor
   result.namespace = parent
@@ -809,6 +816,8 @@ proc visitClass(cursor: CXCursor, parent: seq[string]): CDecl =
         currentAccs = subn.getCXXAccessSpecifier()
       of ckFieldDecl:
         result.members.add visitField(subn, currentAccs)
+      of ckTemplateTypeParameter:
+        discard
       else:
         echo "IMPLEMENT: ", ($subn.cxKind).toRed(), " ", subn
         discard
@@ -829,7 +838,7 @@ proc visitCursor(cursor: CXCursor, parent: seq[string]): tuple[
   result.decls.add case cursor.cxKind:
     of ckNamespace:
       visitNamespace(cursor, parent)
-    of ckClassDecl:
+    of ckClassDecl, ckClassTemplate, ckClassTemplatePartialSpecialization:
       @[ visitClass(cursor, parent) ]
     else:
       # echo "recursing on: ", cursor.cxKind
@@ -862,12 +871,14 @@ type
   WrapConfig* = object
     header*: string
 
-proc wrapMethods*(cd: CDecl, conf: WrapConfig): seq[PProcDecl] =
+proc wrapMethods*(
+  cd: CDecl, conf: WrapConfig, parent: NType[PNode]): seq[PProcDecl] =
   assert cd.kind in {cdkClass, cdkStruct}
   for meth in cd.methods({ckCXXMethod}):
     let procdef = PProcDecl().withIt do:
       # TODO set `exported` and `comment`
       it.name = meth.getNimName()
+      it.genParams = parent.genParams
 
       it.signature = newProcNType[PNode](@[])
       it.exported = (meth.accs == asPublic)
@@ -902,7 +913,7 @@ proc wrapMethods*(cd: CDecl, conf: WrapConfig): seq[PProcDecl] =
       if addThis:
         it.signature.arguments.add PIdentDefs(
           varname: "self",
-          vtype: newPType(cd.name),
+          vtype: parent,
           kind: meth.cursor.isConstMethod.tern(nvdVar, nvdLet)
         )
 
@@ -918,19 +929,25 @@ proc wrapMethods*(cd: CDecl, conf: WrapConfig): seq[PProcDecl] =
 
     result.add procdef
 
-proc wrapObject*(cd: CDecl, conf: WrapConfig): PObject =
+proc wrapObject*(cd: CDecl, conf: WrapConfig): tuple[
+  obj: PObject, procs: seq[PProcDecl]] =
   assert cd.kind in {cdkClass, cdkStruct}
-  result = PObject(name: newPType(cd.name), exported: true)
+  result.obj = PObject(name: newPType(cd.name), exported: true)
+  # WARNING might die on `<T<T<T<T<T<T>>>>>` things
+  for genParam in cd.cursor.children({ckTemplateTypeParameter}):
+    result.obj.name.genParams.add newPType($genParam)
 
   for fld in cd.pubFields:
-    result.flds.add PField(
+    result.obj.flds.add PField(
       isTuple: false,
       name: fld.name,
       exported: true,
       fldType: fld.cursor.cxType().toNType().ntype
     )
 
-  result.annotation = some(newPPragma(
+  result.obj.annotation = some(newPPragma(
     newPIdentColonString("importcpp", cd.namespaceName()),
     newPIdentColonString("header", conf.header),
   ))
+
+  result.procs = cd.wrapMethods(conf, result.obj.name)

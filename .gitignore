@@ -18,3 +18,4 @@ nimcache/
 /scripts/.latex
 callgrind.out.*
 nimdoc.cfg
+wrap-examples.rst

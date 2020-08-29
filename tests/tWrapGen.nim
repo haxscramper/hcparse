@@ -35,6 +35,16 @@ method log(logger: ColorLogger, level: Level, args: varargs[string, `$`]) =
 var logger = ColorLogger(ident: 2)
 addHandler logger
 
+func makeRstCodeBlock*(str: string, lang: string = "nim"): string =
+  let str = str.split("\n").mapIt("    " & it).joinl()
+  &"""
+.. code-block:: {lang}
+{str}
+"""
+
+func makeRstList*(elems: seq[string], ident: int = 0): string =
+  elems.mapIt("  ".repeat(ident) & it).joinl()
+
 macro err(args: varargs[untyped]): untyped =
   result = newCall(newDotExpr(ident "logging", ident "error"))
   for arg in args:
@@ -47,11 +57,10 @@ macro kvCall(head, nodes: untyped): untyped =
     node[1].assertNodeKind({nnkStmtList})
     result.add nnkExprEqExpr.newTree(node[0], node[1][0])
 
-# macro wrapgenTest(body: untyped): untyped =
-#   result = newCall("wrapgen", toSeq(body).toAssgnKV())
+var convertExamples: seq[string]
 
 proc wrapgen(
-  cpp, nim: string,
+  cpp, nim, name: string,
   dirname: string = "/tmp",
   cppfile: string = "wrapgen-test",
   nimfile: string = "wrapgen_test",
@@ -68,8 +77,11 @@ proc wrapgen(
 
   info "Nimcache directory", nimcache
   info "Writing CPP file", cppfile
-  cppfile.writeFile(cpp)
-  nimfile.writeFile(&"import \"{wrapfile}\"\n" & nim)
+  cppfile.writeFile(cpp.dedent())
+  nimfile.writeFile(&"import \"{wrapfile}\"\n" & nim.dedent())
+
+
+
 
   let index = createIndex()
   let unit = parseTranslationUnit(
@@ -94,13 +106,16 @@ proc wrapgen(
   for decl in decls:
     case decl.kind:
       of cdkClass:
+        let (obj, procs) = decl.wrapObject(conf)
+
         outwrap &= makeCommentSection("Type definition", 1) & "\n"
-        outwrap &= $decl.wrapObject(conf).toNNode(true) & "\n"
+        outwrap &= $obj.toNNode(true) & "\n"
         outwrap &= makeCommentSection("Methods", 1) & "\n"
-        outwrap &= decl.wrapMethods(conf).mapIt(
-          $it.toNNode()).joinl()
+        outwrap &= procs.mapIt($it.toNNode()).joinl()
       else:
         discard
+
+
 
   wrapfile.writeFile(outwrap)
   let binfile = nimfile & ".bin"
@@ -133,7 +148,7 @@ proc wrapgen(
 
       echo stdout
       echo err
-      quit 1
+      # quit 1
 
   block:
     let command = binfile
@@ -145,12 +160,40 @@ proc wrapgen(
     else:
       echo outstr
 
+    convertExamples.add """
+# $5
+
+## C++ code
+
+$1
+
+## Generated nim wrapper
+
+$2
+
+## Code using wrapper
+
+$3
+
+## Execution result
+
+$4
+
+""" % [
+    cpp.dedent().makeRstCodeBlock("C++"),
+    outwrap.makeRstCodeBlock("nim"),
+    nim.dedent().makeRstCodeBlock("nim"),
+    outstr.makeRstCodeBlock(""),
+    name]
+
+
 
 
 
 suite "Wrapgen":
   test "single method":
     kvCall wrapgen:
+      name: "Single method"
       cpp:
         """
         class Q {
@@ -159,18 +202,19 @@ suite "Wrapgen":
             void hhh() { a += 2; };
             int qq() { return 1; };
         };
-        """.dedent()
+        """
       nim:
         """
         var q: Q
         q.hhh()
         echo q.qq()
-        """.dedent()
+        """
       stdout:
         "1"
 
   test "Namespaces & includes":
     kvCall wrapgen:
+      name: "Namespace & includes"
       cpp:
         """
         #include <iostream>
@@ -181,17 +225,18 @@ suite "Wrapgen":
               void hello() const { std::cout << "Hello from C++ code"; };
           };
         }
-        """.dedent()
+        """
       nim:
         """
         let z = Z()
         z.hello()
-        """.dedent()
+        """
       stdout:
         "Hello from C++ code"
 
   test "Porting operators":
     kvCall wrapgen:
+      name: "Wrapping operators"
       cpp:
         """
         #include <iostream>
@@ -199,9 +244,7 @@ suite "Wrapgen":
         class Z {
           public:
             int a;
-            void operator+=(const Z& rhs) {
-              a += rhs.a; return *this;
-            }
+            void operator+=(const Z& rhs) { a += rhs.a; }
         };
         """
       nim:
@@ -209,12 +252,44 @@ suite "Wrapgen":
         var z = Z(a: cint 12)
         z += Z(a: cint 22)
         echo z.a
-        """.dedent()
+        """
       stdout:
         "34"
 
   test "Wrapping templates":
-    warn "Not implemented"
+    kvCall wrapgen:
+      name: "Wrapping template classes"
+      cpp:
+        """
+        #include <iostream>
+        #include <typeinfo>
+
+        template <typename T>
+        class Z {
+          public:
+            void getParam() const {
+              std::cout << "Template parameter name [" <<
+                typeid(T).name() << "] \n";
+            }
+        };
+        """
+      nim:
+        """
+        let z = Z[tuple[a: int, b: float]]()
+        z.getParam()
+        """
 
   test "Wrapping constructors":
     warn "Not implemented"
+
+
+  test "Write results":
+    let file = currentSourcePath().splitFile().dir /../
+      "wrap-examples.rst"
+    echo file
+    convertExamples = @["""
+For ease of testing all files use absolute paths for wrappers.
+This is of course configurable.
+"""] & convertExamples
+
+    file.writeFile(convertExamples.join("\n\n"))
