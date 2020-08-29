@@ -16,9 +16,40 @@ import hmisc/types/colorstring
 import hmisc/[hexceptions, helpers]
 import compiler/ast
 
+#==========================  String conversion  ==========================#
+
+proc `$`*(cxstr: CXString): string =
+  let str = getCString(cxstr)
+  result = $str
+  disposeString(cxstr)
+
+proc `$`*(cursor: CXCursor): string = $getCursorSpelling(cursor)
+proc `$`*(cxtype: CXType): string = $getTypeSpelling(cxtype)
+proc `$`*(cxkind: CXCursorKind): string = $getCursorKindSpelling(cxkind)
+
+#*************************************************************************#
+#*****************************  Destructors  *****************************#
+#*************************************************************************#
+proc `=destroy`*(tu: var CXTranslationUnit): void =
+  disposeTranslationUnit(tu)
+  # echo "Destroying translation unit"
+
+proc `=destroy`*(index: var CXIndex): void =
+  # echo "Destroying index"
+  disposeIndex(index)
+
+proc `=destroy`*(dbase: var CXCompilationDatabase): void =
+  dispose(dbase)
+
+proc `=dispose`*(commands: var CXCompileCommands): void =
+  dispose(commands)
+
+
+
 #*************************************************************************#
 #***************  Translation unit construction wrappers  ****************#
 #*************************************************************************#
+
 #=============================  Diagnostics  =============================#
 
 
@@ -56,24 +87,41 @@ proc getArgs*(command: CXCompileCommand): seq[string] =
   for i in 0 ..< command.getNumArgs():
     result.add $command.getArg(i)
 
+iterator items*(commands: CXCompileCommands): CXCompileCommand =
+  for i in 0 ..< commands.getSize():
+    yield commands.getCommand(i)
+
+proc `[]`*(commands: CXCompileCommands, idx: int): CXCompileCommand =
+  assert cuint(idx) < commands.getSize()
+  return commands.getCommand(cuint idx)
+
 #==========================  Translation unit  ===========================#
+
+proc isNil*(tu: CXTranslationUnit): bool =
+  cast[ptr[CXTranslationUnitImpl]](tu) == nil
+
 
 proc parseTranslationUnit*(
   trIndex: CXIndex,
   filename: string,
   cmdline: seq[string] = @[],
-  trOptions: set[CXTranslationUnit_Flags] = {
-    tufSingleFileParse}): CXTranslationUnit =
+  trOptions: set[CXTranslationUnit_Flags] = {tufSingleFileParse},
+  reparseOnNil: bool = true): CXTranslationUnit =
+
+  # var cmdline = cmdline
+  # if
 
   var flags: int
   for opt in trOptions:
     flags = bitor(flags, int(opt))
 
-  let argc = cmdline.len
-  let cmdline = allocCSTringArray(cmdline)
+  block:
+    let argc = cmdline.len
+    let cmdlineC = allocCSTringArray(cmdline)
 
-  result = parseTranslationUnit(
-    trIndex, filename.cstring, cmdline, cint(argc), nil, 0, cuint(flags))
+    result = parseTranslationUnit(
+      trIndex, filename.cstring, cmdlineC, cint(argc), nil, 0, cuint(flags))
+    deallocCStringArray(cmdlineC)
 
   var hadErrors = false
   for diag in result.getDiagnostics():
@@ -82,10 +130,32 @@ proc parseTranslationUnit*(
       echo diag
 
 
-  deallocCStringArray(cmdline)
 
   if hadErrors:
+    raiseAssert(&"""
+Translation unit parse failed due to errors.
+Compilation flags:
+{cmdline.joinql()}
+File:
+  {filename}
+      """)
+
+  if reparseOnNil and result.isNil:
+    echo "Translation unit parse failed, repeating parse in verbose mode"
+    echo "Command line arguments:"
+    echo cmdline.joinl()
+
+    let cmdline = @["-v"] & cmdline
+    let argc = cmdline.len
+    let cmdlineC = allocCSTringArray(cmdline)
+
+    result = parseTranslationUnit(
+      trIndex, filename.cstring, cmdlinec, cint(argc), nil, 0, cuint(flags))
+
+    deallocCStringArray(cmdlineC)
+
     raiseAssert("Translation unit parse failed")
+
 
 proc getBuiltinHeaders*(): seq[string] =
   ## According to clang `documentation <https://clang.llvm.org/docs/LibTooling.html#builtin-includes>`_
@@ -103,9 +173,19 @@ proc getBuiltinHeaders*(): seq[string] =
 
 proc parseTranslationUnit*(
   index: CXIndex,
-  command: CXCompileCommand): CXTranslationUnit =
+  command: CXCompileCommand,
+  extraFlags: seq[string] = @[]): CXTranslationUnit =
   ## Get file and compilation flags from compilation command `command`
   ## and parse translation unit.
+  ##
+  ## ## Parameters
+  ##
+  ## :index: compilation index
+  ## :command: Compilation command from database
+  ## :extraFlags: Additional compilation flags for compiler. When parsing
+  ##              c++ header files with `.h` extension you are most
+  ##              likely need to use `@["-xc++"]` to make clang correctly
+  ##              recognize the language.
 
   var args = collect(newSeq):
     for arg in command.getArgs():
@@ -114,14 +194,11 @@ proc parseTranslationUnit*(
       if match:
         arg
 
-  args = getBuiltinHeaders().mapIt(&"-I{it}") & args
+  args = extraFlags & getBuiltinHeaders().mapIt(&"-I{it}") & args
 
   let file = $command.getFilename()
-  # echo file, "\n", args.joinl()
   index.parseTranslationUnit(file, args, {})
 
-proc isNil*(tu: CXTranslationUnit): bool =
-  cast[ptr[CXTranslationUnitImpl]](tu) == nil
 
 
 
@@ -204,17 +281,6 @@ macro makeVisitor*(captureVars, body: untyped): untyped =
 #****************  Convinience wrappers for clang types  *****************#
 #*************************************************************************#
 
-#==========================  String conversion  ==========================#
-
-proc `$`*(cxstr: CXString): string =
-  let str = getCString(cxstr)
-  result = $str
-  disposeString(cxstr)
-
-proc `$`*(cursor: CXCursor): string = $getCursorSpelling(cursor)
-proc `$`*(cxtype: CXType): string = $getTypeSpelling(cxtype)
-proc `$`*(cxkind: CXCursorKind): string = $getCursorKindSpelling(cxkind)
-
 
 
 
@@ -241,6 +307,12 @@ proc expectKind*(cursor: CXCursor, kind: CXCursorKind) =
   ## Raise assertion if cursor kind does not match
   if cursor.cxKind != kind:
     raiseAssert(&"Expected cursor kind {kind}, but got {cursor.cxKind()}")
+
+
+proc expectKind*(cursor: CXCursor, kind: set[CXCursorKind]) =
+  ## Raise assertion if cursor kind is not in set
+  if cursor.cxKind notin kind:
+    raiseAssert(&"Cursor kind in set: {kind}, but got {cursor.cxKind()}")
 
 
 proc cxType*(cursor: CXCursor): CXType =
@@ -650,21 +722,31 @@ proc visitMethod(cursor: CXCursor, accs: CX_CXXAccessSpecifier): CDecl =
   result.accs = accs
   result.args = cursor.getArguments()
 
+proc visitField(cursor: CXCursor, accs: CX_CXXAccessSpecifier): CDecl =
+  result = CDecl(kind: cdkField)
+  result.name = $cursor
+  result.accs = accs
+
 proc visitClass(cursor: CXCursor, parent: seq[string]): CDecl =
   ## Convert class under cursor to `CDecl`
+  cursor.expectKind({ckClassDecl})
   result = CDecl(kind: cdkClass)
   result.name = $cursor
   result.namespace = parent
+  # echo "found class ", cursor
 
   var currentAccs = asPrivate
   for subn in cursor:
+    # echo "found subnode ", subn
     case subn.cxKind:
-      of ckCXXMethod:
+      of ckCXXMethod, ckConstructor, ckDestructor, ckConversionFunction:
         result.members.add visitMethod(subn, currentAccs)
       of ckCXXAccessSpecifier:
         currentAccs = subn.getCXXAccessSpecifier()
+      of ckFieldDecl:
+        result.members.add visitField(subn, currentAccs)
       else:
-        echo ($subn.cxKind).toRed(), " ", subn
+        echo "IMPLEMENT: ", ($subn.cxKind).toRed(), " ", subn
         discard
 
 
@@ -675,7 +757,7 @@ proc visitNamespace(cursor: CXCursor, parent: seq[string]): seq[CDecl] =
   ## Convert all elements in namespace into sequence of `CDecl`
   ## elements.
   for subn in cursor:
-    result = visitCursor(subn, parent & @[ $cursor ]).decls
+    result.add visitCursor(subn, parent & @[ $cursor ]).decls
 
 proc visitCursor(cursor: CXCursor, parent: seq[string]): tuple[
   decls: seq[CDecl], recurse: bool] =
@@ -686,6 +768,7 @@ proc visitCursor(cursor: CXCursor, parent: seq[string]): tuple[
     of ckClassDecl:
       @[ visitClass(cursor, parent) ]
     else:
+      # echo "recursing on: ", cursor.cxKind
       result.recurse = true
       return
 
