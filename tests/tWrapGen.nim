@@ -111,10 +111,29 @@ proc wrapgen(
     if code != 0:
       err "Compilation failed"
 
-      echo "Generated nim wrapper:\n", outwrap
+      echo "Translation unit tree:\n"
+      let curs = unit.getTranslationUnitCursor()
+      curs.visitMainFile do:
+        makeVisitor [unit]:
+          echo cursor.treeRepr(unit)
+          return cvrContinue
+
+      echo "Generated nim wrapper:\n"
+
+      var idx = 0
+      for line in wrapfile.lines:
+        echo &"{idx:>2} | {line}"
+        inc idx
+
+      idx = 0
+      echo "User file:\n"
+      for line in nimfile.lines:
+        echo &"{idx:>2} | {line}"
+        inc idx
+
       echo stdout
       echo err
-      fail()
+      quit 1
 
   block:
     let command = binfile
@@ -122,6 +141,7 @@ proc wrapgen(
     let (outstr, err, code) = runShell(command)
     if stdout.len > 0:
       assertEq outstr.strip(), stdout.strip()
+      notice "stdout comparison ok"
     else:
       echo outstr
 
@@ -169,3 +189,32 @@ suite "Wrapgen":
         """.dedent()
       stdout:
         "Hello from C++ code"
+
+  test "Porting operators":
+    kvCall wrapgen:
+      cpp:
+        """
+        #include <iostream>
+
+        class Z {
+          public:
+            int a;
+            void operator+=(const Z& rhs) {
+              a += rhs.a; return *this;
+            }
+        };
+        """
+      nim:
+        """
+        var z = Z(a: cint 12)
+        z += Z(a: cint 22)
+        echo z.a
+        """.dedent()
+      stdout:
+        "34"
+
+  test "Wrapping templates":
+    warn "Not implemented"
+
+  test "Wrapping constructors":
+    warn "Not implemented"

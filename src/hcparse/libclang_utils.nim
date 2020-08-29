@@ -557,9 +557,14 @@ proc toNType*(cxtype: CXType): tuple[ntype: NType[PNode], mutable: bool] =
         args = cxtype.argTypes.mapIt(it.toNType().ntype),
         pragma = newPPragma("cdecl")
       )
+    of tkLValueReference:
+      result.mutable = not (cxType.isConstQualifiedType() == 0)
+      toNType(cxType[]).ntype
     else:
       echo "CANT CONVERT: ".toRed({styleItalic}),
-        cxtype.kind, " ", ($cxtype).toGreen()
+        cxtype.kind, " ", ($cxtype).toGreen(), " ",
+        cxtype[]
+
       newPType("!!!")
 
   result.ntype = restype
@@ -627,6 +632,15 @@ when true:
         name*: string
         cursor*: CXCursor
 
+      CXOperatorKind* = enum
+        cxoPrefixOp ## Prefix operator `@a`
+        cxoInfixOP ## Infix operator `a @ b`
+        cxoAsgnOp ## Assign operator `a = b`
+        cxoArrayOp ## Array access operator `a[b]`
+        cxoArrowOp ## Arrow operator `a->`
+        cxoCallOp ## Call operator `a()`
+
+
       CDecl* {.derive(GetSet).} = object
         name*: string
         namespace*: seq[string]
@@ -653,9 +667,39 @@ func methods*(cd: CDecl, kinds: set[CXCursorKind]): seq[CDecl] =
     if (member.kind == cdkMethod) and (member.cursor.cxKind in kinds):
       result.add member
 
+func pubFields*(cd: CDecl): seq[CDecl] =
+  assert cd.kind in {cdkClass, cdkStruct}
+  for member in cd.members:
+    if (member.kind == cdkField) and (member.accs == asPublic):
+      result.add member
+
 func namespaceName*(cd: CDecl): string =
   (cd.namespace & @[cd.name]).join("::")
 
+func isOperator*(cd: CDecl): bool =
+  cd.kind == cdkMethod and
+  cd.name.startsWith("operator") and
+  (not cd.name.validIdentifier())
+
+func classifyOperator*(cd: CDecl): CXOperatorKind =
+  assert cd.isOperator()
+  let name = cd.name.dropPrefix("operator")
+  case name:
+    of "+=":
+      cxoAsgnOp
+    else:
+      raiseAssert("#[ IMPLEMENT ]#")
+
+
+func getNimName*(cd: CDecl): string =
+  case cd.kind:
+    of cdkMethod:
+      if cd.isOperator():
+        cd.name.dropPrefix("operator")
+      else:
+        cd.name
+    else:
+      cd.name
 
 
 #======================  Converting to nim entries  ======================#
@@ -674,6 +718,8 @@ proc fixIdentName(str: string): string =
     of "begin": "cxbegin"
     of "end": "cxend"
     else: result
+
+
 
 proc dropPOD*(cxtype: CXType): string =
   case cxtype.cxKind:
@@ -727,11 +773,12 @@ proc convertCFunction*(cursor: CXCursor): ProcDecl[PNode] =
 #*************************************************************************#
 proc getArguments(cursor: CXCursor): seq[CArg] =
   for idx, subn in cursor.children():
-    var name = $subn
-    if name.len == 0:
-      name = "a" & $idx
+    if subn.cxKind in {ckParmDecl}:
+      var name = $subn
+      if name.len == 0:
+        name = "a" & $idx
 
-    result.add CArg(name: name, cursor: subn)
+      result.add CArg(name: name, cursor: subn)
 
 proc visitMethod(cursor: CXCursor, accs: CX_CXXAccessSpecifier): CDecl =
   result = CDecl(kind: cdkMethod, cursor: cursor)
@@ -820,28 +867,68 @@ proc wrapMethods*(cd: CDecl, conf: WrapConfig): seq[PProcDecl] =
   for meth in cd.methods({ckCXXMethod}):
     let procdef = PProcDecl().withIt do:
       # TODO set `exported` and `comment`
-      it.name = meth.name
+      it.name = meth.getNimName()
+
       it.signature = newProcNType[PNode](@[])
       it.exported = (meth.accs == asPublic)
 
-      it.signature.arguments.add PIdentDefs(
-        varname: "this",
-        vtype: newPType(cd.name),
-        kind: meth.cursor.isConstMethod.tern(nvdVar, nvdLet)
-      )
+      let addThis =
+        if meth.isOperator():
+          let kind = meth.classifyOperator()
+          it.kind = pkOperator
+
+          case kind:
+            of cxoAsgnOp:
+              it.signature.pragma = newPPragma(
+                newPIdentColonString("importcpp", &"# {it.name} #"),
+                newPIdentColonString("header", conf.header)
+              )
+            else:
+              raiseAssert("#[ IMPLEMENT ]#")
+
+
+
+          kind in {cxoAsgnOp}
+        else:
+          it.signature.pragma = newPPragma(
+            newPIdentColonString("importcpp", &"#.{it.name}(@)"),
+            newPIdentColonString("header", conf.header)
+          )
+
+
+
+          true
+
+      if addThis:
+        it.signature.arguments.add PIdentDefs(
+          varname: "self",
+          vtype: newPType(cd.name),
+          kind: meth.cursor.isConstMethod.tern(nvdVar, nvdLet)
+        )
+
+      for arg in meth.args:
+        let (vtype, mutable) = arg.cursor.cxType().toNType()
+        it.signature.arguments.add PIdentDefs(
+          varname: arg.name,
+          vtype: vtype,
+          kind: mutable.tern(nvdVar, nvdLet))
 
       it.signature.setRtype toNType(meth.cursor.retType()).ntype
 
-      it.signature.pragma = newPPragma(
-        newPIdentColonString("importcpp", &"#.{it.name}(@)"),
-        newPIdentColonString("header", conf.header)
-      )
 
     result.add procdef
 
 proc wrapObject*(cd: CDecl, conf: WrapConfig): PObject =
   assert cd.kind in {cdkClass, cdkStruct}
   result = PObject(name: newPType(cd.name), exported: true)
+
+  for fld in cd.pubFields:
+    result.flds.add PField(
+      isTuple: false,
+      name: fld.name,
+      exported: true,
+      fldType: fld.cursor.cxType().toNType().ntype
+    )
 
   result.annotation = some(newPPragma(
     newPIdentColonString("importcpp", cd.namespaceName()),

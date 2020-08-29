@@ -128,8 +128,12 @@ better-named enums and functions.
 
 Must-have todo things
 
-- [ ] Add destructors/finalizers for clang objects - right now none of
-  the ~dispose*()~ functions are called.
+- [X] Add destructors/finalizers for clang objects - right now none of
+  the ~dispose*()~ functions are called. - works on nim devel, fails
+  on 1.2.6
+- [ ] Support additional annotations for generated documentation - you
+  should be able to add own footnotes for any function argument, enum
+  value, class etc.
 
 Future plans/goals
 
