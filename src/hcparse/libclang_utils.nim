@@ -30,19 +30,21 @@ proc `$`*(cxkind: CXCursorKind): string = $getCursorKindSpelling(cxkind)
 #*************************************************************************#
 #*****************************  Destructors  *****************************#
 #*************************************************************************#
-proc `=destroy`*(tu: var CXTranslationUnit): void =
-  disposeTranslationUnit(tu)
-  # echo "Destroying translation unit"
 
-proc `=destroy`*(index: var CXIndex): void =
-  # echo "Destroying index"
-  disposeIndex(index)
+when (NimMinor >= 3) and (NimPatch >= 5):
+  proc `=destroy`*(tu: var CXTranslationUnit): void =
+    echo "Destroying translation unit"
+    disposeTranslationUnit(tu)
 
-proc `=destroy`*(dbase: var CXCompilationDatabase): void =
-  dispose(dbase)
+  proc `=destroy`*(index: var CXIndex): void =
+    # echo "Destroying index"
+    disposeIndex(index)
 
-proc `=dispose`*(commands: var CXCompileCommands): void =
-  dispose(commands)
+  proc `=destroy`*(dbase: var CXCompilationDatabase): void =
+    dispose(dbase)
+
+  proc `=dispose`*(commands: var CXCompileCommands): void =
+    dispose(commands)
 
 
 
@@ -483,7 +485,7 @@ proc fromElaboratedPType*(cxtype: CXType): NType[PNode] =
     dropPrefix("enum ").
     dropPrefix("struct ").
     dropPrefix("const "). # WARNING
-    mkPType()
+    newPType()
 
 
 proc toNType*(cxtype: CXType): tuple[ntype: NType[PNode], mutable: bool] =
@@ -505,51 +507,51 @@ proc toNType*(cxtype: CXType): tuple[ntype: NType[PNode], mutable: bool] =
   ##   simply `E`) specifiers are simply dropped.
   var mutable: bool = false
   let restype = case cxtype.cxKind:
-    of tkBool: mkPType("bool")
-    of tkInt: mkPType("int")
-    of tkVoid: mkPType("void")
-    of tkUInt: mkPType("cuint")
-    of tkLongLong: mkPType("clonglong")
-    of tkULongLong: mkPType("culonglong")
-    of tkDouble: mkPType("cdouble")
-    of tkULong: mkPType("culong")
-    of tkTypedef: mkPType(($cxtype).dropPrefix("const ")) # XXXX typedef processing -
+    of tkBool: newPType("bool")
+    of tkInt: newPType("int")
+    of tkVoid: newPType("void")
+    of tkUInt: newPType("cuint")
+    of tkLongLong: newPType("clonglong")
+    of tkULongLong: newPType("culonglong")
+    of tkDouble: newPType("cdouble")
+    of tkULong: newPType("culong")
+    of tkTypedef: newPType(($cxtype).dropPrefix("const ")) # XXXX typedef processing -
     of tkElaborated, tkRecord, tkEnum:
       fromElaboratedPType(cxtype)
     of tkPointer:
       case cxtype[].cxkind:
         of tkChar_S:
-          mkPType("cstring")
+          newPType("cstring")
         of tkPointer:
           if cxtype[][].cxKind() == tkChar_S:
-            mkPType("cstringArray")
+            newPType("cstringArray")
           else:
-            mkNType("ptr", [toNType(cxtype[]).ntype])
+            newNType("ptr", [toNType(cxtype[]).ntype])
         of tkVoid:
-          mkPType("pointer")
+          newPType("pointer")
         of tkFunctionProto:
           let (t, mut) = toNType(cxtype[])
           t
         else:
-          mkNType("ptr", [toNType(cxtype[]).ntype])
+          newNType("ptr", [toNType(cxtype[]).ntype])
     of tkConstantArray:
-      mkNType(
+      newNType(
         "array",
         @[
-          mkPType($cxtype.getNumElements()),
+          newPType($cxtype.getNumElements()),
           toNType(cxtype.getElementType()).ntype
         ]
       )
     of tkFunctionProto:
-      mkProcNType[PNode](
+      newProcNType[PNode](
         rtype = cxtype.getResultType().toNType().ntype,
         args = cxtype.argTypes.mapIt(it.toNType().ntype),
-        pragma = mkPPragma("cdecl")
+        pragma = newPPragma("cdecl")
       )
     else:
       echo "CANT CONVERT: ".toRed({styleItalic}),
         cxtype.kind, " ", ($cxtype).toGreen()
-      mkPType("!!!")
+      newPType("!!!")
 
   result.ntype = restype
   result.mutable = mutable
@@ -619,7 +621,7 @@ when true:
       CDecl* {.derive(GetSet).} = object
         name*: string
         namespace*: seq[string]
-        cursor*: CXCursor
+        cursor* {.requiresinit.}: CXCursor
         case kind*: CDeclKind
           of cdkField:
             fldAccs* {.name(accs).}: CX_CXXAccessSpecifier
@@ -636,6 +638,11 @@ when true:
 #======================  Accessing CDecl elements  =======================#
 func arg*(cd: CDecl, idx: int): CArg = cd.args()[idx]
 func member*(cd: CDecl, idx: int): CDecl = cd.members[idx]
+func methods*(cd: CDecl, kinds: set[CXCursorKind]): seq[CDecl] =
+  assert cd.kind in {cdkClass, cdkStruct}
+  for member in cd.members:
+    if (member.kind == cdkMethod) and (member.cursor.cxKind in kinds):
+      result.add member
 
 
 
@@ -689,7 +696,7 @@ proc convertCFunction*(cursor: CXCursor): ProcDecl[PNode] =
     # WARNING temporarily disabled comment processing
     # it.comment = cursor.comment().toNimDoc()
     it.name = ($cursor).fixIdentName()
-    it.signature = mkProcNType[PNode](@[])
+    it.signature = newProcNType[PNode](@[])
     it.signature.arguments = collect(newSeq):
       for it in cursor.children:
         if it.cxKind == ckParmDecl:
@@ -703,7 +710,7 @@ proc convertCFunction*(cursor: CXCursor): ProcDecl[PNode] =
     # NOTE dropping mutability from return type
     it.signature.setRType toNType(cursor.retType()).ntype
     # WARNING temprarily disabled pragma annotations
-    # it.signature.pragma = mkPPragma()
+    # it.signature.pragma = newPPragma()
 
 #*************************************************************************#
 #*********************  Translation unit conversion  *********************#
@@ -717,20 +724,20 @@ proc getArguments(cursor: CXCursor): seq[CArg] =
     result.add CArg(name: name, cursor: subn)
 
 proc visitMethod(cursor: CXCursor, accs: CX_CXXAccessSpecifier): CDecl =
-  result = CDecl(kind: cdkMethod)
+  result = CDecl(kind: cdkMethod, cursor: cursor)
   result.name = $cursor
   result.accs = accs
   result.args = cursor.getArguments()
 
 proc visitField(cursor: CXCursor, accs: CX_CXXAccessSpecifier): CDecl =
-  result = CDecl(kind: cdkField)
+  result = CDecl(kind: cdkField, cursor: cursor)
   result.name = $cursor
   result.accs = accs
 
 proc visitClass(cursor: CXCursor, parent: seq[string]): CDecl =
   ## Convert class under cursor to `CDecl`
   cursor.expectKind({ckClassDecl})
-  result = CDecl(kind: cdkClass)
+  result = CDecl(kind: cdkClass, cursor: cursor)
   result.name = $cursor
   result.namespace = parent
   # echo "found class ", cursor
@@ -790,3 +797,29 @@ proc splitDeclarations*(tu: CXTranslationUnit): seq[CDecl] =
         return cvrContinue
 
   return res
+
+#*************************************************************************#
+#*************************  Wrapper generation  **************************#
+#*************************************************************************#
+proc wrapMethods*(cd: CDecl): seq[PNode] =
+  assert cd.kind in {cdkClass, cdkStruct}
+  for meth in cd.methods({ckCXXMethod}):
+    let procdef = PProcDecl().withIt do:
+      # TODO set `exported` and `comment`
+      it.name = meth.name
+      it.signature = newProcNType[PNode](@[])
+      # it.signature.arguments.add
+
+      let this = PIdentDefs(
+        varname: "this",
+        vtype: newPType(cd.name)
+      )
+
+      # it.signature.arguments = collect(newSeq):
+      #   for it in
+
+      it.signature.pragma = newPPragma(
+        newPIdentColonString("importcpp", &"#.{it.name}(@)")
+      )
+
+    result.add procdef.toNNode()

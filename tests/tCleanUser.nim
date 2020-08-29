@@ -34,7 +34,6 @@ suite "Translation unit cursor":
       topCursor = unit.getTranslationUnitCursor()
 
     echo unit.isNil
-    echo topCursor.cxKind
 
     echo topCursor.getFirstOfKind({ckCXXMethod}).treeRepr(unit)
 
@@ -78,12 +77,12 @@ suite "Declaration mapping":
   const tmpfile = "/tmp/declaration-mapping.cpp"
   proc splitDecls(str: string): seq[CDecl] =
     tmpfile.writeFile(str)
-    let
-      index = createIndex(showDiagnostics = true)
-      unit = parseTranslationUnit(index, tmpfile)
-      curs = getTranslationUnitCursor(unit)
+    let index = createIndex(showDiagnostics = true)
+    let unit = parseTranslationUnit(index, tmpfile)
+    let curs = getTranslationUnitCursor(unit)
 
     result = unit.splitDeclarations()
+    # echo "split decls"
 
   macro assertItPPrint(head, body: untyped): untyped =
     result = newStmtList()
@@ -124,3 +123,7 @@ suite "Declaration mapping":
       it[0].member(1).accs == asPublic
       it[0].member(1).arg(0).name == "b"
       it[0].member(1).arg(0).cursor.cxType().cxKind() == tkInt
+
+  test "wrapping methods":
+    var decl = splitDecls("class Z { int hello(); };")[0]
+    echo decl.wrapMethods()

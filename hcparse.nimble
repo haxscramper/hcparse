@@ -11,7 +11,7 @@ srcDir        = "src"
 # Dependencies
 
 requires "nim >= 1.2.6"
-requires "hnimast", "hmisc >= 0.4.0", "hpprint"
+requires "hnimast", "hmisc >= 0.4.0", "hpprint", "nimtraits"
 
 # import shell
 

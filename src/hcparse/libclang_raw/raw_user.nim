@@ -373,7 +373,7 @@ proc fromElaboratedPType(cxtype: CXType): NType[PNode] =
     dropPrefix("enum ").
     dropPrefix("struct ").
     dropPrefix("const "). # XXXX
-    mkPType()
+    newPType()
 
 proc getPointee*(cxType: CXType): CXType =
   cxtype.expectKind(CXType_Pointer)
@@ -437,53 +437,53 @@ proc lispRepr*(cxtype: CXType): string =
 proc toNType*(cxtype: CXType): NType[PNode] =
   # echo cxtype.objTreeRepr().treeRepr()
   result = case cxtype.cxKind:
-    of CXType_Bool: mkPType("bool")
-    of CXType_Int: mkPType("int")
-    # of CXType_Record: mkPType()
-    of CXType_Void: mkPType("void")
-    of CXType_UInt: mkPType("cuint")
-    of CXType_LongLong: mkPType("clonglong")
-    of CXType_ULongLong: mkPType("culonglong")
-    of CXType_Double: mkPType("cdouble")
-    of CXType_ULong: mkPType("culong")
-    of CXType_Typedef: mkPType(($cxtype).dropPrefix("const ")) # XXX typedef processing -
+    of CXType_Bool: newPType("bool")
+    of CXType_Int: newPType("int")
+    # of CXType_Record: newPType()
+    of CXType_Void: newPType("void")
+    of CXType_UInt: newPType("cuint")
+    of CXType_LongLong: newPType("clonglong")
+    of CXType_ULongLong: newPType("culonglong")
+    of CXType_Double: newPType("cdouble")
+    of CXType_ULong: newPType("culong")
+    of CXType_Typedef: newPType(($cxtype).dropPrefix("const ")) # XXX typedef processing -
     of CXType_Elaborated, CXType_Record, CXType_Enum:
       fromElaboratedPType(cxtype)
     of CXType_Pointer:
       let pointee = cxtype.getPointee()
       case pointee.cxkind:
         of CXType_Char_S:
-          mkPType("cstring")
+          newPType("cstring")
         of CXType_Pointer:
           if pointee.getPointee().cxKind() == CXType_Char_S:
-            mkPType("cstringArray")
+            newPType("cstringArray")
           else:
-            mkNType("ptr", [toNType(pointee)])
+            newNType("ptr", [toNType(pointee)])
         of CXType_Void:
-          mkPType("pointer")
+          newPType("pointer")
         of CXType_FunctionProto:
           toNType(pointee)
         else:
           # echo "NESTED ".toYellow(), cxtype.lispRepr()
-          mkNType("ptr", [toNType(pointee)])
+          newNType("ptr", [toNType(pointee)])
     of CXType_ConstantArray:
-      mkNType(
+      newNType(
         "array",
         @[
-          mkPType($cxtype.clang_getNumElements()),
+          newPType($cxtype.clang_getNumElements()),
           toNType(cxtype.clang_getElementType())
         ]
       )
     of CXType_FunctionProto:
-      mkProcNType[PNode](
+      newProcNType[PNode](
         rtype = cxtype.clang_getResultType().toNType(),
         args = cxtype.argTypes.mapIt(it.toNType()),
-        pragma = mkPPragma("cdecl")
+        pragma = newPPragma("cdecl")
       )
     else:
       echo "CANT CONVERT: ".toRed({styleItalic}),
         cxtype.kind, " ", cxtype.lispRepr().toGreen()
-      mkPType("!!!")
+      newPType("!!!")
 
   # echo cxtype.cxkind, " ", result.toNNode()
 
@@ -572,7 +572,7 @@ proc visitFunction(cursor: CXCursor, context: var RewriteContext) =
     it.exported = true
     it.comment = cursor.comment().toNimDoc()
     it.name = cursor.simplifyFuncName(context).fixIdentName()
-    it.signature = mkProcNType[PNode](@[])
+    it.signature = newProcNType[PNode](@[])
     it.signature.arguments = collect(newSeq):
       for it in cursor.children:
         if it.cxKind == CXCursor_ParmDecl:
@@ -584,7 +584,7 @@ proc visitFunction(cursor: CXCursor, context: var RewriteContext) =
           res
 
     `rtype=`(it.signature, toNType(cursor.retType()))
-    it.signature.pragma = mkPPragma(
+    it.signature.pragma = newPPragma(
       newPIdent("cdecl"),
       nnkExprColonExpr.newPTree(
         newPIdent("dynlib"),
@@ -752,7 +752,7 @@ proc visitEnumDecl*(cursor: CXCursor, context: var RewriteContext) =
 proc visitStructDecl*(cursor: CXCursor, context: var RewriteContext) =
   let structName = ($cursor.cxType).dropPrefix("struct ")
 
-  var resType = PObject(name: mkPType(structName))
+  var resType = PObject(name: newPType(structName))
 
   for subn in cursor.children:
     subn.expectKind CXCursor_FieldDecl
@@ -766,7 +766,7 @@ proc visitStructDecl*(cursor: CXCursor, context: var RewriteContext) =
     )
 
   resType.exported = true
-  resType.annotation = some(mkPPragma("pure", "bycopy"))
+  resType.annotation = some(newPPragma("pure", "bycopy"))
   context.resultNode.add resType.toNNode(standalone = true)
 
 
