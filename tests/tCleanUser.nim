@@ -1,9 +1,23 @@
 import hcparse/libclang
 import std/decls
 import hmisc/helpers
-import hpprint, hnimast
+import hpprint, hnimast, hpprint/hpprint_repr
 
 import unittest, macros
+import compiler/ast, options
+import terminal
+import hmisc/types/colorstring
+
+proc prettyPrintConverter(
+  val: NIdentDefs[PNode], path: seq[int] = @[0]): ObjTree =
+    pptMap(
+      ("e", "e"),
+      {
+        "name": pptConst(val.varname, initPrintStyling(fg = fgGreen)),
+        "kind": pptConst($val.kind, initPrintStyling(fg = fgRed)),
+        "type": pptConst($val.vtype, initPrintStyling(fg = fgYellow))
+      }
+    )
 
 suite "Translation unit cursor":
   test "test file":
@@ -125,5 +139,10 @@ suite "Declaration mapping":
       it[0].member(1).arg(0).cursor.cxType().cxKind() == tkInt
 
   test "wrapping methods":
-    var decl = splitDecls("class Z { int hello(); };")[0]
-    echo decl.wrapMethods()
+    assertItPPrint splitDecls(
+      "class Z { int hello(); int eee() const; };"
+    )[0].wrapMethods():
+      it[0].name == "hello"
+      it[0].signature.arg(0).kind == nvdVar
+      it[1].name == "eee"
+      it[1].signature.arg(0).kind == nvdLet

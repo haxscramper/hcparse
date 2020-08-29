@@ -7,7 +7,7 @@ when not defined(libclangIncludeUtils):
 
 #==============================  includes  ===============================#
 import bitops, strformat, macros, terminal, sugar, std/decls, strutils,
-       sequtils
+       sequtils, options
 
 import hpprint, hpprint/hpprint_repr
 import hnimast
@@ -291,11 +291,16 @@ macro makeVisitor*(captureVars, body: untyped): untyped =
 
 proc `==`*(t1, t2: CXType): bool = (equalTypes(t1, t2) != 0)
 proc isConstQualified*(t: CXType): bool = isConstQualifiedType(t) != 0
+
 proc `[]`*(t: CXType): CXType = getPointeeType(t)
+
+
 
 #*************************************************************************#
 #***************************  Cursor wrappers  ***************************#
 #*************************************************************************#
+
+
 
 #===========================  Kind/Type acess  ===========================#
 
@@ -323,6 +328,13 @@ proc cxType*(cursor: CXCursor): CXType =
 
 proc comment*(cursor: CXCursor): CXComment =
   cursor.getParsedComment()
+
+#=============================  Predicates  ==============================#
+proc isConstMethod*(cursor: CXCursor): bool =
+  ## Return true if cursor is a class method with `const`
+  ## qualification. No exception is raised on invalid method
+  (cursor.kind in {ckCXXMethod}) and (cxxMethodIsConst(cursor) == 0)
+
 
 
 #=========================  Accessing subnodes  ==========================#
@@ -465,7 +477,7 @@ proc argTypes*(cursor: CXType): seq[CXType] =
     result.add cursor.getArgType(cuint i)
 
 proc retType*(cursor: CXCursor): CXType =
-  cursor.expectKind(ckFunctionDecl)
+  cursor.expectKind({ckFunctionDecl, ckCXXMethod})
   cursor.cxType().getResultType()
 
 proc argc*(cursor: CXCursor): int =
@@ -644,7 +656,8 @@ func methods*(cd: CDecl, kinds: set[CXCursorKind]): seq[CDecl] =
     if (member.kind == cdkMethod) and (member.cursor.cxKind in kinds):
       result.add member
 
-
+func namespaceName*(cd: CDecl): string =
+  (cd.namespace & @[cd.name]).join("::")
 
 
 
@@ -801,7 +814,7 @@ proc splitDeclarations*(tu: CXTranslationUnit): seq[CDecl] =
 #*************************************************************************#
 #*************************  Wrapper generation  **************************#
 #*************************************************************************#
-proc wrapMethods*(cd: CDecl): seq[PNode] =
+proc wrapMethods*(cd: CDecl): seq[PProcDecl] =
   assert cd.kind in {cdkClass, cdkStruct}
   for meth in cd.methods({ckCXXMethod}):
     let procdef = PProcDecl().withIt do:
@@ -810,16 +823,24 @@ proc wrapMethods*(cd: CDecl): seq[PNode] =
       it.signature = newProcNType[PNode](@[])
       # it.signature.arguments.add
 
-      let this = PIdentDefs(
+      it.signature.arguments.add PIdentDefs(
         varname: "this",
-        vtype: newPType(cd.name)
+        vtype: newPType(cd.name),
+        kind: meth.cursor.isConstMethod.tern(nvdVar, nvdLet)
       )
 
-      # it.signature.arguments = collect(newSeq):
-      #   for it in
+      it.signature.setRtype toNType(meth.cursor.retType()).ntype
 
       it.signature.pragma = newPPragma(
         newPIdentColonString("importcpp", &"#.{it.name}(@)")
       )
 
-    result.add procdef.toNNode()
+    result.add procdef
+
+proc wrapObject*(cd: CDecl): PObject =
+  assert cd.kind in {cdkClass, cdkStruct}
+  result = PObject(name: newPType(cd.name))
+
+  result.annotation = some(newPPragma(
+    newPIdentColonString("importcpp", cd.namespaceName())
+  ))
