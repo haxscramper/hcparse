@@ -13,9 +13,48 @@ import unittest
 import logging
 import hmisc/other/hshell
 
+macro err(args: varargs[untyped]): untyped =
+  result = newCall(newDotExpr(ident "logging", ident "error"))
+  for arg in args:
+    result.add arg
+
+macro kvCall(head, nodes: untyped): untyped =
+  result = newCall(head)
+  for node in nodes:
+    node.assertNodeKind({nnkCall})
+    node[1].assertNodeKind({nnkStmtList})
+    result.add nnkExprEqExpr.newTree(node[0], node[1][0])
+
+macro varargsCall(head, nodes: untyped): untyped =
+  result = newCall(head)
+  for node in nodes:
+    result.add node
+
+macro stringKvTable(nodes: untyped): untyped =
+  result = nnkTableConstr.newTree()
+  for node in nodes:
+    node.assertNodeKind({nnkCall, nnkStrLit})
+    var val = node[1][0]
+    if val.kind == nnkTripleStrLit:
+      val.strVal = val.strVal.dedent()
+
+    result.add nnkExprColonExpr.newTree(
+      newLit node[0].strVal(), val)
+
+
+macro passKVargs(head: untyped, args: varargs[untyped]): untyped =
+  result = newCall(head)
+  head.assertNodeKind({nnkIdent})
+  for arg in args:
+    arg.assertNodeKind({nnkIdent})
+    result.add nnkExprEqExpr.newTree(arg, arg)
+
+
 type
   ColorLogger = ref object of Logger
     ident: int
+
+
 
 method log(logger: ColorLogger, level: Level, args: varargs[string, `$`]) =
   let ident = "  ".repeat(logger.ident)
@@ -42,31 +81,102 @@ func makeRstCodeBlock*(str: string, lang: string = "nim"): string =
 {str}
 """
 
+func makeRstSection*(body, header: string, level: int): string =
+  &"""
+{"#".repeat(level)} {header}
+
+{body}
+"""
+
+func makeRstSection*(
+  level: int, header: string, body: varargs[string]): string =
+  makeRstSection(body.join("\n\n"), header, level)
+
 func makeRstList*(elems: seq[string], ident: int = 0): string =
   elems.mapIt("  ".repeat(ident) & it).joinl()
 
-macro err(args: varargs[untyped]): untyped =
-  result = newCall(newDotExpr(ident "logging", ident "error"))
-  for arg in args:
-    result.add arg
 
-macro kvCall(head, nodes: untyped): untyped =
-  result = newCall(head)
-  for node in nodes:
-    node.assertNodeKind({nnkCall})
-    node[1].assertNodeKind({nnkStmtList})
-    result.add nnkExprEqExpr.newTree(node[0], node[1][0])
 
+proc wrapDeclarations*(
+  decls: seq[CDecl], conf: WrapConfig): string =
+  for decl in decls:
+    case decl.kind:
+      of cdkClass:
+        let (obj, procs) = decl.wrapObject(conf)
+
+        result &= makeCommentSection("Type definition", 1) & "\n"
+        result &= $obj.toNNode(true) & "\n"
+        result &= makeCommentSection("Methods", 1) & "\n"
+        result &= procs.mapIt($it.toNNode()).joinl()
+      else:
+        discard
+
+proc printFile(file: string): void =
+  var idx = 0
+  for line in file.lines():
+    echo &"{idx:>2} | {line}"
+    inc idx
+
+proc printTUMain(unit: CXTranslationUnit): void =
+  let curs = unit.getTranslationUnitCursor()
+  curs.visitMainFile do:
+    makeVisitor [unit]:
+      echo cursor.treeRepr(unit)
+      return cvrContinue
+
+proc compileRunNim(nimfile, wrapfile, stdout: string,
+  unit: CXTranslationUnit): tuple[outstr: string] =
+  let binfile = nimfile & ".bin"
+  block:
+    let command = &"nim cpp -o:{binfile} \"{nimfile}\""
+    info &"Compiling nim file '{command}'"
+
+    let (stdout, err, code) = runShell(command, doRaise = false)
+    if code != 0:
+      err "Compilation failed"
+
+      echo("Translation unit tree:\n"); unit.printTUMain()
+      echo("Generated nim wrapper:\n"); wrapfile.printFile()
+      echo("User file:\n"); nimfile.printFile()
+
+      echo stdout
+      echo err
+
+  block:
+    let command = binfile
+    info "Running", command
+    let (outstr, err, code) = runShell(command)
+    if stdout.len > 0:
+      assertEq outstr.strip(), stdout.strip()
+      notice "stdout comparison ok"
+    else:
+      echo outstr
+
+
+
+
+proc parseCPP(cppfile: string, flags: seq[string] = @[]): tuple[
+  api: CApiUnit, unit: CXTranslationUnit, index: CXIndex] =
+
+  result.index = createIndex()
+  result.unit = parseTranslationUnit(
+    result.index, cppfile, flags, {tufSkipFunctionBodies})
+
+  if result.unit.isNil:
+    err "Translation unit parse failed"
+    fail()
+  else:
+    info "Parsed file", cppfile
+
+  result.api = result.unit.splitDeclarations()
+
+#=======================  Example page generation  =======================#
 var convertExamples: seq[string]
 
-proc wrapgen(
-  cpp, nim, name: string,
-  dirname: string = "/tmp",
-  cppfile: string = "wrapgen-test",
-  nimfile: string = "wrapgen_test",
-  nimcache: string = "nimcache.d",
-  stdout: string = ""): void =
 
+#=========================  Common setup parts  ==========================#
+
+template commonSetup() {.dirty.} =
   let
     wrapfile = dirname / nimfile & "_wrap.nim"
     cppfile = dirname / cppfile & ".cpp"
@@ -79,116 +189,41 @@ proc wrapgen(
   info "Writing CPP file", cppfile
   cppfile.writeFile(cpp.dedent())
   nimfile.writeFile(&"import \"{wrapfile}\"\n" & nim.dedent())
-
-
-
-
-  let index = createIndex()
-  let unit = parseTranslationUnit(
-    index, cppfile, @[], {tufSkipFunctionBodies})
-
-  if unit.isNil:
-    err "Translation unit parse failed"
-    echo cpp
-    fail()
-  else:
-    info "Parsed file", cppfile
-
-
   info "Wrapper file is", wrapfile
-  var outwrap = ""
-
-  let conf = WrapConfig(
-    header: cppfile
-  )
-
-  let decls = unit.splitDeclarations()
-  for decl in decls:
-    case decl.kind:
-      of cdkClass:
-        let (obj, procs) = decl.wrapObject(conf)
-
-        outwrap &= makeCommentSection("Type definition", 1) & "\n"
-        outwrap &= $obj.toNNode(true) & "\n"
-        outwrap &= makeCommentSection("Methods", 1) & "\n"
-        outwrap &= procs.mapIt($it.toNNode()).joinl()
-      else:
-        discard
 
 
 
-  wrapfile.writeFile(outwrap)
+#======================  Direct wrapper generation  ======================#
+
+proc wrapgen(
+  cpp, nim, name: string,
+  dirname: string = "/tmp",
+  cppfile: string = "wrapgen-test",
+  nimfile: string = "wrapgen_test",
+  nimcache: string = "nimcache.d",
+  stdout: string = ""): void =
+
+  commonSetup()
+  let conf = WrapConfig(header: cppfile)
+  let (api, unit, index) = parseCPP(cppfile)
+
+  let wrapText = api.decls.wrapDeclarations(conf)
+  wrapfile.writeFile(wrapText)
   let binfile = nimfile & ".bin"
-  block:
-    let command = &"nim cpp -o:{binfile} \"{nimfile}\""
-    info &"Compiling nim file '{command}'"
-    let (stdout, err, code) = runShell(command)
-    if code != 0:
-      err "Compilation failed"
-
-      echo "Translation unit tree:\n"
-      let curs = unit.getTranslationUnitCursor()
-      curs.visitMainFile do:
-        makeVisitor [unit]:
-          echo cursor.treeRepr(unit)
-          return cvrContinue
-
-      echo "Generated nim wrapper:\n"
-
-      var idx = 0
-      for line in wrapfile.lines:
-        echo &"{idx:>2} | {line}"
-        inc idx
-
-      idx = 0
-      echo "User file:\n"
-      for line in nimfile.lines:
-        echo &"{idx:>2} | {line}"
-        inc idx
-
-      echo stdout
-      echo err
-      # quit 1
-
-  block:
-    let command = binfile
-    info "Running", command
-    let (outstr, err, code) = runShell(command)
-    if stdout.len > 0:
-      assertEq outstr.strip(), stdout.strip()
-      notice "stdout comparison ok"
-    else:
-      echo outstr
-
-    convertExamples.add """
-# $5
-
-## C++ code
-
-$1
-
-## Generated nim wrapper
-
-$2
-
-## Code using wrapper
-
-$3
-
-## Execution result
-
-$4
-
-""" % [
-    cpp.dedent().makeRstCodeBlock("C++"),
-    outwrap.makeRstCodeBlock("nim"),
-    nim.dedent().makeRstCodeBlock("nim"),
-    outstr.makeRstCodeBlock(""),
-    name]
+  let runres = passKVargs(compileRunNim, nimfile, unit, wrapfile, stdout)
 
 
-
-
+  convertExamples.add makeRstSection(
+    1, name,
+    cpp.dedent().makeRstCodeBlock("C++").makeRstSection(
+      "C++ code", 2),
+    wrapfile.readFile().makeRstCodeBlock("nim").makeRstSection(
+      "Nim wrappers generated for all dependent files", 2),
+    nim.dedent().makeRstCodeBlock("nim").makeRstSection(
+      "Code using wrapper", 2),
+    runres.outstr.makeRstCodeBlock("").makeRstSection(
+      "Execution result", 2)
+  )
 
 suite "Wrapgen":
   test "single method":
@@ -284,15 +319,93 @@ suite "Wrapgen":
     warn "Not implemented"
 
 
-  test "Write results":
-    let file = currentSourcePath().splitFile().dir /../
-      "wrap-examples.rst"
-    echo file
-    convertExamples = @["""
+#======================  Api dependency inference  =======================#
+
+proc getIncludePaths(): seq[string] = @[]
+
+proc inferapi(
+  nim, name: string,
+  cpp: string,
+  deps: openarray[(string, string)],
+  dirname: string = "/tmp/inferapi-test",
+  cppfile: string = "wrapgen-test",
+  nimfile: string = "wrapgen_test",
+  nimcache: string = "nimcache.d",
+  includepaths: seq[string] = getIncludePaths(),
+  stdout: string = ""): void =
+
+  commonSetup()
+
+  var wrapsection = ""
+  for (name, content) in deps:
+    (dirname / name).writeFile(content)
+    wrapsection.add makeRstSection(
+      3, name, makeRstCodeBlock(content, "c++"))
+
+  let (api, unit, index) = parseCPP(cppfile, @[&"-I{dirname}"])
+
+  # Generate wrappers for dependencies
+  block:
+    discard
+
+
+  # Generate main wrapper
+  block:
+    let conf = WrapConfig(header: cppfile)
+    let wrapText = api.decls.wrapDeclarations(conf)
+    wrapfile.writeFile(wrapText)
+
+  let runres = passKVargs(compileRunNim, nimfile, unit, wrapfile, stdout)
+
+  convertExamples.add makeRstSection(
+    1, name,
+    cpp.dedent().makeRstCodeBlock("C++").makeRstSection(
+      "C++ code", 2),
+    wrapsection.makeRstSection(
+      "Nim wrappers generated for all dependent files", 2),
+    nim.dedent().makeRstCodeBlock("nim").makeRstSection(
+      "Code using wrapper", 2),
+    runres.outstr.makeRstCodeBlock("").makeRstSection(
+      "Execution result", 2)
+  )
+
+suite "Public API inference":
+  test "Imported class":
+    kvCall inferapi:
+      name: "Single external dependency"
+      nim:
+        """
+        var q: Q
+        let z = q.hh()
+        """
+      cpp:
+        """
+        #include "dependency.hpp"
+        // Main file that we are interseted in wrapping
+        // Public API uses type `D` that was imported from another 
+        // header. In order to compile wraper we must know how this
+        // type is defined (where it is imported from etc.) or treat
+        // it as opaque handle - e.g provide no implementation except
+        // for `type D {.importcpp: "someheader".} = object`
+        class Q { public: D dep; };
+        """
+      deps:
+        stringKvTable:
+          "dependency.hpp": # This dependency file should be wrapped
+                            # automatically
+            """
+            class D { public: int d; };
+            """
+
+
+let file = currentSourcePath().splitFile().dir /../
+  "wrap-examples.rst"
+convertExamples = @["""
 For ease of testing all files use absolute paths for wrappers.
 This is of course configurable. This file is automatically generated
 from unit tests. You can view source code for tests
 `here <https://github.com/haxscramper/hcparse/blob/master/tests/tWrapGen.nim>`_
 """] & convertExamples
 
-    file.writeFile(convertExamples.join("\n\n"))
+file.writeFile(convertExamples.join("\n\n"))
+echo "Unit test finished. Examples were written to ", file

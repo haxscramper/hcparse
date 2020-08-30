@@ -941,9 +941,55 @@ proc convertCFunction*(cursor: CXCursor): ProcDecl[PNode] =
     # WARNING temprarily disabled pragma annotations
     # it.signature.pragma = newPPragma()
 
+#===================  Accessible public API elements  ====================#
+proc getPublicAPI*(cd: CDecl): seq[CXCursor] =
+  ## Get list of cursors referring to parts of the public API for a
+  ## declaration: return and argument types for functions and methods,
+  ## public fields for objects.
+  case cd.kind:
+    of cdkClass, cdkStruct:
+      for member in cd.members:
+        result.add member.getPublicAPI()
+    of cdkField:
+      if cd.accs == asPublic:
+        return @[ cd.cursor ]
+      else:
+        return @[]
+    of cdkFunction, cdkMethod:
+      let exportd = (cd.kind == cdkFunction) or (cd.accs() == asPublic)
+      if exportd:
+        result.add cd.cursor
+        for arg in cd.args:
+          result.add arg.cursor
+    of cdkEnum:
+      return @[]
+
+
 #*************************************************************************#
 #*********************  Translation unit conversion  *********************#
 #*************************************************************************#
+#==========================  Type declarations  ==========================#
+type
+  CApiUnit* = object
+    ## Representation of single API unit - all public
+    ## methods/classes/fields/functions declared in main file of
+    ## single translation unit.
+    ##
+    ## ## Fields
+    ## :decls: List of declarations in main file
+    ## :publicTypes: List of public entries exposed by the API.
+    ##
+    ##     Class fields, function/method arguments/return values and
+    ##     so on. This list allows you to determine whether or not
+    ##     wrapping additional API unit & including them in main file
+    ##     is necessary.
+
+    # TODO infer 'derived' API that must also be acessible through
+    # object - things like public fields and methods of parent class.
+    decls*: seq[CDecl]
+    publicAPI*: seq[CXCursor]
+
+
 #===========  Splitting translation unit into logical chunks  ============#
 proc getArguments(cursor: CXCursor): seq[CArg] =
   for idx, subn in cursor.children():
@@ -1014,20 +1060,23 @@ proc visitCursor(cursor: CXCursor, parent: seq[string]): tuple[
       return
 
 
-proc splitDeclarations*(tu: CXTranslationUnit): seq[CDecl] =
+proc splitDeclarations*(tu: CXTranslationUnit): CApiUnit =
   ## Convert main file of translation unit into flattened sequence of
   ## high-level declarations. All cursors for objects/structs are
-  ## retained.
+  ## retained. Public API elements are stored in `publicAPI` field
   assert not tu.isNil
   let cursor = tu.getTranslationUnitCursor()
-  var res: seq[CDecl]
+  var res: CApiUnit
   cursor.visitMainFile do:
     makeVisitor [tu, res]:
       let (decls, rec) = visitCursor(cursor, @[])
       if rec:
         return cvrRecurse
       else:
-        res.add decls
+        res.decls.add decls
+        for decl in decls:
+          res.publicAPI.add decl.getPublicAPI()
+
         return cvrContinue
 
   return res
