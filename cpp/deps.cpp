@@ -2,6 +2,7 @@
 #define XSTRINGIFY(x) STRINGIFY(x)
 
 // adapted from https://github.com/katahiromz/BoostWaveExample
+// to build run `clang++ -lboost_system -lboost_filesystem -lboost_thread -lboost_wave -o../bin/deps deps.cpp`
 
 #include <boost/property_tree/info_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
