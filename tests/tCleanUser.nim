@@ -141,7 +141,7 @@ suite "Declaration mapping":
   test "wrapping methods":
     assertItPPrint splitDecls(
       "class Z { int hello(); int eee() const; };"
-    )[0].wrapMethods():
+    )[0].wrapMethods(WrapConfig(), newPType("Z")):
       it[0].name == "hello"
       it[0].signature.arg(0).kind == nvdVar
       it[1].name == "eee"
