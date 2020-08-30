@@ -16,7 +16,6 @@
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <vector>
 
 #include "predefined.hpp"
 
@@ -89,9 +88,8 @@ inline void show_help(void) {
            "** System variable & default paths\n\n"
            "`$CPATH` is added to sytem paths and either of "
            "`$C_INCLUDE_PATH` or `$CPLUS_INCLUDE_PATH` "
-           "(mutally exclusive!) variables. `/usr/include` is "
-           "added to system include path if none of the above variables "
-           "are defined"
+           "(mutally exclusive!) variables. `/usr/include` is always "
+           "added to system include path"
            "\n"
            "Options:\n"
            "  -Dmacro        Defines a macro\n"
@@ -101,17 +99,6 @@ inline void show_help(void) {
            "  -Spath         Adds system include path"
         << std::endl;
 }
-std::vector<std::string> split(const std::string& s, char delim) {
-    std::vector<std::string> elems;
-    std::stringstream        ss(s);
-    std::string              item;
-    while (std::getline(ss, item, delim)) {
-        elems.push_back(item);
-    }
-
-    return elems;
-}
-
 
 template <typename T_CONTEXT>
 inline bool setup_context(T_CONTEXT& ctx, int argc, char** argv) {
@@ -144,30 +131,14 @@ inline bool setup_context(T_CONTEXT& ctx, int argc, char** argv) {
     const char* path2 = getenv("C_INCLUDE_PATH");
     const char* path3 = getenv("CPLUS_INCLUDE_PATH");
     if (path1) {
-        for (auto& path : split(std::string(path1), ':')) {
-            std::cerr << "added system include path [ " << path << " ]\n";
-            ctx.add_sysinclude_path(path.c_str());
-        }
+        ctx.add_sysinclude_path(path1);
     }
     if (path2) {
-        for (auto& path : split(std::string(path2), ':')) {
-
-            std::cerr << "added system include path [ " << path << " ]\n";
-            ctx.add_sysinclude_path(path.c_str());
-        }
+        ctx.add_sysinclude_path(path2);
     } else if (path3) {
-        for (auto& path : split(std::string(path3), ':')) {
-
-            std::cerr << "added system include path [ " << path << " ]\n";
-            ctx.add_sysinclude_path(path.c_str());
-        }
+        ctx.add_sysinclude_path(path3);
     }
-
     if (!path1 && !path2 && !path3) {
-
-        std::cerr << "added system include path [ "
-                  << "/usr/include"
-                  << " ]\n";
         ctx.add_sysinclude_path("/usr/include");
     }
 
