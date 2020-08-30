@@ -54,7 +54,15 @@ type
   ColorLogger = ref object of Logger
     ident: int
 
+proc identLog =
+  for handler in getHandlers():
+    if ColorLogger(handler) != nil:
+      inc ColorLogger(handler).ident
 
+proc dedentLog =
+  for handler in getHandlers():
+    if ColorLogger(handler) != nil:
+      dec ColorLogger(handler).ident
 
 method log(logger: ColorLogger, level: Level, args: varargs[string, `$`]) =
   let ident = "  ".repeat(logger.ident)
@@ -188,7 +196,6 @@ template commonSetup() {.dirty.} =
   info "Nimcache directory", nimcache
   info "Writing CPP file", cppfile
   cppfile.writeFile(cpp.dedent())
-  nimfile.writeFile(&"import \"{wrapfile}\"\n" & nim.dedent())
   info "Wrapper file is", wrapfile
 
 
@@ -204,6 +211,7 @@ proc wrapgen(
   stdout: string = ""): void =
 
   commonSetup()
+  nimfile.writeFile(&"import \"{wrapfile}\"\n" & nim.dedent())
   let conf = WrapConfig(header: cppfile)
   let (api, unit, index) = parseCPP(cppfile)
 
@@ -344,9 +352,18 @@ proc inferapi(
 
   let (api, unit, index) = parseCPP(cppfile, @[&"-I{dirname}"])
 
+  var depImports = @[wrapfile]
   # Generate wrappers for dependencies
   block:
-    discard
+    identLog()
+    for file in api.publicAPI.getDepFiles():
+      debug "Found dependency", file
+
+
+    dedentLog()
+  if true: quit 0
+  nimfile.writeFile(depImports.mapIt(
+    &"import \"{it}\"").joinl() & "\n" & nim.dedent())
 
 
   # Generate main wrapper

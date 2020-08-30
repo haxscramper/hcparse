@@ -456,6 +456,25 @@ proc isFromMainFile*(cursor: CXCursor): bool =
   let location = cursor.getCursorLocation()
   result = location.locationIsFromMainFile() != cint(0)
 
+proc getSpellingLocation*(cursor: CXCursor): tuple[
+  file: string, line, column, offset: int] =
+
+  let location = cursor.getCursorLocation()
+  var
+    file: CXFile
+    line: cuint
+    column: cuint
+    offset: cuint
+
+  location.getSpellingLocation(
+    addr file, addr line, addr column, addr offset)
+
+  result.file = $file.getFileName()
+  result.line = line.int
+  result.column = column.int
+  result.offset = offset.int
+
+
 
 #*************************************************************************#
 #*******************  Documentation comment wrappers  ********************#
@@ -1082,6 +1101,7 @@ proc splitDeclarations*(tu: CXTranslationUnit): CApiUnit =
   return res
 
 #=====================  Dependency list generation  ======================#
+# ~~~~ CLI helper path resolution ~~~~ #
 proc getHCParseBinDir*(): string =
   ## Return absolute path `/bin` directory with helper cmdline tools;
   ## NOTE right now I have no idea how to handle dependencies like
@@ -1102,6 +1122,8 @@ proc getHCParseBinPath*(name: string): string =
     return file
   else:
     raise newException(IOError, "Could not find '" & file & "'")
+
+# ~~~~ Dependency tree construction ~~~~ #
 
 type
   CDepsTree* = object
@@ -1135,9 +1157,6 @@ proc parseBuildDepsTree*(outs: string): CDepsTree =
 
   return CDepsTree(deps: auxTree())
 
-
-
-
 proc buildDepsTree*(file: string, args: seq[string]): CDepsTree =
   let bin = getHCParseBinPath("deps")
   assert file.existsFile()
@@ -1154,8 +1173,29 @@ proc buildDepsTree*(file: string, args: seq[string]): CDepsTree =
     echo "Arguments:"
     echo args.joinql()
 
+
 proc immediateDeps*(d: CDepsTree): seq[string] =
   d.deps.mapIt(it.file)
+
+# ~~~~ Collecting dependeny list ~~~~ #
+
+proc getDepFiles*(deps: seq[CXCursor]): seq[string] =
+  ## Generate list of files that have to be wrapped
+  # TODO:DOC
+  for dep in deps:
+    # echo "found dependency ", dep, " of kind ", dep.cxKind,
+    #  " type kind ", dep.cxType.cxKind
+
+    let decl: CXCursor = dep.cxType.getTypeDeclaration()
+    # echo "declared as ", decl.cxKind()
+    let (file, line, column, _) = decl.getSpellingLocation()
+
+    result.add file
+    # echo &"in {file}:{line}:{column}"
+ 
+  result = result.deduplicate()
+
+
 
 #*************************************************************************#
 #*************************  Wrapper generation  **************************#
