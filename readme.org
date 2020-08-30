@@ -117,6 +117,15 @@ TranslationUnit
 found functions: @["main"]
 #+end_example
 
+
+This library is not meant to be used as standalone tool for wrapping
+C++ code, but instead provides high-level primitives for building own
+wrapper tools. Default implementation of wrapper logic is currently
+WIP; see [[https://haxscramper.github.io/hcparse-doc/wrap-examples.html][automatically generated examples (part of the unit test)]],
+[[https://haxscramper.github.io/hcparse-doc/src/hcparse/libclang.html#splitDeclarations%2CCXTranslationUnit][splitDeclarations]] procedure and possible example of use in
+[[file:tests/tWrapGen.nim]].
+
+
 * Contribution & development
 
 Must-have todo things

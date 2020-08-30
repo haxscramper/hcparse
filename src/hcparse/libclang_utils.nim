@@ -810,6 +810,9 @@ when true:
 
 
       CDecl* {.derive(GetSet).} = object
+        ## Higher-level wrapper on top of CXCursor. Mostly used to
+        ## provide more intuitive API for working with things to be
+        ## wrapped.
         name*: string
         namespace*: seq[string]
         cursor* {.requiresinit.}: CXCursor
