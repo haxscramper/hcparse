@@ -2,7 +2,8 @@
 #define XSTRINGIFY(x) STRINGIFY(x)
 
 // adapted from https://github.com/katahiromz/BoostWaveExample
-// to build run `clang++ -lboost_system -lboost_filesystem -lboost_thread -lboost_wave -o../bin/deps deps.cpp`
+// to build run `clang++ -lboost_system -lboost_filesystem -lboost_thread
+// -lboost_wave -o../bin/deps deps.cpp`
 
 #include <boost/property_tree/info_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
@@ -95,7 +96,7 @@ inline void show_help(void) {
            "(mutally exclusive!) variables. `/usr/include` is "
            "added to system include path if none of the above variables "
            "are defined\n"
-           "Basically you have top ways for using this - either set none "
+           "Basically you have two ways for using this - either set none "
            "of the variables and supply all options through the "
            "command-line flags (+ /usr/include added by default), or set "
            "`$CPATH` for common include directories (both C++ and C) and "
@@ -166,20 +167,20 @@ inline bool setup_context(T_CONTEXT& ctx, int argc, char** argv) {
     const char* path3 = getenv("CPLUS_INCLUDE_PATH");
     if (path1) {
         for (auto& path : split(std::string(path1), ':')) {
-            std::cerr << "added system include path [ " << path << " ]\n";
+            std::cerr << "-S [ " << path << " ]\n";
             ctx.add_sysinclude_path(path.c_str());
         }
     }
     if (path2) {
         for (auto& path : split(std::string(path2), ':')) {
 
-            std::cerr << "added system include path [ " << path << " ]\n";
+            std::cerr << "-S [ " << path << " ]\n";
             ctx.add_sysinclude_path(path.c_str());
         }
     } else if (path3) {
         for (auto& path : split(std::string(path3), ':')) {
 
-            std::cerr << "added system include path [ " << path << " ]\n";
+            std::cerr << "-S [ " << path << " ]\n";
             ctx.add_sysinclude_path(path.c_str());
         }
     }
@@ -323,8 +324,8 @@ int main(int argc, char** argv) {
                     cerr << ex.description() << endl;
                     return 1;
                 } else {
-                    cerr << "Recoverable error: " << ex.description()
-                         << endl;
+                    // cerr << "Recoverable error: " << ex.description()
+                    //      << endl;
                 }
             }
 

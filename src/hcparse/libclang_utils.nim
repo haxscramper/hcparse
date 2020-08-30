@@ -7,9 +7,11 @@ when not defined(libclangIncludeUtils):
 
 #==============================  includes  ===============================#
 import bitops, strformat, macros, terminal, sugar, std/decls, strutils,
-       sequtils, options
+       sequtils, options, os, re
 
 import hpprint, hpprint/hpprint_repr
+import hparse/tscanf
+import hmisc/other/hshell
 import hnimast
 import nimtraits
 import hmisc/types/colorstring
@@ -942,6 +944,7 @@ proc convertCFunction*(cursor: CXCursor): ProcDecl[PNode] =
 #*************************************************************************#
 #*********************  Translation unit conversion  *********************#
 #*************************************************************************#
+#===========  Splitting translation unit into logical chunks  ============#
 proc getArguments(cursor: CXCursor): seq[CArg] =
   for idx, subn in cursor.children():
     if subn.cxKind in {ckParmDecl}:
@@ -1028,6 +1031,78 @@ proc splitDeclarations*(tu: CXTranslationUnit): seq[CDecl] =
         return cvrContinue
 
   return res
+
+#=====================  Dependency list generation  ======================#
+proc getHCParseBinDir*(): string =
+  ## Return absolute path `/bin` directory with helper cmdline tools;
+  ## NOTE right now I have no idea how to handle dependencies like
+  ## this - this is just a hacky solution.
+  for dir in currentSourcePath().parentDirs():
+    if (dir / "hcparse.nimble").fileExists():
+      return dir / "bin"
+
+  raise newException(
+    IOError,
+    "Could not find `hcparse.nimble` in any of the parent directories")
+
+proc getHCParseBinPath*(name: string): string =
+  ## Return absolute name of the helper cmdline tool `name`
+  let bindir = getHCParseBinDir()
+  let file = bindir / name
+  if fileExists(file):
+    return file
+  else:
+    raise newException(IOError, "Could not find '" & file & "'")
+
+type
+  CDepsTree* = object
+    file*: string
+    name*: string
+    deps*: seq[CDepsTree]
+
+proc parseBuildDepsTree*(outs: string): CDepsTree =
+  let depLines = outs.split("\n")
+  var idx = 0
+  echo "deps list has ", depLines.len,  " lines"
+
+  proc auxTree(): seq[CDepsTree] {.closure.} =
+    while not depLines[idx].startsWith(Whitespace, "}"):
+      if deplines[idx] =~ re".*?<(.*?)> (.*)":
+        inc idx
+        result.add CDepsTree(name: matches[0], file: matches[1])
+      elif deplines[idx] =~ re""".*?"(.*?)" (.*)""":
+        inc idx
+        result.add CDepsTree(name: matches[0], file: matches[1])
+      elif depLines[idx].startsWith(Whitespace, "{"):
+        inc idx
+        # echo "startin level ", depLines[idx]
+        result.last.deps = auxTree()
+      elif depLines[idx].isEmptyOrWhitespace():
+        inc idx
+        return
+
+    inc idx
+
+
+  return CDepsTree(deps: auxTree())
+
+
+proc buildDepsTree*(file: string, args: seq[string]): CDepsTree =
+  let bin = getHCParseBinPath("deps")
+  assert file.existsFile()
+  let command = bin & " " & args.joinw() & " " & file
+
+  try:
+    let (outs, _, _) = runShell(command)
+    result = parseBuildDepsTree(outs)
+    result.file = file
+
+
+  except ShellError:
+    printShellError()
+    echo "Arguments:"
+    echo args.joinql()
+
 
 #*************************************************************************#
 #*************************  Wrapper generation  **************************#
@@ -1116,3 +1191,25 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig): tuple[
   ))
 
   result.procs = cd.wrapMethods(conf, result.obj.name)
+
+when isMainModule:
+  import hpprint
+  echo tscanf("<", "$*<")
+  pprint (parseBuildDepsTree """
+<zzz> /tmp/zzz
+{
+  <eee> /tmp/ee
+  <1> /tmp/werrwe
+  {
+    <1.1> /tmp/ee23
+    <1.2> /tmp/werrfsf34we
+    <1.3> /tmp/ewewffv234
+  }
+  <2> /tmp/ewewffv
+  {
+    <2.1> /tmp/ee1233
+    <2.2> /tmp/werrwe23
+    <2.3> /tmp/ewewffv
+  }
+}
+"""), maxwidth = 100
