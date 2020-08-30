@@ -1,6 +1,8 @@
 #define STRINGIFY(x) #x
 #define XSTRINGIFY(x) STRINGIFY(x)
 
+// adapted from https://github.com/katahiromz/BoostWaveExample
+
 #include <boost/property_tree/info_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
@@ -16,6 +18,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+// #include <vector>
 
 #include "predefined.hpp"
 
@@ -80,25 +83,55 @@ class BasicInputPolicy
 inline void show_help(void) {
     std::cout
         << "Usage: cpp [options] input-file\n"
-           "Generate tree of dependencies for file <input-file>\n"
-           "WARNING: no assumptions about include paths is made - if "
-           "you need to include locations for the system include "
+           "Generate tree of dependencies for file <input-file>\n\n"
+           "WARNING: no assumptions about include paths is made - "
+           "you need to manually include locations for the system include "
            "headers and your project's include paths. "
-           "\n"
+           "\n\n"
            "** System variable & default paths\n\n"
            "`$CPATH` is added to sytem paths and either of "
            "`$C_INCLUDE_PATH` or `$CPLUS_INCLUDE_PATH` "
-           "(mutally exclusive!) variables. `/usr/include` is always "
-           "added to system include path"
-           "\n"
-           "Options:\n"
+           "(mutally exclusive!) variables. `/usr/include` is "
+           "added to system include path if none of the above variables "
+           "are defined\n"
+           "Basically you have top ways for using this - either set none "
+           "of the variables and supply all options through the "
+           "command-line flags (+ /usr/include added by default), or set "
+           "`$CPATH` for common include directories (both C++ and C) and "
+           "one of the `C/CPLUS` variables. C one is queried first"
+           "\n\n"
+           "** Options:\n\n"
            "  -Dmacro        Defines a macro\n"
            "  -Dmacro=def    Defines a macro\n"
            "  -Umacro        Undefines a macro\n"
            "  -Ipath         Adds include path\n"
-           "  -Spath         Adds system include path"
+           "  -Spath         Adds system include path\n\n"
+           "** Output format\n\n"
+           "Output consists of nested opening/closing parenthesis {} with "
+           "list of file. Each opening paren corresponds to opening "
+           "#include directive, with all elements in the next layer being "
+           "retrived from the #include'd file. Output example:\n\n"
+           // clang-format off
+"  <iostream> /usr/include/c++/10.2.0/iostream\n"
+"  {\n"
+"    <bits/c++config.h> /usr/include/c++/10.2.0/x86_64-pc-linux-gnu/bits/c++config.h\n"
+"      {\n"
+"        <bits/os_defines.h> /usr/include/c++/10.2.0/x86_64-pc-linux-gnu/bits/os_defines.h\n"
+"          {\n"
+        // clang-format on
         << std::endl;
 }
+std::vector<std::string> split(const std::string& s, char delim) {
+    std::vector<std::string> elems;
+    std::stringstream        ss(s);
+    std::string              item;
+    while (std::getline(ss, item, delim)) {
+        elems.push_back(item);
+    }
+
+    return elems;
+}
+
 
 template <typename T_CONTEXT>
 inline bool setup_context(T_CONTEXT& ctx, int argc, char** argv) {
@@ -131,14 +164,30 @@ inline bool setup_context(T_CONTEXT& ctx, int argc, char** argv) {
     const char* path2 = getenv("C_INCLUDE_PATH");
     const char* path3 = getenv("CPLUS_INCLUDE_PATH");
     if (path1) {
-        ctx.add_sysinclude_path(path1);
+        for (auto& path : split(std::string(path1), ':')) {
+            std::cerr << "added system include path [ " << path << " ]\n";
+            ctx.add_sysinclude_path(path.c_str());
+        }
     }
     if (path2) {
-        ctx.add_sysinclude_path(path2);
+        for (auto& path : split(std::string(path2), ':')) {
+
+            std::cerr << "added system include path [ " << path << " ]\n";
+            ctx.add_sysinclude_path(path.c_str());
+        }
     } else if (path3) {
-        ctx.add_sysinclude_path(path3);
+        for (auto& path : split(std::string(path3), ':')) {
+
+            std::cerr << "added system include path [ " << path << " ]\n";
+            ctx.add_sysinclude_path(path.c_str());
+        }
     }
+
     if (!path1 && !path2 && !path3) {
+
+        std::cerr << "added system include path [ "
+                  << "/usr/include"
+                  << " ]\n";
         ctx.add_sysinclude_path("/usr/include");
     }
 
@@ -244,12 +293,16 @@ int main(int argc, char** argv) {
         code.end(),
         argv[argc - 1],
         MakeIncludeTreeHook(incTree)); // Pass the tree
-    if (!setup_context(ctx, argc, argv))
+
+    if (!setup_context(ctx, argc, argv)) {
+        cerr << "Context setup failed";
         return 2;
+    }
 
     Context::iterator_type itrEnd = ctx.end();
     Context::iterator_type itr    = ctx.begin();
 
+    cerr << "Starting preprocessor\n";
     while (itr != itrEnd) {
         try {
             ++itr;
@@ -279,6 +332,16 @@ int main(int argc, char** argv) {
             // {
             //   auto err = ex.get_errorcode();
             // }
+        } catch (const wave::preprocess_exception& ex) {
+            cerr << "Preprocessor exception";
+            cerr << "ERROR in " << ex.file_name() << " : " << ex.line_no()
+                 << endl;
+            cerr << ex.description() << "\n";
+            // cerr << ex.what() << "\n";
+            return 1;
+        } catch (...) {
+            cerr << "Exception ocurred during preprocessing";
+            return 1;
         }
     }
 
