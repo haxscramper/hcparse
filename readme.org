@@ -31,9 +31,8 @@ by reference.
 
 #+begin_src nim :exports both
   {.define(plainStdout).}
-  import hcparse/libclang_raw/[raw_user, index]
+  import hcparse/libclang
   import std/decls
-  # import macros
 
   let outfile = "/tmp/example.cpp"
   outfile.writeFile """
@@ -57,9 +56,12 @@ by reference.
 
 
   let
-    trIndex = clang_createIndex(0, 0)
+    trIndex = createIndex()
     unit = parseTranslationUnit(trIndex, outfile)
-    topCursor = unit.clang_getTranslationUnitCursor()
+    topCursor = unit.getTranslationUnitCursor()
+
+  echo unit.isNil
+  echo topCursor.cxKind
 
   var functionNames: seq[string]
   topCursor.visitMainFile do: # Visit all ast elements from main translation unit
@@ -69,18 +71,19 @@ by reference.
       # - `cursor` (current AST element being visited) and `parent` -
       # parent node for cursor.
       echo cursor.treeRepr(unit)
-      if cursor.cxKind == CXCursor_FunctionDecl:
-        echo cursor.comment().toNimDoc() # Print documentation as RST
+      if cursor.cxKind == ckFunctionDecl:
+        echo cursor.comment().toNimDoc()
         functionNames.add $cursor
 
-      return CXChildVisit_Continue
+      return cvrContinue
 
   echo "found functions: ", functionNames
 #+end_src
 
 #+RESULTS:
 #+begin_example
-/tmp/example.cpp:4:7
+false
+TranslationUnit
 `ClassDecl MyClass`:
     +-> type: MyClass
     +-> CXXAccessSpecifier:
@@ -98,7 +101,6 @@ by reference.
     +-> CXXMethod:
         +-> type: int ()
         +-> static int static_method ( )
-/tmp/example.cpp:14:5
 `FunctionDecl main`:
     +-> type: int ()
     +-> `CompoundStmt `:

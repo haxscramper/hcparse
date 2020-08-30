@@ -461,20 +461,29 @@ proc isFromMainFile*(cursor: CXCursor): bool =
 proc cxKind*(comment: CXComment): CXCommentKind = comment.getKind()
 
 proc `$`*(comment: CXComment): string =
-  $comment.fullCommentGetAsHTML() # NOTE it seems like libclang
-  # API does not provide a way to get full comment string as raw string.
+  ## Get original representation of the comment. NOTE: it seems like
+  ## libclang API does not provide a way to get full comment string (I
+  ## haven't found one yet) as raw string, so instead
+  ## `fullCommentGetAsHTML` is returned.
+  # TODO handle comments that are not 'full comment'
+  $comment.fullCommentGetAsHTML()
 
 iterator children*(comment: CXComment): CXComment =
+  ## Get all comment subnodes
   for i in 0 .. getNumChildren(comment):
     yield comment.getChild(cuint(i))
 
-proc len*(comment: CXComment): int = getNumChildren(comment).int
+proc len*(comment: CXComment): int =
+  ## Get number of subnodes for comment
+  getNumChildren(comment).int
 
 proc `[]`*(comment: CXComment, idx: int): CXComment =
+  ## Get `idx`'th subnode of comment
   assert idx < comment.len
   getChild(comment, cuint(idx))
 
 proc objTreeRepr*(comment: CXComment): ObjTree =
+  ## Convert comment to `ObjTree` repr
   case comment.cxKind:
     of cokText:
       pptConst $comment.textComment_getText()
@@ -592,14 +601,17 @@ proc toRstNode(comment: CXComment): PRstNode =
       raiseAssert("#[ IMPLEMENT ]#")
 
 func dropEmptyLines*(str: string): string =
+  ## Remove all empty lines from string
   str.split("\n").filterIt(not it.allOfIt(it in Whitespace)).join("\n")
 
 
 func dropEmptyLines*(str: var string): void =
+  ## Remove all empty lines from string
   str = str.split("\n").filterIt(
     not it.allOfIt(it in Whitespace)).join("\n")
 
 proc toNimDoc*(comment: CXComment): string =
+  ## Convert Comment to rst string
   # echo comment.objTreeRepr().pstring()
   comment.toRstNode().renderRstToRst(result)
   result.dropEmptyLines()
