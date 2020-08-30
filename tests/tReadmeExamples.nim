@@ -1,5 +1,5 @@
 {.define(plainStdout).}
-import hcparse/libclang_raw/[raw_user, index]
+import hcparse/libclang
 import std/decls
 
 let outfile = "/tmp/example.cpp"
@@ -24,9 +24,9 @@ int main() {
 
 
 let
-  trIndex = clang_createIndex(0, 0)
+  trIndex = createIndex()
   unit = parseTranslationUnit(trIndex, outfile)
-  topCursor = unit.clang_getTranslationUnitCursor()
+  topCursor = unit.getTranslationUnitCursor()
 
 echo unit.isNil
 echo topCursor.cxKind
@@ -39,10 +39,10 @@ topCursor.visitMainFile do: # Visit all ast elements from main translation unit
     # - `cursor` (current AST element being visited) and `parent` -
     # parent node for cursor.
     echo cursor.treeRepr(unit)
-    if cursor.cxKind == CXCursor_FunctionDecl:
-      echo cursor.comment().toNimDoc() # Print documentation as RST
+    if cursor.cxKind == ckFunctionDecl:
+      echo cursor.comment().toNimDoc()
       functionNames.add $cursor
 
-    return CXChildVisit_Continue
+    return cvrContinue
 
 echo "found functions: ", functionNames

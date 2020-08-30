@@ -15,6 +15,7 @@ import nimtraits
 import hmisc/types/colorstring
 import hmisc/[hexceptions, helpers]
 import compiler/ast
+import packages/docutils/rstast
 
 #==========================  String conversion  ==========================#
 
@@ -453,6 +454,155 @@ proc isFromMainFile*(cursor: CXCursor): bool =
   let location = cursor.getCursorLocation()
   result = location.locationIsFromMainFile() != cint(0)
 
+
+#*************************************************************************#
+#*******************  Documentation comment wrappers  ********************#
+#*************************************************************************#
+proc cxKind*(comment: CXComment): CXCommentKind = comment.getKind()
+
+proc `$`*(comment: CXComment): string =
+  $comment.fullCommentGetAsHTML() # NOTE it seems like libclang
+  # API does not provide a way to get full comment string as raw string.
+
+iterator children*(comment: CXComment): CXComment =
+  for i in 0 .. getNumChildren(comment):
+    yield comment.getChild(cuint(i))
+
+proc len*(comment: CXComment): int = getNumChildren(comment).int
+
+proc `[]`*(comment: CXComment, idx: int): CXComment =
+  assert idx < comment.len
+  getChild(comment, cuint(idx))
+
+proc objTreeRepr*(comment: CXComment): ObjTree =
+  case comment.cxKind:
+    of cokText:
+      pptConst $comment.textComment_getText()
+    of cokParamCommand:
+      pptObj(
+        $comment.cxKind,
+        [(
+          $paramCommandComment_getParamName(comment),
+          pptSeq(toSeq(comment.children).mapIt(it.objTreeRepr()))
+          # objTreeRepr(comment[0])
+        )]
+      )
+    of cokInlineCommand:
+      let args: seq[string] = collect(newSeq):
+        for i in 0 ..< inlineCommandComment_getNumArgs(comment):
+          $inlineCommandComment_getArgText(comment, cuint(i))
+
+      pptObj(
+        $comment.cxKind,
+        [(
+          $inlineCommandComment_getCommandName(comment),
+          pptSeq(
+            args.mapIt(it.pptConst) &
+            toSeq(comment.children).mapIt(it.objTreeRepr())
+          )
+        )]
+      )
+    of cokBlockCommand:
+      pptObj(
+        $comment.cxKind,
+        [(
+          $blockCommandComment_getCommandName(comment),
+          pptSeq(toSeq(comment.children).mapIt(it.objTreeRepr()))
+          # objTreeRepr(comment[0])
+        )]
+      )
+    else:
+      if comment.len == 0:
+        pptObj($comment.cxKind,
+               pptConst($comment.fullComment_getAsXML()))
+      else:
+        pptObj($comment.cxKind,
+               toSeq(comment.children).mapIt(it.objTreeRepr()))
+
+#==========================  Conversion to rst  ==========================#
+
+proc newRstNode(
+  kind: RstNodeKind, subnodes: varargs[PRstNode]): PRstNode =
+  result = rstast.newRstNode(kind)
+  for node in subnodes:
+    result.add node
+
+proc `$`(n: PRstNode): string = renderRstToRst(n, result)
+
+proc toRstNode(comment: CXComment): PRstNode =
+  case comment.cxKind:
+    of cokText:
+      return rnLeaf.newRstNode(
+        $textComment_getText(comment))
+
+    of cokFullComment:
+      result = rnInner.newRstNode()
+      for subnode in comment.children():
+        result.add rnParagraph.newRstNode(subnode.toRstNode())
+
+    of cokParagraph:
+      result = rnInner.newRstNode()
+      for subnode in comment.children():
+        result.add rnParagraph.newRstNode(subnode.toRstNode())
+
+    of cokNull:
+      return rnLeaf.newRstNode("")
+
+    of cokInlineCommand:
+      return rnInner.newRstNode("")
+
+    of cokParamCommand:
+      let pn = $paramCommandComment_getParamName(comment)
+      # echo "param: ", pn
+      result = rnInner.newRstNode(
+        @[ rnStrongEmphasis.newRstNode(rnLeaf.newRstNode(pn)) ] &
+          toSeq(comment.children).mapIt(it.toRstNode())
+      )
+
+      # echo result
+
+    of cokBlockCommand:
+      return rnParagraph.newRstNode(
+        @[
+          rnEmphasis.newRstNode(
+            rnInner.newRstNode(
+              $blockCommandComment_getCommandName(comment)
+            )
+          )
+        ] & toSeq(comment.children).mapIt(it.toRstNode()))
+
+    of cokVerbatimBlockCommand:
+      return rnCodeBlock.newRstNode(
+        rnDirArg.newRstNode(""),
+        rnFieldList.newRstNode(
+          rnField.newRstNode(
+            rnFieldName.newRstNode(rnLeaf.newRstNode("default-language")),
+            rnFieldBody.newRstNode(rnLeaf.newRstNode("c++"))
+          )
+        ),
+        rnLiteralBlock.newRstNode(
+          rnLeaf.newRstNode(
+            $verbatimBlockLineComment_getText(comment))))
+    of cokVerbatimLine:
+      return rnInterpretedText.newRstNode(
+        $verbatimLineComment_getText(comment))
+    else:
+      echo "died".toRed()
+      echo comment.objTreeRepr().pstring()
+      raiseAssert("#[ IMPLEMENT ]#")
+
+func dropEmptyLines*(str: string): string =
+  str.split("\n").filterIt(not it.allOfIt(it in Whitespace)).join("\n")
+
+
+func dropEmptyLines*(str: var string): void =
+  str = str.split("\n").filterIt(
+    not it.allOfIt(it in Whitespace)).join("\n")
+
+proc toNimDoc*(comment: CXComment): string =
+  # echo comment.objTreeRepr().pstring()
+  comment.toRstNode().renderRstToRst(result)
+  result.dropEmptyLines()
 
 
 

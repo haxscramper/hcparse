@@ -117,15 +117,6 @@ found functions: @["main"]
 
 * Contribution & development
 
-Currently only direct bindings
-([[file:src/hcparse/libclang_raw/index.nim]]) for libclang are provided -
-generated directly from header files, no function
-renaming/documentation porting has been done, so all functions have
-~clang_*~ prefix, enums also have pretty long names etc. More
-user-friendly wrappers are currently WIP in
-[[file:src/hcparse/libclang.nim]] with automatically ported documentation,
-better-named enums and functions.
-
 Must-have todo things
 
 - [X] Add destructors/finalizers for clang objects - right now none of
