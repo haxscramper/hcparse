@@ -1087,6 +1087,8 @@ proc parseBuildDepsTree*(outs: string): CDepsTree =
   return CDepsTree(deps: auxTree())
 
 
+
+
 proc buildDepsTree*(file: string, args: seq[string]): CDepsTree =
   let bin = getHCParseBinPath("deps")
   assert file.existsFile()
@@ -1103,6 +1105,8 @@ proc buildDepsTree*(file: string, args: seq[string]): CDepsTree =
     echo "Arguments:"
     echo args.joinql()
 
+proc immediateDeps*(d: CDepsTree): seq[string] =
+  d.deps.mapIt(it.file)
 
 #*************************************************************************#
 #*************************  Wrapper generation  **************************#

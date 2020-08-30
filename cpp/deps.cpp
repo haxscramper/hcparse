@@ -7,7 +7,6 @@
 
 #include <boost/property_tree/info_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
-#include <boost/property_tree/xml_parser.hpp>
 #include <boost/wave.hpp>
 #include <boost/wave/cpplexer/cpp_lex_iterator.hpp>
 #include <boost/wave/cpplexer/cpp_lex_token.hpp>
@@ -150,10 +149,24 @@ inline bool setup_context(T_CONTEXT& ctx, int argc, char** argv) {
         if (argv[i][0] == '-' && argv[i][1]) {
             std::string str = &(argv[i][2]);
             switch (argv[i][1]) {
-                case 'D': ctx.add_macro_definition(str); break;
-                case 'U': ctx.remove_macro_definition(str); break;
-                case 'I': ctx.add_include_path(str.c_str()); break;
-                case 'S': ctx.add_sysinclude_path(str.c_str()); break;
+                case 'D': {
+                    ctx.add_macro_definition(str);
+                    break;
+                }
+                case 'U': {
+                    ctx.remove_macro_definition(str);
+                    break;
+                }
+                case 'I': {
+                    std::cerr << "-I [ " << str << " ]\n";
+                    ctx.add_include_path(str.c_str());
+                    break;
+                }
+                case 'S': {
+                    std::cerr << "-S [ " << str << " ]\n";
+                    ctx.add_sysinclude_path(str.c_str());
+                    break;
+                }
                 default:
                     fprintf(
                         stderr, "ERROR: invalid argument '%s'\n", argv[i]);
@@ -187,9 +200,7 @@ inline bool setup_context(T_CONTEXT& ctx, int argc, char** argv) {
 
     if (!path1 && !path2 && !path3) {
 
-        std::cerr << "added system include path [ "
-                  << "/usr/include"
-                  << " ]\n";
+        std::cerr << "-S [ /usr/include ]\n";
         ctx.add_sysinclude_path("/usr/include");
     }
 
@@ -305,6 +316,16 @@ int main(int argc, char** argv) {
     Context::iterator_type itr    = ctx.begin();
 
     cerr << "Starting preprocessor\n";
+    try {
+        auto tmp = (itr != itrEnd);
+    } catch (const boost::wave::preprocess_exception& ex) {
+        cerr << "ERROR in " << ex.file_name() << " : " << ex.line_no()
+             << endl;
+        cerr << ex.description() << endl;
+        return 1;
+    }
+
+
     while (itr != itrEnd) {
         try {
             ++itr;
@@ -323,17 +344,8 @@ int main(int argc, char** argv) {
                         bad_include_file) {
                     cerr << ex.description() << endl;
                     return 1;
-                } else {
-                    // cerr << "Recoverable error: " << ex.description()
-                    //      << endl;
                 }
             }
-
-
-            // if (ex.get_severity() >= boost::wave::util::severity_error)
-            // {
-            //   auto err = ex.get_errorcode();
-            // }
         } catch (const wave::preprocess_exception& ex) {
             cerr << "Preprocessor exception";
             cerr << "ERROR in " << ex.file_name() << " : " << ex.line_no()
@@ -347,9 +359,6 @@ int main(int argc, char** argv) {
         }
     }
 
-    // Output include tree
     info_parser::write_info(cout, incTree);
-    // boost::property_tree::xml_parser::write_xml(cout, incTree);
-
     return 0;
 }

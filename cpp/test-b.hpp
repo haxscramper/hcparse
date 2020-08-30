@@ -1,1 +1,4 @@
-// ee
+// hello
+class A
+{
+};
