@@ -154,6 +154,7 @@ proc compileRunNim(nimfile, wrapfile, stdout: string,
     let command = binfile
     info "Running", command
     let (outstr, err, code) = runShell(command)
+    result.outstr = outstr
     if stdout.len > 0:
       assertEq outstr.strip(), stdout.strip()
       notice "stdout comparison ok"
@@ -225,12 +226,12 @@ proc wrapgen(
     1, name,
     cpp.dedent().makeRstCodeBlock("C++").makeRstSection(
       "C++ code", 2),
-    wrapfile.readFile().makeRstCodeBlock("nim").makeRstSection(
-      "Nim wrappers generated for all dependent files", 2),
     nim.dedent().makeRstCodeBlock("nim").makeRstSection(
       "Code using wrapper", 2),
     runres.outstr.makeRstCodeBlock("").makeRstSection(
-      "Execution result", 2)
+      "Execution result", 2),
+    wrapfile.readFile().makeRstCodeBlock("nim").makeRstSection(
+      "Nim wrappers generated for all dependent files", 2)
   )
 
 suite "Wrapgen":
@@ -352,25 +353,39 @@ proc inferapi(
 
   let (api, unit, index) = parseCPP(cppfile, @[&"-I{dirname}"])
 
-  var depImports = @[wrapfile]
+  var depImports: seq[string]
   # Generate wrappers for dependencies
   block:
     identLog()
     for file in api.publicAPI.getDepFiles():
       debug "Found dependency", file
 
+      let
+        conf = WrapConfig(header: file)
+        (dapi, dunit, dindex) = parseCPP(file, @[&"-I{dirname}"])
+        # NOTE for now we only go one level deeper into dependency
+        # tree
+        wrapText = dapi.decls.wrapDeclarations(conf)
+        depname = file.dropSuffix(@[".hpp", ".cpp"]).addSuffix(".nim")
+
+      wrapsection.add makeRstSection(
+        3, &"Wrapper for dependency {file}",
+        makeRstCodeBlock(wrapText, "nim"))
+
+      depname.writeFile(wrapText)
+      debug "Wrote", depname
+      depImports.add depname
 
     dedentLog()
-  if true: quit 0
-  nimfile.writeFile(depImports.mapIt(
-    &"import \"{it}\"").joinl() & "\n" & nim.dedent())
 
+  nimfile.writeFile(&"import \"{wrapfile}\"\n" & nim.dedent())
 
   # Generate main wrapper
   block:
     let conf = WrapConfig(header: cppfile)
     let wrapText = api.decls.wrapDeclarations(conf)
-    wrapfile.writeFile(wrapText)
+    wrapfile.writeFile(depImports.mapIt(
+      &"import \"{it}\"").joinl() & "\n" & wrapText)
 
   let runres = passKVargs(compileRunNim, nimfile, unit, wrapfile, stdout)
 
@@ -393,13 +408,13 @@ suite "Public API inference":
       nim:
         """
         var q: Q
-        let z = q.hh()
+        echo typeof q.dep
         """
       cpp:
         """
         #include "dependency.hpp"
         // Main file that we are interseted in wrapping
-        // Public API uses type `D` that was imported from another 
+        // Public API uses type `D` that was imported from another
         // header. In order to compile wraper we must know how this
         // type is defined (where it is imported from etc.) or treat
         // it as opaque handle - e.g provide no implementation except
@@ -426,3 +441,4 @@ from unit tests. You can view source code for tests
 
 file.writeFile(convertExamples.join("\n\n"))
 echo "Unit test finished. Examples were written to ", file
+discard runShell(&"nim rst2html -o:{file}.html {file}")
