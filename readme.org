@@ -2,12 +2,39 @@
 
 Higher-level bindings for libclang in nim.
 
+** Installation
+
+#+begin_src bash
+nimble install hcparse
+#+end_src
+
+This package also requires libclang library installed. On most linux
+systems it comes with installation of clang compiler, so most likely
+you already have it.
+
+** Usage
+
+#+begin_src nim
+import hcparse/libclang
+
+# ...
+#+end_src
+
+** Links
+
+- [[https://github.com/haxscramper/hcparse][github]]
+- [[https://haxscramper.github.io/hcparse-doc/src/hcparse/libclang.html][libclang API wrapper documentation]]
+- [[https://haxscramper.github.io/hcparse-doc/wrap-examples.html][WIP wrapper examples - generated from unit tests]]
+- [[https://discord.gg/hjfYJCU][discord server]]
+- [[https://nimble.directory/pkg/hcparse][nimble package]]
+
 * Overview
 
 
 This readme provides high-level overview of libclang library and
-several helper functions. For reference manual on the libclang API see
-<link>.
+several helper functions. For comprehensive list of all available
+functions with documentation see [[https://haxscramper.github.io/hcparse-doc/src/hcparse/libclang.html][libclang API wrapper documentation]]
+and [[https://haxscramper.github.io/hcparse-doc/src/hcparse/libclang_utils.html][utils documentation]]
 
 # Documentation for helper functions <here> provided on top of raw libclang bindings.
 

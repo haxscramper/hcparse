@@ -10,7 +10,6 @@ import bitops, strformat, macros, terminal, sugar, std/decls, strutils,
        sequtils, options, os, re
 
 import hpprint, hpprint/hpprint_repr
-import hparse/tscanf
 import hmisc/other/hshell
 import hnimast
 import nimtraits
@@ -1192,7 +1191,7 @@ proc getDepFiles*(deps: seq[CXCursor]): seq[string] =
 
     result.add file
     # echo &"in {file}:{line}:{column}"
- 
+
   result = result.deduplicate()
 
 
@@ -1287,7 +1286,6 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig): tuple[
 
 when isMainModule:
   import hpprint
-  echo tscanf("<", "$*<")
   pprint (parseBuildDepsTree """
 <zzz> /tmp/zzz
 {

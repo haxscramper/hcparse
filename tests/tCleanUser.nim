@@ -95,7 +95,7 @@ suite "Declaration mapping":
     let unit = parseTranslationUnit(index, tmpfile)
     let curs = getTranslationUnitCursor(unit)
 
-    result = unit.splitDeclarations()
+    result = unit.splitDeclarations().decls
     # echo "split decls"
 
   macro assertItPPrint(head, body: untyped): untyped =
