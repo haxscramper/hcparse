@@ -1304,3 +1304,68 @@ when isMainModule:
   }
 }
 """), maxwidth = 100
+
+#*************************************************************************#
+#********************  Dependency graph construction  ********************#
+#*************************************************************************#
+import gram, tables
+
+const HeaderGraphFlags = toInt({
+  Directed, ValueIndex, UniqueEdges, UniqueNodes})
+
+type
+  IncludeDep* = object
+    # TODO use it as edge value
+    includedAs*: string
+    includedPath*: string
+    includedFrom*: string
+
+  ParsedFile* = object
+    unit*: CXTranslationUnit ## Translation unit
+    filename*: string ## Name of the origina file
+    api*: CApiUnit ## File's API
+    index*: CXIndex
+    explicitDeps*: seq[string] ## Filenames in which types exposed in
+    ## API are declared. Guaranteed to have every file listed once &
+    ## no self-dependencies.
+
+  HeaderDepGraph* = Graph[string, bool, HeaderGraphFlags]
+
+  ParseConfiguration* = object
+    globalPaths*: seq[string]
+    fileFlags*: Table[string, seq[string]]
+
+
+  FileIndex* = object
+    index*: Table[string, ParsedFile]
+    depGraph*: HeaderDepGraph
+
+
+func getFlags*(config: ParseConfiguration, file: string): seq[string] =
+  for path in config.globalPaths:
+    result.add path.addPrefix("-I")
+
+  result.add config.fileFlags.getOrDefault(file)
+
+proc parseFile*(file: string, config: ParseConfiguration): ParsedFile =
+  let flags = config.getFlags(file)
+  result.index = createIndex()
+  result.unit = parseTranslationUnit(
+    result.index, file, flags, {tufSkipFunctionBodies})
+
+  result.api = result.unit.splitDeclarations()
+  result.explicitDeps = result.api.publicApi.
+    getDepFiles().filterIt(it != file)
+
+proc parseAll*(files: seq[string], conf: ParseConfiguration): FileIndex =
+  for file in files:
+    result.index[file] = parseFile(file, conf)
+
+  result.depGraph = newGraph[string, bool](HeaderGraphFlags)
+
+  for file, parsed in result.index:
+    for dep in parsed.explicitDeps:
+      discard result.depGraph.add(file)
+      discard result.depGraph.add(dep)
+      discard result.depGraph.edge(
+        result.depGraph[file], true, result.depGraph[dep])

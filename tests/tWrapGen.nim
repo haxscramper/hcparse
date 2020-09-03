@@ -2,106 +2,20 @@ import sugar, strutils, sequtils, strformat, os
 
 import hcparse/libclang
 import std/decls
-import hmisc/helpers
 import hpprint, hnimast, hpprint/hpprint_repr
 
 import unittest, macros
 import compiler/ast, options
-import hmisc/hexceptions
 
 import unittest
-import logging
-import hmisc/other/hshell
 
-macro err(args: varargs[untyped]): untyped =
-  result = newCall(newDotExpr(ident "logging", ident "error"))
-  for arg in args:
-    result.add arg
-
-macro kvCall(head, nodes: untyped): untyped =
-  result = newCall(head)
-  for node in nodes:
-    node.assertNodeKind({nnkCall})
-    node[1].assertNodeKind({nnkStmtList})
-    result.add nnkExprEqExpr.newTree(node[0], node[1][0])
-
-macro varargsCall(head, nodes: untyped): untyped =
-  result = newCall(head)
-  for node in nodes:
-    result.add node
-
-macro stringKvTable(nodes: untyped): untyped =
-  result = nnkTableConstr.newTree()
-  for node in nodes:
-    node.assertNodeKind({nnkCall, nnkStrLit})
-    var val = node[1][0]
-    if val.kind == nnkTripleStrLit:
-      val.strVal = val.strVal.dedent()
-
-    result.add nnkExprColonExpr.newTree(
-      newLit node[0].strVal(), val)
+import hmisc/macros/kv_transform
+import hmisc/algo/make_rst
+import hmisc/[hexceptions, helpers]
+import hmisc/other/[hshell, colorlogger]
 
 
-macro passKVargs(head: untyped, args: varargs[untyped]): untyped =
-  result = newCall(head)
-  head.assertNodeKind({nnkIdent})
-  for arg in args:
-    arg.assertNodeKind({nnkIdent})
-    result.add nnkExprEqExpr.newTree(arg, arg)
-
-
-type
-  ColorLogger = ref object of Logger
-    ident: int
-
-proc identLog =
-  for handler in getHandlers():
-    if ColorLogger(handler) != nil:
-      inc ColorLogger(handler).ident
-
-proc dedentLog =
-  for handler in getHandlers():
-    if ColorLogger(handler) != nil:
-      dec ColorLogger(handler).ident
-
-method log(logger: ColorLogger, level: Level, args: varargs[string, `$`]) =
-  let ident = "  ".repeat(logger.ident)
-  let prefix =
-    case level:
-      of lvlDebug: "DEBUG"
-      of lvlInfo: "\e[94mINFO\e[39m"
-      of lvlNotice: "\e[32mNOTICE\e[39m"
-      of lvlWarn: "\e[33mWARN\e[39m"
-      of lvlError: "\e[31mERROR\e[39m"
-      of lvlFatal: "\e[1m\e[35mFATAL\e[39m\e[21m"
-      of lvlAll: "ALL"
-      of lvlNone: ""
-
-  echo ident, prefix, " ", args.join(" ")
-
-var logger = ColorLogger(ident: 2)
-addHandler logger
-
-func makeRstCodeBlock*(str: string, lang: string = "nim"): string =
-  let str = str.split("\n").mapIt("    " & it).joinl()
-  &"""
-.. code-block:: {lang}
-{str}
-"""
-
-func makeRstSection*(body, header: string, level: int): string =
-  &"""
-{"#".repeat(level)} {header}
-
-{body}
-"""
-
-func makeRstSection*(
-  level: int, header: string, body: varargs[string]): string =
-  makeRstSection(body.join("\n\n"), header, level)
-
-func makeRstList*(elems: seq[string], ident: int = 0): string =
-  elems.mapIt("  ".repeat(ident) & it).joinl()
+startColorLogging()
 
 
 
@@ -137,7 +51,8 @@ proc compileRunNim(nimfile, wrapfile, stdout: string,
   let binfile = nimfile & ".bin"
   block:
     let command = &"nim cpp -o:{binfile} \"{nimfile}\""
-    info &"Compiling nim file '{command}'"
+    info &"Compiling nim file"
+    debug nimfile
 
     let (stdout, err, code) = runShell(command, doRaise = false)
     if code != 0:
@@ -395,7 +310,7 @@ proc inferapi(
       "C++ code", 2),
     wrapsection.makeRstSection(
       "Nim wrappers generated for all dependent files", 2),
-    nim.dedent().makeRstCodeBlock("nim").makeRstSection(
+    nimfile.readFile().makeRstCodeBlock("nim").makeRstSection(
       "Code using wrapper", 2),
     runres.outstr.makeRstCodeBlock("").makeRstSection(
       "Execution result", 2)
@@ -429,6 +344,48 @@ suite "Public API inference":
             class D { public: int d; };
             """
 
+  test "Multiple dependencies":
+    kvCall inferapi:
+      name: "Multiple dependencies"
+      nim:
+        """
+        var q: Q
+        echo typeof q.dep1.i
+        echo q.dep2.i
+        """
+      cpp:
+        """
+        // Internal implementation dependency
+        #include "header0.hpp"
+
+        // External API dendendencies
+        #include "header1.hpp"
+        #include "header2.hpp"
+
+        class Q { D0 dep0; public: D1 dep1; D2 dep2; };
+        """
+      deps:
+        stringKvTable:
+          "header0.hpp":
+            """
+            #pragma once
+
+            class D0 { public: int i; };
+            """
+
+          "header1.hpp":
+            """
+            #pragma once
+
+            class D1 { public: int i; };
+            """
+
+          "header2.hpp":
+            """
+            #pragma once
+
+            class D2 { public: int i; };
+            """
 
 let file = currentSourcePath().splitFile().dir /../
   "wrap-examples.rst"
@@ -441,4 +398,4 @@ from unit tests. You can view source code for tests
 
 file.writeFile(convertExamples.join("\n\n"))
 echo "Unit test finished. Examples were written to ", file
-discard runShell(&"nim rst2html -o:{file}.html {file}")
+echo runShell(&"nim rst2html -o:{file}.html {file}").stdout
