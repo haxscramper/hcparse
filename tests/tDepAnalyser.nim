@@ -35,6 +35,10 @@ proc makeDepGraph(
 
   var parsed = files.mapIt(dirname / it.file).parseAll(conf)
 
+  let graph = parsed.dotRepr()
+  graph.toPng(dirname / "parsed.png")
+
+  wrapResults.add makeRstImage(dirname / "parsed.png")
 
 
 #================================  tests  ================================#
@@ -47,11 +51,33 @@ suite "CPP dependency analysis graph":
       name: "Two level dependency"
       files:
         stringKvTable:
+          "common.hpp":
+            """
+            struct Aux { int hello; };
+            """
+
           "dep1.hpp": "class D1 {};"
+
+          "dep2.hpp":
+            """
+            #include "dep2-1.hpp"
+            #include "common.hpp"
+            class D2 { public: D2_1 dep2_1; };
+            Aux impl() {}
+            """
+
+          "dep2-1.hpp":
+            """
+            #include "common.hpp"
+            class D2_1 {};
+            Aux impl2() {}
+            """
+
           "main.hpp":
             """
             #include "dep1.hpp"
-            class Main { public: D1 dep1; };
+            #include "dep2.hpp"
+            class Main { public: D1 dep1; D2 dep2; };
             """
 
 

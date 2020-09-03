@@ -7,7 +7,7 @@ when not defined(libclangIncludeUtils):
 
 #==============================  includes  ===============================#
 import bitops, strformat, macros, terminal, sugar, std/decls, strutils,
-       sequtils, options, os, re
+       sequtils, options, os, re, hashes
 
 import hpprint, hpprint/hpprint_repr
 import hmisc/other/hshell
@@ -974,7 +974,9 @@ proc getPublicAPI*(cd: CDecl): seq[CXCursor] =
       else:
         return @[]
     of cdkFunction, cdkMethod:
-      let exportd = (cd.kind == cdkFunction) or (cd.accs() == asPublic)
+      let exportd: bool = (cd.kind == cdkFunction) or
+        (cd.accs() == asPublic)
+
       if exportd:
         result.add cd.cursor
         for arg in cd.args:
@@ -1024,6 +1026,7 @@ proc visitMethod(cursor: CXCursor, accs: CX_CXXAccessSpecifier): CDecl =
   result.accs = accs
   result.args = cursor.getArguments()
 
+
 proc visitField(cursor: CXCursor, accs: CX_CXXAccessSpecifier): CDecl =
   result = CDecl(kind: cdkField, cursor: cursor)
   result.name = $cursor
@@ -1054,6 +1057,11 @@ proc visitClass(cursor: CXCursor, parent: seq[string]): CDecl =
         echo "IMPLEMENT: ", ($subn.cxKind).toRed(), " ", subn
         discard
 
+proc visitFunction(cursor: CXCursor, parent: seq[string]): CDecl =
+  result = CDecl(kind: cdkFunction, cursor: cursor, namespace: parent)
+  result.name = $cursor
+  result.args = cursor.getArguments()
+
 
 proc visitCursor(cursor: CXCursor, parent: seq[string]): tuple[
   decls: seq[CDecl], recurse: bool]
@@ -1072,6 +1080,8 @@ proc visitCursor(cursor: CXCursor, parent: seq[string]): tuple[
       visitNamespace(cursor, parent)
     of ckClassDecl, ckClassTemplate, ckClassTemplatePartialSpecialization:
       @[ visitClass(cursor, parent) ]
+    of ckFunctionDecl:
+      @[ visitFunction(cursor, parent) ]
     else:
       # echo "recursing on: ", cursor.cxKind
       result.recurse = true
@@ -1182,15 +1192,16 @@ proc getDepFiles*(deps: seq[CXCursor]): seq[string] =
   ## Generate list of files that have to be wrapped
   # TODO:DOC
   for dep in deps:
-    # echo "found dependency ", dep, " of kind ", dep.cxKind,
-    #  " type kind ", dep.cxType.cxKind
+    let decl: CXCursor =
+      case dep.cxKind:
+        of ckFunctionDecl:
+          dep.retType().getTypeDeclaration()
+        else:
+          dep.cxType.getTypeDeclaration()
 
-    let decl: CXCursor = dep.cxType.getTypeDeclaration()
-    # echo "declared as ", decl.cxKind()
     let (file, line, column, _) = decl.getSpellingLocation()
 
     result.add file
-    # echo &"in {file}:{line}:{column}"
 
   result = result.deduplicate()
 
@@ -1369,3 +1380,16 @@ proc parseAll*(files: seq[string], conf: ParseConfiguration): FileIndex =
       discard result.depGraph.add(dep)
       discard result.depGraph.edge(
         result.depGraph[file], true, result.depGraph[dep])
+
+
+import hasts/graphviz_ast
+export toPng
+
+func dotRepr*(idx: FileIndex): graphviz_ast.Graph =
+  result.styleNode = makeRectConsolasNode()
+
+  for file in idx.depGraph.nodes:
+    result.addNode(makeNode(hash file.value, file.value))
+
+  for (source, _, target) in idx.depGraph.edges:
+    result.addEdge makeEdge(hash source.value, hash target.value)
