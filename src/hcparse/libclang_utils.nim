@@ -1393,3 +1393,9 @@ func dotRepr*(idx: FileIndex): graphviz_ast.Graph =
 
   for (source, _, target) in idx.depGraph.edges:
     result.addEdge makeEdge(hash source.value, hash target.value)
+
+func getDepModules*(file: string, idx: FileIndex): seq[string] =
+  ## Get list of modules that have to be imported in wrapper for file
+  ## `file`.
+  for dep in idx.depGraph[file].outgoing():
+    result.add dep.node.value

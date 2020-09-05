@@ -27,7 +27,6 @@ proc makeDepGraph(
     section.add makeRstSection(
       2, file, content.makeRstCodeBlock("c++")) & "\n"
 
-  wrapResults.add makeRstSection(1, name, section)
 
   var conf = ParseConfiguration(
     globalPaths: @[dirname]
@@ -36,9 +35,12 @@ proc makeDepGraph(
   var parsed = files.mapIt(dirname / it.file).parseAll(conf)
 
   let graph = parsed.dotRepr()
-  graph.toPng(dirname / "parsed.png")
+  let name = name.dashedWords() & ".png"
+  graph.toPng(dirname / name)
 
-  wrapResults.add makeRstImage(dirname / "parsed.png")
+  section.add makeRstSection(2, name, makeRstImage(dirname / name))
+
+  wrapResults.add makeRstSection(1, name, section)
 
 
 #================================  tests  ================================#
