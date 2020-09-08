@@ -688,7 +688,9 @@ proc lispRepr*(cxtype: CXType): string =
   cxtype.objTreeRepr().lispRepr()
 
 
-proc objTreeRepr*(cursor: CXCursor, tu: CXTranslationUnit): ObjTree =
+proc objTreeRepr*(
+  cursor: CXCursor, tu: CXTranslationUnit,
+  showtype: bool = true): ObjTree =
   ## Generate ObjTree representation of cursor
   const colorize = not defined(plainStdout)
   let ctype = pptConst(
@@ -697,24 +699,31 @@ proc objTreeRepr*(cursor: CXCursor, tu: CXTranslationUnit): ObjTree =
                      style = {styleItalic, styleDim}))
 
   if cursor.len  == 0:
-    pptObj($cursor.cxkind,
-           initPrintStyling(fg = fgYellow),
-           ctype,
-           pptConst(
-             cursor.tokens(tu).join(" "), initPrintStyling(fg = fgGreen)))
+    let val = pptConst(
+      cursor.tokens(tu).join(" "), initPrintStyling(fg = fgGreen))
+    let flds = if showtype: @[ctype, val] else: @[val]
+
+    pptObj($cursor.cxkind, initPrintStyling(fg = fgYellow), flds)
   else:
     pptObj(
       ($cursor.cxkind).toMagenta(colorize) & " " & $cursor,
-      @[ctype] & toSeq(cursor.children).mapIt(it.objTreeRepr(tu))
+      showtype.tern(@[ctype], @[]) &
+        toSeq(cursor.children).mapIt(it.objTreeRepr(tu, showtype))
     )
 
 
-proc treeRepr*(cursor: CXCursor, tu: CXTranslationUnit): string =
+proc treeRepr*(cursor: CXCursor, tu: CXTranslationUnit,
+               showtype: bool = true): string =
   ## Generate pretty-printed tree representation of cursor.
-  cursor.objTreeRepr(tu).treeRepr()
+  cursor.objTreeRepr(tu, showtype).treeRepr()
 
 
-proc objTreeRepr*(cursor: CXCursor): ObjTree =
+proc lispRepr*(cursor: CXCursor, tu: CXTranslationUnit,
+               showtype: bool = true): string =
+  ## Generate pretty-printed tree representation of cursor.
+  cursor.objTreeRepr(tu, showtype).lispRepr()
+
+proc objTreeRepr*(cursor: CXCursor, showtype: bool = true): ObjTree =
   ## Generate ObjTree representation of cursor
   const colorize = not defined(plainStdout)
   let ctype = pptConst(
@@ -723,17 +732,22 @@ proc objTreeRepr*(cursor: CXCursor): ObjTree =
                      style = {styleItalic, styleDim}))
 
   if cursor.len  == 0:
-    pptObj($cursor.cxkind, initPrintStyling(fg = fgYellow), ctype)
+    if showType:
+      pptObj($cursor.cxkind, initPrintStyling(fg = fgYellow),
+             ctype, pptConst($cursor))
+    else:
+      pptConst($cursor.cxKind)
   else:
     pptObj(
       ($cursor.cxkind).toMagenta(colorize) & " " & $cursor,
-      @[ctype] & toSeq(cursor.children).mapIt(it.objTreeRepr())
+      showtype.tern(@[ctype], @[]) &
+        toSeq(cursor.children).mapIt(it.objTreeRepr(showtype))
     )
 
 
-proc treeRepr*(cursor: CXCursor): string =
+proc treeRepr*(cursor: CXCursor, showtype: bool = true): string =
   ## Generate pretty-printed tree representation of cursor.
-  cursor.objTreeRepr().treeRepr()
+  cursor.objTreeRepr(showtype).treeRepr()
 
 
 #===========================  Type conversion  ===========================#
@@ -745,10 +759,10 @@ type
     makeHeader*: proc(conf: WrapConfig): PNode ## Genreate identifier for
     ## `{.header: ... .}`
     makeTypeName*: proc(
-      cxtype: CXType, conf: WrapConfig): NType[PNode] ## Create nim
-    ## type for type name referred to by `cxtype`. This is only called
-    ## for elements inside namespaces, objects and similar things.
-    ## Mostly used for making comprehensibe names from
+      cursor: CXCursor, conf: WrapConfig): NType[PNode] ## Create nim
+    ## type for entity at `cursor`. Mostly called for elements inside
+    ## namespaces, objects and similar things. Should be used for
+    ## making comprehensibe names from
     ## `boost::wave::macro_handling_exception::bad_include_file`
 
 proc fromElaboratedPType*(cxtype: CXType): NType[PNode] =
@@ -779,7 +793,6 @@ proc toNType*(
   ## - For C types with elaborated specifier (e.g. `enum E` instead of
   ##   simply `E`) specifiers are simply dropped.
   var mutable: bool = false
-  warn $cxtype
   let restype = case cxtype.cxKind:
     of tkBool: newPType("bool")
     of tkInt: newPType("int")
@@ -791,7 +804,7 @@ proc toNType*(
     of tkULong: newPType("culong")
     of tkTypedef: newPType(($cxtype).dropPrefix("const ")) # XXXX typedef processing -
     of tkElaborated, tkRecord, tkEnum:
-      conf.makeTypeName(cxtype, conf)
+      fromElaboratedPType(cxtype)
     of tkPointer:
       case cxtype[].cxkind:
         of tkChar_S:
@@ -835,11 +848,77 @@ proc toNType*(
   result.ntype = restype
   result.mutable = mutable
 
+
+
+proc fixIdentName(str: string): string =
+  result = if str[0].isLowerAscii():
+    str
+  else:
+    str[0].toLowerAscii() & str[1..^1]
+
+  result = case result:
+    of "set": "cxset"
+    of "type": "cxtype"
+    of "range": "cxrange"
+    of "string": "cxstring"
+    of "begin": "cxbegin"
+    of "end": "cxend"
+    else: result
+
+proc dropPOD*(cxtype: CXType): string =
+  case cxtype.cxKind:
+    of tkElaborated:
+      cxtype.fromElaboratedPType().head
+    of tkPointer:
+      cxtype[].dropPOD()
+    of tkTypedef:
+      ($cxtype).dropPrefix("const ")
+    else:
+      ""
+
+
+
+proc toNType*(
+  curs: CXCursor,
+  conf: WrapConfig): tuple[ntype: NType[PNode], mutable: bool]
+
+proc toPIdentDefs*(cursor: CXCursor, conf: WrapConfig): PIdentDefs =
+  result.varname = $cursor
+  if result.varname.len == 0:
+    result.varname = "arg" & $cursor.cxType().dropPOD()
+
+  result.varname = result.varname.fixIdentName()
+
+  let (ctype, mutable) = cursor.toNType(conf)
+  result.vtype = ctype
+  if mutable:
+    result.kind = nvdVar
+
+
 proc toNType*(
   curs: CXCursor,
   conf: WrapConfig): tuple[ntype: NType[PNode], mutable: bool] =
+  case curs.cxKind:
+    of ckCXXMethod:
+      result.ntype = newProcNType[PNode](@[])
 
-  echo curs.treeRepr(conf.unit)
+      var retCursors: seq[CXCursor]
+      for ch in curs:
+        if ch.kind == ckParmDecl:
+          result.ntype.arguments.add ch.toPIdentDefs(conf)
+        else:
+          retCursors.add ch
+
+    of ckParmDecl:
+      case curs.cxType.cxKind:
+        of tkInt:
+          result.ntype = curs.cxType.toNType(conf).ntype
+        else:
+          result.ntype = conf.makeTypeName(curs, conf)
+    else:
+      err curs.treeRepr(conf.unit)
+      raiseAssert(
+        &"Cannot convert cursor of kind {curs.cxKind} to type")
 
 
 
@@ -937,46 +1016,6 @@ func getNimName*(cd: CDecl): string =
 
 
 #======================  Converting to nim entries  ======================#
-
-proc fixIdentName(str: string): string =
-  result = if str[0].isLowerAscii():
-    str
-  else:
-    str[0].toLowerAscii() & str[1..^1]
-
-  result = case result:
-    of "set": "cxset"
-    of "type": "cxtype"
-    of "range": "cxrange"
-    of "string": "cxstring"
-    of "begin": "cxbegin"
-    of "end": "cxend"
-    else: result
-
-
-
-proc dropPOD*(cxtype: CXType): string =
-  case cxtype.cxKind:
-    of tkElaborated:
-      cxtype.fromElaboratedPType().head
-    of tkPointer:
-      cxtype[].dropPOD()
-    of tkTypedef:
-      ($cxtype).dropPrefix("const ")
-    else:
-      ""
-
-proc toPIdentDefs*(cursor: CXCursor, conf: WrapConfig): PIdentDefs =
-  result.varname = $cursor
-  if result.varname.len == 0:
-    result.varname = "arg" & $cursor.cxType().dropPOD()
-
-  result.varname = result.varname.fixIdentName()
-
-  let (ctype, mutable) = cursor.toNType(conf)
-  result.vtype = ctype
-  if mutable:
-    result.kind = nvdVar
 
 proc convertCFunction*(cursor: CXCursor, conf: WrapConfig): ProcDecl[PNode] =
   cursor.expectKind(ckFunctionDecl)
@@ -1262,7 +1301,7 @@ proc wrapMethods*(
       it.name = meth.getNimName()
       it.genParams = parent.genParams
 
-      it.signature = newProcNType[PNode](@[])
+      it.signature = meth.cursor.toNType(conf).ntype
       it.exported = (meth.accs == asPublic)
 
       let addThis =
@@ -1295,20 +1334,21 @@ proc wrapMethods*(
           true
 
       if addThis:
-        it.signature.arguments.add PIdentDefs(
+        it.signature.arguments = PIdentDefs(
           varname: "self",
           vtype: parent,
           kind: meth.cursor.isConstMethod.tern(nvdVar, nvdLet)
-        )
+        ) & it.signature.arguments
 
-      for arg in meth.args:
-        let (vtype, mutable) = arg.cursor.toNType(conf)
-        it.signature.arguments.add PIdentDefs(
-          varname: arg.name,
-          vtype: vtype,
-          kind: mutable.tern(nvdVar, nvdLet))
+      # for arg in meth.args:
+      #   let (vtype, mutable) = arg.cursor.toNType(conf)
+      #   it.signature.arguments.add PIdentDefs(
+      #     varname: arg.name,
+      #     vtype: vtype,
+      #     kind: mutable.tern(nvdVar, nvdLet))
 
-      it.signature.setRtype toNType(meth.cursor.retType(), conf).ntype
+      # debug meth.cursor.treeRepr(conf.unit)
+      # it.signature.setRtype toNType(meth.cursor.retType(), conf).ntype
 
 
     result.add procdef
