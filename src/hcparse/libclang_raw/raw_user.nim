@@ -438,7 +438,7 @@ proc toNType*(cxtype: CXType): NType[PNode] =
   # echo cxtype.objTreeRepr().treeRepr()
   result = case cxtype.cxKind:
     of CXType_Bool: newPType("bool")
-    of CXType_Int: newPType("int")
+    of CXType_Int: newPType("cint")
     # of CXType_Record: newPType()
     of CXType_Void: newPType("void")
     of CXType_UInt: newPType("cuint")

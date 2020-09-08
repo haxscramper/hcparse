@@ -152,9 +152,9 @@ type
                    ##  an error.
 type
   CXVersion* {.pure, bycopy.} = object
-    major*: int
-    minor*: int
-    subminor*: int
+    major*: cint
+    minor*: cint
+    subminor*: cint
 
 type
   CXCursor_ExceptionSpecificationKind* = enum ##  Describes the exception specification of a cursor.
@@ -169,7 +169,7 @@ type
     ceskUninstantiated,       ##  The exception specification has not yet been instantiated.
     ceskUnparsed,             ##  The exception specification has not been parsed yet.
     ceskNoThrow               ##  The cursor has a __declspec(nothrow) exception specification.
-proc createIndex*(excludeDeclarationsFromPCH: int; displayDiagnostics: int): CXIndex {.
+proc createIndex*(excludeDeclarationsFromPCH: cint; displayDiagnostics: cint): CXIndex {.
     cdecl, dynlib: libclang, importc: "clang_createIndex".}
   ##  Provides a shared context for creating translation units.
   ##  It provides two options:
@@ -233,7 +233,7 @@ type
   CXFileUniqueID* {.pure, bycopy.} = object
     data*: array[3, culonglong]
 
-proc getFileUniqueID*(file: CXFile; outID: ptr[CXFileUniqueID]): int {.cdecl,
+proc getFileUniqueID*(file: CXFile; outID: ptr[CXFileUniqueID]): cint {.cdecl,
     dynlib: libclang, importc: "clang_getFileUniqueID".}
   ##  Retrieve the unique ID for the given 
   ## **file**
@@ -265,9 +265,9 @@ proc getFile*(tu: CXTranslationUnit; file_name: cstring): CXFile {.cdecl,
   ## **
   ##  the file handle for the named file in the translation unit 
   ##  or a NULL file handle if the file was not a part of this translation unit.
-proc getFileContents*(tu: CXTranslationUnit; file: CXFile; size: ptr[int]): cstring {.
+proc getFileContents*(tu: CXTranslationUnit; file: CXFile; size: ptr[cint]): cstring {.
     cdecl, dynlib: libclang, importc: "clang_getFileContents".}
-proc isEqual*(file1: CXFile; file2: CXFile): int {.cdecl, dynlib: libclang,
+proc isEqual*(file1: CXFile; file2: CXFile): cint {.cdecl, dynlib: libclang,
     importc: "clang_File_isEqual".}
   ##  Returns non-zero if the 
   ##  and 
@@ -308,10 +308,10 @@ proc getLocationForOffset*(tu: CXTranslationUnit; file: CXFile; offset: cuint): 
     cdecl, dynlib: libclang, importc: "clang_getLocationForOffset".}
   ##  Retrieves the source location associated with a given character offset
   ##  in a particular translation unit.
-proc location_isInSystemHeader*(location: CXSourceLocation): int {.cdecl,
+proc location_isInSystemHeader*(location: CXSourceLocation): cint {.cdecl,
     dynlib: libclang, importc: "clang_Location_isInSystemHeader".}
   ##  Returns non-zero if the given source location is in a system header.
-proc location_isFromMainFile*(location: CXSourceLocation): int {.cdecl,
+proc location_isFromMainFile*(location: CXSourceLocation): cint {.cdecl,
     dynlib: libclang, importc: "clang_Location_isFromMainFile".}
   ##  Returns non-zero if the given source location is in the main file of
   ##  the corresponding translation unit.
@@ -327,7 +327,7 @@ proc equalRanges*(range1: CXSourceRange; range2: CXSourceRange): cuint {.cdecl,
   ##  Determine whether two ranges are equivalent.
   ## **
   ##  non-zero if the ranges are the same, zero if they differ.
-proc range_isNull*(cxrange: CXSourceRange): int {.cdecl, dynlib: libclang,
+proc range_isNull*(cxrange: CXSourceRange): cint {.cdecl, dynlib: libclang,
     importc: "clang_Range_isNull".}
   ##  Returns non-zero if 
   ##  is null.
@@ -690,7 +690,7 @@ proc getTranslationUnitSpelling*(cTUnit: CXTranslationUnit): CXString {.cdecl,
     dynlib: libclang, importc: "clang_getTranslationUnitSpelling".}
   ##  Get the original translation unit source file name.
 proc createTranslationUnitFromSourceFile*(cIdx: CXIndex; source_filename: cstring;
-    num_clang_command_line_args: int; clang_command_line_args: cstringArray;
+    num_clang_command_line_args: cint; clang_command_line_args: cstringArray;
     num_unsaved_files: cuint; unsaved_files: ptr[CXUnsavedFile]): CXTranslationUnit {.
     cdecl, dynlib: libclang, importc: "clang_createTranslationUnitFromSourceFile".}
   ##  Return the CXTranslationUnit for a given source file and the provided
@@ -838,7 +838,7 @@ proc defaultEditingTranslationUnitOptions*(): cuint {.cdecl, dynlib: libclang,
   ##  set of optimizations enabled may change from one version to the next.
 proc parseTranslationUnit*(cIdx: CXIndex; source_filename: cstring;
                           command_line_args: cstringArray;
-                          num_command_line_args: int;
+                          num_command_line_args: cint;
                           unsaved_files: ptr[CXUnsavedFile];
                           num_unsaved_files: cuint; options: cuint): CXTranslationUnit {.
     cdecl, dynlib: libclang, importc: "clang_parseTranslationUnit".}
@@ -851,7 +851,7 @@ proc parseTranslationUnit*(cIdx: CXIndex; source_filename: cstring;
   ##  error codes.
 proc parseTranslationUnit2*(cIdx: CXIndex; source_filename: cstring;
                            command_line_args: cstringArray;
-                           num_command_line_args: int;
+                           num_command_line_args: cint;
                            unsaved_files: ptr[CXUnsavedFile];
                            num_unsaved_files: cuint; options: cuint;
                            out_TU: ptr[CXTranslationUnit]): CXErrorCode {.cdecl,
@@ -900,7 +900,7 @@ proc parseTranslationUnit2*(cIdx: CXIndex; source_filename: cstring;
   ##  Zero on success, otherwise returns an error code.
 proc parseTranslationUnit2FullArgv*(cIdx: CXIndex; source_filename: cstring;
                                    command_line_args: cstringArray;
-                                   num_command_line_args: int;
+                                   num_command_line_args: cint;
                                    unsaved_files: ptr[CXUnsavedFile];
                                    num_unsaved_files: cuint; options: cuint;
                                    out_TU: ptr[CXTranslationUnit]): CXErrorCode {.
@@ -937,7 +937,7 @@ type
                           ##  and 
     seInvalidTU = 3 ##  Indicates that the translation unit to be saved was somehow
                  ##  invalid (e.g., NULL).
-proc saveTranslationUnit*(tU: CXTranslationUnit; fileName: cstring; options: cuint): int {.
+proc saveTranslationUnit*(tU: CXTranslationUnit; fileName: cstring; options: cuint): cint {.
     cdecl, dynlib: libclang, importc: "clang_saveTranslationUnit".}
   ##  Saves a translation unit into a serialized representation of
   ##  that translation unit on disk.
@@ -987,7 +987,7 @@ proc defaultReparseOptions*(tU: CXTranslationUnit): cuint {.cdecl, dynlib: libcl
   ##  of reparsing. The set of optimizations enabled may change from one version
   ##  to the next.
 proc reparseTranslationUnit*(tU: CXTranslationUnit; num_unsaved_files: cuint;
-                            unsaved_files: ptr[CXUnsavedFile]; options: cuint): int {.
+                            unsaved_files: ptr[CXUnsavedFile]; options: cuint): cint {.
     cdecl, dynlib: libclang, importc: "clang_reparseTranslationUnit".}
   ##  Reparse the source files that produced this translation unit.
   ##  This routine can be used to re-parse the source files that originally
@@ -1073,7 +1073,7 @@ proc getTriple*(info: CXTargetInfo): CXString {.cdecl, dynlib: libclang,
     importc: "clang_TargetInfo_getTriple".}
   ##  Get the normalized target triple as a string.
   ##  Returns the empty string in case of any error.
-proc getPointerWidth*(info: CXTargetInfo): int {.cdecl, dynlib: libclang,
+proc getPointerWidth*(info: CXTargetInfo): cint {.cdecl, dynlib: libclang,
     importc: "clang_TargetInfo_getPointerWidth".}
   ##  Get the pointer width of the target in bits.
   ##  Returns -1 in case of error.
@@ -1424,7 +1424,7 @@ type
 type
   CXCursor* {.pure, bycopy.} = object
     kind*: CXCursorKind
-    xdata*: int
+    xdata*: cint
     data*: array[3, pointer]
 
 proc getNullCursor*(): CXCursor {.cdecl, dynlib: libclang,
@@ -1438,8 +1438,8 @@ proc getTranslationUnitCursor*(argCXTranslationUnit: CXTranslationUnit): CXCurso
 proc equalCursors*(argCXCursor: CXCursor; argCXCursor1: CXCursor): cuint {.cdecl,
     dynlib: libclang, importc: "clang_equalCursors".}
   ##  Determine whether two cursors are equivalent.
-proc isNull*(cursor: CXCursor): int {.cdecl, dynlib: libclang,
-                                  importc: "clang_Cursor_isNull".}
+proc isNull*(cursor: CXCursor): cint {.cdecl, dynlib: libclang,
+                                   importc: "clang_Cursor_isNull".}
   ##  Returns non-zero if 
   ##  is null.
 proc hashCursor*(argCXCursor: CXCursor): cuint {.cdecl, dynlib: libclang,
@@ -1539,15 +1539,15 @@ type
     introduced*: CXVersion
     deprecated*: CXVersion
     obsoleted*: CXVersion
-    unavailable*: int
+    unavailable*: cint
     message*: CXString
 
-proc getCursorPlatformAvailability*(cursor: CXCursor; always_deprecated: ptr[int];
+proc getCursorPlatformAvailability*(cursor: CXCursor; always_deprecated: ptr[cint];
                                    deprecated_message: ptr[CXString];
-                                   always_unavailable: ptr[int];
+                                   always_unavailable: ptr[cint];
                                    unavailable_message: ptr[CXString];
                                    availability: ptr[CXPlatformAvailability];
-                                   availability_size: int): int {.cdecl,
+                                   availability_size: cint): cint {.cdecl,
     dynlib: libclang, importc: "clang_getCursorPlatformAvailability".}
   ##  Determine the availability of the entity that this cursor refers to
   ##  on any platforms for which availability information is known.
@@ -1858,12 +1858,12 @@ proc getEnumConstantDeclUnsignedValue*(c: CXCursor): culonglong {.cdecl,
   ##  If the cursor does not reference an enum constant declaration, ULLONG_MAX is returned.
   ##  Since this is also potentially a valid constant value, the kind of the cursor
   ##  must be verified before calling this function.
-proc getFieldDeclBitWidth*(c: CXCursor): int {.cdecl, dynlib: libclang,
+proc getFieldDeclBitWidth*(c: CXCursor): cint {.cdecl, dynlib: libclang,
     importc: "clang_getFieldDeclBitWidth".}
   ##  Retrieve the bit width of a bit field declaration as an integer.
   ##  If a cursor that is not a bit field declaration is passed in, -1 is returned.
-proc getNumArguments*(c: CXCursor): int {.cdecl, dynlib: libclang,
-                                      importc: "clang_Cursor_getNumArguments".}
+proc getNumArguments*(c: CXCursor): cint {.cdecl, dynlib: libclang,
+                                       importc: "clang_Cursor_getNumArguments".}
   ##  Retrieve the number of non-variadic arguments associated with a given
   ##  cursor.
   ##  The number of arguments can be determined for calls as well as for
@@ -1880,7 +1880,7 @@ type
                               ##  element descriptions.
     takNull, takType, takDeclaration, takNullPtr, takIntegral, takTemplate,
     takTemplateExpansion, takExpression, takPack, takInvalid
-proc getNumTemplateArguments*(c: CXCursor): int {.cdecl, dynlib: libclang,
+proc getNumTemplateArguments*(c: CXCursor): cint {.cdecl, dynlib: libclang,
     importc: "clang_Cursor_getNumTemplateArguments".}
   ## Returns the number of template args of a function decl representing a
   ##  template specialization.
@@ -2043,13 +2043,13 @@ proc getResultType*(t: CXType): CXType {.cdecl, dynlib: libclang,
                                      importc: "clang_getResultType".}
   ##  Retrieve the return type associated with a function type.
   ##  If a non-function type is passed in, an invalid type is returned.
-proc getExceptionSpecificationType*(t: CXType): int {.cdecl, dynlib: libclang,
+proc getExceptionSpecificationType*(t: CXType): cint {.cdecl, dynlib: libclang,
     importc: "clang_getExceptionSpecificationType".}
   ##  Retrieve the exception specification type associated with a function type.
   ##  This is a value of type CXCursor_ExceptionSpecificationKind.
   ##  If a non-function type is passed in, an error code of -1 is returned.
-proc getNumArgTypes*(t: CXType): int {.cdecl, dynlib: libclang,
-                                   importc: "clang_getNumArgTypes".}
+proc getNumArgTypes*(t: CXType): cint {.cdecl, dynlib: libclang,
+                                    importc: "clang_getNumArgTypes".}
   ##  Retrieve the number of non-variadic parameters associated with a
   ##  function type.
   ##  If a non-function type is passed in, -1 is returned.
@@ -2087,7 +2087,7 @@ proc getCursorResultType*(c: CXCursor): CXType {.cdecl, dynlib: libclang,
     importc: "clang_getCursorResultType".}
   ##  Retrieve the return type associated with a given cursor.
   ##  This only returns a valid type if the cursor refers to a function or method.
-proc getCursorExceptionSpecificationType*(c: CXCursor): int {.cdecl,
+proc getCursorExceptionSpecificationType*(c: CXCursor): cint {.cdecl,
     dynlib: libclang, importc: "clang_getCursorExceptionSpecificationType".}
   ##  Retrieve the exception specification type associated with a given cursor.
   ##  This is a value of type CXCursor_ExceptionSpecificationKind.
@@ -2215,7 +2215,7 @@ type
     rqkNone = 0,                ##  No ref-qualifier was provided. 
     rqkLValue,                ##  An lvalue ref-qualifier was provided (
     rqkRValue                 ##  An rvalue ref-qualifier was provided (
-proc getNumTemplateArguments*(t: CXType): int {.cdecl, dynlib: libclang,
+proc getNumTemplateArguments*(t: CXType): cint {.cdecl, dynlib: libclang,
     importc: "clang_Type_getNumTemplateArguments".}
   ##  Returns the number of template arguments for given template
   ##  specialization, or -1 if type 
@@ -2467,7 +2467,7 @@ proc getCanonicalCursor*(argCXCursor: CXCursor): CXCursor {.cdecl, dynlib: libcl
   ##  comparing their canonical cursors.
   ## **
   ##  The canonical cursor for the entity referred to by the given cursor.
-proc getObjCSelectorIndex*(argCXCursor: CXCursor): int {.cdecl, dynlib: libclang,
+proc getObjCSelectorIndex*(argCXCursor: CXCursor): cint {.cdecl, dynlib: libclang,
     importc: "clang_Cursor_getObjCSelectorIndex".}
   ##  If the cursor points to a selector identifier in an Objective-C
   ##  method or message expression, this returns the selector index.
@@ -2477,8 +2477,8 @@ proc getObjCSelectorIndex*(argCXCursor: CXCursor): int {.cdecl, dynlib: libclang
   ##  The selector index if the cursor is an Objective-C method or message
   ##  expression and the cursor is pointing to a selector identifier, or -1
   ##  otherwise.
-proc isDynamicCall*(c: CXCursor): int {.cdecl, dynlib: libclang,
-                                    importc: "clang_Cursor_isDynamicCall".}
+proc isDynamicCall*(c: CXCursor): cint {.cdecl, dynlib: libclang,
+                                     importc: "clang_Cursor_isDynamicCall".}
   ##  Given a cursor pointing to a C++ method call or an Objective-C
   ##  message, returns non-zero if the method/message is "dynamic", meaning:
   ##  For a C++ method: the call is virtual.
@@ -2608,8 +2608,8 @@ proc getFullName*(module: CXModule): CXString {.cdecl, dynlib: libclang,
   ##  a module object.
   ## **
   ##  the full name of the module, e.g. "std.vector".
-proc isSystem*(module: CXModule): int {.cdecl, dynlib: libclang,
-                                    importc: "clang_Module_isSystem".}
+proc isSystem*(module: CXModule): cint {.cdecl, dynlib: libclang,
+                                     importc: "clang_Module_isSystem".}
   ## **Module**
   ##  a module object.
   ## **
@@ -3368,8 +3368,8 @@ proc evaluate*(c: CXCursor): CXEvalResult {.cdecl, dynlib: libclang,
 proc getKind*(e: CXEvalResult): CXEvalResultKind {.cdecl, dynlib: libclang,
     importc: "clang_EvalResult_getKind".}
   ##  Returns the kind of the evaluated result.
-proc getAsInt*(e: CXEvalResult): int {.cdecl, dynlib: libclang,
-                                   importc: "clang_EvalResult_getAsInt".}
+proc getAsInt*(e: CXEvalResult): cint {.cdecl, dynlib: libclang,
+                                    importc: "clang_EvalResult_getAsInt".}
   ##  Returns the evaluation result as integer if the
   ##  kind is Int.
 proc getAsLongLong*(e: CXEvalResult): clonglong {.cdecl, dynlib: libclang,
@@ -3497,16 +3497,16 @@ type
     hashLoc*: CXIdxLoc
     filename*: cstring
     file*: CXFile
-    isImport*: int
-    isAngled*: int
-    isModuleImport*: int
+    isImport*: cint
+    isAngled*: cint
+    isModuleImport*: cint
 
 type
   CXIdxImportedASTFileInfo* {.pure, bycopy.} = object
     file*: CXFile
     module*: CXModule
     loc*: CXIdxLoc
-    isImplicit*: int
+    isImplicit*: cint
 
 type
   CXIdxEntityKind* = enum
@@ -3573,11 +3573,11 @@ type
     loc*: CXIdxLoc
     semanticContainer*: ptr[CXIdxContainerInfo]
     lexicalContainer*: ptr[CXIdxContainerInfo]
-    isRedeclaration*: int
-    isDefinition*: int
-    isContainer*: int
+    isRedeclaration*: cint
+    isDefinition*: cint
+    isContainer*: cint
     declAsContainer*: ptr[CXIdxContainerInfo]
-    isImplicit*: int
+    isImplicit*: cint
     attributes*: ptr[ptr[CXIdxAttrInfo]]
     numAttributes*: cuint
     flags*: cuint
@@ -3659,7 +3659,7 @@ type
 
 type
   IndexerCallbacks* {.pure, bycopy.} = object
-    abortQuery*: proc (a0: CXClientData; a1: pointer): int {.cdecl.}
+    abortQuery*: proc (a0: CXClientData; a1: pointer): cint {.cdecl.}
     diagnostic*: proc (a0: CXClientData; a1: CXDiagnosticSet; a2: pointer): void {.cdecl.}
     enteredMainFile*: proc (a0: CXClientData; a1: CXFile; a2: pointer): CXIdxClientFile {.
         cdecl.}
@@ -3673,7 +3673,7 @@ type
     indexEntityReference*: proc (a0: CXClientData; a1: ptr[CXIdxEntityRefInfo]): void {.
         cdecl.}
 
-proc index_isEntityObjCContainerKind*(argCXIdxEntityKind: CXIdxEntityKind): int {.
+proc index_isEntityObjCContainerKind*(argCXIdxEntityKind: CXIdxEntityKind): cint {.
     cdecl, dynlib: libclang, importc: "clang_index_isEntityObjCContainerKind".}
 proc index_getObjCContainerDeclInfo*(argCXIdxDeclInfo: ptr[CXIdxDeclInfo]): ptr[
     CXIdxObjCContainerDeclInfo] {.cdecl, dynlib: libclang, importc: "clang_index_getObjCContainerDeclInfo".}
@@ -3740,10 +3740,10 @@ proc indexSourceFile*(argCXIndexAction: CXIndexAction; client_data: CXClientData
                      index_callbacks: ptr[IndexerCallbacks];
                      index_callbacks_size: cuint; index_options: cuint;
                      source_filename: cstring; command_line_args: cstringArray;
-                     num_command_line_args: int;
+                     num_command_line_args: cint;
                      unsaved_files: ptr[CXUnsavedFile]; num_unsaved_files: cuint;
-                     out_TU: ptr[CXTranslationUnit]; tU_options: cuint): int {.cdecl,
-    dynlib: libclang, importc: "clang_indexSourceFile".}
+                     out_TU: ptr[CXTranslationUnit]; tU_options: cuint): cint {.
+    cdecl, dynlib: libclang, importc: "clang_indexSourceFile".}
   ##  Index the given source file and the translation unit corresponding
   ##  to that file via callbacks implemented through #IndexerCallbacks.
   ## **client_data**
@@ -3774,10 +3774,10 @@ proc indexSourceFileFullArgv*(argCXIndexAction: CXIndexAction;
                              index_callbacks_size: cuint; index_options: cuint;
                              source_filename: cstring;
                              command_line_args: cstringArray;
-                             num_command_line_args: int;
+                             num_command_line_args: cint;
                              unsaved_files: ptr[CXUnsavedFile];
                              num_unsaved_files: cuint;
-                             out_TU: ptr[CXTranslationUnit]; tU_options: cuint): int {.
+                             out_TU: ptr[CXTranslationUnit]; tU_options: cuint): cint {.
     cdecl, dynlib: libclang, importc: "clang_indexSourceFileFullArgv".}
   ##  Same as clang_indexSourceFile but requires a full command line
   ##  for 
@@ -3787,7 +3787,7 @@ proc indexTranslationUnit*(argCXIndexAction: CXIndexAction;
                           client_data: CXClientData;
                           index_callbacks: ptr[IndexerCallbacks];
                           index_callbacks_size: cuint; index_options: cuint;
-                          argCXTranslationUnit: CXTranslationUnit): int {.cdecl,
+                          argCXTranslationUnit: CXTranslationUnit): cint {.cdecl,
     dynlib: libclang, importc: "clang_indexTranslationUnit".}
   ##  Index the given translation unit via callbacks implemented through
   ##  #IndexerCallbacks.

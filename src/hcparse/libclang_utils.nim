@@ -70,7 +70,7 @@ proc createIndex*(
   excludeDeclarations: bool = false,
   showDiagnostics: bool = false): CXIndex =
 
-  createIndex(excludeDeclarations.int, showDiagnostics.int)
+  createIndex(excludeDeclarations.cint, showDiagnostics.cint)
 
 #=====================  Compile commands & database  =====================#
 
@@ -765,12 +765,20 @@ type
     ## making comprehensibe names from
     ## `boost::wave::macro_handling_exception::bad_include_file`
 
+
+proc toNType*(
+  cxtype: CXType,
+  conf: WrapConfig): tuple[ntype: NType[PNode], mutable: bool]
+
 proc fromElaboratedPType*(cxtype: CXType): NType[PNode] =
-  ($cxtype).
+  result = ($cxtype).
     dropPrefix("enum ").
     dropPrefix("struct ").
     dropPrefix("const "). # WARNING
     newPType()
+
+  let genParams = cxtype.getNumTemplateArguments()
+  debug genParams, result
 
 
 proc toNType*(
@@ -1301,7 +1309,8 @@ proc wrapMethods*(
       it.name = meth.getNimName()
       it.genParams = parent.genParams
 
-      it.signature = meth.cursor.toNType(conf).ntype
+      it.signature = newProcNType[PNode](@[])
+      # it.signature = meth.cursor.toNType(conf).ntype
       it.exported = (meth.accs == asPublic)
 
       let addThis =
@@ -1334,21 +1343,27 @@ proc wrapMethods*(
           true
 
       if addThis:
-        it.signature.arguments = PIdentDefs(
+        it.signature.arguments.add PIdentDefs(
           varname: "self",
           vtype: parent,
           kind: meth.cursor.isConstMethod.tern(nvdVar, nvdLet)
-        ) & it.signature.arguments
+        )
 
-      # for arg in meth.args:
-      #   let (vtype, mutable) = arg.cursor.toNType(conf)
-      #   it.signature.arguments.add PIdentDefs(
-      #     varname: arg.name,
-      #     vtype: vtype,
-      #     kind: mutable.tern(nvdVar, nvdLet))
+        # it.signature.arguments = PIdentDefs(
+        #   varname: "self",
+        #   vtype: parent,
+        #   kind: meth.cursor.isConstMethod.tern(nvdVar, nvdLet)
+        # ) & it.signature.arguments
+
+      for arg in meth.args:
+        let (vtype, mutable) = arg.cursor.cxType().toNType(conf)
+        it.signature.arguments.add PIdentDefs(
+          varname: arg.name,
+          vtype: vtype,
+          kind: mutable.tern(nvdVar, nvdLet))
 
       # debug meth.cursor.treeRepr(conf.unit)
-      # it.signature.setRtype toNType(meth.cursor.retType(), conf).ntype
+      it.signature.setRtype toNType(meth.cursor.retType(), conf).ntype
 
 
     result.add procdef
