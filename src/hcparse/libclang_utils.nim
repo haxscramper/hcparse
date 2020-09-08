@@ -10,7 +10,7 @@ import bitops, strformat, macros, terminal, sugar, std/decls, strutils,
        sequtils, options, os, re, hashes
 
 import hpprint, hpprint/hpprint_repr
-import hmisc/other/hshell
+import hmisc/other/[hshell, colorlogger]
 import hnimast
 import nimtraits
 import hmisc/types/colorstring
@@ -674,94 +674,6 @@ proc nthArg*(cxtype: CXType, idx: int): CXType =
   assert idx < cxtype.argc()
   getArgType(cxtype, cuint(idx))
 
-#===========================  Type conversion  ===========================#
-
-
-proc fromElaboratedPType*(cxtype: CXType): NType[PNode] =
-  ($cxtype).
-    dropPrefix("enum ").
-    dropPrefix("struct ").
-    dropPrefix("const "). # WARNING
-    newPType()
-
-
-proc toNType*(cxtype: CXType): tuple[ntype: NType[PNode], mutable: bool] =
-  ## Convert CXType to nim type. Due to differences in how mutability
-  ## handled in nim and C it is not entirely possible to map `CXType`
-  ## to `NType` without losing this information. Instead `mutable` is
-  ## returned, indicating whether or not the type was mutable.
-  ## Conversion is performed as follows
-  ##
-  ## - `T&` is considered mutable and mapped to `var T`
-  ## - Any kind of pointer is mapped to immutable since it is not possible
-  ##   infer this information from C type anyway.
-  ## - Function prototype is mapped to `{.cdecl.}` proc type
-  ## - 'special' types are mapped
-  ##   - `char*` -> `cstring`
-  ##   - `char**` -> `cstringArray`
-  ##   - `void*` -> `pointer`
-  ## - For C types with elaborated specifier (e.g. `enum E` instead of
-  ##   simply `E`) specifiers are simply dropped.
-  var mutable: bool = false
-  let restype = case cxtype.cxKind:
-    of tkBool: newPType("bool")
-    of tkInt: newPType("int")
-    of tkVoid: newPType("void")
-    of tkUInt: newPType("cuint")
-    of tkLongLong: newPType("clonglong")
-    of tkULongLong: newPType("culonglong")
-    of tkDouble: newPType("cdouble")
-    of tkULong: newPType("culong")
-    of tkTypedef: newPType(($cxtype).dropPrefix("const ")) # XXXX typedef processing -
-    of tkElaborated, tkRecord, tkEnum:
-      fromElaboratedPType(cxtype)
-    of tkPointer:
-      case cxtype[].cxkind:
-        of tkChar_S:
-          newPType("cstring")
-        of tkPointer:
-          if cxtype[][].cxKind() == tkChar_S:
-            newPType("cstringArray")
-          else:
-            newNType("ptr", [toNType(cxtype[]).ntype])
-        of tkVoid:
-          newPType("pointer")
-        of tkFunctionProto:
-          let (t, mut) = toNType(cxtype[])
-          t
-        else:
-          newNType("ptr", [toNType(cxtype[]).ntype])
-    of tkConstantArray:
-      newNType(
-        "array",
-        @[
-          newPType($cxtype.getNumElements()),
-          toNType(cxtype.getElementType()).ntype
-        ]
-      )
-    of tkFunctionProto:
-      newProcNType[PNode](
-        rtype = cxtype.getResultType().toNType().ntype,
-        args = cxtype.argTypes.mapIt(it.toNType().ntype),
-        pragma = newPPragma("cdecl")
-      )
-    of tkLValueReference:
-      result.mutable = not (cxType.isConstQualifiedType() == 0)
-      toNType(cxType[]).ntype
-    else:
-      echo "CANT CONVERT: ".toRed({styleItalic}),
-        cxtype.kind, " ", ($cxtype).toGreen(), " ",
-        cxtype[]
-
-      newPType("!!!")
-
-  result.ntype = restype
-  result.mutable = mutable
-  # echo cxtype.cxkind, " ", result.toNNode()
-
-
-
-
 #===========================  Pretty-printing  ===========================#
 
 proc objTreeRepr*(cxtype: CXType): ObjTree =
@@ -800,6 +712,137 @@ proc objTreeRepr*(cursor: CXCursor, tu: CXTranslationUnit): ObjTree =
 proc treeRepr*(cursor: CXCursor, tu: CXTranslationUnit): string =
   ## Generate pretty-printed tree representation of cursor.
   cursor.objTreeRepr(tu).treeRepr()
+
+
+proc objTreeRepr*(cursor: CXCursor): ObjTree =
+  ## Generate ObjTree representation of cursor
+  const colorize = not defined(plainStdout)
+  let ctype = pptConst(
+    "type: " & $cursor.cxType,
+    initPrintStyling(fg = fgBlue,
+                     style = {styleItalic, styleDim}))
+
+  if cursor.len  == 0:
+    pptObj($cursor.cxkind, initPrintStyling(fg = fgYellow), ctype)
+  else:
+    pptObj(
+      ($cursor.cxkind).toMagenta(colorize) & " " & $cursor,
+      @[ctype] & toSeq(cursor.children).mapIt(it.objTreeRepr())
+    )
+
+
+proc treeRepr*(cursor: CXCursor): string =
+  ## Generate pretty-printed tree representation of cursor.
+  cursor.objTreeRepr().treeRepr()
+
+
+#===========================  Type conversion  ===========================#
+type
+  WrapConfig* = object
+    ## Configuration for wrapping. Mostly deals with type renaming
+    header*: string ## Current main translation file (header)
+    unit*: CXTranslationUnit
+    makeHeader*: proc(conf: WrapConfig): PNode ## Genreate identifier for
+    ## `{.header: ... .}`
+    makeTypeName*: proc(
+      cxtype: CXType, conf: WrapConfig): NType[PNode] ## Create nim
+    ## type for type name referred to by `cxtype`. This is only called
+    ## for elements inside namespaces, objects and similar things.
+    ## Mostly used for making comprehensibe names from
+    ## `boost::wave::macro_handling_exception::bad_include_file`
+
+proc fromElaboratedPType*(cxtype: CXType): NType[PNode] =
+  ($cxtype).
+    dropPrefix("enum ").
+    dropPrefix("struct ").
+    dropPrefix("const "). # WARNING
+    newPType()
+
+
+proc toNType*(
+  cxtype: CXType,
+  conf: WrapConfig): tuple[ntype: NType[PNode], mutable: bool] =
+  ## Convert CXType to nim type. Due to differences in how mutability
+  ## handled in nim and C it is not entirely possible to map `CXType`
+  ## to `NType` without losing this information. Instead `mutable` is
+  ## returned, indicating whether or not the type was mutable.
+  ## Conversion is performed as follows
+  ##
+  ## - `T&` is considered mutable and mapped to `var T`
+  ## - Any kind of pointer is mapped to immutable since it is not possible
+  ##   infer this information from C type anyway.
+  ## - Function prototype is mapped to `{.cdecl.}` proc type
+  ## - 'special' types are mapped
+  ##   - `char*` -> `cstring`
+  ##   - `char**` -> `cstringArray`
+  ##   - `void*` -> `pointer`
+  ## - For C types with elaborated specifier (e.g. `enum E` instead of
+  ##   simply `E`) specifiers are simply dropped.
+  var mutable: bool = false
+  warn $cxtype
+  let restype = case cxtype.cxKind:
+    of tkBool: newPType("bool")
+    of tkInt: newPType("int")
+    of tkVoid: newPType("void")
+    of tkUInt: newPType("cuint")
+    of tkLongLong: newPType("clonglong")
+    of tkULongLong: newPType("culonglong")
+    of tkDouble: newPType("cdouble")
+    of tkULong: newPType("culong")
+    of tkTypedef: newPType(($cxtype).dropPrefix("const ")) # XXXX typedef processing -
+    of tkElaborated, tkRecord, tkEnum:
+      conf.makeTypeName(cxtype, conf)
+    of tkPointer:
+      case cxtype[].cxkind:
+        of tkChar_S:
+          newPType("cstring")
+        of tkPointer:
+          if cxtype[][].cxKind() == tkChar_S:
+            newPType("cstringArray")
+          else:
+            newNType("ptr", [toNType(cxtype[], conf).ntype])
+        of tkVoid:
+          newPType("pointer")
+        of tkFunctionProto:
+          let (t, mut) = toNType(cxtype[], conf)
+          t
+        else:
+          newNType("ptr", [toNType(cxtype[], conf).ntype])
+    of tkConstantArray:
+      newNType(
+        "array",
+        @[
+          newPType($cxtype.getNumElements()),
+          toNType(cxtype.getElementType(), conf).ntype
+        ]
+      )
+    of tkFunctionProto:
+      newProcNType[PNode](
+        rtype = cxtype.getResultType().toNType(conf).ntype,
+        args = cxtype.argTypes.mapIt(toNType(it, conf).ntype),
+        pragma = newPPragma("cdecl")
+      )
+    of tkLValueReference:
+      result.mutable = not (cxType.isConstQualifiedType() == 0)
+      toNType(cxType[], conf).ntype
+    else:
+      err "CANT CONVERT: ".toRed({styleItalic}),
+        cxtype.kind, " ", ($cxtype).toGreen(), " ",
+        cxtype[]
+
+      newPType("!!!")
+
+  result.ntype = restype
+  result.mutable = mutable
+
+proc toNType*(
+  curs: CXCursor,
+  conf: WrapConfig): tuple[ntype: NType[PNode], mutable: bool] =
+
+  echo curs.treeRepr(conf.unit)
+
+
+
 
 #*************************************************************************#
 #***********************  Declaration conversion  ************************#
@@ -923,19 +966,19 @@ proc dropPOD*(cxtype: CXType): string =
     else:
       ""
 
-proc toPIdentDefs*(cursor: CXCursor): PIdentDefs =
+proc toPIdentDefs*(cursor: CXCursor, conf: WrapConfig): PIdentDefs =
   result.varname = $cursor
   if result.varname.len == 0:
     result.varname = "arg" & $cursor.cxType().dropPOD()
 
   result.varname = result.varname.fixIdentName()
 
-  let (ctype, mutable) = cursor.cxType.toNType()
+  let (ctype, mutable) = cursor.toNType(conf)
   result.vtype = ctype
   if mutable:
     result.kind = nvdVar
 
-proc convertCFunction*(cursor: CXCursor): ProcDecl[PNode] =
+proc convertCFunction*(cursor: CXCursor, conf: WrapConfig): ProcDecl[PNode] =
   cursor.expectKind(ckFunctionDecl)
   var prevName = ""
   result = ProcDecl[PNode]().withIt do:
@@ -947,7 +990,7 @@ proc convertCFunction*(cursor: CXCursor): ProcDecl[PNode] =
     it.signature.arguments = collect(newSeq):
       for it in cursor.children:
         if it.cxKind == ckParmDecl:
-          var res = it.toPIdentDefs()
+          var res = it.toPIdentDefs(conf)
           if res.varname == prevName:
             res.varname &= "1"
 
@@ -955,7 +998,7 @@ proc convertCFunction*(cursor: CXCursor): ProcDecl[PNode] =
           res
 
     # NOTE dropping mutability from return type
-    it.signature.setRType toNType(cursor.retType()).ntype
+    it.signature.setRType toNType(cursor.retType(), conf).ntype
     # WARNING temprarily disabled pragma annotations
     # it.signature.pragma = newPPragma()
 
@@ -1054,7 +1097,7 @@ proc visitClass(cursor: CXCursor, parent: seq[string]): CDecl =
       of ckTemplateTypeParameter:
         discard
       else:
-        echo "IMPLEMENT: ", ($subn.cxKind).toRed(), " ", subn
+        warn "IMPLEMENT:", ($subn.cxKind).toRed(), subn
         discard
 
 proc visitFunction(cursor: CXCursor, parent: seq[string]): CDecl =
@@ -1143,7 +1186,7 @@ type
 proc parseBuildDepsTree*(outs: string): CDepsTree =
   let depLines = outs.split("\n")
   var idx = 0
-  echo "deps list has ", depLines.len,  " lines"
+  info "deps list has ", depLines.len,  " lines"
 
   proc auxTree(): seq[CDepsTree] {.closure.} =
     while not depLines[idx].startsWith(Whitespace, "}"):
@@ -1210,10 +1253,6 @@ proc getDepFiles*(deps: seq[CXCursor]): seq[string] =
 #*************************************************************************#
 #*************************  Wrapper generation  **************************#
 #*************************************************************************#
-type
-  WrapConfig* = object
-    header*: string
-
 proc wrapMethods*(
   cd: CDecl, conf: WrapConfig, parent: NType[PNode]): seq[PProcDecl] =
   assert cd.kind in {cdkClass, cdkStruct}
@@ -1235,7 +1274,8 @@ proc wrapMethods*(
             of cxoAsgnOp:
               it.signature.pragma = newPPragma(
                 newPIdentColonString("importcpp", &"# {it.name} #"),
-                newPIdentColonString("header", conf.header)
+                newExprColonExpr(newPIdent "header",
+                                 conf.makeHeader(conf)),
               )
             else:
               raiseAssert("#[ IMPLEMENT ]#")
@@ -1246,7 +1286,8 @@ proc wrapMethods*(
         else:
           it.signature.pragma = newPPragma(
             newPIdentColonString("importcpp", &"#.{it.name}(@)"),
-            newPIdentColonString("header", conf.header)
+            newExprColonExpr(newPIdent "header",
+                             conf.makeHeader(conf)),
           )
 
 
@@ -1261,13 +1302,13 @@ proc wrapMethods*(
         )
 
       for arg in meth.args:
-        let (vtype, mutable) = arg.cursor.cxType().toNType()
+        let (vtype, mutable) = arg.cursor.toNType(conf)
         it.signature.arguments.add PIdentDefs(
           varname: arg.name,
           vtype: vtype,
           kind: mutable.tern(nvdVar, nvdLet))
 
-      it.signature.setRtype toNType(meth.cursor.retType()).ntype
+      it.signature.setRtype toNType(meth.cursor.retType(), conf).ntype
 
 
     result.add procdef
@@ -1285,12 +1326,12 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig): tuple[
       isTuple: false,
       name: fld.name,
       exported: true,
-      fldType: fld.cursor.cxType().toNType().ntype
+      fldType: fld.cursor.toNType(conf).ntype
     )
 
   result.obj.annotation = some(newPPragma(
     newPIdentColonString("importcpp", cd.namespaceName()),
-    newPIdentColonString("header", conf.header),
+    newExprColonExpr(newPIdent "header", conf.makeHeader(conf)),
   ))
 
   result.procs = cd.wrapMethods(conf, result.obj.name)
@@ -1398,4 +1439,4 @@ func getDepModules*(file: string, idx: FileIndex): seq[string] =
   ## Get list of modules that have to be imported in wrapper for file
   ## `file`.
   for dep in idx.depGraph[file].outgoing():
-    result.add dep.node.value
+    result.add dep.target.value

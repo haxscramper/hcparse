@@ -15,7 +15,7 @@ import hmisc/[hexceptions, helpers]
 import hmisc/other/[hshell, colorlogger]
 
 
-startColorLogging()
+startColorLogger()
 
 
 
