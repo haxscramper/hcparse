@@ -10,13 +10,17 @@ import bitops, strformat, macros, terminal, sugar, std/decls, strutils,
        sequtils, options, os, re, hashes
 
 import hpprint, hpprint/hpprint_repr
-import hmisc/other/[hshell, colorlogger]
 import hnimast
 import nimtraits
-import hmisc/types/colorstring
-import hmisc/[hexceptions, helpers]
 import compiler/ast
 import packages/docutils/rstast
+import posix
+
+import hmisc/types/colorstring
+import hmisc/[hexceptions, helpers]
+import hmisc/other/[hshell, colorlogger]
+
+
 
 #==========================  String conversion  ==========================#
 
@@ -28,6 +32,12 @@ proc `$`*(cxstr: CXString): string =
 proc `$`*(cursor: CXCursor): string = $getCursorSpelling(cursor)
 proc `$`*(cxtype: CXType): string = $getTypeSpelling(cxtype)
 proc `$`*(cxkind: CXCursorKind): string = $getCursorKindSpelling(cxkind)
+
+proc realpath*(path: string): string =
+  var resolved: cstring
+  let res = realpath(path.cstring, resolved)
+  result = $res
+
 
 #*************************************************************************#
 #*****************************  Destructors  *****************************#
@@ -171,6 +181,13 @@ File:
 
     raiseAssert("Translation unit parse failed")
 
+proc getFlags*(command: CXCompileCommand): seq[string] =
+  for arg in command.getArgs():
+    if arg.startsWith("-"):
+      result.add arg
+
+
+
 
 proc parseTranslationUnit*(
   index: CXIndex,
@@ -188,14 +205,8 @@ proc parseTranslationUnit*(
   ##              likely need to use `@["-xc++"]` to make clang correctly
   ##              recognize the language.
 
-  var args = collect(newSeq):
-    for arg in command.getArgs():
-      let match = arg.startsWith("-I", "-std=")
-
-      if match:
-        arg
-
-  args = extraFlags & getBuiltinHeaders().mapIt(&"-I{it}") & args
+  let args = extraFlags & getBuiltinHeaders().mapIt(&"-I{it}") &
+    command.getFlags()
 
   let file = $command.getFilename()
   index.parseTranslationUnit(file, args, {})
@@ -652,7 +663,12 @@ type
     ## `{.header: ... .}`
     fixTypeName*: proc(
       ntype: NType[PNode], conf: WrapConfig): NType[PNode]
-    ## `boost::wave::macro_handling_exception::bad_include_file`
+    ## Change type name for `ntype`. Used to convert things like
+    ## `boost::wave::macro_handling_exception::bad_include_file` into
+    ## human-readable names.
+    getImport*: proc(dep: string, conf: WrapConfig): PNode ## Generate
+    ## import statement for header file dependency
+
 
 #==========================  Helper utilities  ===========================#
 
@@ -669,6 +685,11 @@ proc argc*(cxtype: CXType): int =
   ## Get numbler of arguments in function type
   cxtype.expectKind(tkFunctionProto)
   getNumArgTypes(cxtype).int
+
+proc params*(cursor: CXCursor): seq[CXCursor] =
+  for ch in cursor:
+    if ch.kind == ckParmDecl:
+      result.add ch
 
 proc argTypes*(cursor: CXType): seq[CXType] =
   for i in 0 ..< cursor.getNumArgTypes():
@@ -1315,22 +1336,63 @@ proc immediateDeps*(d: CDepsTree): seq[string] =
 
 # ~~~~ Collecting dependeny list ~~~~ #
 
+
+proc getDepFiles*(deps: seq[CXCursor]): seq[string]
+
+proc getDepFiles*(cxtype: CXType): seq[string] =
+  let decl = cxtype.getTypeDeclaration()
+  for parm in cxtype.genParams():
+    if parm.cxKind != tkInvalid:
+      result.add getDepFiles(parm)
+
+  let (file, _, _, _) = decl.getSpellingLocation()
+  result.add file
+
 proc getDepFiles*(deps: seq[CXCursor]): seq[string] =
   ## Generate list of files that have to be wrapped
   # TODO:DOC
   for dep in deps:
     let decl: CXCursor =
       case dep.cxKind:
-        of ckFunctionDecl:
+        of ckFunctionDecl, ckCXXMethod:
+          result.add getDepFiles(dep.params())
+
           dep.retType().getTypeDeclaration()
+        of ckParmDecl:
+          var cxt = dep.cxType()
+
+          let subn = dep.children()
+          var typeRef = false
+
+          for sub in subn:
+            case sub.cxKind:
+              of ckNamespaceRef:
+                discard
+              of ckTypeRef:
+                cxt = sub.cxType()
+                typeRef = true
+              else:
+                break
+
+
+          if not typeRef and (cxt.cxKind() notin {tkInt}):
+            for parm in cxt.genParams():
+              if parm.cxKind != tkInvalid:
+                result.add getDepFiles(parm)
+
+
+          cxt.getTypeDeclaration()
         else:
+          warn dep.cxKind(), dep, dep.cxType()
           dep.cxType.getTypeDeclaration()
 
     let (file, line, column, _) = decl.getSpellingLocation()
 
     result.add file
 
-  result = result.deduplicate()
+  result = result.deduplicate().
+    filterIt(it.len > 0).
+    mapIt(it.realpath())
 
 
 
@@ -1428,26 +1490,26 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig): tuple[
 
   result.procs = cd.wrapMethods(conf, result.obj.name)
 
-when isMainModule:
-  import hpprint
-  pprint (parseBuildDepsTree """
-<zzz> /tmp/zzz
-{
-  <eee> /tmp/ee
-  <1> /tmp/werrwe
-  {
-    <1.1> /tmp/ee23
-    <1.2> /tmp/werrfsf34we
-    <1.3> /tmp/ewewffv234
-  }
-  <2> /tmp/ewewffv
-  {
-    <2.1> /tmp/ee1233
-    <2.2> /tmp/werrwe23
-    <2.3> /tmp/ewewffv
-  }
-}
-"""), maxwidth = 100
+proc wrapApiUnit*(api: CApiUnit, conf: WrapConfig): PNode =
+  ## Generate wrapper for api unit.
+  result = nnkStmtList.newPTree()
+  for decl in api.decls:
+    case decl.kind:
+      of cdkClass:
+        identLog()
+        let (obj, procs) = decl.wrapObject(conf)
+
+        result.add obj.toNNode(true)
+        # outwrap &= makeCommentSection("Type definition", 1) & "\n"
+        # outwrap &= $obj.toNNode(true) & "\n"
+        # outwrap &= makeCommentSection("Methods", 1) & "\n"
+        for pr in procs:
+          result.add pr.toNNode()
+        # outwrap &= procs.mapIt($it.toNNode()).joinl()
+        # outwrap &= "\n\n"
+        dedentLog()
+      else:
+        discard
 
 #*************************************************************************#
 #********************  Dependency graph construction  ********************#
@@ -1532,3 +1594,45 @@ func getDepModules*(file: string, idx: FileIndex): seq[string] =
   ## `file`.
   for dep in idx.depGraph[file].outgoing():
     result.add dep.target.value
+
+#*************************************************************************#
+#****************************  File wrapping  ****************************#
+#*************************************************************************#
+func makeImport*(names: seq[string]): PNode =
+  nnkImportStmt.newPTree(
+    nnkInfix.newPTree(
+      newPIdent("/"),
+      newPIdent(names[0]),
+      newPIdent(names[1])
+    ))
+
+
+proc makeCXStdImport*(path: string): PNode =
+  let (dir, name, ext) = path.splitFile()
+  makeImport(@["cxstd", name])
+
+
+proc wrapFile*(file: string, flags: seq[string], conf: WrapConfig):
+  tuple[parsed: ParsedFile, wrapped: PNode] =
+
+  let parsedConf = ParseConfiguration(
+    globalPaths: getBuiltinHeaders(),
+    fileFlags: { file : flags }.toTable()
+  )
+
+  result.parsed = parseFile(file, parsedConf)
+
+  result.wrapped = result.parsed.api.wrapApiUnit(conf)
+
+  var imports = nnkStmtList.newPTree()
+  for dep in result.parsed.explicitDeps:
+    imports.add conf.getImport(dep, conf)
+
+  result.wrapped = nnkStmtList.newPTree(imports, result.wrapped)
+
+proc wrapFile*(
+  cmd: CXCompileCommand, extraFlags: seq[string],
+  conf: WrapConfig): tuple[parsed: ParsedFile, wrapped: PNode] =
+  wrapFile($cmd.getFilename(),
+           extraFlags & cmd.getFlags(),
+           conf)
