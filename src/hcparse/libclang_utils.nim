@@ -642,6 +642,19 @@ proc toNimDoc*(comment: CXComment): string =
 #*************************************************************************#
 #****************************  Type wrappers  ****************************#
 #*************************************************************************#
+#==========================  Type declaration  ===========================#
+type
+  WrapConfig* = object
+    ## Configuration for wrapping. Mostly deals with type renaming
+    header*: string ## Current main translation file (header)
+    unit*: CXTranslationUnit
+    makeHeader*: proc(conf: WrapConfig): PNode ## Genreate identifier for
+    ## `{.header: ... .}`
+    fixTypeName*: proc(
+      ntype: NType[PNode], conf: WrapConfig): NType[PNode]
+    ## `boost::wave::macro_handling_exception::bad_include_file`
+
+#==========================  Helper utilities  ===========================#
 
 proc cxKind*(cxtype: CXType): CXTypeKind =
   ## Get type kind
@@ -673,6 +686,44 @@ proc nthArg*(cxtype: CXType, idx: int): CXType =
   ## Retrieve type nth argument of function type
   assert idx < cxtype.argc()
   getArgType(cxtype, cuint(idx))
+
+proc fixIdentName*(str: string): string =
+  result = if str[0].isLowerAscii():
+    str
+  else:
+    str[0].toLowerAscii() & str[1..^1]
+
+  result = case result:
+    of "set": "cxset"
+    of "type": "cxtype"
+    of "range": "cxrange"
+    of "string": "cxstring"
+    of "begin": "cxbegin"
+    of "end": "cxend"
+    else: result
+
+proc fixStdTypeName*(ntype: NType[PNode], conf: WrapConfig): NType[PNode] =
+  result = ntype
+  let split = ntype.head.split("::")
+  if split[0] == "std" and split.len == 2:
+    let name = case split[1]:
+      of "unique_ptr": "UPtr"
+      of "string": "String"
+      of "vector": "Vector"
+      else: "<<<" & split[1] & ">>>"
+
+    result.head = "Std" & name
+
+    for gen in mitems(result.genParams):
+      gen = conf.fixTypeName(gen, conf)
+
+proc genParams*(cxtype: CXType): seq[CXType] =
+  let args = cxtype.getNumTemplateArguments()
+  if args > 0:
+    for i in 0 .. args:
+      result.add cxtype.getTemplateArgumentAsType(i.cuint)
+
+
 
 #===========================  Pretty-printing  ===========================#
 
@@ -751,34 +802,87 @@ proc treeRepr*(cursor: CXCursor, showtype: bool = true): string =
 
 
 #===========================  Type conversion  ===========================#
-type
-  WrapConfig* = object
-    ## Configuration for wrapping. Mostly deals with type renaming
-    header*: string ## Current main translation file (header)
-    unit*: CXTranslationUnit
-    makeHeader*: proc(conf: WrapConfig): PNode ## Genreate identifier for
-    ## `{.header: ... .}`
-    makeTypeName*: proc(
-      cursor: CXCursor, conf: WrapConfig): NType[PNode] ## Create nim
-    ## type for entity at `cursor`. Mostly called for elements inside
-    ## namespaces, objects and similar things. Should be used for
-    ## making comprehensibe names from
-    ## `boost::wave::macro_handling_exception::bad_include_file`
-
+proc getTypeName*(curs: CXCursor, conf: WrapConfig): string
 
 proc toNType*(
   cxtype: CXType,
   conf: WrapConfig): tuple[ntype: NType[PNode], mutable: bool]
 
-proc fromElaboratedPType*(cxtype: CXType): NType[PNode] =
-  result = ($cxtype).
-    dropPrefix("enum ").
-    dropPrefix("struct ").
-    dropPrefix("const "). # WARNING
-    newPType()
 
+proc fromElaboratedPType*(cxtype: CXType, conf: WrapConfig): NType[PNode] =
   let genParams = cxtype.getNumTemplateArguments()
-  debug genParams, result
+  if genParams > 0:
+    let decl = cxtype.getTypeDeclaration()
+    case decl.cxKind:
+      of ckTypedefDecl:
+        # WARNING `template <J, Q> using` is not handled
+        result = newPType(decl.getTypeName(conf))
+      of ckClassDecl:
+        let params = cxtype.genParams()
+        result = newPType(decl.getTypeName(conf))
+        for idx, parm in params:
+          if parm.cxKind == tkInvalid:
+            warn "Type", cxtype, "has invalid parameter #", idx + 1
+          else:
+            result.genParams.add parm.toNType(conf).ntype
+
+      else:
+        warn decl.treeRepr()
+
+    result = conf.fixTypeName(result, conf)
+    # debug $result
+  else:
+    result = ($cxtype).
+      dropPrefix("enum ").
+      dropPrefix("struct ").
+      dropPrefix("const "). # WARNING
+      newPType()
+
+
+proc dropPOD*(cxtype: CXType, conf: WrapConfig): string =
+  case cxtype.cxKind:
+    of tkElaborated:
+      cxtype.fromElaboratedPType(conf).head
+    of tkPointer:
+      cxtype[].dropPOD(conf)
+    of tkTypedef:
+      ($cxtype).dropPrefix("const ")
+    else:
+      ""
+
+proc toPIdentDefs*(cursor: CXCursor, conf: WrapConfig): PIdentDefs =
+  result.varname = $cursor
+  if result.varname.len == 0:
+    result.varname = "arg" & $cursor.cxType().dropPOD(conf)
+
+  result.varname = result.varname.fixIdentName()
+
+  let (ctype, mutable) = cursor.cxType().toNType(conf)
+  result.vtype = ctype
+  if mutable:
+    result.kind = nvdVar
+
+proc getSemanticNamespaces*(curs: CXCursor): seq[string] =
+  let parent = curs.getCursorSemanticParent()
+  case parent.cxKind:
+    of ckNamespace:
+      result = parent.getSemanticNamespaces() & @[$parent]
+    else:
+      discard
+
+proc getTypeName*(curs: CXCursor, conf: WrapConfig): string =
+  case curs.cxKind:
+    of ckTypedefDecl:
+      return $curs.cxType()
+    of ckClassDecl:
+      result = $curs
+    else:
+      err $curs
+      err "Type name for ", curs.treeRepr(conf.unit)
+      raiseAssert(
+        &"Cannot convert cursor of kind {curs.cxKind} to type")
+
+  result = (curs.getSemanticNamespaces() & @[result]).join("::")
 
 
 proc toNType*(
@@ -803,7 +907,7 @@ proc toNType*(
   var mutable: bool = false
   let restype = case cxtype.cxKind:
     of tkBool: newPType("bool")
-    of tkInt: newPType("int")
+    of tkInt: newPType("cint")
     of tkVoid: newPType("void")
     of tkUInt: newPType("cuint")
     of tkLongLong: newPType("clonglong")
@@ -812,7 +916,7 @@ proc toNType*(
     of tkULong: newPType("culong")
     of tkTypedef: newPType(($cxtype).dropPrefix("const ")) # XXXX typedef processing -
     of tkElaborated, tkRecord, tkEnum:
-      fromElaboratedPType(cxtype)
+      fromElaboratedPType(cxtype, conf)
     of tkPointer:
       case cxtype[].cxkind:
         of tkChar_S:
@@ -858,75 +962,8 @@ proc toNType*(
 
 
 
-proc fixIdentName(str: string): string =
-  result = if str[0].isLowerAscii():
-    str
-  else:
-    str[0].toLowerAscii() & str[1..^1]
-
-  result = case result:
-    of "set": "cxset"
-    of "type": "cxtype"
-    of "range": "cxrange"
-    of "string": "cxstring"
-    of "begin": "cxbegin"
-    of "end": "cxend"
-    else: result
-
-proc dropPOD*(cxtype: CXType): string =
-  case cxtype.cxKind:
-    of tkElaborated:
-      cxtype.fromElaboratedPType().head
-    of tkPointer:
-      cxtype[].dropPOD()
-    of tkTypedef:
-      ($cxtype).dropPrefix("const ")
-    else:
-      ""
 
 
-
-proc toNType*(
-  curs: CXCursor,
-  conf: WrapConfig): tuple[ntype: NType[PNode], mutable: bool]
-
-proc toPIdentDefs*(cursor: CXCursor, conf: WrapConfig): PIdentDefs =
-  result.varname = $cursor
-  if result.varname.len == 0:
-    result.varname = "arg" & $cursor.cxType().dropPOD()
-
-  result.varname = result.varname.fixIdentName()
-
-  let (ctype, mutable) = cursor.toNType(conf)
-  result.vtype = ctype
-  if mutable:
-    result.kind = nvdVar
-
-
-proc toNType*(
-  curs: CXCursor,
-  conf: WrapConfig): tuple[ntype: NType[PNode], mutable: bool] =
-  case curs.cxKind:
-    of ckCXXMethod:
-      result.ntype = newProcNType[PNode](@[])
-
-      var retCursors: seq[CXCursor]
-      for ch in curs:
-        if ch.kind == ckParmDecl:
-          result.ntype.arguments.add ch.toPIdentDefs(conf)
-        else:
-          retCursors.add ch
-
-    of ckParmDecl:
-      case curs.cxType.cxKind:
-        of tkInt:
-          result.ntype = curs.cxType.toNType(conf).ntype
-        else:
-          result.ntype = conf.makeTypeName(curs, conf)
-    else:
-      err curs.treeRepr(conf.unit)
-      raiseAssert(
-        &"Cannot convert cursor of kind {curs.cxKind} to type")
 
 
 
@@ -1381,7 +1418,7 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig): tuple[
       isTuple: false,
       name: fld.name,
       exported: true,
-      fldType: fld.cursor.toNType(conf).ntype
+      fldType: fld.cursor.cxType().toNType(conf).ntype
     )
 
   result.obj.annotation = some(newPPragma(
