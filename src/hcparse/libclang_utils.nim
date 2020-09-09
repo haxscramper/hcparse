@@ -1088,8 +1088,6 @@ func toCppImport*(ns: CNamespace): string =
   var genIdx: int = 0
   for part in ns:
     if part.genParams.len > 0:
-      {.noSideEffect.}:
-        info "ns", part, "has", part.genParams.len()
       var genTypes: seq[string]
       for param in part.genParams:
         genTypes.add "'" & $genIdx
@@ -1590,8 +1588,8 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig): tuple[
   assert cd.kind in {cdkClass, cdkStruct}
   result.obj = PObject(name: cd.name, exported: true)
   # WARNING might die on `<T<T<T<T<T<T>>>>>` things
-  for genParam in cd.cursor.children({ckTemplateTypeParameter}):
-    result.obj.name.genParams.add newPType($genParam)
+  # for genParam in cd.cursor.children({ckTemplateTypeParameter}):
+  #   result.obj.name.genParams.add newPType($genParam)
 
   for fld in cd.pubFields:
     result.obj.flds.add PField(
@@ -1601,8 +1599,11 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig): tuple[
       fldType: fld.cursor.cxType().toNType(conf).ntype
     )
 
+  var ns = nnkRStrLit.newPTree()
+  ns.strVal = cd.namespaceName()
+  info ns
   result.obj.annotation = some(newPPragma(
-    newPIdentColonString("importcpp", cd.namespaceName()),
+    newExprColonExpr(newPIdent "importcpp", ns),
     newExprColonExpr(newPIdent "header", conf.makeHeader(conf)),
   ))
 
@@ -1735,10 +1736,15 @@ func makeImport*(names: seq[string]): PNode =
       newPIdent(names[1])
     ))
 
+proc fixFileName*(name: string): string =
+  name.multiReplace({
+    "-": "_",
+    "+": "p"
+  })
 
 proc makeCXStdImport*(path: string): seq[string] =
   let (dir, name, ext) = path.splitFile()
-  @["cxstd", name]
+  @["cxstd", name.fixFileName()]
 
 proc wrapFile*(parsed: ParsedFile, conf: WrapConfig): PNode =
   result = parsed.api.wrapApiUnit(conf)
