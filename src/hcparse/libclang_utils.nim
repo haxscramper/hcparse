@@ -666,8 +666,12 @@ type
     ## Change type name for `ntype`. Used to convert things like
     ## `boost::wave::macro_handling_exception::bad_include_file` into
     ## human-readable names.
-    getImport*: proc(dep: string, conf: WrapConfig): PNode ## Generate
+    getImport*: proc(dep: string, conf: WrapConfig): seq[string] ## Generate
     ## import statement for header file dependency
+    ignoreCursor*: proc(curs: CXCursor, conf: WrapConfig): bool ## User-defined
+    ## predicate for determining whether or not cursor should be
+    ## considered a part of api. Things like `internal` namespaces.
+
 
 
 #==========================  Helper utilities  ===========================#
@@ -696,7 +700,13 @@ proc argTypes*(cursor: CXType): seq[CXType] =
     result.add cursor.getArgType(cuint i)
 
 proc retType*(cursor: CXCursor): CXType =
-  cursor.expectKind({ckFunctionDecl, ckCXXMethod})
+  cursor.expectKind({
+    ckFunctionDecl,
+    ckCXXMethod,
+    ckConversionFunction,
+    ckFunctionTemplate
+  })
+
   cursor.cxType().getResultType()
 
 proc argc*(cursor: CXCursor): int =
@@ -811,7 +821,7 @@ proc objTreeRepr*(cursor: CXCursor, showtype: bool = true): ObjTree =
       pptConst($cursor.cxKind)
   else:
     pptObj(
-      ($cursor.cxkind).toMagenta(colorize) & " " & $cursor,
+      ("kind: " & $cursor.cxkind).toYellow(colorize) & " " & $cursor,
       showtype.tern(@[ctype], @[]) &
         toSeq(cursor.children).mapIt(it.objTreeRepr(showtype))
     )
@@ -935,6 +945,7 @@ proc toNType*(
     of tkULongLong: newPType("culonglong")
     of tkDouble: newPType("cdouble")
     of tkULong: newPType("culong")
+    of tkUChar: newPType("cuchar")
     of tkTypedef: newPType(($cxtype).dropPrefix("const ")) # XXXX typedef processing -
     of tkElaborated, tkRecord, tkEnum:
       fromElaboratedPType(cxtype, conf)
@@ -1003,6 +1014,7 @@ when true:
         cdkFunction
         cdkMethod
         cdkField
+        cdkAlias
 
       CArg* = object
         name*: string
@@ -1022,6 +1034,9 @@ when true:
         ## provide more intuitive API for working with things to be
         ## wrapped.
         name*: string
+        genParams*: seq[string]
+        genConstraints*: seq[CXCursor]
+
         namespace*: seq[string]
         cursor* {.requiresinit.}: CXCursor
         case kind*: CDeclKind
@@ -1067,7 +1082,7 @@ func classifyOperator*(cd: CDecl): CXOperatorKind =
     of "+=":
       cxoAsgnOp
     else:
-      raiseAssert("#[ IMPLEMENT ]#")
+      raiseAssert(&"#[ IMPLEMENT {name} ]#")
 
 
 func getNimName*(cd: CDecl): string =
@@ -1129,7 +1144,7 @@ proc getPublicAPI*(cd: CDecl): seq[CXCursor] =
         result.add cd.cursor
         for arg in cd.args:
           result.add arg.cursor
-    of cdkEnum:
+    of cdkEnum, cdkAlias:
       return @[]
 
 
@@ -1180,63 +1195,116 @@ proc visitField(cursor: CXCursor, accs: CX_CXXAccessSpecifier): CDecl =
   result.name = $cursor
   result.accs = accs
 
-proc visitClass(cursor: CXCursor, parent: seq[string]): CDecl =
+var undefCnt: int = 0
+
+proc visitAlias*(
+  cursor: CXCursor, parent: seq[string], conf: WrapConfig): CDecl =
+  result = CDecl(kind: cdkAlias, cursor: cursor)
+  result.name = $cursor
+  result.namespace = parent
+  # IMPLEMENT
+
+proc visitFunction(
+  cursor: CXCursor, parent: seq[string], conf: WrapConfig): CDecl =
+  result = CDecl(kind: cdkFunction, cursor: cursor, namespace: parent)
+  result.name = $cursor
+  result.args = cursor.getArguments()
+  for subn in cursor:
+    case subn.cxKind:
+      of ckTemplateTypeParameter:
+        result.genParams.add $subn
+      of ckNonTypeTemplateParameter:
+        result.genConstraints.add subn
+      of ckParmDecl:
+        discard
+      else:
+        warn "Unknown element", subn.cxKind, subn
+
+
+
+
+proc visitClass(
+  cursor: CXCursor, parent: seq[string], conf: WrapConfig): CDecl =
   ## Convert class under cursor to `CDecl`
   cursor.expectKind({ckClassDecl, ckClassTemplate,
                       ckClassTemplatePartialSpecialization})
   result = CDecl(kind: cdkClass, cursor: cursor)
   result.name = $cursor
+  info "Class", (parent & @[ result.name ]).join("::")
+  identLog()
+  defer: dedentLog()
+
   result.namespace = parent
   # echo "found class ", cursor
 
   var currentAccs = asPrivate
   for subn in cursor:
-    # echo "found subnode ", subn
-    case subn.cxKind:
-      of ckCXXMethod, ckConstructor, ckDestructor, ckConversionFunction:
-        result.members.add visitMethod(subn, currentAccs)
-      of ckCXXAccessSpecifier:
-        currentAccs = subn.getCXXAccessSpecifier()
-      of ckFieldDecl:
-        result.members.add visitField(subn, currentAccs)
-      of ckTemplateTypeParameter:
-        discard
-      else:
-        warn "IMPLEMENT:", ($subn.cxKind).toRed(), subn
-        discard
+    if subn.cxKind == ckCXXAccessSpecifier:
+      currentAccs = subn.getCXXAccessSpecifier()
 
-proc visitFunction(cursor: CXCursor, parent: seq[string]): CDecl =
-  result = CDecl(kind: cdkFunction, cursor: cursor, namespace: parent)
-  result.name = $cursor
-  result.args = cursor.getArguments()
+    if currentAccs == asPublic:
+      case subn.cxKind:
+        of ckCXXMethod, ckConversionFunction:
+          result.members.add visitMethod(subn, currentAccs)
+        of ckConstructor:
+          var res = visitMethod(subn, currentAccs)
+          res.name = "new" & result.name
+        of ckCXXAccessSpecifier:
+          currentAccs = subn.getCXXAccessSpecifier()
+        of ckFieldDecl:
+          result.members.add visitField(subn, currentAccs)
+        of ckTemplateTypeParameter, ckFriendDecl,
+           ckStaticAssert, ckDestructor:
+          discard
+        of ckTemplateTemplateParameter:
+          result.genParams.add $subn
+        of ckFunctionTemplate:
+          result.members.add visitFunction(
+            subn, parent & @[ result.name ], conf)
+        of ckTypeAliasTemplateDecl, ckTypeAliasDecl:
+          result.members.add visitAlias(subn, parent & @[result.name], conf)
+        else:
+          inc undefCnt
+          if undefCnt > 20:
+            raiseAssert("")
+          else:
+            warn "IMPLEMENT class element:", ($subn.cxKind).toRed(), subn
+            debug subn.treeRepr()
 
 
-proc visitCursor(cursor: CXCursor, parent: seq[string]): tuple[
+
+proc visitCursor(
+  cursor: CXCursor, parent: seq[string], conf: WrapConfig): tuple[
   decls: seq[CDecl], recurse: bool]
 
-proc visitNamespace(cursor: CXCursor, parent: seq[string]): seq[CDecl] =
+proc visitNamespace(
+  cursor: CXCursor, parent: seq[string], conf: WrapConfig): seq[CDecl] =
   ## Convert all elements in namespace into sequence of `CDecl`
   ## elements.
-  for subn in cursor:
-    result.add visitCursor(subn, parent & @[ $cursor ]).decls
+  if not conf.ignoreCursor(cursor, conf):
+    for subn in cursor:
+      result.add visitCursor(subn, parent & @[ $cursor ], conf).decls
 
-proc visitCursor(cursor: CXCursor, parent: seq[string]): tuple[
+proc visitCursor(
+  cursor: CXCursor, parent: seq[string], conf: WrapConfig): tuple[
   decls: seq[CDecl], recurse: bool] =
 
-  result.decls.add case cursor.cxKind:
-    of ckNamespace:
-      visitNamespace(cursor, parent)
-    of ckClassDecl, ckClassTemplate, ckClassTemplatePartialSpecialization:
-      @[ visitClass(cursor, parent) ]
-    of ckFunctionDecl:
-      @[ visitFunction(cursor, parent) ]
-    else:
-      # echo "recursing on: ", cursor.cxKind
-      result.recurse = true
-      return
+  if not conf.ignoreCursor(cursor, conf):
+    result.decls.add case cursor.cxKind:
+      of ckNamespace:
+        visitNamespace(cursor, parent, conf)
+      of ckClassDecl, ckClassTemplate, ckClassTemplatePartialSpecialization:
+        @[ visitClass(cursor, parent, conf) ]
+      of ckFunctionDecl:
+        @[ visitFunction(cursor, parent, conf) ]
+      else:
+        # echo "recursing on: ", cursor.cxKind
+        result.recurse = true
+        return
 
 
-proc splitDeclarations*(tu: CXTranslationUnit): CApiUnit =
+proc splitDeclarations*(
+  tu: CXTranslationUnit, conf: WrapConfig): CApiUnit =
   ## Convert main file of translation unit into flattened sequence of
   ## high-level declarations. All cursors for objects/structs are
   ## retained. Public API elements are stored in `publicAPI` field
@@ -1244,8 +1312,8 @@ proc splitDeclarations*(tu: CXTranslationUnit): CApiUnit =
   let cursor = tu.getTranslationUnitCursor()
   var res: CApiUnit
   cursor.visitMainFile do:
-    makeVisitor [tu, res]:
-      let (decls, rec) = visitCursor(cursor, @[])
+    makeVisitor [tu, res, conf]:
+      let (decls, rec) = visitCursor(cursor, @[], conf)
       if rec:
         return cvrRecurse
       else:
@@ -1352,43 +1420,46 @@ proc getDepFiles*(deps: seq[CXCursor]): seq[string] =
   ## Generate list of files that have to be wrapped
   # TODO:DOC
   for dep in deps:
-    let decl: CXCursor =
-      case dep.cxKind:
-        of ckFunctionDecl, ckCXXMethod:
-          result.add getDepFiles(dep.params())
+    var decl: (CXCursor, bool)
+    case dep.cxKind:
+      of ckFunctionDecl, ckCXXMethod, ckConversionFunction:
+        result.add getDepFiles(dep.params())
 
-          dep.retType().getTypeDeclaration()
-        of ckParmDecl:
-          var cxt = dep.cxType()
+        decl = (dep.retType().getTypeDeclaration(), true)
+      of ckFunctionTemplate:
+        result.add dep.retType().getDepFiles()
+      of ckParmDecl:
+        var cxt = dep.cxType()
 
-          let subn = dep.children()
-          var typeRef = false
+        let subn = dep.children()
+        var typeRef = false
 
-          for sub in subn:
-            case sub.cxKind:
-              of ckNamespaceRef:
-                discard
-              of ckTypeRef:
-                cxt = sub.cxType()
-                typeRef = true
-              else:
-                break
-
-
-          if not typeRef and (cxt.cxKind() notin {tkInt}):
-            for parm in cxt.genParams():
-              if parm.cxKind != tkInvalid:
-                result.add getDepFiles(parm)
+        for sub in subn:
+          case sub.cxKind:
+            of ckNamespaceRef:
+              discard
+            of ckTypeRef:
+              cxt = sub.cxType()
+              typeRef = true
+            else:
+              break
 
 
-          cxt.getTypeDeclaration()
-        else:
-          warn dep.cxKind(), dep, dep.cxType()
-          dep.cxType.getTypeDeclaration()
+        if not typeRef and (cxt.cxKind() notin {tkInt}):
+          for parm in cxt.genParams():
+            if parm.cxKind != tkInvalid:
+              result.add getDepFiles(parm)
 
-    let (file, line, column, _) = decl.getSpellingLocation()
 
-    result.add file
+        decl = (cxt.getTypeDeclaration(), true)
+      else:
+        warn "dep for:", dep.cxKind(), dep, dep.cxType()
+        decl = (dep.cxType.getTypeDeclaration(), true)
+
+    if decl[1]:
+      let (file, line, column, _) = decl[0].getSpellingLocation()
+
+      result.add file
 
   result = result.deduplicate().
     filterIt(it.len > 0).
@@ -1553,23 +1624,34 @@ func getFlags*(config: ParseConfiguration, file: string): seq[string] =
 
   result.add config.fileFlags.getOrDefault(file)
 
-proc parseFile*(file: string, config: ParseConfiguration): ParsedFile =
+proc parseFile*(
+  file: string, config: ParseConfiguration,
+  wrapConf: WrapConfig): ParsedFile =
+
+  info "File", file
+  identLog()
+
   let flags = config.getFlags(file)
   result.index = createIndex()
   result.unit = parseTranslationUnit(
     result.index, file, flags, {tufSkipFunctionBodies})
 
-  result.api = result.unit.splitDeclarations()
+  result.api = result.unit.splitDeclarations(wrapConf)
   result.explicitDeps = result.api.publicApi.
     getDepFiles().filterIt(it != file)
 
-proc parseAll*(files: seq[string], conf: ParseConfiguration): FileIndex =
+  dedentLog()
+
+proc parseAll*(
+  files: seq[string],
+  conf: ParseConfiguration, wrapConf: WrapConfig): FileIndex =
   for file in files:
-    result.index[file] = parseFile(file, conf)
+    result.index[file] = parseFile(file, conf, wrapConf)
 
   result.depGraph = newGraph[string, bool](HeaderGraphFlags)
 
   for file, parsed in result.index:
+
     for dep in parsed.explicitDeps:
       discard result.depGraph.add(file)
       discard result.depGraph.add(dep)
@@ -1607,9 +1689,18 @@ func makeImport*(names: seq[string]): PNode =
     ))
 
 
-proc makeCXStdImport*(path: string): PNode =
+proc makeCXStdImport*(path: string): seq[string] =
   let (dir, name, ext) = path.splitFile()
-  makeImport(@["cxstd", name])
+  @["cxstd", name]
+
+proc wrapFile*(parsed: ParsedFile, conf: WrapConfig): PNode =
+  result = parsed.api.wrapApiUnit(conf)
+
+  var imports = nnkStmtList.newPTree()
+  for dep in parsed.explicitDeps:
+    imports.add conf.getImport(dep, conf).makeImport()
+
+  result = nnkStmtList.newPTree(imports, result)
 
 
 proc wrapFile*(file: string, flags: seq[string], conf: WrapConfig):
@@ -1620,15 +1711,8 @@ proc wrapFile*(file: string, flags: seq[string], conf: WrapConfig):
     fileFlags: { file : flags }.toTable()
   )
 
-  result.parsed = parseFile(file, parsedConf)
-
-  result.wrapped = result.parsed.api.wrapApiUnit(conf)
-
-  var imports = nnkStmtList.newPTree()
-  for dep in result.parsed.explicitDeps:
-    imports.add conf.getImport(dep, conf)
-
-  result.wrapped = nnkStmtList.newPTree(imports, result.wrapped)
+  result.parsed = parseFile(file, parsedConf, conf)
+  result.wrapped = result.parsed.wrapFile(conf)
 
 proc wrapFile*(
   cmd: CXCompileCommand, extraFlags: seq[string],
@@ -1636,3 +1720,29 @@ proc wrapFile*(
   wrapFile($cmd.getFilename(),
            extraFlags & cmd.getFlags(),
            conf)
+
+type
+  WrapResult* = object
+    parsed*: ParsedFile
+    wrapped*: PNode
+    infile*: string
+    importName*: seq[string]
+
+proc wrapAll*(
+  files: seq[string],
+  parseConf: ParseConfiguration,
+  wrapConf: WrapConfig): seq[WrapResult] =
+
+  let parsed = files.parseAll(parseConf, wrapConf)
+  var wrap = wrapConf
+
+  for file in files:
+    wrap.header = file
+    result.add WrapResult(
+      parsed: parsed.index[file],
+      infile: file,
+      importName: wrapConf.getImport(file, wrapConf),
+      wrapped: parsed.index[file].wrapFile(wrapConf)
+    )
+
+

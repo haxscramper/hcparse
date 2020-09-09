@@ -15,9 +15,9 @@ you already have it.
 ** Usage
 
 #+begin_src nim
-import hcparse/libclang
+  import hcparse/libclang
 
-# ...
+  # ...
 #+end_src
 
 ** Links
@@ -109,12 +109,11 @@ by reference.
 
 #+RESULTS:
 #+begin_example
-false
 TranslationUnit
 `ClassDecl MyClass`:
     +-> type: MyClass
     +-> CXXAccessSpecifier:
-    |   +-> type:
+    |   +-> type: 
     |   +-> public :
     +-> FieldDecl:
     |   +-> type: int
@@ -131,7 +130,7 @@ TranslationUnit
 `FunctionDecl main`:
     +-> type: int ()
     +-> `CompoundStmt `:
-        +-> type:
+        +-> type: 
         +-> `BinaryOperator `:
             +-> type: int
             +-> IntegerLiteral:
@@ -140,7 +139,7 @@ TranslationUnit
             +-> IntegerLiteral:
                 +-> type: int
                 +-> 2
- This is a main function documenation comment
+ This is a main function documenation comment 
 found functions: @["main"]
 #+end_example
 
