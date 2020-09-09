@@ -852,9 +852,7 @@ proc fromElaboratedPType*(cxtype: CXType, conf: WrapConfig): NType[PNode] =
         let params = cxtype.genParams()
         result = newPType(decl.getTypeName(conf))
         for idx, parm in params:
-          if parm.cxKind == tkInvalid:
-            warn "Type", cxtype, "has invalid parameter #", idx + 1
-          else:
+          if parm.cxKind != tkInvalid:
             result.genParams.add parm.toNType(conf).ntype
 
       else:
@@ -915,6 +913,19 @@ proc getTypeName*(curs: CXCursor, conf: WrapConfig): string =
 
   result = (curs.getSemanticNamespaces() & @[result]).join("::")
 
+proc isMutableRef*(cxtype: CXType): bool =
+  case cxType.cxKind:
+    of tkLValueReference, tkRValueReference:
+      return not (cxType.isConstQualifiedType() == 0)
+    of tkTypeDef:
+      let decl = cxtype.getTypeDeclaration()
+      info cxtype, "is defined on line", decl.getSpellingLocation().line, "as"
+      # debug decl.treeRepr()
+      if decl.len == 1 and decl[0].cxKind == ckTypeRef:
+        info "Simple type alias for", decl[0].cxType()
+        debug decl[0].cxType().getTypeDeclaration().treeRepr()
+    else:
+      raiseAssert(&"#[ IMPLEMENT Is {cxtype.cxKind} a mutable ref? ]#")
 
 proc toNType*(
   cxtype: CXType,
@@ -946,7 +957,10 @@ proc toNType*(
     of tkDouble: newPType("cdouble")
     of tkULong: newPType("culong")
     of tkUChar: newPType("cuchar")
-    of tkTypedef: newPType(($cxtype).dropPrefix("const ")) # XXXX typedef processing -
+    of tkChar_S: newPType("cchar")
+    of tkTypedef:
+      result.mutable = cxType.isMutableRef()
+      newPType(($cxtype).dropPrefix("const ")) # XXXX typedef processing -
     of tkElaborated, tkRecord, tkEnum:
       fromElaboratedPType(cxtype, conf)
     of tkPointer:
@@ -980,8 +994,15 @@ proc toNType*(
         pragma = newPPragma("cdecl")
       )
     of tkLValueReference:
-      result.mutable = not (cxType.isConstQualifiedType() == 0)
+      result.mutable = cxType.isMutableRef()
       toNType(cxType[], conf).ntype
+    of tkRValueReference: # WARNING I'm not 100% sure this is correct
+                          # way to map rvalue references to nim type
+                          # system.
+      result.mutable = cxType.isMutableRef()
+      toNType(cxType[], conf).ntype
+    of tkUnexposed:
+      newPType("UNEXPOSED")
     else:
       err "CANT CONVERT: ".toRed({styleItalic}),
         cxtype.kind, " ", ($cxtype).toGreen(), " ",
@@ -1079,8 +1100,10 @@ func classifyOperator*(cd: CDecl): CXOperatorKind =
   assert cd.isOperator()
   let name = cd.name.dropPrefix("operator")
   case name:
-    of "+=":
+    of "+=", "=": # NOTE `=`
       cxoAsgnOp
+    of "[]":
+      cxoArrayOp
     else:
       raiseAssert(&"#[ IMPLEMENT {name} ]#")
 
@@ -1089,7 +1112,10 @@ func getNimName*(cd: CDecl): string =
   case cd.kind:
     of cdkMethod:
       if cd.isOperator():
-        cd.name.dropPrefix("operator")
+        if cd.name == "operator=":
+          "setFrom" # REVIEW change name to something different if possible
+        else:
+          cd.name.dropPrefix("operator")
       else:
         cd.name
     else:
@@ -1215,7 +1241,7 @@ proc visitFunction(
         result.genParams.add $subn
       of ckNonTypeTemplateParameter:
         result.genConstraints.add subn
-      of ckParmDecl:
+      of ckParmDecl, ckTypeRef, ckNamespaceRef:
         discard
       else:
         warn "Unknown element", subn.cxKind, subn
@@ -1483,11 +1509,17 @@ proc wrapMethods*(
       # it.signature = meth.cursor.toNType(conf).ntype
       it.exported = (meth.accs == asPublic)
 
-      let addThis =
-        if meth.isOperator():
-          let kind = meth.classifyOperator()
-          it.kind = pkOperator
+      var addThis = true
+      if meth.isOperator():
+        let kind = meth.classifyOperator()
+        it.kind = pkOperator
 
+        if kind == cxoAsgnOp and it.name == "setFrom":
+          it.signature.pragma = newPPragma(
+            newPIdentColonString("importcpp", &"# = #"),
+            newExprColonExpr(newPIdent "header",
+                             conf.makeHeader(conf)))
+        else:
           case kind:
             of cxoAsgnOp:
               it.signature.pragma = newPPragma(
@@ -1495,22 +1527,24 @@ proc wrapMethods*(
                 newExprColonExpr(newPIdent "header",
                                  conf.makeHeader(conf)),
               )
+            of cxoArrayOp:
+              let rtype = meth.cursor.retType()
+              let (_, mutable) = rtype.toNType(conf)
+              if mutable:
+                it.name = "[]="
+
+              info &"Array op {rtype.lispRepr()}[] is mutable: {mutable}"
             else:
               raiseAssert("#[ IMPLEMENT ]#")
 
+        addThis = kind in {cxoAsgnOp}
+      else:
+        it.signature.pragma = newPPragma(
+          newPIdentColonString("importcpp", &"#.{it.name}(@)"),
+          newExprColonExpr(newPIdent "header",
+                           conf.makeHeader(conf)),
+        )
 
-
-          kind in {cxoAsgnOp}
-        else:
-          it.signature.pragma = newPPragma(
-            newPIdentColonString("importcpp", &"#.{it.name}(@)"),
-            newExprColonExpr(newPIdent "header",
-                             conf.makeHeader(conf)),
-          )
-
-
-
-          true
 
       if addThis:
         it.signature.arguments.add PIdentDefs(
@@ -1518,12 +1552,6 @@ proc wrapMethods*(
           vtype: parent,
           kind: meth.cursor.isConstMethod.tern(nvdVar, nvdLet)
         )
-
-        # it.signature.arguments = PIdentDefs(
-        #   varname: "self",
-        #   vtype: parent,
-        #   kind: meth.cursor.isConstMethod.tern(nvdVar, nvdLet)
-        # ) & it.signature.arguments
 
       for arg in meth.args:
         let (vtype, mutable) = arg.cursor.cxType().toNType(conf)
@@ -1628,7 +1656,7 @@ proc parseFile*(
   file: string, config: ParseConfiguration,
   wrapConf: WrapConfig): ParsedFile =
 
-  info "File", file
+  info "File"
   identLog()
 
   let flags = config.getFlags(file)
