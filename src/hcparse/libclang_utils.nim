@@ -918,12 +918,13 @@ proc isMutableRef*(cxtype: CXType): bool =
     of tkLValueReference, tkRValueReference:
       return not (cxType.isConstQualifiedType() == 0)
     of tkTypeDef:
+      # TODO implement mutability checking
       let decl = cxtype.getTypeDeclaration()
-      info cxtype, "is defined on line", decl.getSpellingLocation().line, "as"
-      # debug decl.treeRepr()
+      # info cxtype, "is defined on line", decl.getSpellingLocation().line
       if decl.len == 1 and decl[0].cxKind == ckTypeRef:
-        info "Simple type alias for", decl[0].cxType()
-        debug decl[0].cxType().getTypeDeclaration().treeRepr()
+        discard
+        # info "Simple type alias for", decl[0].cxType()
+        # debug decl[0].cxType().getTypeDeclaration().treeRepr()
     else:
       raiseAssert(&"#[ IMPLEMENT Is {cxtype.cxKind} a mutable ref? ]#")
 
@@ -1050,15 +1051,15 @@ when true:
         cxoCallOp ## Call operator `a()`
 
 
+      CNamespace* = seq[NType[PNode]]
       CDecl* {.derive(GetSet).} = object
         ## Higher-level wrapper on top of CXCursor. Mostly used to
         ## provide more intuitive API for working with things to be
         ## wrapped.
-        name*: string
-        genParams*: seq[string]
+        name*: NType[PNode]
         genConstraints*: seq[CXCursor]
 
-        namespace*: seq[string]
+        namespace*: CNamespace
         cursor* {.requiresinit.}: CXCursor
         case kind*: CDeclKind
           of cdkField:
@@ -1082,6 +1083,24 @@ func methods*(cd: CDecl, kinds: set[CXCursorKind]): seq[CDecl] =
     if (member.kind == cdkMethod) and (member.cursor.cxKind in kinds):
       result.add member
 
+func toCppImport*(ns: CNamespace): string =
+  var buf: seq[string]
+  var genIdx: int = 0
+  for part in ns:
+    if part.genParams.len > 0:
+      {.noSideEffect.}:
+        info "ns", part, "has", part.genParams.len()
+      var genTypes: seq[string]
+      for param in part.genParams:
+        genTypes.add "'" & $genIdx
+        inc genIdx
+
+      buf.add part.head & "<" & genTypes.join(", ") & ">"
+    else:
+      buf.add part.head
+
+  result = buf.join("::")
+
 func pubFields*(cd: CDecl): seq[CDecl] =
   assert cd.kind in {cdkClass, cdkStruct}
   for member in cd.members:
@@ -1089,16 +1108,16 @@ func pubFields*(cd: CDecl): seq[CDecl] =
       result.add member
 
 func namespaceName*(cd: CDecl): string =
-  (cd.namespace & @[cd.name]).join("::")
+  (cd.namespace & @[cd.name]).toCppImport()
 
 func isOperator*(cd: CDecl): bool =
   cd.kind == cdkMethod and
-  cd.name.startsWith("operator") and
-  (not cd.name.validIdentifier())
+  cd.name.head.startsWith("operator") and
+  (not cd.name.head.validIdentifier())
 
 func classifyOperator*(cd: CDecl): CXOperatorKind =
   assert cd.isOperator()
-  let name = cd.name.dropPrefix("operator")
+  let name = cd.name.head.dropPrefix("operator")
   case name:
     of "+=", "=": # NOTE `=`
       cxoAsgnOp
@@ -1112,14 +1131,14 @@ func getNimName*(cd: CDecl): string =
   case cd.kind:
     of cdkMethod:
       if cd.isOperator():
-        if cd.name == "operator=":
+        if cd.name.head == "operator=":
           "setFrom" # REVIEW change name to something different if possible
         else:
-          cd.name.dropPrefix("operator")
+          cd.name.head.dropPrefix("operator")
       else:
-        cd.name
+        cd.name.head
     else:
-      cd.name
+      cd.name.head
 
 
 #======================  Converting to nim entries  ======================#
@@ -1210,35 +1229,33 @@ proc getArguments(cursor: CXCursor): seq[CArg] =
       result.add CArg(name: name, cursor: subn)
 
 proc visitMethod(cursor: CXCursor, accs: CX_CXXAccessSpecifier): CDecl =
-  result = CDecl(kind: cdkMethod, cursor: cursor)
-  result.name = $cursor
+  result = CDecl(kind: cdkMethod, cursor: cursor, name: newPType $cursor)
   result.accs = accs
   result.args = cursor.getArguments()
 
 
 proc visitField(cursor: CXCursor, accs: CX_CXXAccessSpecifier): CDecl =
-  result = CDecl(kind: cdkField, cursor: cursor)
-  result.name = $cursor
+  result = CDecl(kind: cdkField, cursor: cursor, name: newPType $cursor)
   result.accs = accs
 
 var undefCnt: int = 0
 
 proc visitAlias*(
-  cursor: CXCursor, parent: seq[string], conf: WrapConfig): CDecl =
+  cursor: CXCursor, parent: CNamespace, conf: WrapConfig): CDecl =
   result = CDecl(kind: cdkAlias, cursor: cursor)
-  result.name = $cursor
+  result.name = newPType $cursor
   result.namespace = parent
   # IMPLEMENT
 
 proc visitFunction(
-  cursor: CXCursor, parent: seq[string], conf: WrapConfig): CDecl =
+  cursor: CXCursor, parent: CNamespace, conf: WrapConfig): CDecl =
   result = CDecl(kind: cdkFunction, cursor: cursor, namespace: parent)
-  result.name = $cursor
+  result.name = newPType $cursor
   result.args = cursor.getArguments()
   for subn in cursor:
     case subn.cxKind:
       of ckTemplateTypeParameter:
-        result.genParams.add $subn
+        result.name.genParams.add newPType $subn
       of ckNonTypeTemplateParameter:
         result.genConstraints.add subn
       of ckParmDecl, ckTypeRef, ckNamespaceRef:
@@ -1250,20 +1267,24 @@ proc visitFunction(
 
 
 proc visitClass(
-  cursor: CXCursor, parent: seq[string], conf: WrapConfig): CDecl =
+  cursor: CXCursor, parent: CNamespace, conf: WrapConfig): CDecl =
   ## Convert class under cursor to `CDecl`
   cursor.expectKind({ckClassDecl, ckClassTemplate,
                       ckClassTemplatePartialSpecialization})
-  result = CDecl(kind: cdkClass, cursor: cursor)
-  result.name = $cursor
-  info "Class", (parent & @[ result.name ]).join("::")
+  result = CDecl(kind: cdkClass, cursor: cursor, name: newPType($cursor))
+  info "Class", (parent & @[ result.name ]).toCppImport()
+  result.namespace = parent
+
+  for subn in cursor:
+    if subn.cxKind in {ckTemplateTemplateParameter, ckTemplateTypeParameter}:
+      result.name.genParams.add newPType $subn
+
   identLog()
   defer: dedentLog()
 
-  result.namespace = parent
-  # echo "found class ", cursor
 
   var currentAccs = asPrivate
+
   for subn in cursor:
     if subn.cxKind == ckCXXAccessSpecifier:
       currentAccs = subn.getCXXAccessSpecifier()
@@ -1274,16 +1295,14 @@ proc visitClass(
           result.members.add visitMethod(subn, currentAccs)
         of ckConstructor:
           var res = visitMethod(subn, currentAccs)
-          res.name = "new" & result.name
+          res.name.head = "new" & result.name.head
         of ckCXXAccessSpecifier:
           currentAccs = subn.getCXXAccessSpecifier()
         of ckFieldDecl:
           result.members.add visitField(subn, currentAccs)
         of ckTemplateTypeParameter, ckFriendDecl,
-           ckStaticAssert, ckDestructor:
+           ckStaticAssert, ckDestructor, ckTemplateTemplateParameter:
           discard
-        of ckTemplateTemplateParameter:
-          result.genParams.add $subn
         of ckFunctionTemplate:
           result.members.add visitFunction(
             subn, parent & @[ result.name ], conf)
@@ -1300,19 +1319,19 @@ proc visitClass(
 
 
 proc visitCursor(
-  cursor: CXCursor, parent: seq[string], conf: WrapConfig): tuple[
+  cursor: CXCursor, parent: CNamespace, conf: WrapConfig): tuple[
   decls: seq[CDecl], recurse: bool]
 
 proc visitNamespace(
-  cursor: CXCursor, parent: seq[string], conf: WrapConfig): seq[CDecl] =
+  cursor: CXCursor, parent: CNamespace, conf: WrapConfig): seq[CDecl] =
   ## Convert all elements in namespace into sequence of `CDecl`
   ## elements.
   if not conf.ignoreCursor(cursor, conf):
     for subn in cursor:
-      result.add visitCursor(subn, parent & @[ $cursor ], conf).decls
+      result.add visitCursor(subn, parent & @[ newPType($cursor) ], conf).decls
 
 proc visitCursor(
-  cursor: CXCursor, parent: seq[string], conf: WrapConfig): tuple[
+  cursor: CXCursor, parent: CNamespace, conf: WrapConfig): tuple[
   decls: seq[CDecl], recurse: bool] =
 
   if not conf.ignoreCursor(cursor, conf):
@@ -1569,7 +1588,7 @@ proc wrapMethods*(
 proc wrapObject*(cd: CDecl, conf: WrapConfig): tuple[
   obj: PObject, procs: seq[PProcDecl]] =
   assert cd.kind in {cdkClass, cdkStruct}
-  result.obj = PObject(name: newPType(cd.name), exported: true)
+  result.obj = PObject(name: cd.name, exported: true)
   # WARNING might die on `<T<T<T<T<T<T>>>>>` things
   for genParam in cd.cursor.children({ckTemplateTypeParameter}):
     result.obj.name.genParams.add newPType($genParam)
@@ -1577,7 +1596,7 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig): tuple[
   for fld in cd.pubFields:
     result.obj.flds.add PField(
       isTuple: false,
-      name: fld.name,
+      name: fld.name.head,
       exported: true,
       fldType: fld.cursor.cxType().toNType(conf).ntype
     )
@@ -1656,7 +1675,7 @@ proc parseFile*(
   file: string, config: ParseConfiguration,
   wrapConf: WrapConfig): ParsedFile =
 
-  info "File"
+  # info "File"
   identLog()
 
   let flags = config.getFlags(file)
