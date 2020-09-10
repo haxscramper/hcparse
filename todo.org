@@ -1,0 +1,8 @@
+* 'Cleaned' libclang wrappers
+
+- [ ] Instead of simply dropping duplicate enum values generate
+  constants with dropped names.
+- [ ] Improve enum name conversion algorithm to also drop ~CXX~ in in
+  the name.
+- [ ] Completely remove underscores from generated type and function
+  names

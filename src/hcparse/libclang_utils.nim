@@ -7,7 +7,7 @@ when not defined(libclangIncludeUtils):
 
 #==============================  includes  ===============================#
 import bitops, strformat, macros, terminal, sugar, std/decls, strutils,
-       sequtils, options, os, re, hashes
+       sequtils, options, os, re, hashes, deques, sets
 
 import hpprint, hpprint/hpprint_repr
 import hnimast
@@ -72,7 +72,7 @@ proc getDiagnostics*(unit: CXTranslationUnit): seq[CXDiagnostic] =
     result.add getDiagnostic(unit, i)
 
 proc `$`*(diag: CXDiagnostic): string =
-  $diag.formatDiagnostic(0)
+  $diag.formatDiagnostic(1)
 
 #================================  Index  ================================#
 
@@ -1121,6 +1121,10 @@ func classifyOperator*(cd: CDecl): CXOperatorKind =
       cxoAsgnOp
     of "[]":
       cxoArrayOp
+    of "*", "-", "+", "/":
+      cxoInfixOp
+    of "->":
+      cxoArrowOp
     else:
       raiseAssert(&"#[ IMPLEMENT {name} ]#")
 
@@ -1254,12 +1258,15 @@ proc visitFunction(
     case subn.cxKind:
       of ckTemplateTypeParameter:
         result.name.genParams.add newPType $subn
-      of ckNonTypeTemplateParameter:
+      of ckNonTypeTemplateParameter, ckTemplateRef:
         result.genConstraints.add subn
-      of ckParmDecl, ckTypeRef, ckNamespaceRef:
+      of ckParmDecl, ckTypeRef, ckNamespaceRef,
+         ckFirstExpr, ckCompoundStmt, ckMemberRef:
+         # WARNING right now these things are just droppped. Maybe it
+         # will cause some errors in the future, I don't really know.
         discard
       else:
-        warn "Unknown element", subn.cxKind, subn
+        warn "Unknown element", subn.cxKind, subn, "in\n" & $cursor
 
 
 
@@ -1270,7 +1277,7 @@ proc visitClass(
   cursor.expectKind({ckClassDecl, ckClassTemplate,
                       ckClassTemplatePartialSpecialization})
   result = CDecl(kind: cdkClass, cursor: cursor, name: newPType($cursor))
-  info "Class", (parent & @[ result.name ]).toCppImport()
+  # info "Class", (parent & @[ result.name ]).toCppImport()
   result.namespace = parent
 
   for subn in cursor:
@@ -1304,12 +1311,14 @@ proc visitClass(
         of ckFunctionTemplate:
           result.members.add visitFunction(
             subn, parent & @[ result.name ], conf)
-        of ckTypeAliasTemplateDecl, ckTypeAliasDecl:
-          result.members.add visitAlias(subn, parent & @[result.name], conf)
+        of ckTypeAliasTemplateDecl, ckTypeAliasDecl,
+           ckTypedefDecl, ckUsingDeclaration:
+          result.members.add visitAlias(
+            subn, parent & @[result.name], conf)
         else:
           inc undefCnt
           if undefCnt > 20:
-            raiseAssert("")
+            raiseAssert("Reached unknown class element limit")
           else:
             warn "IMPLEMENT class element:", ($subn.cxKind).toRed(), subn
             debug subn.treeRepr()
@@ -1550,7 +1559,19 @@ proc wrapMethods*(
               if mutable:
                 it.name = "[]="
 
-              info &"Array op {rtype.lispRepr()}[] is mutable: {mutable}"
+            of cxoInfixOp:
+              it.signature.pragma = newPPragma(
+                newPIdentColonString("importcpp", &"# {it.name} #"),
+                newExprColonExpr(newPIdent "header",
+                                 conf.makeHeader(conf)),
+              )
+            of cxoArrowOp:
+              # WARNING
+              it.signature.pragma = newPPragma(
+                newPIdentColonString("importcpp", &"#.operator->()"),
+                newExprColonExpr(newPIdent "header",
+                                 conf.makeHeader(conf)),
+              )
             else:
               raiseAssert("#[ IMPLEMENT ]#")
 
@@ -1601,7 +1622,6 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig): tuple[
 
   var ns = nnkRStrLit.newPTree()
   ns.strVal = cd.namespaceName()
-  info ns
   result.obj.annotation = some(newPPragma(
     newExprColonExpr(newPIdent "importcpp", ns),
     newExprColonExpr(newPIdent "header", conf.makeHeader(conf)),
@@ -1657,7 +1677,7 @@ type
   HeaderDepGraph* = Graph[string, bool, HeaderGraphFlags]
 
   ParseConfiguration* = object
-    globalPaths*: seq[string]
+    globalFlags*: seq[string]
     fileFlags*: Table[string, seq[string]]
 
 
@@ -1667,9 +1687,7 @@ type
 
 
 func getFlags*(config: ParseConfiguration, file: string): seq[string] =
-  for path in config.globalPaths:
-    result.add path.addPrefix("-I")
-
+  result.add config.globalFlags
   result.add config.fileFlags.getOrDefault(file)
 
 proc parseFile*(
@@ -1690,6 +1708,14 @@ proc parseFile*(
 
   dedentLog()
 
+proc registerDeps*(graph: var HeaderDepGraph, parsed: ParsedFile) =
+  let file = parsed.filename
+  for dep in parsed.explicitDeps:
+    discard graph.add(file)
+    discard graph.add(dep)
+    discard graph.edge(graph[file], true, graph[dep])
+
+
 proc parseAll*(
   files: seq[string],
   conf: ParseConfiguration, wrapConf: WrapConfig): FileIndex =
@@ -1699,12 +1725,8 @@ proc parseAll*(
   result.depGraph = newGraph[string, bool](HeaderGraphFlags)
 
   for file, parsed in result.index:
+    result.depGraph.registerDeps(parsed)
 
-    for dep in parsed.explicitDeps:
-      discard result.depGraph.add(file)
-      discard result.depGraph.add(dep)
-      discard result.depGraph.edge(
-        result.depGraph[file], true, result.depGraph[dep])
 
 
 import hasts/graphviz_ast
@@ -1750,17 +1772,28 @@ proc wrapFile*(parsed: ParsedFile, conf: WrapConfig): PNode =
   result = parsed.api.wrapApiUnit(conf)
 
   var imports = nnkStmtList.newPTree()
+
+  imports.add nnkConstSection.newPTree(
+    nnkConstDef.newPTree(
+      newPIdent("cxheader"),
+      newEmptyPNode(),
+      newPLit(parsed.filename)
+    ))
+
   for dep in parsed.explicitDeps:
     imports.add conf.getImport(dep, conf).makeImport()
 
   result = nnkStmtList.newPTree(imports, result)
 
+func toIncludes*(files: seq[string]): seq[string] =
+  for file in files:
+    result.add file.addPrefix("-I")
 
 proc wrapFile*(file: string, flags: seq[string], conf: WrapConfig):
   tuple[parsed: ParsedFile, wrapped: PNode] =
 
   let parsedConf = ParseConfiguration(
-    globalPaths: getBuiltinHeaders(),
+    globalFlags: getBuiltinHeaders().toIncludes(),
     fileFlags: { file : flags }.toTable()
   )
 
@@ -1786,10 +1819,39 @@ proc wrapAll*(
   parseConf: ParseConfiguration,
   wrapConf: WrapConfig): seq[WrapResult] =
 
-  let parsed = files.parseAll(parseConf, wrapConf)
+  var que = initDeque[string]()
+  var visited: HashSet[string]
+
+  # Parse initial file list
+  var parsed = files.parseAll(parseConf, wrapConf)
+
+  for file, _ in parsed.index:
+    que.addLast file # Add all files to que
+    visited.incl file # Mark all as visited
+
+  while que.len > 0:
+    let file = que.popFirst()
+    if file notin visited: # If dependency is new parse it
+      parsed.index[file] = file.parseFile(parseConf, wrapConf)
+      visited.incl file
+
+    # Add to graph
+    parsed.depGraph.registerDeps(parsed.index[file])
+
+    # Store all explicit dependencies for file
+    for dep in parsed.index[file].explicitdeps:
+      if dep in visited:
+        discard
+      else:
+        que.addLast dep
+
+
+
+
   var wrap = wrapConf
 
-  for file in files:
+  for file in visited:
+    info "Wrapping file ", file
     wrap.header = file
     result.add WrapResult(
       parsed: parsed.index[file],
