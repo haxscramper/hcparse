@@ -499,6 +499,23 @@ proc getCursorSemanticSiblings*(cursor: CXCursor): tuple[
         result.before.add curs
 
 
+proc isSemanticAncestorOf*(ancestor, cursor: CXCursor): bool =
+  var parent = cursor
+  while true:
+    parent = parent.getCursorSemanticParent()
+    if parent == ancestor:
+      return true
+    elif parent.cxKind == ckTranslationUnit:
+      return false
+
+proc inheritsGenParamsOf*(cursor, ancestor: CXCursor): bool =
+  # All arguments are semantic descendants of class
+  # declaration, therefore more complicated logic is necessary
+  # to check for type definition.
+  ancestor.isSemanticAncestorOf(
+    cursor.cxType.getTypedeclaration())
+
+
 #*************************************************************************#
 #*******************  Documentation comment wrappers  ********************#
 #*************************************************************************#
@@ -1022,8 +1039,7 @@ proc toNType*(
         of tkVoid:
           newPType("pointer")
         of tkFunctionProto:
-          let (t, mut) = toNType(cxtype[], conf)
-          t
+          toNType(cxtype[], conf).ntype
         else:
           newNType("ptr", [toNType(cxtype[], conf).ntype])
     of tkConstantArray:
@@ -1695,14 +1711,31 @@ proc wrapMethods*(
           kind: meth.cursor.isConstMethod.tern(nvdVar, nvdLet))
 
       for arg in meth.args:
-        let (vtype, mutable) = arg.cursor.cxType().toNType(conf)
+        var (vtype, mutable) = arg.cursor.cxType().toNType(conf)
+        if vtype.head == "UNEXPOSED":
+          # HACK
+          info arg.cursor.cxType(), "parsed as unexposed"
+          info arg.cursor.cxType().lispRepr()
+
+        if arg.cursor.inheritsGenParamsOf(cd.cursor):
+          # WARNING nested class definitions with additional template
+          # parameters are not handled right now. It will break for
+          # code like
+          # `<Ta> struct A { <Tb> struct B {void func(); }; };`
+          # and only add `Tb` as template parameter for `func()`.
+          vtype.genParams.add parent.genParams
+
         it.signature.arguments.add PIdentDefs(
           varname: fixIdentName(arg.name),
           vtype: vtype,
           kind: mutable.tern(nvdVar, nvdLet))
 
-      var (rtype, mutable) = toNType(meth.cursor.retType(), conf)
-      it.signature.setRtype rtype
+      if not (meth.isOperator and meth.classifyOperator() == cxoAsgnOp):
+        var (rtype, mutable) = toNType(meth.cursor.retType(), conf)
+        rtype.genParams = parent.genParams
+        it.signature.setRtype rtype
+      else:
+        it.signature.setRType newPType("void")
 
       block: # Name fixes
         for param in mitems(it.genParams):
