@@ -743,12 +743,18 @@ proc nthArg*(cxtype: CXType, idx: int): CXType =
   assert idx < cxtype.argc()
   getArgType(cxtype, cuint(idx))
 
-proc fixIdentName*(str: string): string =
-  result = if str[0].isLowerAscii():
-    str
-  else:
-    str[0].toLowerAscii() & str[1..^1]
 
+func toCamelCase*(str: string): string =
+  var buf = str.split("_").
+    filterIt(it.len > 0).
+    mapIt(it.capitalizeAscii())
+
+  buf[0][0] = buf[0][0].toLowerAscii()
+
+  return buf.join("")
+
+proc fixIdentName*(str: string): string =
+  result = str.toCamelCase()
   result = case result:
     of "set": "cxset"
     of "type": "cxtype"
@@ -758,7 +764,7 @@ proc fixIdentName*(str: string): string =
     of "end": "cxend"
     else: result
 
-func toCamelCase*(str: string): string =
+func toPascalCase*(str: string): string =
   str.split("_").
     filterIt(it.len > 0).
     mapIt(it.capitalizeAscii()).
@@ -772,12 +778,12 @@ proc fixTypeName*(str: string): string =
     return str
 
   for ns in str.split("::"):
-    result.add ns.toCamelCase()
+    result.add ns.toPascalCase()
 
 proc fixStdTypeName*(head: string): string =
   let split = head.split("::")
   for name in split[0 .. ^1]:
-    result &= name.toCamelCase()
+    result &= name.toPascalCase()
 
 
 proc fixTypeName*(ntype: var NType[PNode], conf: WrapConfig) =
@@ -998,6 +1004,7 @@ proc toNType*(
     of tkULong: newPType("culong")
     of tkUChar: newPType("cuchar")
     of tkChar_S: newPType("cchar")
+    of tkLong: newPType("clong")
     of tkTypedef:
       result.mutable = cxType.isMutableRef()
       newPType(($cxtype).dropPrefix("const ")) # XXXX typedef processing -
@@ -1042,6 +1049,7 @@ proc toNType*(
       result.mutable = cxType.isMutableRef()
       toNType(cxType[], conf).ntype
     of tkUnexposed:
+      # warn "Unexposed type"
       newPType("UNEXPOSED")
     else:
       err "CANT CONVERT: ".toRed({styleItalic}),
@@ -1137,6 +1145,18 @@ func toCppImport*(ns: CNamespace): string =
       buf.add part.head
 
   result = buf.join("::")
+
+func inNamespace*(cd: CDecl, ns: CNamespace): NType[PNode] =
+  var nameBuf: seq[string]
+
+  for n in ns & @[ cd.name ]:
+    result.genParams.add n.genParams
+    nameBuf.add n.head
+
+  result.head = nameBuf.join("::")
+
+func inNamespace*(cd: CDecl, ns: CDecl): NType[PNode] =
+  cd.inNamespace(ns.namespace & @[ ns.name ])
 
 func pubFields*(cd: CDecl): seq[CDecl] =
   assert cd.kind in {cdkClass, cdkStruct}
@@ -1285,11 +1305,10 @@ var undefCnt: int = 0
 
 proc visitAlias*(
   cursor: CXCursor, parent: CNamespace, conf: WrapConfig): CDecl =
-  result = CDecl(kind: cdkAlias, cursor: cursor)
+  result = CDecl(kind: cdkAlias, cursor: cursor, namespace: parent)
+
   result.name = newPType $cursor
-  result.namespace = parent
-  info "Visit alias", cursor
-  # IMPLEMENT
+  # info "Visit alias", cursor
 
 proc visitFunction(
   cursor: CXCursor, parent: CNamespace, conf: WrapConfig): CDecl =
@@ -1325,8 +1344,14 @@ proc visitClass(
   result.namespace = parent
 
   for subn in cursor:
-    if subn.cxKind in {ckTemplateTemplateParameter, ckTemplateTypeParameter}:
-      result.name.genParams.add newPType $subn
+    if subn.cxKind in {ckTemplateTemplateParameter,
+                        ckTemplateTypeParameter}:
+      if subn.len > 0:
+        # WARNING Just drop all template parameters that are not
+        # simply `T`.
+        discard
+      else:
+        result.name.genParams.add newPType $subn
 
   identLog()
   defer: dedentLog()
@@ -1368,8 +1393,9 @@ proc visitClass(
           if undefCnt > 20:
             raiseAssert("Reached unknown class element limit")
           else:
-            warn "IMPLEMENT class element:", ($subn.cxKind).toRed(), subn
-            debug subn.treeRepr()
+            discard
+            # warn "IMPLEMENT class element:", ($subn.cxKind).toRed(), subn
+            # debug subn.treeRepr()
 
 
 
@@ -1402,7 +1428,7 @@ proc visitCursor(
       of ckTypedefDecl:
         @[ visitAlias(cursor, parent, conf) ]
       else:
-        warn "Recursing on", cursor, "of kind", cursor.cxKind()
+        # warn "Recursing on", cursor, "of kind", cursor.cxKind()
         result.recurse = true
         return
 
@@ -1557,7 +1583,7 @@ proc getDepFiles*(deps: seq[CXCursor]): seq[string] =
 
         decl = (cxt.getTypeDeclaration(), true)
       else:
-        warn "dep for:", dep.cxKind(), dep, dep.cxType()
+        # warn "dep for:", dep.cxKind(), dep, dep.cxType()
         decl = (dep.cxType.getTypeDeclaration(), true)
 
     if decl[1]:
@@ -1574,110 +1600,160 @@ proc getDepFiles*(deps: seq[CXCursor]): seq[string] =
 #*************************************************************************#
 #*************************  Wrapper generation  **************************#
 #*************************************************************************#
+proc wrapOperator*(
+  oper: CDecl, genParams: seq[NType[PNode]],
+  conf: WrapConfig): tuple[
+    decl: PProcDecl, addThis: bool] =
+
+  var it = PProcDecl()
+
+  it.signature = newProcNType[PNode](@[])
+  it.name = oper.getNimName()
+  it.genParams = genParams
+  it.exported = true
+
+  let kind = oper.classifyOperator()
+  it.kind = pkOperator
+
+  if kind == cxoAsgnOp and it.name == "setFrom":
+    it.signature.pragma = newPPragma(
+      newPIdentColonString("importcpp", &"# = #"),
+      newExprColonExpr(newPIdent "header",
+                       conf.makeHeader(conf)))
+    it.kind = pkRegular
+  else:
+    case kind:
+      of cxoAsgnOp:
+        it.signature.pragma = newPPragma(
+          newPIdentColonString("importcpp", &"# {it.name} #"),
+          newExprColonExpr(newPIdent "header",
+                           conf.makeHeader(conf)),
+        )
+      of cxoArrayOp:
+        let rtype = oper.cursor.retType()
+        let (_, mutable) = rtype.toNType(conf)
+        if mutable:
+          it.name = "[]="
+
+      of cxoInfixOp:
+        it.signature.pragma = newPPragma(
+          newPIdentColonString("importcpp", &"# {it.name} #"),
+          newExprColonExpr(newPIdent "header",
+                           conf.makeHeader(conf)),
+        )
+      of cxoArrowOp:
+        # WARNING
+        it.signature.pragma = newPPragma(
+          newPIdentColonString("importcpp", &"#.operator->()"),
+          newExprColonExpr(newPIdent "header",
+                           conf.makeHeader(conf)),
+        )
+      of cxoCallOp:
+        # NOTE nim does have experimental support for call
+        # operator, but I think it is better to wrap this one as
+        # separate function `call()`
+        it.name = "call"
+        it.kind = pkRegular
+        it.signature.pragma = newPPragma(
+          newPIdentColonString("importcpp", &"#(@)"),
+          newExprColonExpr(newPIdent "header",
+                           conf.makeHeader(conf)),
+        )
+      else:
+        raiseAssert("#[ IMPLEMENT ]#")
+
+  result.decl = it
+  result.addThis = kind in {cxoAsgnOp}
+
+
 proc wrapMethods*(
   cd: CDecl, conf: WrapConfig,
   parent: NType[PNode], cache: var WrapCache): seq[PProcDecl] =
   assert cd.kind in {cdkClass, cdkStruct}
   for meth in cd.methods({ckCXXMethod}):
-    let procdef = PProcDecl().withIt do:
-      # TODO set `exported` and `comment`
-      it.name = meth.getNimName()
-      it.genParams = parent.genParams
-
-      for param in mitems(it.genParams):
-        conf.fixTypeName(param, conf)
-
-      it.signature = newProcNType[PNode](@[])
-      # it.signature = meth.cursor.toNType(conf).ntype
-      it.exported = (meth.accs == asPublic)
-
+    result.add PProcDecl().withIt do:
       var addThis = true
       if meth.isOperator():
-        let kind = meth.classifyOperator()
-        it.kind = pkOperator
-
-        if kind == cxoAsgnOp and it.name == "setFrom":
-          it.signature.pragma = newPPragma(
-            newPIdentColonString("importcpp", &"# = #"),
-            newExprColonExpr(newPIdent "header",
-                             conf.makeHeader(conf)))
-        else:
-          case kind:
-            of cxoAsgnOp:
-              it.signature.pragma = newPPragma(
-                newPIdentColonString("importcpp", &"# {it.name} #"),
-                newExprColonExpr(newPIdent "header",
-                                 conf.makeHeader(conf)),
-              )
-            of cxoArrayOp:
-              let rtype = meth.cursor.retType()
-              let (_, mutable) = rtype.toNType(conf)
-              if mutable:
-                it.name = "[]="
-
-            of cxoInfixOp:
-              it.signature.pragma = newPPragma(
-                newPIdentColonString("importcpp", &"# {it.name} #"),
-                newExprColonExpr(newPIdent "header",
-                                 conf.makeHeader(conf)),
-              )
-            of cxoArrowOp:
-              # WARNING
-              it.signature.pragma = newPPragma(
-                newPIdentColonString("importcpp", &"#.operator->()"),
-                newExprColonExpr(newPIdent "header",
-                                 conf.makeHeader(conf)),
-              )
-            of cxoCallOp:
-              # NOTE nim does have experimental support for call
-              # operator, but I think it is better to wrap this one as
-              # separate function `call()`
-              it.name = "call"
-              it.kind = pkRegular
-              it.signature.pragma = newPPragma(
-                newPIdentColonString("importcpp", &"#(@)"),
-                newExprColonExpr(newPIdent "header",
-                                 conf.makeHeader(conf)),
-              )
-            else:
-              raiseAssert("#[ IMPLEMENT ]#")
-
-        addThis = kind in {cxoAsgnOp}
+        let (decl, adt) = meth.wrapOperator(parent.genParams, conf)
+        it = decl
+        addThis = adt
       else:
+        it.signature = newProcNType[PNode](@[])
+        it.name = meth.getNimName()
+        it.exported = true
+        it.genParams = parent.genParams
+
         it.signature.pragma = newPPragma(
           newPIdentColonString("importcpp", &"#.{it.name}(@)"),
           newExprColonExpr(newPIdent "header",
-                           conf.makeHeader(conf)),
-        )
-
+                           conf.makeHeader(conf)))
 
       if addThis:
-        var parent = parent
-        conf.fixTypeName(parent, conf)
         it.signature.arguments.add PIdentDefs(
           varname: "self",
           vtype: parent,
-          kind: meth.cursor.isConstMethod.tern(nvdVar, nvdLet)
-        )
+          kind: meth.cursor.isConstMethod.tern(nvdVar, nvdLet))
 
       for arg in meth.args:
-        var (vtype, mutable) = arg.cursor.cxType().toNType(conf)
-        conf.fixTypeName(vtype, conf)
+        let (vtype, mutable) = arg.cursor.cxType().toNType(conf)
         it.signature.arguments.add PIdentDefs(
           varname: fixIdentName(arg.name),
           vtype: vtype,
           kind: mutable.tern(nvdVar, nvdLet))
 
-      # debug meth.cursor.treeRepr(conf.unit)
       var (rtype, mutable) = toNType(meth.cursor.retType(), conf)
-      conf.fixTypeName(rtype, conf)
       it.signature.setRtype rtype
 
+      block: # Name fixes
+        for param in mitems(it.genParams):
+          conf.fixTypeName(param, conf)
 
-    result.add procdef
+        for arg in mitems(it.signature.arguments):
+          conf.fixTypeName(arg.vtype, conf)
+
+        conf.fixTypeName(it.signature.rtype.get().getIt(), conf)
+
+        it.name = it.name.fixIdentName()
+
+proc wrapAlias*(
+  al: CDecl, parent: CDecl, conf: WrapConfig): PNode =
+  let importas = (parent.namespace & @[parent.name, al.name]).toCppImport()
+  var al = al
+  al.name = al.inNamespace(parent)
+
+  conf.fixTypeName(al.name, conf)
+
+  var obj = PObject(name: al.name, exported: true)
+
+  # let alKind = al.cursor.cxType().getCanonicalType().cxKind()
+  # if alKind == tkUnexposed:
+  #   warn "Alias", al.name, "correponds to unexposed type"
+  #   debug al.cursor.treeRepr()
+  # else:
+  #   info "Alias", al.name, alKind
+
+
+  obj.annotation = some(newPPragma(
+    newExprColonExpr(newPIdent "importcpp", newRStrLit(importas)),
+    newExprColonExpr(newPIdent "header", conf.makeHeader(conf)),
+  ))
+
+  result = obj.toNNode(true)
+
+  # newPTree(
+  #   nnkTypeSection,
+  #   newPTree(
+  #     nnkTypeDef,
+  #     newPTree(nnkPostfix, newPIdent("*"), al.name.toNNode()),
+  #     newEmptyNNode[PNode](),
+  #     newPTree(
+  #       nnkDistinctTy, # TODO make it configurable via user-defined
+  #                      # callback. Not all types should be distinct
+  #       al.cursor.cxType().getCanonicalType().toNType(conf).ntype.toNNode()
+  # )))
 
 proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): tuple[
-  obj: PObject, procs: seq[PProcDecl]] =
+  obj: PObject, procs: seq[PProcDecl], other: seq[PNode]] =
   assert cd.kind in {cdkClass, cdkStruct}
   result.obj = PObject(name: cd.name, exported: true)
   # WARNING might die on `<T<T<T<T<T<T>>>>>` things
@@ -1692,15 +1768,20 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): tuple[
       fldType: fld.cursor.cxType().toNType(conf).ntype
     )
 
-  var ns = nnkRStrLit.newPTree()
-  ns.strVal = cd.namespaceName()
   result.obj.annotation = some(newPPragma(
-    newExprColonExpr(newPIdent "importcpp", ns),
+    newExprColonExpr(newPIdent "importcpp", cd.namespaceName().newRStrLit()),
     newExprColonExpr(newPIdent "header", conf.makeHeader(conf)),
   ))
 
   result.procs = cd.wrapMethods(conf, result.obj.name, cache)
   conf.fixTypeName(result.obj.name, conf)
+
+  for mem in cd.members:
+    case mem.kind:
+      of cdkAlias:
+        result.other.add mem.wrapAlias(cd, conf)
+      else:
+        discard
 
 proc wrapApiUnit*(
   api: CApiUnit, conf: WrapConfig, cache: var WrapCache): PNode =
@@ -1722,11 +1803,16 @@ proc wrapApiUnit*(
           # warn "Skipping", decl.cursor.cxType()
           # debug "Which is a specialization of", spec.cxKind()
         else:
-          let (obj, procs) = decl.wrapObject(conf, cache)
+          let (obj, procs, other) = decl.wrapObject(conf, cache)
 
           result.add obj.toNNode(true)
+
+          for it in other:
+            result.add it
+
           for pr in procs:
             result.add pr.toNNode()
+
 
         dedentLog()
       else:
@@ -1777,10 +1863,11 @@ proc parseFile*(
   file: string, config: ParseConfiguration,
   wrapConf: WrapConfig): ParsedFile =
 
-  info "File", file
+  # info "File", file
   identLog()
 
   let flags = config.getFlags(file)
+  result.filename = file
   result.index = createIndex()
   result.unit = parseTranslationUnit(
     result.index, file, flags, {tufSkipFunctionBodies})
@@ -1865,8 +1952,15 @@ proc wrapFile*(
       newPLit(parsed.filename)
     ))
 
-  for dep in parsed.explicitDeps:
-    imports.add conf.getImport(dep, conf).makeImport()
+
+  for node in parsed.explicitDeps.mapIt(
+      conf.getImport(it, conf)).
+      deduplicate().
+      mapIt(it.makeImport()):
+    imports.add node
+
+  # for dep in parsed.explicitDeps:
+  #   imports.add conf.getImport(dep, conf).makeImport()
 
   result = nnkStmtList.newPTree(imports, result)
 
@@ -1931,9 +2025,6 @@ proc wrapAll*(
         discard
       else:
         que.addLast dep
-
-
-
 
   var wrap = wrapConf
 
