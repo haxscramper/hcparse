@@ -7,7 +7,7 @@ when not defined(libclangIncludeUtils):
 
 #==============================  includes  ===============================#
 import bitops, strformat, macros, terminal, sugar, std/decls, strutils,
-       sequtils, options, os, re, hashes, deques, sets
+       sequtils, options, os, re, hashes, deques, sets, hashes
 
 import hpprint, hpprint/hpprint_repr
 import hnimast
@@ -345,6 +345,7 @@ proc isConstMethod*(cursor: CXCursor): bool =
   ## qualification. No exception is raised on invalid method
   (cursor.kind in {ckCXXMethod}) and (cxxMethodIsConst(cursor) == 0)
 
+proc `==`*(c1, c2: CXCursor): bool = equalCursors(c1, c2) == 0
 
 
 #=========================  Accessing subnodes  ==========================#
@@ -484,6 +485,18 @@ proc getSpellingLocation*(cursor: CXCursor): tuple[
   result.column = column.int
   result.offset = offset.int
 
+proc getCursorSemanticSiblings*(cursor: CXCursor): tuple[
+  before, after: seq[CXCursor]] =
+
+  var foundIt = false
+  for curs in cursor.getCursorSemanticParent():
+    if curs == cursor:
+      foundIt = true
+    else:
+      if foundIt:
+        result.after.add curs
+      else:
+        result.before.add curs
 
 
 #*************************************************************************#
@@ -661,8 +674,7 @@ type
     unit*: CXTranslationUnit
     makeHeader*: proc(conf: WrapConfig): PNode ## Genreate identifier for
     ## `{.header: ... .}`
-    fixTypeName*: proc(
-      ntype: NType[PNode], conf: WrapConfig): NType[PNode]
+    fixTypeName*: proc(ntype: var NType[PNode], conf: WrapConfig)
     ## Change type name for `ntype`. Used to convert things like
     ## `boost::wave::macro_handling_exception::bad_include_file` into
     ## human-readable names.
@@ -672,9 +684,22 @@ type
     ## predicate for determining whether or not cursor should be
     ## considered a part of api. Things like `internal` namespaces.
 
+  WrapCache* = HashSet[Hash]
 
 
 #==========================  Helper utilities  ===========================#
+
+proc declHash*(cursor: CXCursor): Hash =
+  let loc = cursor.getSpellingLocation()
+  return !$(
+    hash(loc.file) !& hash(loc.line) !&
+    hash(loc.column) !& hash(loc.offset))
+
+proc markWrap*(cache: var WrapCache, cursor: CXCursor) =
+  cache.incl cursor.declHash()
+
+proc canWrap*(cache: WrapCache, cursor: CXCursor): bool =
+  cursor.declHash() notin cache
 
 proc cxKind*(cxtype: CXType): CXTypeKind =
   ## Get type kind
@@ -733,20 +758,34 @@ proc fixIdentName*(str: string): string =
     of "end": "cxend"
     else: result
 
-proc fixStdTypeName*(ntype: NType[PNode], conf: WrapConfig): NType[PNode] =
-  result = ntype
-  let split = ntype.head.split("::")
-  if split[0] == "std" and split.len == 2:
-    let name = case split[1]:
-      of "unique_ptr": "UPtr"
-      of "string": "String"
-      of "vector": "Vector"
-      else: "<<<" & split[1] & ">>>"
+func toCamelCase*(str: string): string =
+  str.split("_").
+    filterIt(it.len > 0).
+    mapIt(it.capitalizeAscii()).
+    join("")
 
-    result.head = "Std" & name
+proc fixTypeName*(str: string): string =
+  if str in @[
+    "bool", "cint", "cuint", "ptr", "void", "char",
+    "cuchar", "cstring"
+  ]:
+    return str
 
-    for gen in mitems(result.genParams):
-      gen = conf.fixTypeName(gen, conf)
+  for ns in str.split("::"):
+    result.add ns.toCamelCase()
+
+proc fixStdTypeName*(head: string): string =
+  let split = head.split("::")
+  for name in split[0 .. ^1]:
+    result &= name.toCamelCase()
+
+
+proc fixTypeName*(ntype: var NType[PNode], conf: WrapConfig) =
+  ntype.head = fixTypeName(ntype.head)
+
+  for gen in mitems(ntype.genParams):
+    conf.fixTypeName(gen, conf)
+
 
 proc genParams*(cxtype: CXType): seq[CXType] =
   let args = cxtype.getNumTemplateArguments()
@@ -858,8 +897,8 @@ proc fromElaboratedPType*(cxtype: CXType, conf: WrapConfig): NType[PNode] =
       else:
         warn decl.treeRepr()
 
-    result = conf.fixTypeName(result, conf)
-    # debug $result
+    conf.fixTypeName(result, conf)
+
   else:
     result = ($cxtype).
       dropPrefix("enum ").
@@ -1125,6 +1164,8 @@ func classifyOperator*(cd: CDecl): CXOperatorKind =
       cxoInfixOp
     of "->":
       cxoArrowOp
+    of "()":
+      cxoCallOp
     else:
       raiseAssert(&"#[ IMPLEMENT {name} ]#")
 
@@ -1247,6 +1288,7 @@ proc visitAlias*(
   result = CDecl(kind: cdkAlias, cursor: cursor)
   result.name = newPType $cursor
   result.namespace = parent
+  info "Visit alias", cursor
   # IMPLEMENT
 
 proc visitFunction(
@@ -1274,10 +1316,12 @@ proc visitFunction(
 proc visitClass(
   cursor: CXCursor, parent: CNamespace, conf: WrapConfig): CDecl =
   ## Convert class under cursor to `CDecl`
-  cursor.expectKind({ckClassDecl, ckClassTemplate,
-                      ckClassTemplatePartialSpecialization})
+  cursor.expectKind({
+    ckClassDecl, ckClassTemplate, ckClassTemplatePartialSpecialization,
+    ckStructDecl
+  })
+
   result = CDecl(kind: cdkClass, cursor: cursor, name: newPType($cursor))
-  # info "Class", (parent & @[ result.name ]).toCppImport()
   result.namespace = parent
 
   for subn in cursor:
@@ -1288,7 +1332,11 @@ proc visitClass(
   defer: dedentLog()
 
 
-  var currentAccs = asPrivate
+  var currentAccs =
+    if cursor.cxKind == ckStructDecl:
+      asPublic
+    else:
+      asPrivate
 
   for subn in cursor:
     if subn.cxKind == ckCXXAccessSpecifier:
@@ -1345,12 +1393,16 @@ proc visitCursor(
     result.decls.add case cursor.cxKind:
       of ckNamespace:
         visitNamespace(cursor, parent, conf)
-      of ckClassDecl, ckClassTemplate, ckClassTemplatePartialSpecialization:
+      of ckClassDecl, ckClassTemplate,
+         ckClassTemplatePartialSpecialization,
+         ckStructDecl:
         @[ visitClass(cursor, parent, conf) ]
-      of ckFunctionDecl:
+      of ckFunctionDecl, ckFunctionTemplate:
         @[ visitFunction(cursor, parent, conf) ]
+      of ckTypedefDecl:
+        @[ visitAlias(cursor, parent, conf) ]
       else:
-        # echo "recursing on: ", cursor.cxKind
+        warn "Recursing on", cursor, "of kind", cursor.cxKind()
         result.recurse = true
         return
 
@@ -1523,13 +1575,17 @@ proc getDepFiles*(deps: seq[CXCursor]): seq[string] =
 #*************************  Wrapper generation  **************************#
 #*************************************************************************#
 proc wrapMethods*(
-  cd: CDecl, conf: WrapConfig, parent: NType[PNode]): seq[PProcDecl] =
+  cd: CDecl, conf: WrapConfig,
+  parent: NType[PNode], cache: var WrapCache): seq[PProcDecl] =
   assert cd.kind in {cdkClass, cdkStruct}
   for meth in cd.methods({ckCXXMethod}):
     let procdef = PProcDecl().withIt do:
       # TODO set `exported` and `comment`
       it.name = meth.getNimName()
       it.genParams = parent.genParams
+
+      for param in mitems(it.genParams):
+        conf.fixTypeName(param, conf)
 
       it.signature = newProcNType[PNode](@[])
       # it.signature = meth.cursor.toNType(conf).ntype
@@ -1572,6 +1628,17 @@ proc wrapMethods*(
                 newExprColonExpr(newPIdent "header",
                                  conf.makeHeader(conf)),
               )
+            of cxoCallOp:
+              # NOTE nim does have experimental support for call
+              # operator, but I think it is better to wrap this one as
+              # separate function `call()`
+              it.name = "call"
+              it.kind = pkRegular
+              it.signature.pragma = newPPragma(
+                newPIdentColonString("importcpp", &"#(@)"),
+                newExprColonExpr(newPIdent "header",
+                                 conf.makeHeader(conf)),
+              )
             else:
               raiseAssert("#[ IMPLEMENT ]#")
 
@@ -1585,6 +1652,8 @@ proc wrapMethods*(
 
 
       if addThis:
+        var parent = parent
+        conf.fixTypeName(parent, conf)
         it.signature.arguments.add PIdentDefs(
           varname: "self",
           vtype: parent,
@@ -1592,19 +1661,22 @@ proc wrapMethods*(
         )
 
       for arg in meth.args:
-        let (vtype, mutable) = arg.cursor.cxType().toNType(conf)
+        var (vtype, mutable) = arg.cursor.cxType().toNType(conf)
+        conf.fixTypeName(vtype, conf)
         it.signature.arguments.add PIdentDefs(
-          varname: arg.name,
+          varname: fixIdentName(arg.name),
           vtype: vtype,
           kind: mutable.tern(nvdVar, nvdLet))
 
       # debug meth.cursor.treeRepr(conf.unit)
-      it.signature.setRtype toNType(meth.cursor.retType(), conf).ntype
+      var (rtype, mutable) = toNType(meth.cursor.retType(), conf)
+      conf.fixTypeName(rtype, conf)
+      it.signature.setRtype rtype
 
 
     result.add procdef
 
-proc wrapObject*(cd: CDecl, conf: WrapConfig): tuple[
+proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): tuple[
   obj: PObject, procs: seq[PProcDecl]] =
   assert cd.kind in {cdkClass, cdkStruct}
   result.obj = PObject(name: cd.name, exported: true)
@@ -1627,27 +1699,38 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig): tuple[
     newExprColonExpr(newPIdent "header", conf.makeHeader(conf)),
   ))
 
-  result.procs = cd.wrapMethods(conf, result.obj.name)
+  result.procs = cd.wrapMethods(conf, result.obj.name, cache)
+  conf.fixTypeName(result.obj.name, conf)
 
-proc wrapApiUnit*(api: CApiUnit, conf: WrapConfig): PNode =
+proc wrapApiUnit*(
+  api: CApiUnit, conf: WrapConfig, cache: var WrapCache): PNode =
   ## Generate wrapper for api unit.
   result = nnkStmtList.newPTree()
   for decl in api.decls:
+    if cache.canWrap(decl.cursor):
+      cache.markWrap(decl.cursor)
+    else:
+      continue
+
     case decl.kind:
       of cdkClass:
         identLog()
-        let (obj, procs) = decl.wrapObject(conf)
+        let spec = decl.cursor.getSpecializedCursorTemplate()
 
-        result.add obj.toNNode(true)
-        # outwrap &= makeCommentSection("Type definition", 1) & "\n"
-        # outwrap &= $obj.toNNode(true) & "\n"
-        # outwrap &= makeCommentSection("Methods", 1) & "\n"
-        for pr in procs:
-          result.add pr.toNNode()
-        # outwrap &= procs.mapIt($it.toNNode()).joinl()
-        # outwrap &= "\n\n"
+        if spec.cxKind() != ckFirstInvalid:
+          discard
+          # warn "Skipping", decl.cursor.cxType()
+          # debug "Which is a specialization of", spec.cxKind()
+        else:
+          let (obj, procs) = decl.wrapObject(conf, cache)
+
+          result.add obj.toNNode(true)
+          for pr in procs:
+            result.add pr.toNNode()
+
         dedentLog()
       else:
+        # err "Not wrapping", decl.kind, decl.name
         discard
 
 #*************************************************************************#
@@ -1694,7 +1777,7 @@ proc parseFile*(
   file: string, config: ParseConfiguration,
   wrapConf: WrapConfig): ParsedFile =
 
-  # info "File"
+  info "File", file
   identLog()
 
   let flags = config.getFlags(file)
@@ -1718,7 +1801,8 @@ proc registerDeps*(graph: var HeaderDepGraph, parsed: ParsedFile) =
 
 proc parseAll*(
   files: seq[string],
-  conf: ParseConfiguration, wrapConf: WrapConfig): FileIndex =
+  conf: ParseConfiguration,
+  wrapConf: WrapConfig, ): FileIndex =
   for file in files:
     result.index[file] = parseFile(file, conf, wrapConf)
 
@@ -1768,8 +1852,9 @@ proc makeCXStdImport*(path: string): seq[string] =
   let (dir, name, ext) = path.splitFile()
   @["cxstd", name.fixFileName()]
 
-proc wrapFile*(parsed: ParsedFile, conf: WrapConfig): PNode =
-  result = parsed.api.wrapApiUnit(conf)
+proc wrapFile*(
+  parsed: ParsedFile, conf: WrapConfig, cache: var WrapCache): PNode =
+  result = parsed.api.wrapApiUnit(conf, cache)
 
   var imports = nnkStmtList.newPTree()
 
@@ -1789,7 +1874,9 @@ func toIncludes*(files: seq[string]): seq[string] =
   for file in files:
     result.add file.addPrefix("-I")
 
-proc wrapFile*(file: string, flags: seq[string], conf: WrapConfig):
+proc wrapFile*(
+  file: string, flags: seq[string],
+  conf: WrapConfig, cache: var WrapCache):
   tuple[parsed: ParsedFile, wrapped: PNode] =
 
   let parsedConf = ParseConfiguration(
@@ -1798,14 +1885,14 @@ proc wrapFile*(file: string, flags: seq[string], conf: WrapConfig):
   )
 
   result.parsed = parseFile(file, parsedConf, conf)
-  result.wrapped = result.parsed.wrapFile(conf)
+  result.wrapped = result.parsed.wrapFile(conf, cache)
 
 proc wrapFile*(
   cmd: CXCompileCommand, extraFlags: seq[string],
-  conf: WrapConfig): tuple[parsed: ParsedFile, wrapped: PNode] =
-  wrapFile($cmd.getFilename(),
-           extraFlags & cmd.getFlags(),
-           conf)
+  conf: WrapConfig, cache: var WrapCache
+             ): tuple[parsed: ParsedFile, wrapped: PNode] =
+  wrapFile(
+    $cmd.getFilename(), extraFlags & cmd.getFlags(), conf, cache)
 
 type
   WrapResult* = object
@@ -1819,11 +1906,11 @@ proc wrapAll*(
   parseConf: ParseConfiguration,
   wrapConf: WrapConfig): seq[WrapResult] =
 
-  var que = initDeque[string]()
-  var visited: HashSet[string]
-
-  # Parse initial file list
-  var parsed = files.parseAll(parseConf, wrapConf)
+  var
+    que = initDeque[string]()
+    visited: HashSet[string]
+    cache: WrapCache
+    parsed = files.parseAll(parseConf, wrapConf)
 
   for file, _ in parsed.index:
     que.addLast file # Add all files to que
@@ -1851,13 +1938,10 @@ proc wrapAll*(
   var wrap = wrapConf
 
   for file in visited:
-    info "Wrapping file ", file
     wrap.header = file
     result.add WrapResult(
       parsed: parsed.index[file],
       infile: file,
       importName: wrapConf.getImport(file, wrapConf),
-      wrapped: parsed.index[file].wrapFile(wrapConf)
+      wrapped: parsed.index[file].wrapFile(wrapConf, cache)
     )
-
-
