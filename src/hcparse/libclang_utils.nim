@@ -1094,7 +1094,7 @@ func hasUnexposed*(nt: NType[PNode]): bool =
 #*************************************************************************#
 #=========================  C entry declaration  =========================#
 when true:
-  derive commonDerives:
+  when true: # derive commonDerives:
     type
       CDeclKind* = enum
         cdkClass
@@ -1119,7 +1119,7 @@ when true:
 
 
       CNamespace* = seq[NType[PNode]]
-      CDecl* {.derive(GetSet).} = object
+      CDecl* = object
         ## Higher-level wrapper on top of CXCursor. Mostly used to
         ## provide more intuitive API for working with things to be
         ## wrapped.
@@ -1130,16 +1130,64 @@ when true:
         cursor* {.requiresinit.}: CXCursor
         case kind*: CDeclKind
           of cdkField:
-            fldAccs* {.name(accs).}: CX_CXXAccessSpecifier
+            fldAccs*: CX_CXXAccessSpecifier
           of cdkMethod:
-            metAccs* {.name(accs).}: CX_CXXAccessSpecifier
-            metArgs* {.name(args).}: seq[CArg]
+            metAccs*: CX_CXXAccessSpecifier
+            metArgs*: seq[CArg]
           of cdkFunction:
-            funArgs* {.name(args).}: seq[CArg]
+            funArgs*: seq[CArg]
           of cdkClass, cdkStruct:
             members*: seq[CDecl]
+          of cdkEnum:
+            flds*: seq[tuple[
+              fldname: string,
+              value: Option[CXCursor]
+            ]]
           else:
             nil
+
+#=================================  ---  =================================#
+
+  
+proc accs(self: CDecl): CX_CXXAccessSpecifier =
+  if contains({cdkField}, self.kind):
+    return self.fldAccs
+  if contains({cdkMethod}, self.kind):
+    return self.metAccs
+  raiseAssert("#[ IMPLEMENT:ERRMSG ]#")
+
+proc `accs=`(self: var CDecl; it: CX_CXXAccessSpecifier) =
+  var matched: bool = false
+  if contains({cdkField}, self.kind):
+    if true:
+      matched = true
+      self.fldAccs = it
+  if contains({cdkMethod}, self.kind):
+    if true:
+      matched = true
+      self.metAccs = it
+  if not matched:
+    raiseAssert("#[ IMPLEMENT:ERRMSG ]#")
+  
+proc args(self: CDecl): seq[CArg] =
+  if contains({cdkMethod}, self.kind):
+    return self.metArgs
+  if contains({cdkFunction}, self.kind):
+    return self.funArgs
+  raiseAssert("#[ IMPLEMENT:ERRMSG ]#")
+
+proc `args=`(self: var CDecl; it: seq[CArg]) =
+  var matched: bool = false
+  if contains({cdkMethod}, self.kind):
+    if true:
+      matched = true
+      self.metArgs = it
+  if contains({cdkFunction}, self.kind):
+    if true:
+      matched = true
+      self.funArgs = it
+  if not matched:
+    raiseAssert("#[ IMPLEMENT:ERRMSG ]#")
 
 #======================  Accessing CDecl elements  =======================#
 func arg*(cd: CDecl, idx: int): CArg = cd.args()[idx]
@@ -1350,6 +1398,17 @@ proc visitFunction(
         warn "Unknown element", subn.cxKind, subn, "in\n" & $cursor
 
 
+proc visitEnum(
+  cursor: CXcursor, parent: CNamespace, conf: WrapConfig): CDecl =
+  result = CDecl(kind: cdkEnum, cursor: cursor, name: newPType(
+    ($cursor).dropPrefix("enum "))
+  )
+
+  for elem in cursor:
+    result.flds.add ($elem, some(elem[0]))
+
+  info "Found enum", result.name
+
 
 
 proc visitClass(
@@ -1448,6 +1507,8 @@ proc visitCursor(
         @[ visitFunction(cursor, parent, conf) ]
       of ckTypedefDecl:
         @[ visitAlias(cursor, parent, conf) ]
+      of ckEnumDecl:
+        @[ visitEnum(cursor, parent, conf) ]
       else:
         # warn "Recursing on", cursor, "of kind", cursor.cxKind()
         result.recurse = true
@@ -1858,6 +1919,98 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): tuple[
       else:
         discard
 
+proc wrapEnum*(declEn: CDecl, conf: WrapConfig): PNode =
+  let pref = declEn.flds.mapIt(it.fldName).commonPrefix()
+
+  let enumPref = declEn.name.head.
+    splitCamel().
+    mapIt(it[0].toLowerAscii()).
+    join("")
+
+  var en = PEnum(name: declEn.name.head)
+
+  proc renameField(fld: string): string {.closure.} =
+    fld.dropPrefix(pref).dropPrefix("_").addPrefix(enumPref)
+
+  var prevVal: BiggestInt = -123124912
+  for (name, value) in declEn.flds:
+    let val = value.get()
+    var fld = EnumField[PNode](name: name, kind: efvOrdinal)
+
+    var skip = false # C++ allows duplicate elements in enums, so we
+                     # need to skip them when wrapping things into nim.
+    case val.kind:
+      of ckIntegerLiteral:
+        echov val.treeRepr(conf.unit)
+        fld.ordVal = makeRTOrdinal(val.tokens(conf.unit)[0].parseInt())
+      of ckBinaryOperator:
+        let subn = val.children()
+        let toks = val.tokens(conf.unit)[1]
+        case toks:
+          of "<<":
+            fld.ordVal = makeRTOrdinal(
+              subn[0].tokens(conf.unit)[0].parseInt() shl
+              subn[1].tokens(conf.unit)[0].parseInt(),
+            )
+          of "|":
+            let toks = val.tokens(conf.unit)
+            # NOTE assuming `EnumField | OtherField` for now
+            let
+              lhs = renameField(toks[0])
+              rhs = renameField(toks[2])
+              lhsVal = en.values.findItFirst(it.name == lhs)
+              rhsVal = en.values.findItFirst(it.name == rhs)
+
+            fld.ordVal = makeRTOrdinal(
+              bitor(
+                lhsVal.ordVal.intVal,
+                rhsVal.ordVal.intVal,
+              )
+            )
+
+          else:
+            echo toks
+
+      of ckUnaryOperator:
+        let toks = val.tokens(conf.unit)
+        case toks[0]:
+          of "-":
+            fld.ordVal = makeRTOrdinal(toks[1].parseInt())
+          else:
+            raiseAssert("#[ IMPLEMENT ]#")
+      of ckDeclRefExpr:
+        skip = true
+      else:
+        if $val.kind == "OverloadCandidate":
+          fld = EnumField[PNode](name: name, kind: efvNone)
+        else:
+          fld = EnumField[PNode](name: name, kind: efvNone)
+
+
+    if not skip:
+      if fld.kind == efvOrdinal:
+        if fld.ordVal.intVal != prevVal:
+          en.values.add fld
+          prevVal = fld.ordVal.intVal
+      else:
+        inc prevVal
+        en.values.add fld
+
+
+  proc fldCmp(f1, f2: EnumField[PNode]): int {.closure.} =
+    # NOTE possible source of incompatibility - only fields with
+    # specified ordinal values should be sorted.
+    if f1.kind == f2.kind and f1.kind == efvOrdinal:
+      cmp(f1.ordVal.intVal, f2.ordVal.intVal)
+    else:
+      0
+
+  en.values.sort(fldCmp)
+
+  en.exported = true
+
+  return en.toNNode(standalone = true)
+
 proc wrapApiUnit*(
   api: CApiUnit, conf: WrapConfig, cache: var WrapCache): PNode =
   ## Generate wrapper for api unit.
@@ -1892,6 +2045,8 @@ proc wrapApiUnit*(
         dedentLog()
       of cdkAlias:
         result.add decl.wrapAlias(decl.namespace, conf)
+      of cdkEnum:
+        result.add decl.wrapEnum(conf)
       else:
         # err "Not wrapping", decl.kind, decl.name
         discard
@@ -2107,11 +2262,7 @@ proc wrapAll*(
 
   for file in visited:
     wrap.header = file
-    # if "stl_vector" notin file:
-    #   setLogFilter(lvlWarn)
-    # else:
-    #   setLogFilter(lvlDebug)
-
+    wrap.unit = parsed.index[file].unit
     result.add WrapResult(
       parsed: parsed.index[file],
       infile: file,
