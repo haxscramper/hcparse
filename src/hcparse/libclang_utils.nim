@@ -7,7 +7,7 @@ when not defined(libclangIncludeUtils):
 
 #==============================  includes  ===============================#
 import bitops, strformat, macros, terminal, sugar, std/decls, strutils,
-       sequtils, options, os, re, hashes, deques, sets, hashes
+       sequtils, options, os, re, hashes, deques, sets, hashes, logging
 
 import hpprint, hpprint/hpprint_repr
 import hnimast
@@ -512,8 +512,11 @@ proc inheritsGenParamsOf*(cursor, ancestor: CXCursor): bool =
   # All arguments are semantic descendants of class
   # declaration, therefore more complicated logic is necessary
   # to check for type definition.
-  ancestor.isSemanticAncestorOf(
-    cursor.cxType.getTypedeclaration())
+  if cursor.kind in {ckNoDeclFound}:
+    false
+  else:
+    ancestor.isSemanticAncestorOf(
+      cursor.cxType.getTypedeclaration())
 
 
 #*************************************************************************#
@@ -1065,7 +1068,6 @@ proc toNType*(
       result.mutable = cxType.isMutableRef()
       toNType(cxType[], conf).ntype
     of tkUnexposed:
-      # warn "Unexposed type"
       newPType("UNEXPOSED")
     else:
       err "CANT CONVERT: ".toRed({styleItalic}),
@@ -1077,7 +1079,9 @@ proc toNType*(
   result.ntype = restype
   result.mutable = mutable
 
-
+func hasUnexposed*(nt: NType[PNode]): bool =
+  nt.head == "UNEXPOSED" or
+  nt.genParams.anyOfIt(it.hasUnexposed())
 
 
 
@@ -1324,7 +1328,7 @@ proc visitAlias*(
   result = CDecl(kind: cdkAlias, cursor: cursor, namespace: parent)
 
   result.name = newPType $cursor
-  # info "Visit alias", cursor
+  # info "Visit alias ", cursor
 
 proc visitFunction(
   cursor: CXCursor, parent: CNamespace, conf: WrapConfig): CDecl =
@@ -1402,8 +1406,9 @@ proc visitClass(
             subn, parent & @[ result.name ], conf)
         of ckTypeAliasTemplateDecl, ckTypeAliasDecl,
            ckTypedefDecl, ckUsingDeclaration:
-          result.members.add visitAlias(
-            subn, parent & @[result.name], conf)
+          if not conf.ignoreCursor(subn, conf):
+            result.members.add visitAlias(
+              subn, parent & @[result.name], conf)
         else:
           inc undefCnt
           if undefCnt > 20:
@@ -1650,6 +1655,19 @@ proc wrapOperator*(
         let (_, mutable) = rtype.toNType(conf)
         if mutable:
           it.name = "[]="
+          # WARNING potential source of horrible c++ codegen errors
+          it.signature.pragma = newPPragma(
+            newPIdentColonString("importcpp", &"#[#]= #"),
+            newExprColonExpr(newPIdent "header",
+                             conf.makeHeader(conf)))
+
+        else:
+          it.signature.pragma = newPPragma(
+            newPIdentColonString("importcpp", &"#[#]"),
+            newExprColonExpr(newPIdent "header",
+                             conf.makeHeader(conf)))
+
+
 
       of cxoInfixOp:
         it.signature.pragma = newPPragma(
@@ -1679,7 +1697,7 @@ proc wrapOperator*(
         raiseAssert("#[ IMPLEMENT ]#")
 
   result.decl = it
-  result.addThis = kind in {cxoAsgnOp}
+  result.addThis = kind in {cxoAsgnOp, cxoArrayOp}
 
 
 proc wrapMethods*(
@@ -1687,7 +1705,8 @@ proc wrapMethods*(
   parent: NType[PNode], cache: var WrapCache): seq[PProcDecl] =
   assert cd.kind in {cdkClass, cdkStruct}
   for meth in cd.methods({ckCXXMethod}):
-    result.add PProcDecl().withIt do:
+    var canAdd: bool = true
+    let decl = PProcDecl().withIt do:
       var addThis = true
       if meth.isOperator():
         let (decl, adt) = meth.wrapOperator(parent.genParams, conf)
@@ -1713,9 +1732,10 @@ proc wrapMethods*(
       for arg in meth.args:
         var (vtype, mutable) = arg.cursor.cxType().toNType(conf)
         if vtype.head == "UNEXPOSED":
-          # HACK
-          info arg.cursor.cxType(), "parsed as unexposed"
-          info arg.cursor.cxType().lispRepr()
+          # WARNING currently parameters which contain `tkUnexposed`
+          # types are not handled but are skipped instead. I don't
+          # know how to fix right now.
+          canAdd = false
 
         if arg.cursor.inheritsGenParamsOf(cd.cursor):
           # WARNING nested class definitions with additional template
@@ -1730,12 +1750,25 @@ proc wrapMethods*(
           vtype: vtype,
           kind: mutable.tern(nvdVar, nvdLet))
 
+      # Force override return type for assignment operators
       if not (meth.isOperator and meth.classifyOperator() == cxoAsgnOp):
         var (rtype, mutable) = toNType(meth.cursor.retType(), conf)
-        rtype.genParams = parent.genParams
+        if meth.cursor.retType().
+           getTypeDeclaration().
+           inheritsGenParamsOf(cd.cursor):
+
+          rtype.genParams = parent.genParams
+
         it.signature.setRtype rtype
+
+        if rtype.hasUnexposed():
+          # WARNING dropping all methods that use `tkUnexposed` type
+          # in return value. This must be fixed in future versions.
+          canAdd = false
+
       else:
         it.signature.setRType newPType("void")
+
 
       block: # Name fixes
         for param in mitems(it.genParams):
@@ -1748,9 +1781,17 @@ proc wrapMethods*(
 
         it.name = it.name.fixIdentName()
 
+    if canAdd:
+      result.add decl
+
+
+  result = result.deduplicate()
+
+
+
 proc wrapAlias*(
-  al: CDecl, parent: CDecl, conf: WrapConfig): PNode =
-  let importas = (parent.namespace & @[parent.name, al.name]).toCppImport()
+  al: CDecl, parent: CNamespace, conf: WrapConfig): PNode =
+  let importas = (parent & @[al.name]).toCppImport()
   var al = al
   al.name = al.inNamespace(parent)
 
@@ -1788,7 +1829,7 @@ proc wrapAlias*(
 proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): tuple[
   obj: PObject, procs: seq[PProcDecl], other: seq[PNode]] =
   assert cd.kind in {cdkClass, cdkStruct}
-  result.obj = PObject(name: cd.name, exported: true)
+  result.obj = PObject(name: cd.inNamespace(cd.namespace), exported: true)
   # WARNING might die on `<T<T<T<T<T<T>>>>>` things
   # for genParam in cd.cursor.children({ckTemplateTypeParameter}):
   #   result.obj.name.genParams.add newPType($genParam)
@@ -1802,7 +1843,8 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): tuple[
     )
 
   result.obj.annotation = some(newPPragma(
-    newExprColonExpr(newPIdent "importcpp", cd.namespaceName().newRStrLit()),
+    newExprColonExpr(newPIdent "importcpp",
+                     cd.namespaceName().newRStrLit()),
     newExprColonExpr(newPIdent "header", conf.makeHeader(conf)),
   ))
 
@@ -1812,7 +1854,7 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): tuple[
   for mem in cd.members:
     case mem.kind:
       of cdkAlias:
-        result.other.add mem.wrapAlias(cd, conf)
+        result.other.add mem.wrapAlias(cd.namespace & @[cd.name], conf)
       else:
         discard
 
@@ -1848,6 +1890,8 @@ proc wrapApiUnit*(
 
 
         dedentLog()
+      of cdkAlias:
+        result.add decl.wrapAlias(decl.namespace, conf)
       else:
         # err "Not wrapping", decl.kind, decl.name
         discard
@@ -2063,6 +2107,11 @@ proc wrapAll*(
 
   for file in visited:
     wrap.header = file
+    # if "stl_vector" notin file:
+    #   setLogFilter(lvlWarn)
+    # else:
+    #   setLogFilter(lvlDebug)
+
     result.add WrapResult(
       parsed: parsed.index[file],
       infile: file,
