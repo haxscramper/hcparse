@@ -1148,7 +1148,7 @@ when true:
 
 #=================================  ---  =================================#
 
-  
+
 proc accs(self: CDecl): CX_CXXAccessSpecifier =
   if contains({cdkField}, self.kind):
     return self.fldAccs
@@ -1168,7 +1168,7 @@ proc `accs=`(self: var CDecl; it: CX_CXXAccessSpecifier) =
       self.metAccs = it
   if not matched:
     raiseAssert("#[ IMPLEMENT:ERRMSG ]#")
-  
+
 proc args(self: CDecl): seq[CArg] =
   if contains({cdkMethod}, self.kind):
     return self.metArgs
@@ -1400,9 +1400,9 @@ proc visitFunction(
 
 proc visitEnum(
   cursor: CXcursor, parent: CNamespace, conf: WrapConfig): CDecl =
-  result = CDecl(kind: cdkEnum, cursor: cursor, name: newPType(
-    ($cursor).dropPrefix("enum "))
-  )
+  result = CDecl(kind: cdkEnum, cursor: cursor,
+                 namespace: parent,
+                 name: newPType(($cursor).dropPrefix("enum ")))
 
   for elem in cursor:
     result.flds.add ($elem, some(elem[0]))
@@ -1927,7 +1927,9 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): PNode =
     mapIt(it[0].toLowerAscii()).
     join("")
 
-  var en = PEnum(name: declEn.name.head)
+  var nt = declEn.inNamespace(declEn.namespace)
+  conf.fixTypeName(nt, conf)
+  var en = PEnum(name: nt.head)
 
   proc renameField(fld: string): string {.closure.} =
     fld.dropPrefix(pref).dropPrefix("_").addPrefix(enumPref)
@@ -1941,7 +1943,6 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): PNode =
                      # need to skip them when wrapping things into nim.
     case val.kind:
       of ckIntegerLiteral:
-        echov val.treeRepr(conf.unit)
         fld.ordVal = makeRTOrdinal(val.tokens(conf.unit)[0].parseInt())
       of ckBinaryOperator:
         let subn = val.children()
@@ -2266,6 +2267,6 @@ proc wrapAll*(
     result.add WrapResult(
       parsed: parsed.index[file],
       infile: file,
-      importName: wrapConf.getImport(file, wrapConf),
-      wrapped: parsed.index[file].wrapFile(wrapConf, cache)
+      importName: wrap.getImport(file, wrap),
+      wrapped: parsed.index[file].wrapFile(wrap, cache)
     )
