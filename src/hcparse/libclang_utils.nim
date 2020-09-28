@@ -1329,7 +1329,9 @@ proc getPublicAPI*(cd: CDecl): seq[CXCursor] =
         result.add cd.cursor
         for arg in cd.args:
           result.add arg.cursor
-    of cdkEnum, cdkAlias:
+    of cdkAlias:
+      return @[cd.cursor]
+    of cdkEnum:
       return @[]
 
 
@@ -1652,6 +1654,12 @@ proc getDepFiles*(deps: seq[CXCursor]): seq[string] =
         decl = (dep.retType().getTypeDeclaration(), true)
       of ckFunctionTemplate:
         result.add dep.retType().getDepFiles()
+      of ckTypeAliasTemplateDecl, ckTypeAliasDecl,
+         ckTypedefDecl, ckUsingDeclaration:
+        decl = (
+          dep.cxType().getCanonicalType().getTypeDeclaration(),
+          true
+        )
       of ckParmDecl:
         var cxt = dep.cxType()
 
