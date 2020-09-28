@@ -17,7 +17,7 @@ import packages/docutils/rstast
 import posix
 
 import hmisc/types/colorstring
-import hmisc/[hexceptions, helpers]
+import hmisc/[hexceptions, helpers, hdebug_misc]
 import hmisc/other/[hshell, colorlogger]
 
 
@@ -793,7 +793,7 @@ func toPascalCase*(str: string): string =
 proc fixTypeName*(str: string): string =
   if str in @[
     "bool", "cint", "cuint", "ptr", "void", "char",
-    "cuchar", "cstring"
+    "cuchar", "cstring", "cchar", "uint32"
   ]:
     return str
 
@@ -907,13 +907,17 @@ proc toNType*(
 
 proc fromElaboratedPType*(cxtype: CXType, conf: WrapConfig): NType[PNode] =
   let genParams = cxtype.getNumTemplateArguments()
+  # echov genParams
+  # echov cxtype
   if genParams > 0:
     let decl = cxtype.getTypeDeclaration()
+    # echov decl.cxKind
+    # echov decl
     case decl.cxKind:
       of ckTypedefDecl:
         # WARNING `template <J, Q> using` is not handled
         result = newPType(decl.getTypeName(conf))
-      of ckClassDecl:
+      of ckClassDecl, ckStructDecl:
         let params = cxtype.genParams()
         result = newPType(decl.getTypeName(conf))
         for idx, parm in params:
@@ -968,7 +972,7 @@ proc getTypeName*(curs: CXCursor, conf: WrapConfig): string =
   case curs.cxKind:
     of ckTypedefDecl:
       return $curs.cxType()
-    of ckClassDecl:
+    of ckClassDecl, ckStructDecl:
       result = $curs
     else:
       err $curs
@@ -1023,8 +1027,13 @@ proc toNType*(
     of tkDouble: newPType("cdouble")
     of tkULong: newPType("culong")
     of tkUChar: newPType("cuchar")
+    of tkChar16: newPType("uint16") # WARNING C++ type is `char16_t`
+    of tkChar32: newPType("uint32") # WARNING C++ type is `char32_t`
+    of tkWChar: newPType("uint32") # WARNING C++ type is `wchar_t`
     of tkChar_S: newPType("cchar")
     of tkLong: newPType("clong")
+    of tkUShort: newPType("cushort")
+    of tkNullPtr: newPType("pointer") # WARNING C++ type is `nullptr_t`
     of tkTypedef:
       result.mutable = cxType.isMutableRef()
       newPType(($cxtype).dropPrefix("const ")) # XXXX typedef processing -
@@ -1376,7 +1385,10 @@ proc visitAlias*(
   result = CDecl(kind: cdkAlias, cursor: cursor, namespace: parent)
 
   result.name = newPType $cursor
-  # info "Visit alias ", cursor
+
+  # if "string" in $cursor:
+  #   info "Visit alias ", cursor
+  #   debug cursor.treeRepr()
 
 proc visitFunction(
   cursor: CXCursor, parent: CNamespace, conf: WrapConfig): CDecl =
@@ -1855,25 +1867,31 @@ proc wrapAlias*(
   let importas = (parent & @[al.name]).toCppImport()
   var al = al
   al.name = al.inNamespace(parent)
-
   conf.fixTypeName(al.name, conf)
 
-  var obj = PObject(name: al.name, exported: true)
+  # var obj = PObject(name: al.name, exported: true)
 
-  # let alKind = al.cursor.cxType().getCanonicalType().cxKind()
-  # if alKind == tkUnexposed:
-  #   warn "Alias", al.name, "correponds to unexposed type"
-  #   debug al.cursor.treeRepr()
-  # else:
-  #   info "Alias", al.name, alKind
+  let aliasof = al.cursor.cxType().getCanonicalType()
+  if "string" in $al.cursor:
+    # workHax true:
+    info "Alias", al.name, aliasof.toNType(conf).ntype
+    info aliasof.lispRepr()
+    debug aliasof.getTypeDeclaration().treeRepr()
 
+  result = nnkTypeSection.newPTree(
+    nnkTypeDef.newPTree(
+      al.name.toNNode(),
+      newEmptyPNode(),
+      aliasof.toNType(conf).ntype.toNNode()
+    )
+  )
 
-  obj.annotation = some(newPPragma(
-    newExprColonExpr(newPIdent "importcpp", newRStrLit(importas)),
-    newExprColonExpr(newPIdent "header", conf.makeHeader(conf)),
-  ))
+  # obj.annotation = some(newPPragma(
+  #   newExprColonExpr(newPIdent "importcpp", newRStrLit(importas)),
+  #   newExprColonExpr(newPIdent "header", conf.makeHeader(conf)),
+  # ))
 
-  result = obj.toNNode(true)
+  # result = obj.toNNode(true)
 
   # newPTree(
   #   nnkTypeSection,

@@ -6,3 +6,8 @@
   the name.
 - [ ] Completely remove underscores from generated type and function
   names
+
+* Wrapper generator
+
+- [ ] Follow typedef alias dependencies
+- [ ] Wrap alias as ~type A = B~ instead of declaring separate object
