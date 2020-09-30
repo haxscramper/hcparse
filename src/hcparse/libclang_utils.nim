@@ -30,7 +30,12 @@ proc `$`*(cxstr: CXString): string =
   disposeString(cxstr)
 
 proc `$`*(cursor: CXCursor): string = $getCursorSpelling(cursor)
-proc `$`*(cxtype: CXType): string = $getTypeSpelling(cxtype)
+proc `$`*(cxtype: CXType): string =
+  if cxtype.kind == tkInvalid:
+    "<invalid>"
+  else:
+    $getTypeSpelling(cxtype)
+
 proc `$`*(cxkind: CXCursorKind): string = $getCursorKindSpelling(cxkind)
 
 proc realpath*(path: string): string =
@@ -155,8 +160,6 @@ proc parseTranslationUnit*(
     if diag.getDiagnosticSeverity() in {dsError, dsFatal}:
       hadErrors = true
       echo ($diag).toRed()
-    else:
-      echo ($diag).toYellow()
 
   if hadErrors or (reparseOnNil and result.isNil):
     echo(&"""
@@ -694,7 +697,7 @@ type
     unit*: CXTranslationUnit
     makeHeader*: proc(conf: WrapConfig): PNode ## Genreate identifier for
     ## `{.header: ... .}`
-    fixTypeName*: proc(ntype: var NType[PNode], conf: WrapConfig)
+    fixTypeName*: proc(ntype: var NType[PNode], conf: WrapConfig, idx: int)
     ## Change type name for `ntype`. Used to convert things like
     ## `boost::wave::macro_handling_exception::bad_include_file` into
     ## human-readable names.
@@ -790,30 +793,41 @@ func toPascalCase*(str: string): string =
     mapIt(it.capitalizeAscii()).
     join("")
 
-proc fixTypeName*(str: string): string =
-  if str in @[
+proc fixTypeName*(str: string, idx: int): string =
+  if str.len == 0:
+    return "T" & $idx
+  elif str in @[
     "bool", "cint", "cuint", "ptr", "void", "char",
-    "cuchar", "cstring", "cchar", "uint32"
+    "cuchar", "cstring", "cchar", "uint32", "uint16"
   ]:
     return str
+  else:
+    for ns in str.split("::"):
+      result.add ns.toPascalCase()
 
-  for ns in str.split("::"):
-    result.add ns.toPascalCase()
+proc fixStdTypeName*(head: string, idx: int): string =
+  if head.len == 0:
+    result = "T" & $idx
+  else:
+    let split = head.split("::")
+    for name in split[0 .. ^1]:
+      result &= name.toPascalCase()
 
-proc fixStdTypeName*(head: string): string =
-  let split = head.split("::")
-  for name in split[0 .. ^1]:
-    result &= name.toPascalCase()
 
+proc fixTypeName*(
+  ntype: var NType[PNode], conf: WrapConfig, idx: int = 0) =
+  ntype.head = fixTypeName(ntype.head, idx)
 
-proc fixTypeName*(ntype: var NType[PNode], conf: WrapConfig) =
-  ntype.head = fixTypeName(ntype.head)
-
+  var idx = idx
   for gen in mitems(ntype.genParams):
-    conf.fixTypeName(gen, conf)
+    conf.fixTypeName(gen, conf, idx)
+    inc idx
 
 
 proc genParams*(cxtype: CXType): seq[CXType] =
+  ## Get list of generic parameters for a type
+  # DOC just any type or only generic instantiation?
+  # TODO maybe mark generated parameters as defaulted/non-defaulted?
   let args = cxtype.getNumTemplateArguments()
   if args > 0:
     for i in 0 .. args:
@@ -927,7 +941,7 @@ proc fromElaboratedPType*(cxtype: CXType, conf: WrapConfig): NType[PNode] =
       else:
         warn decl.treeRepr()
 
-    conf.fixTypeName(result, conf)
+    conf.fixTypeName(result, conf, 0)
 
   else:
     result = ($cxtype).
@@ -1253,11 +1267,15 @@ func classifyOperator*(cd: CDecl): CXOperatorKind =
   assert cd.isOperator()
   let name = cd.name.head.dropPrefix("operator")
   case name:
-    of "+=", "=": # NOTE `=`
+    of "+=", "=", "-=", "*=": # NOTE `=`
       cxoAsgnOp
     of "[]":
       cxoArrayOp
-    of "*", "-", "+", "/":
+    of "*", "-", "+", "/",
+       "++", "--" # NOTE this is an operator implementation, so we are
+                  # not (i hope) dropping information about
+                  # prefix/infix calls
+         :
       cxoInfixOp
     of "->":
       cxoArrowOp
@@ -1421,7 +1439,21 @@ proc visitEnum(
   for elem in cursor:
     result.flds.add ($elem, some(elem[0]))
 
-  info "Found enum", result.name
+  # info "Found enum", result.name
+
+
+proc requiredGenericParams(cursor: CXCursor): seq[NType[PNode]] =
+  ## Get list of required generic parameters from cursor pointing to
+  ## class or struct declaration
+  for subn in cursor:
+    if subn.cxKind in {ckTemplateTemplateParameter,
+                        ckTemplateTypeParameter}:
+      if subn.len > 0:
+        # WARNING Just drop all template parameters that are not
+        # simply `T`.
+        discard
+      else:
+        result.add newPType $subn # WARNING blow up on `a<b>`
 
 
 
@@ -1435,20 +1467,10 @@ proc visitClass(
 
   result = CDecl(kind: cdkClass, cursor: cursor, name: newPType($cursor))
   result.namespace = parent
-
-  for subn in cursor:
-    if subn.cxKind in {ckTemplateTemplateParameter,
-                        ckTemplateTypeParameter}:
-      if subn.len > 0:
-        # WARNING Just drop all template parameters that are not
-        # simply `T`.
-        discard
-      else:
-        result.name.genParams.add newPType $subn
+  result.name.genParams.add cursor.requiredGenericParams()
 
   identLog()
   defer: dedentLog()
-
 
   var currentAccs =
     if cursor.cxKind == ckStructDecl:
@@ -1852,13 +1874,17 @@ proc wrapMethods*(
 
 
       block: # Name fixes
+        var idx: int = 0
         for param in mitems(it.genParams):
-          conf.fixTypeName(param, conf)
+          conf.fixTypeName(param, conf, 0)
+          inc idx
 
+        idx = 0
         for arg in mitems(it.signature.arguments):
-          conf.fixTypeName(arg.vtype, conf)
+          conf.fixTypeName(arg.vtype, conf, idx)
+          inc idx
 
-        conf.fixTypeName(it.signature.rtype.get().getIt(), conf)
+        conf.fixTypeName(it.signature.rtype.get().getIt(), conf, 0)
 
         it.name = it.name.fixIdentName()
 
@@ -1875,22 +1901,48 @@ proc wrapAlias*(
   let importas = (parent & @[al.name]).toCppImport()
   var al = al
   al.name = al.inNamespace(parent)
-  conf.fixTypeName(al.name, conf)
+  conf.fixTypeName(al.name, conf, 0)
 
   # var obj = PObject(name: al.name, exported: true)
 
   let aliasof = al.cursor.cxType().getCanonicalType()
-  if "string" in $al.cursor:
+  if ("string" in $al.cursor) and ("Json" notin $al.name):
     # workHax true:
     info "Alias", al.name, aliasof.toNType(conf).ntype
-    info aliasof.lispRepr()
-    debug aliasof.getTypeDeclaration().treeRepr()
+    # info aliasof.lispRepr()
+    info al.cursor.treeRepr()
+    info aliasof.getTypeDeclaration().cxType().toNType(conf).ntype
+    # let declBase = al.cursor[0]
+    # debug declbase.cxType().lispRepr()
+    # debug declBase.treeRepr()
+    # debug declBase.requiredGenericParams()
+
+  var full = aliasof.toNType(conf).ntype
+
+  if aliasof.getNumTemplateArguments() > 0:
+    let required =
+      aliasof.getTypeDeclaration().
+      getSpecializedCursorTemplate().
+      requiredGenericParams()
+
+    # WARNING HACK - ignore all template parameters that /might/ be
+    # defaulted - i.e. only ones that *must* be specified (not
+    # defaulted in declaration) are included.
+    full.genParams = full.genParams[0 ..< required.len()]
+    # info required
+    # debug al.cursor.tokens(conf.unit)
+    # debug al.cursor.getSpellingLocation()
+    # debug al.cursor.treeRepr(conf.unit)
+    # debug aliasof.getTypeDeclaration()
+
+    # info required
+    # info full
 
   result = nnkTypeSection.newPTree(
     nnkTypeDef.newPTree(
       al.name.toNNode(),
       newEmptyPNode(),
-      aliasof.toNType(conf).ntype.toNNode()
+      full.toNNode()
     )
   )
 
@@ -1936,7 +1988,7 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): tuple[
   ))
 
   result.procs = cd.wrapMethods(conf, result.obj.name, cache)
-  conf.fixTypeName(result.obj.name, conf)
+  conf.fixTypeName(result.obj.name, conf, 0)
 
   for mem in cd.members:
     case mem.kind:
@@ -1954,7 +2006,7 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): PNode =
     join("")
 
   var nt = declEn.inNamespace(declEn.namespace)
-  conf.fixTypeName(nt, conf)
+  conf.fixTypeName(nt, conf, 0)
   var en = PEnum(name: nt.head)
 
   proc renameField(fld: string): string {.closure.} =
