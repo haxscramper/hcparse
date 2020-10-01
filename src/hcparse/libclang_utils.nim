@@ -1090,8 +1090,8 @@ proc toNType*(
                           # system.
       result.mutable = cxType.isMutableRef()
       toNType(cxType[], conf).ntype
-    of tkUnexposed:
-      newPType("UNEXPOSED")
+    of tkUnexposed: newPType("UNEXPOSED")
+    of tkDependent: newPType("DEPENDENT")
     else:
       err "CANT CONVERT: ".toRed({styleItalic}),
         cxtype.kind, " ", ($cxtype).toGreen(), " ",
@@ -1105,7 +1105,7 @@ proc toNType*(
 func hasUnexposed*(nt: NType[PNode]): bool =
   case nt.kind:
     of ntkIdent, ntkGenericSpec:
-      nt.head == "UNEXPOSED" or
+      nt.head in [ "UNEXPOSED", "DEPENDENT" ] or
       nt.genParams.anyOfIt(it.hasUnexposed())
     of ntkProc:
       nt.arguments.anyOfIt(it.vtype.hasUnexposed())
@@ -1139,12 +1139,14 @@ when true:
         cursor*: CXCursor
 
       CXOperatorKind* = enum
+        ## Classification for operators
         cxoPrefixOp ## Prefix operator `@a`
         cxoInfixOP ## Infix operator `a @ b`
         cxoAsgnOp ## Assign operator `a = b`
         cxoArrayOp ## Array access operator `a[b]`
         cxoArrowOp ## Arrow operator `a->`
         cxoCallOp ## Call operator `a()`
+        cxoDerefOp ## Prefix dereference operator
 
 
       CNamespace* = seq[NType[PNode]]
@@ -1286,12 +1288,17 @@ func classifyOperator*(cd: CDecl): CXOperatorKind =
       cxoAsgnOp
     of "[]":
       cxoArrayOp
-    of "*", "-", "+", "/",
+    of "-", "+", "/",
        "++", "--" # NOTE this is an operator implementation, so we are
                   # not (i hope) dropping information about
                   # prefix/infix calls
          :
       cxoInfixOp
+    of "*": # NOTE this heuristics might not be valid in all cases.
+      if cd.args.len == 0:
+        cxoDerefOp
+      else:
+        cxoInfixOp
     of "->":
       cxoArrowOp
     of "()":
@@ -1811,11 +1818,18 @@ proc wrapOperator*(
           newExprColonExpr(newPIdent "header",
                            conf.makeHeader(conf)),
         )
+      of cxoDerefOp:
+        it.name = "[]"
+        # it.kind = pkRegular
+        it.signature.pragma = newPPragma(
+          newPIdentColonString("importcpp", &"*#"),
+          newExprColonExpr(newPIdent "header",
+                           conf.makeHeader(conf)))
       else:
         raiseAssert("#[ IMPLEMENT ]#")
 
   result.decl = it
-  result.addThis = kind in {cxoAsgnOp, cxoArrayOp}
+  result.addThis = kind in {cxoAsgnOp, cxoArrayOp, cxoDerefOp, cxoArrowOp}
 
 
 proc wrapMethods*(
@@ -1910,6 +1924,25 @@ proc wrapMethods*(
   result = result.deduplicate()
 
 
+proc wrapTypeFromNamespace(
+  namespace: CNamespace, conf: WrapConfig): PNode =
+  # WARNING for now I assume that 'UNEXPOSED' type only occurs in
+  # situations like `std::move_iterator<'0>::pointer` where typedef
+  # uses it's semantic parent (class or struct declaration) to get
+  # template parameters. This might not be a valid assumption in
+  # general case.k
+
+  var name: NType[PNode] = namespace.toNType()
+  conf.fixTypeName(name, conf, 0)
+  var obj = PObject(name: name, exported: true)
+  obj.annotation = some(newPPragma(
+    newExprColonExpr(newPIdent "importcpp",
+                     namespace.toCppImport().newRStrLit()),
+    newExprColonExpr(newPIdent "header", conf.makeHeader(conf)),
+  ))
+
+  result = obj.toNNode(standalone = true)
+
 
 proc wrapAlias*(
   al: CDecl, parent: CNamespace, conf: WrapConfig): PNode =
@@ -1932,29 +1965,12 @@ proc wrapAlias*(
     full.genParams = full.genParams[0 ..< required.len()]
 
   if full.hasUnexposed():
-    let namespace = parent & @[newPType($al.cursor)] 
-    # WARNING for now I assume that 'UNEXPOSED' type only occurs in
-    # situations like `std::move_iterator<'0>::pointer` where typedef
-    # uses it's semantic parent (class or struct declaration) to get
-    # template parameters. This might not be a valid assumption in
-    # general case.k
-    var name: NType[PNode] = namespace.toNType()
-    conf.fixTypeName(name, conf, 0)
-    var obj = PObject(name: name, exported: true)
-    obj.annotation = some(newPPragma(
-      newExprColonExpr(newPIdent "importcpp",
-                       namespace.toCppImport().newRStrLit()),
-      newExprColonExpr(newPIdent "header", conf.makeHeader(conf)),
-    ))
-
-    result = obj.toNNode(standalone = true)
+    let namespace = parent & @[newPType($al.cursor)]
+    result = namespace.wrapTypeFromNamespace(conf)
   else:
+    let (head, genparams) = al.name.toExported(true)
     result = nnkTypeSection.newPTree(
-      nnkTypeDef.newPTree(
-        al.name.toNNode(),
-        newEmptyPNode(),
-        full.toNNode()
-      )
+      nnkTypeDef.newPTree(head, genparams, full.toNNode())
     )
 
 proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): tuple[
