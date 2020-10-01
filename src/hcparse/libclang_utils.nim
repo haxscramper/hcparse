@@ -1103,8 +1103,14 @@ proc toNType*(
   result.mutable = mutable
 
 func hasUnexposed*(nt: NType[PNode]): bool =
-  nt.head == "UNEXPOSED" or
-  nt.genParams.anyOfIt(it.hasUnexposed())
+  case nt.kind:
+    of ntkIdent, ntkGenericSpec:
+      nt.head == "UNEXPOSED" or
+      nt.genParams.anyOfIt(it.hasUnexposed())
+    of ntkProc:
+      nt.arguments.anyOfIt(it.vtype.hasUnexposed())
+    else:
+      false
 
 
 
@@ -1236,6 +1242,15 @@ func toCppImport*(ns: CNamespace): string =
       buf.add part.head
 
   result = buf.join("::")
+
+func toNType*(ns: CNamespace): NType[PNode] =
+  var nameBuf: seq[string]
+  for part in ns:
+    result.genParams.add part.genParams
+    nameBuf.add part.head
+
+  result.head = nameBuf.join("::")
+
 
 func inNamespace*(cd: CDecl, ns: CNamespace): NType[PNode] =
   var nameBuf: seq[string]
@@ -1898,7 +1913,7 @@ proc wrapMethods*(
 
 proc wrapAlias*(
   al: CDecl, parent: CNamespace, conf: WrapConfig): PNode =
-  let importas = (parent & @[al.name]).toCppImport()
+  # let importas = (parent & @[al.name]).toCppImport()
   var al = al
   al.name = al.inNamespace(parent)
   conf.fixTypeName(al.name, conf, 0)
@@ -1916,13 +1931,31 @@ proc wrapAlias*(
     # defaulted in declaration) are included.
     full.genParams = full.genParams[0 ..< required.len()]
 
-  result = nnkTypeSection.newPTree(
-    nnkTypeDef.newPTree(
-      al.name.toNNode(),
-      newEmptyPNode(),
-      full.toNNode()
+  if full.hasUnexposed():
+    let namespace = parent & @[newPType($al.cursor)] 
+    # WARNING for now I assume that 'UNEXPOSED' type only occurs in
+    # situations like `std::move_iterator<'0>::pointer` where typedef
+    # uses it's semantic parent (class or struct declaration) to get
+    # template parameters. This might not be a valid assumption in
+    # general case.k
+    var name: NType[PNode] = namespace.toNType()
+    conf.fixTypeName(name, conf, 0)
+    var obj = PObject(name: name, exported: true)
+    obj.annotation = some(newPPragma(
+      newExprColonExpr(newPIdent "importcpp",
+                       namespace.toCppImport().newRStrLit()),
+      newExprColonExpr(newPIdent "header", conf.makeHeader(conf)),
+    ))
+
+    result = obj.toNNode(standalone = true)
+  else:
+    result = nnkTypeSection.newPTree(
+      nnkTypeDef.newPTree(
+        al.name.toNNode(),
+        newEmptyPNode(),
+        full.toNNode()
+      )
     )
-  )
 
 proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): tuple[
   obj: PObject, procs: seq[PProcDecl], other: seq[PNode]] =
