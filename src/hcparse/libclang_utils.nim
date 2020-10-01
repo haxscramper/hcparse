@@ -1903,22 +1903,8 @@ proc wrapAlias*(
   al.name = al.inNamespace(parent)
   conf.fixTypeName(al.name, conf, 0)
 
-  # var obj = PObject(name: al.name, exported: true)
-
   let aliasof = al.cursor.cxType().getCanonicalType()
-  if ("string" in $al.cursor) and ("Json" notin $al.name):
-    # workHax true:
-    info "Alias", al.name, aliasof.toNType(conf).ntype
-    # info aliasof.lispRepr()
-    info al.cursor.treeRepr()
-    info aliasof.getTypeDeclaration().cxType().toNType(conf).ntype
-    # let declBase = al.cursor[0]
-    # debug declbase.cxType().lispRepr()
-    # debug declBase.treeRepr()
-    # debug declBase.requiredGenericParams()
-
   var full = aliasof.toNType(conf).ntype
-
   if aliasof.getNumTemplateArguments() > 0:
     let required =
       aliasof.getTypeDeclaration().
@@ -1929,14 +1915,6 @@ proc wrapAlias*(
     # defaulted - i.e. only ones that *must* be specified (not
     # defaulted in declaration) are included.
     full.genParams = full.genParams[0 ..< required.len()]
-    # info required
-    # debug al.cursor.tokens(conf.unit)
-    # debug al.cursor.getSpellingLocation()
-    # debug al.cursor.treeRepr(conf.unit)
-    # debug aliasof.getTypeDeclaration()
-
-    # info required
-    # info full
 
   result = nnkTypeSection.newPTree(
     nnkTypeDef.newPTree(
@@ -1945,25 +1923,6 @@ proc wrapAlias*(
       full.toNNode()
     )
   )
-
-  # obj.annotation = some(newPPragma(
-  #   newExprColonExpr(newPIdent "importcpp", newRStrLit(importas)),
-  #   newExprColonExpr(newPIdent "header", conf.makeHeader(conf)),
-  # ))
-
-  # result = obj.toNNode(true)
-
-  # newPTree(
-  #   nnkTypeSection,
-  #   newPTree(
-  #     nnkTypeDef,
-  #     newPTree(nnkPostfix, newPIdent("*"), al.name.toNNode()),
-  #     newEmptyNNode[PNode](),
-  #     newPTree(
-  #       nnkDistinctTy, # TODO make it configurable via user-defined
-  #                      # callback. Not all types should be distinct
-  #       al.cursor.cxType().getCanonicalType().toNType(conf).ntype.toNNode()
-  # )))
 
 proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): tuple[
   obj: PObject, procs: seq[PProcDecl], other: seq[PNode]] =
