@@ -140,6 +140,8 @@ proc parseTranslationUnit*(
   trOptions: set[CXTranslationUnit_Flags] = {tufSingleFileParse},
   reparseOnNil: bool = true): CXTranslationUnit =
 
+  filename.assertExists()
+
   let cmdline = getBuiltinHeaders().mapIt(&"-I{it}") & cmdline
 
   var flags: int
@@ -165,7 +167,7 @@ proc parseTranslationUnit*(
 Translation unit parse failed due to errors.
 Compilation flags:
 {cmdline.joinql()}
-File:
+Input file:
   {filename}
       """)
 
@@ -481,7 +483,8 @@ proc getExpansionLocation*(location: CXSourceLocation): tuple[
   location.getSpellingLocation(
     addr file, addr line, addr column, addr offset)
 
-  result.file = toAbsFile $file.getFileName()
+  # debug $file.getFileName()
+  result.file = toAbsFile($file.getFileName(), true) # WARNING set root?
   result.line = line.int
   result.column = column.int
   result.offset = offset.int
@@ -1694,8 +1697,9 @@ proc getDepFiles*(cxtype: CXType): seq[AbsFile] =
     if parm.cxKind != tkInvalid:
       result.add getDepFiles(parm)
 
-  let (file, _, _, _) = decl.getSpellingLocation()
-  result.add file.toAbsFile()
+  ignorePathErrors {fekInvalidEntry}:
+    let (file, _, _, _) = decl.getSpellingLocation()
+    result.add file
 
 proc getDepFiles*(deps: seq[CXCursor]): seq[AbsFile] =
   ## Generate list of files that have to be wrapped
@@ -1744,12 +1748,13 @@ proc getDepFiles*(deps: seq[CXCursor]): seq[AbsFile] =
         decl = (dep.cxType.getTypeDeclaration(), true)
 
     if decl[1]:
-      let (file, line, column, _) = decl[0].getSpellingLocation()
-
-      result.add file.toAbsFile()
+      ignorePathErrors {fekInvalidEntry}:
+        # WARNING ignore invalid `#include`
+        let (file, line, column, _) = decl[0].getSpellingLocation()
+        result.add file
 
   result = result.deduplicate().
-    filterIt(it.len > 0).
+    filterIt(it.len > 0 and it.hasExt()).
     mapIt(it.normalize())
 
 
@@ -2203,8 +2208,13 @@ proc parseFile*(
     result.index, file, flags, {tufSkipFunctionBodies})
 
   result.api = result.unit.splitDeclarations(wrapConf)
+  info "Explicit dependencies for", file
   result.explicitDeps = result.api.publicApi.
     getDepFiles().filterIt(it != file)
+
+  logIdented:
+    for dep in result.explicitDeps:
+      debug dep
 
   dedentLog()
 
@@ -2342,6 +2352,7 @@ proc wrapAll*(
 
   while que.len > 0:
     let file = que.popFirst()
+    info "Parsing file", file
     if file notin visited: # If dependency is new parse it
       parsed.index[file] = file.parseFile(parseConf, wrapConf)
       visited.incl file
@@ -2350,7 +2361,7 @@ proc wrapAll*(
     parsed.depGraph.registerDeps(parsed.index[file])
 
     # Store all explicit dependencies for file
-    for dep in parsed.index[file].explicitdeps:
+    for dep in parsed.index[file].explicitDeps:
       if dep in visited:
         discard
       else:
