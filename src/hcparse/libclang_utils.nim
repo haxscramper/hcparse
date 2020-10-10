@@ -7,18 +7,16 @@ when not defined(libclangIncludeUtils):
 
 #==============================  includes  ===============================#
 import bitops, strformat, macros, terminal, sugar, std/decls, strutils,
-       sequtils, options, os, re, hashes, deques, sets, hashes, logging
+       sequtils, options, re, hashes, deques, sets, hashes, logging
 
 import hpprint, hpprint/hpprint_repr
 import hnimast
 import nimtraits
 import compiler/ast
 import packages/docutils/rstast
-import posix
-
 import hmisc/types/colorstring
 import hmisc/[hexceptions, helpers, hdebug_misc]
-import hmisc/other/[hshell, colorlogger]
+import hmisc/other/[hshell, colorlogger, oswrap]
 
 
 
@@ -36,12 +34,10 @@ proc `$`*(cxtype: CXType): string =
   else:
     $getTypeSpelling(cxtype)
 
-proc `$`*(cxkind: CXCursorKind): string = $getCursorKindSpelling(cxkind)
+proc `$`*(cxRange: CXSourceRange): string =
+  &"[{cxRange.beginIntData}, {cxRange.endIntData}]"
 
-proc realpath*(path: string): string =
-  var resolved: cstring
-  let res = realpath(path.cstring, resolved)
-  result = $res
+proc `$`*(cxkind: CXCursorKind): string = $getCursorKindSpelling(cxkind)
 
 
 #*************************************************************************#
@@ -114,6 +110,9 @@ proc `[]`*(commands: CXCompileCommands, idx: int): CXCompileCommand =
   assert cuint(idx) < commands.getSize()
   return commands.getCommand(cuint idx)
 
+proc absFile*(command: CXCompileCommand): AbsFile =
+  AbsFile $command.getFilename()
+
 #==========================  Translation unit  ===========================#
 
 proc isNil*(tu: CXTranslationUnit): bool =
@@ -121,7 +120,7 @@ proc isNil*(tu: CXTranslationUnit): bool =
 
 
 
-proc getBuiltinHeaders*(): seq[string] =
+proc getBuiltinHeaders*(): seq[AbsDir] =
   ## According to clang `documentation <https://clang.llvm.org/docs/LibTooling.html#builtin-includes>`_
   ## libclang is needs additional precompiled headers paths in
   ## addition to default include.
@@ -131,12 +130,12 @@ proc getBuiltinHeaders*(): seq[string] =
 
   let version = ($getClangVersion()).split(" ")[2] # WARNING
   @[
-    &"/usr/lib/clang/{version}/include"
+    toAbsDir &"/usr/lib/clang/{version}/include"
   ]
 
 proc parseTranslationUnit*(
   trIndex: CXIndex,
-  filename: string,
+  filename: AbsFile,
   cmdline: seq[string] = @[],
   trOptions: set[CXTranslationUnit_Flags] = {tufSingleFileParse},
   reparseOnNil: bool = true): CXTranslationUnit =
@@ -212,7 +211,7 @@ proc parseTranslationUnit*(
     command.getFlags()
 
   let file = $command.getFilename()
-  index.parseTranslationUnit(file, args, {})
+  index.parseTranslationUnit(file.toAbsFile(), args, {})
 
 
 
@@ -470,10 +469,9 @@ proc isFromMainFile*(cursor: CXCursor): bool =
   let location = cursor.getCursorLocation()
   result = location.locationIsFromMainFile() != cint(0)
 
-proc getSpellingLocation*(cursor: CXCursor): tuple[
-  file: string, line, column, offset: int] =
+proc getExpansionLocation*(location: CXSourceLocation): tuple[
+  file: AbsFile, line, column, offset: int] =
 
-  let location = cursor.getCursorLocation()
   var
     file: CXFile
     line: cuint
@@ -483,10 +481,15 @@ proc getSpellingLocation*(cursor: CXCursor): tuple[
   location.getSpellingLocation(
     addr file, addr line, addr column, addr offset)
 
-  result.file = $file.getFileName()
+  result.file = toAbsFile $file.getFileName()
   result.line = line.int
   result.column = column.int
   result.offset = offset.int
+
+
+proc getSpellingLocation*(cursor: CXCursor): tuple[
+  file: AbsFile, line, column, offset: int] =
+  cursor.getCursorLocation().getExpansionLocation()
 
 proc getCursorSemanticSiblings*(cursor: CXCursor): tuple[
   before, after: seq[CXCursor]] =
@@ -693,7 +696,7 @@ proc toNimDoc*(comment: CXComment): string =
 type
   WrapConfig* = object
     ## Configuration for wrapping. Mostly deals with type renaming
-    header*: string ## Current main translation file (header)
+    header*: AbsFile ## Current main translation file (header)
     unit*: CXTranslationUnit
     makeHeader*: proc(conf: WrapConfig): PNode ## Genreate identifier for
     ## `{.header: ... .}`
@@ -701,7 +704,7 @@ type
     ## Change type name for `ntype`. Used to convert things like
     ## `boost::wave::macro_handling_exception::bad_include_file` into
     ## human-readable names.
-    getImport*: proc(dep: string, conf: WrapConfig): seq[string] ## Generate
+    getImport*: proc(dep: AbsFile, conf: WrapConfig): seq[string] ## Generate
     ## import statement for header file dependency
     ignoreCursor*: proc(curs: CXCursor, conf: WrapConfig): bool ## User-defined
     ## predicate for determining whether or not cursor should be
@@ -860,9 +863,17 @@ proc objTreeRepr*(
                      style = {styleItalic, styleDim}))
 
   if cursor.len  == 0:
-    let val = pptConst(
-      cursor.tokens(tu).join(" "), initPrintStyling(fg = fgGreen))
-    let flds = if showtype: @[ctype, val] else: @[val]
+    let val = pptconst(
+      cursor.tokens(tu).join(" "), initprintstyling(fg = fggreen))
+    var flds = if showtype: @[ctype, val] else: @[val]
+
+    if cursor.cxKind in {ckMacroExpansion}:
+      let cxRange =
+        $getCursorLocation(cursor).getExpansionLocation() & " " &
+          $getCursorExtent(cursor)
+
+      flds.add pptconst(
+        $cxRange, initprintstyling(fg = fgBlue))
 
     pptObj($cursor.cxkind, initPrintStyling(fg = fgYellow), flds)
   else:
@@ -1597,32 +1608,32 @@ proc splitDeclarations*(
 
 #=====================  Dependency list generation  ======================#
 # ~~~~ CLI helper path resolution ~~~~ #
-proc getHCParseBinDir*(): string =
+proc getHCParseBinDir*(): AbsDir =
   ## Return absolute path `/bin` directory with helper cmdline tools;
   ## NOTE right now I have no idea how to handle dependencies like
   ## this - this is just a hacky solution.
   for dir in currentSourcePath().parentDirs():
-    if (dir / "hcparse.nimble").fileExists():
+    if (dir /. "hcparse.nimble").fileExists():
       return dir / "bin"
 
   raise newException(
     IOError,
     "Could not find `hcparse.nimble` in any of the parent directories")
 
-proc getHCParseBinPath*(name: string): string =
+proc getHCParseBinPath*(name: string): AbsFile =
   ## Return absolute name of the helper cmdline tool `name`
   let bindir = getHCParseBinDir()
-  let file = bindir / name
+  let file = bindir /. name
   if fileExists(file):
     return file
   else:
-    raise newException(IOError, "Could not find '" & file & "'")
+    raise newException(IOError, "Could not find '" & $file & "'")
 
 # ~~~~ Dependency tree construction ~~~~ #
 
 type
   CDepsTree* = object
-    file*: string
+    file*: AbsFile
     name*: string
     deps*: seq[CDepsTree]
 
@@ -1635,10 +1646,10 @@ proc parseBuildDepsTree*(outs: string): CDepsTree =
     while not depLines[idx].startsWith(Whitespace, "}"):
       if deplines[idx] =~ re".*?<(.*?)> (.*)":
         inc idx
-        result.add CDepsTree(name: matches[0], file: matches[1])
+        result.add CDepsTree(name: matches[0], file: matches[1].toAbsFile)
       elif deplines[idx] =~ re""".*?"(.*?)" (.*)""":
         inc idx
-        result.add CDepsTree(name: matches[0], file: matches[1])
+        result.add CDepsTree(name: matches[0], file: matches[1].toAbsFile)
       elif depLines[idx].startsWith(Whitespace, "{"):
         inc idx
         # echo "startin level ", depLines[idx]
@@ -1652,13 +1663,13 @@ proc parseBuildDepsTree*(outs: string): CDepsTree =
 
   return CDepsTree(deps: auxTree())
 
-proc buildDepsTree*(file: string, args: seq[string]): CDepsTree =
+proc buildDepsTree*(file: AbsFile, args: seq[string]): CDepsTree =
   let bin = getHCParseBinPath("deps")
   assert file.existsFile()
-  let command = bin & " " & args.joinw() & " " & file
+  let command = $bin & " " & args.joinw() & " " & $file
 
   try:
-    let (outs, _, _) = runShell(command)
+    let (outs, _, _) = runShell(makeGnuCmd(command))
     result = parseBuildDepsTree(outs)
     result.file = file
 
@@ -1669,24 +1680,24 @@ proc buildDepsTree*(file: string, args: seq[string]): CDepsTree =
     echo args.joinql()
 
 
-proc immediateDeps*(d: CDepsTree): seq[string] =
+proc immediateDeps*(d: CDepsTree): seq[AbsFile] =
   d.deps.mapIt(it.file)
 
 # ~~~~ Collecting dependeny list ~~~~ #
 
 
-proc getDepFiles*(deps: seq[CXCursor]): seq[string]
+proc getDepFiles*(deps: seq[CXCursor]): seq[AbsFile]
 
-proc getDepFiles*(cxtype: CXType): seq[string] =
+proc getDepFiles*(cxtype: CXType): seq[AbsFile] =
   let decl = cxtype.getTypeDeclaration()
   for parm in cxtype.genParams():
     if parm.cxKind != tkInvalid:
       result.add getDepFiles(parm)
 
   let (file, _, _, _) = decl.getSpellingLocation()
-  result.add file
+  result.add file.toAbsFile()
 
-proc getDepFiles*(deps: seq[CXCursor]): seq[string] =
+proc getDepFiles*(deps: seq[CXCursor]): seq[AbsFile] =
   ## Generate list of files that have to be wrapped
   # TODO:DOC
   for dep in deps:
@@ -1735,11 +1746,11 @@ proc getDepFiles*(deps: seq[CXCursor]): seq[string] =
     if decl[1]:
       let (file, line, column, _) = decl[0].getSpellingLocation()
 
-      result.add file
+      result.add file.toAbsFile()
 
   result = result.deduplicate().
     filterIt(it.len > 0).
-    mapIt(it.realpath())
+    mapIt(it.normalize())
 
 
 
@@ -2155,31 +2166,31 @@ type
 
   ParsedFile* = object
     unit*: CXTranslationUnit ## Translation unit
-    filename*: string ## Name of the origina file
+    filename*: AbsFile ## Name of the original file
     api*: CApiUnit ## File's API
     index*: CXIndex
-    explicitDeps*: seq[string] ## Filenames in which types exposed in
+    explicitDeps*: seq[AbsFile] ## Filenames in which types exposed in
     ## API are declared. Guaranteed to have every file listed once &
     ## no self-dependencies.
 
-  HeaderDepGraph* = Graph[string, bool, HeaderGraphFlags]
+  HeaderDepGraph* = Graph[AbsFile, bool, HeaderGraphFlags]
 
   ParseConfiguration* = object
     globalFlags*: seq[string]
-    fileFlags*: Table[string, seq[string]]
+    fileFlags*: Table[AbsFile, seq[string]]
 
 
   FileIndex* = object
-    index*: Table[string, ParsedFile]
+    index*: Table[AbsFile, ParsedFile]
     depGraph*: HeaderDepGraph
 
 
-func getFlags*(config: ParseConfiguration, file: string): seq[string] =
+proc getFlags*(config: ParseConfiguration, file: AbsFile): seq[string] =
   result.add config.globalFlags
   result.add config.fileFlags.getOrDefault(file)
 
 proc parseFile*(
-  file: string, config: ParseConfiguration,
+  file: AbsFile, config: ParseConfiguration,
   wrapConf: WrapConfig): ParsedFile =
 
   # info "File", file
@@ -2206,13 +2217,13 @@ proc registerDeps*(graph: var HeaderDepGraph, parsed: ParsedFile) =
 
 
 proc parseAll*(
-  files: seq[string],
+  files: seq[AbsFile],
   conf: ParseConfiguration,
   wrapConf: WrapConfig, ): FileIndex =
   for file in files:
     result.index[file] = parseFile(file, conf, wrapConf)
 
-  result.depGraph = newGraph[string, bool](HeaderGraphFlags)
+  result.depGraph = newGraph[AbsFile, bool](HeaderGraphFlags)
 
   for file, parsed in result.index:
     result.depGraph.registerDeps(parsed)
@@ -2226,12 +2237,12 @@ func dotRepr*(idx: FileIndex): graphviz_ast.Graph =
   result.styleNode = makeRectConsolasNode()
 
   for file in idx.depGraph.nodes:
-    result.addNode(makeNode(hash file.value, file.value))
+    result.addNode(makeNode(hash file.value, file.value.getStr()))
 
   for (source, _, target) in idx.depGraph.edges:
     result.addEdge makeEdge(hash source.value, hash target.value)
 
-func getDepModules*(file: string, idx: FileIndex): seq[string] =
+proc getDepModules*(file: AbsFile, idx: FileIndex): seq[AbsFile] =
   ## Get list of modules that have to be imported in wrapper for file
   ## `file`.
   for dep in idx.depGraph[file].outgoing():
@@ -2254,7 +2265,7 @@ proc fixFileName*(name: string): string =
     "+": "p"
   })
 
-proc makeCXStdImport*(path: string): seq[string] =
+proc makeCXStdImport*(path: AbsFile): seq[string] =
   let (dir, name, ext) = path.splitFile()
   @["cxstd", name.fixFileName()]
 
@@ -2268,7 +2279,7 @@ proc wrapFile*(
     nnkConstDef.newPTree(
       newPIdent("cxheader"),
       newEmptyPNode(),
-      newPLit(parsed.filename)
+      newPLit(parsed.filename.getStr())
     ))
 
 
@@ -2283,12 +2294,12 @@ proc wrapFile*(
 
   result = nnkStmtList.newPTree(imports, result)
 
-func toIncludes*(files: seq[string]): seq[string] =
+func toIncludes*(files: seq[AbsDir]): seq[string] =
   for file in files:
-    result.add file.addPrefix("-I")
+    result.add file.getStr().addPrefix("-I")
 
 proc wrapFile*(
-  file: string, flags: seq[string],
+  file: AbsFile, flags: seq[string],
   conf: WrapConfig, cache: var WrapCache):
   tuple[parsed: ParsedFile, wrapped: PNode] =
 
@@ -2305,23 +2316,23 @@ proc wrapFile*(
   conf: WrapConfig, cache: var WrapCache
              ): tuple[parsed: ParsedFile, wrapped: PNode] =
   wrapFile(
-    $cmd.getFilename(), extraFlags & cmd.getFlags(), conf, cache)
+    toAbsFile $cmd.getFilename(), extraFlags & cmd.getFlags(), conf, cache)
 
 type
   WrapResult* = object
     parsed*: ParsedFile
     wrapped*: PNode
-    infile*: string
+    infile*: AbsFile
     importName*: seq[string]
 
 proc wrapAll*(
-  files: seq[string],
+  files: seq[AbsFile],
   parseConf: ParseConfiguration,
   wrapConf: WrapConfig): seq[WrapResult] =
 
   var
-    que = initDeque[string]()
-    visited: HashSet[string]
+    que = initDeque[AbsFile]()
+    visited: HashSet[AbsFile]
     cache: WrapCache
     parsed = files.parseAll(parseConf, wrapConf)
 
