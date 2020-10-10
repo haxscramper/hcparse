@@ -1,4 +1,4 @@
-## Helper functions for libclang. This file should not be imported -
+ ## Helper functions for libclang. This file should not be imported -
 ## it is `include`'d in the main `libclang` file.
 
 when not defined(libclangIncludeUtils):
@@ -213,7 +213,7 @@ proc parseTranslationUnit*(
     command.getFlags()
 
   let file = $command.getFilename()
-  index.parseTranslationUnit(file.toAbsFile(), args, {})
+  index.parseTranslationUnit(file.toAbsFile(true), args, {})
 
 
 
@@ -483,8 +483,9 @@ proc getExpansionLocation*(location: CXSourceLocation): tuple[
   location.getSpellingLocation(
     addr file, addr line, addr column, addr offset)
 
-  # debug $file.getFileName()
   result.file = toAbsFile($file.getFileName(), true) # WARNING set root?
+  echov file.getFileName()
+  echov result.file
   result.line = line.int
   result.column = column.int
   result.offset = offset.int
@@ -492,7 +493,8 @@ proc getExpansionLocation*(location: CXSourceLocation): tuple[
 
 proc getSpellingLocation*(cursor: CXCursor): tuple[
   file: AbsFile, line, column, offset: int] =
-  cursor.getCursorLocation().getExpansionLocation()
+  result = cursor.getCursorLocation().getExpansionLocation()
+  echov result.file
 
 proc getCursorSemanticSiblings*(cursor: CXCursor): tuple[
   before, after: seq[CXCursor]] =
@@ -1695,24 +1697,34 @@ proc getDepFiles*(cxtype: CXType): seq[AbsFile] =
   let decl = cxtype.getTypeDeclaration()
   for parm in cxtype.genParams():
     if parm.cxKind != tkInvalid:
-      result.add getDepFiles(parm)
+      for file in getDepFiles(parm):
+        result.add file
 
-  ignorePathErrors {fekInvalidEntry}:
+  ignorePathErrors {pekInvalidEntry}:
     let (file, _, _, _) = decl.getSpellingLocation()
     result.add file
+
+  for file in result:
+    assertExists(file)
 
 proc getDepFiles*(deps: seq[CXCursor]): seq[AbsFile] =
   ## Generate list of files that have to be wrapped
   # TODO:DOC
   for dep in deps:
     var decl: (CXCursor, bool)
+    echov dep
     case dep.cxKind:
       of ckFunctionDecl, ckCXXMethod, ckConversionFunction:
-        result.add getDepFiles(dep.params())
+        result.add getDepFiles(dep.params()).withIt do:
+          for file in it:
+            echov file
+            assertExists file
 
         decl = (dep.retType().getTypeDeclaration(), true)
       of ckFunctionTemplate:
-        result.add dep.retType().getDepFiles()
+        result.add dep.retType().getDepFiles().withIt do:
+          for file in it:
+            assertExists file
       of ckTypeAliasTemplateDecl, ckTypeAliasDecl,
          ckTypedefDecl, ckUsingDeclaration:
         decl = (
@@ -1739,7 +1751,9 @@ proc getDepFiles*(deps: seq[CXCursor]): seq[AbsFile] =
         if not typeRef and (cxt.cxKind() notin {tkInt}):
           for parm in cxt.genParams():
             if parm.cxKind != tkInvalid:
-              result.add getDepFiles(parm)
+              result.add getDepFiles(parm).withIt do:
+                for file in it:
+                  assertExists file
 
 
         decl = (cxt.getTypeDeclaration(), true)
@@ -1748,14 +1762,18 @@ proc getDepFiles*(deps: seq[CXCursor]): seq[AbsFile] =
         decl = (dep.cxType.getTypeDeclaration(), true)
 
     if decl[1]:
-      ignorePathErrors {fekInvalidEntry}:
+      ignorePathErrors {pekInvalidEntry}:
         # WARNING ignore invalid `#include`
+        echov decl
         let (file, line, column, _) = decl[0].getSpellingLocation()
+        echov file
+        assertExists(file)
         result.add file
+
 
   result = result.deduplicate().
     filterIt(it.len > 0 and it.hasExt()).
-    mapIt(it.normalize())
+    mapIt(it.realpath())
 
 
 
@@ -2198,7 +2216,8 @@ proc parseFile*(
   file: AbsFile, config: ParseConfiguration,
   wrapConf: WrapConfig): ParsedFile =
 
-  # info "File", file
+  info "File", file
+  file.assertExists()
   identLog()
 
   let flags = config.getFlags(file)
@@ -2212,9 +2231,9 @@ proc parseFile*(
   result.explicitDeps = result.api.publicApi.
     getDepFiles().filterIt(it != file)
 
-  logIdented:
-    for dep in result.explicitDeps:
-      debug dep
+  # logIdented:
+  #   for dep in result.explicitDeps:
+  #     debug dep
 
   dedentLog()
 
@@ -2326,7 +2345,8 @@ proc wrapFile*(
   conf: WrapConfig, cache: var WrapCache
              ): tuple[parsed: ParsedFile, wrapped: PNode] =
   wrapFile(
-    toAbsFile $cmd.getFilename(), extraFlags & cmd.getFlags(), conf, cache)
+    toAbsFile($cmd.getFilename(), true),
+    extraFlags & cmd.getFlags(), conf, cache)
 
 type
   WrapResult* = object
