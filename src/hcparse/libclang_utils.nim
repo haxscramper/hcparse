@@ -1180,6 +1180,9 @@ when true:
         includedAs*: string
         includedPath*: AbsFile
         includedFrom*: AbsFile
+        fromLine*: int
+        fromColumn*: int
+        fromOffset*: int
 
 
 
@@ -1606,9 +1609,13 @@ proc visitCursor(
       of ckEnumDecl:
         result.decls.add visitEnum(cursor, parent, conf) 
       of ckInclusionDirective:
+        let loc = cursor.getSpellingLocation()
         result.includes.add IncludeDep(
           includedAs: $cursor,
-          includedFrom: cursor.getSpellingLocation().file,
+          includedFrom: loc.file,
+          fromLine: loc.line,
+          fromColumn: loc.column,
+          fromOffset: loc.offset,
           includedPath: AbsFile $cursor.getIncludedFile()
         )
         # info "Found include ", cursor
@@ -2233,7 +2240,7 @@ type
     ## API are declared. Guaranteed to have every file listed once &
     ## no self-dependencies.
 
-  HeaderDepGraph* = Graph[AbsFile, bool, HeaderGraphFlags]
+  HeaderDepGraph* = Graph[AbsFile, string, HeaderGraphFlags]
 
   ParseConfiguration* = object
     globalFlags*: seq[string] ## List of parse flags applied on each
@@ -2277,12 +2284,51 @@ proc parseFile*(
 
   dedentLog()
 
+proc incl*[N, E, F](gr: var Graph[N, E, F], val: N) =
+  if val notin gr:
+    discard gr.add(val)
+
+proc contains*[N, E, F](gr: Graph[N, E, F], pair: (N, N)): bool =
+  if (pair[0] notin gr) or (pair[1] notin gr):
+    return false
+
+  for (edge, node) in gr[pair[0]].incoming():
+    if node.value == pair[1]:
+    # if edge in gr:
+      return true
+
+
+  for (edge, node) in gr[pair[0]].outgoing():
+    # if edge in gr:
+    if node.value == pair[1]:
+      return true
+
+proc incl*[N, E, F](
+  gr: var Graph[N, E, F], pair: (N, N), edgeVal: E) =
+  if pair notin gr:
+    discard gr.edge(gr[pair[0]], edgeVal, gr[pair[1]])
+
+
+
 proc registerDeps*(graph: var HeaderDepGraph, parsed: ParsedFile) =
   let file = parsed.filename
+
+  for dep in parsed.api.includes:
+    let
+      path = dep.includedPath.realpath
+      ifrm = dep.includedFrom.realpath
+
+    graph.incl(path)
+    graph.incl(ifrm)
+    notice ifrm, " -> ", path
+    graph.incl((ifrm, path), &"{dep.includedAs}:{dep.fromLine}",)
+
+
   for dep in parsed.explicitDeps:
-    discard graph.add(file)
-    discard graph.add(dep)
-    discard graph.edge(graph[file], true, graph[dep])
+    graph.incl(file.realpath)
+    graph.incl(dep.realpath)
+    info file, " -> ", dep
+    graph.incl((file.realpath, dep.realpath), "@@@")
 
 
 proc parseAll*(
@@ -2292,7 +2338,7 @@ proc parseAll*(
   for file in files:
     result.index[file] = parseFile(file, conf, wrapConf)
 
-  result.depGraph = newGraph[AbsFile, bool](HeaderGraphFlags)
+  result.depGraph = newGraph[AbsFile, string](HeaderGraphFlags)
 
   for file, parsed in result.index:
     result.depGraph.registerDeps(parsed)
@@ -2300,16 +2346,30 @@ proc parseAll*(
 
 
 import hasts/graphviz_ast
-export toPng
+export toPng, toXDot, AbsFile
 
-func dotRepr*(idx: FileIndex): graphviz_ast.Graph =
+func dotRepr*(idx: FileIndex, onlyPP: bool = true): DotGraph =
   result.styleNode = makeRectConsolasNode()
+  # result.splines = spsLine
 
+  result.rankdir = grdLeftRight
   for file in idx.depGraph.nodes:
-    result.addNode(makeNode(hash file.value, file.value.getStr()))
+    result.addNode(makeDotNode(hash file.value, file.value.getStr()))
 
-  for (source, _, target) in idx.depGraph.edges:
-    result.addEdge makeEdge(hash source.value, hash target.value)
+  for (source, edge, target) in idx.depGraph.edges:
+    var e =  makeDotEdge(
+      hash source.value,
+      hash target.value,
+      edge.value
+    )
+
+    if edge.value == "@@@":
+      e.style = edsDashed
+      e.label = none(string)
+      if not onlyPP:
+        result.addEdge e
+    else:
+      result.addEdge e
 
 proc getDepModules*(file: AbsFile, idx: FileIndex): seq[AbsFile] =
   ## Get list of modules that have to be imported in wrapper for file
@@ -2398,13 +2458,14 @@ type
 proc wrapAll*(
   files: seq[AbsFile],
   parseConf: ParseConfiguration,
-  wrapConf: WrapConfig): seq[WrapResult] =
+  wrapConf: WrapConfig
+            ): tuple[wrapped: seq[WrapResult], index: FileIndex] =
 
   var
     que = initDeque[AbsFile]()
     visited: HashSet[AbsFile]
     cache: WrapCache
-    parsed = files.parseAll(parseConf, wrapConf)
+    parsed: FileIndex = files.parseAll(parseConf, wrapConf)
 
   for file, _ in parsed.index:
     que.addLast file # Add all files to que
@@ -2432,9 +2493,11 @@ proc wrapAll*(
   for file in visited:
     wrap.header = file
     wrap.unit = parsed.index[file].unit
-    result.add WrapResult(
+    result.wrapped.add WrapResult(
       parsed: parsed.index[file],
       infile: file,
       importName: wrap.getImport(file, wrap),
       wrapped: parsed.index[file].wrapFile(wrap, cache)
     )
+
+  result.index = parsed
