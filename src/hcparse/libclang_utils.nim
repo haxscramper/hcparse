@@ -38,7 +38,7 @@ proc `$`*(cxRange: CXSourceRange): string =
   &"[{cxRange.beginIntData}, {cxRange.endIntData}]"
 
 proc `$`*(cxkind: CXCursorKind): string = $getCursorKindSpelling(cxkind)
-
+proc `$`*(file: CXFile): string = $getFileName(file)
 
 #*************************************************************************#
 #*****************************  Destructors  *****************************#
@@ -484,8 +484,8 @@ proc getExpansionLocation*(location: CXSourceLocation): tuple[
     addr file, addr line, addr column, addr offset)
 
   result.file = toAbsFile($file.getFileName(), true) # WARNING set root?
-  echov file.getFileName()
-  echov result.file
+  # echov file.getFileName()
+  # echov result.file
   result.line = line.int
   result.column = column.int
   result.offset = offset.int
@@ -494,7 +494,7 @@ proc getExpansionLocation*(location: CXSourceLocation): tuple[
 proc getSpellingLocation*(cursor: CXCursor): tuple[
   file: AbsFile, line, column, offset: int] =
   result = cursor.getCursorLocation().getExpansionLocation()
-  echov result.file
+  # echov result.file
 
 proc getCursorSemanticSiblings*(cursor: CXCursor): tuple[
   before, after: seq[CXCursor]] =
@@ -714,6 +714,7 @@ type
     ignoreCursor*: proc(curs: CXCursor, conf: WrapConfig): bool ## User-defined
     ## predicate for determining whether or not cursor should be
     ## considered a part of api. Things like `internal` namespaces.
+    collapsibleNamespaces*: seq[string]
 
   WrapCache* = HashSet[Hash]
 
@@ -801,7 +802,7 @@ func toPascalCase*(str: string): string =
     mapIt(it.capitalizeAscii()).
     join("")
 
-proc fixTypeName*(str: string, idx: int): string =
+proc fixTypeName*(str: string, idx: int, conf: WrapConfig): string =
   if str.len == 0:
     return "T" & $idx
   elif str in @[
@@ -810,8 +811,18 @@ proc fixTypeName*(str: string, idx: int): string =
   ]:
     return str
   else:
-    for ns in str.split("::"):
-      result.add ns.toPascalCase()
+    let split = str.split("::")
+    var idx = 0
+    while idx < split.len:
+      if (idx + 1 < split.len) and
+         (split[idx] in conf.collapsibleNamespaces) and
+         (split[idx + 1].normalize().startsWith(split[idx])):
+        # For things like `sourcetrail::SourcetrailDBWrapper`
+        discard
+      else:
+        result.add split[idx].toPascalCase()
+
+      inc idx
 
 proc fixStdTypeName*(head: string, idx: int): string =
   if head.len == 0:
@@ -824,7 +835,7 @@ proc fixStdTypeName*(head: string, idx: int): string =
 
 proc fixTypeName*(
   ntype: var NType[PNode], conf: WrapConfig, idx: int = 0) =
-  ntype.head = fixTypeName(ntype.head, idx)
+  ntype.head = fixTypeName(ntype.head, idx, conf)
 
   var idx = idx
   for gen in mitems(ntype.genParams):
@@ -1164,6 +1175,13 @@ when true:
         cxoCallOp ## Call operator `a()`
         cxoDerefOp ## Prefix dereference operator
 
+      IncludeDep* = object
+        # TODO use it as edge value
+        includedAs*: string
+        includedPath*: AbsFile
+        includedFrom*: AbsFile
+
+
 
       CNamespace* = seq[NType[PNode]]
       CDecl* = object
@@ -1414,6 +1432,7 @@ type
     # object - things like public fields and methods of parent class.
     decls*: seq[CDecl]
     publicAPI*: seq[CXCursor]
+    includes*: seq[IncludeDep]
 
 
 #===========  Splitting translation unit into logical chunks  ============#
@@ -1555,7 +1574,7 @@ proc visitClass(
 
 proc visitCursor(
   cursor: CXCursor, parent: CNamespace, conf: WrapConfig): tuple[
-  decls: seq[CDecl], recurse: bool]
+  decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]]
 
 proc visitNamespace(
   cursor: CXCursor, parent: CNamespace, conf: WrapConfig): seq[CDecl] =
@@ -1564,29 +1583,42 @@ proc visitNamespace(
   if not conf.ignoreCursor(cursor, conf):
     for subn in cursor:
       result.add visitCursor(subn, parent & @[ newPType($cursor) ], conf).decls
+  # else:
+  #   warn "Skipping namespace", cursor
+  #   debug cursor.getSpellingLocation()
 
 proc visitCursor(
   cursor: CXCursor, parent: CNamespace, conf: WrapConfig): tuple[
-  decls: seq[CDecl], recurse: bool] =
+  decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]] =
 
   if not conf.ignoreCursor(cursor, conf):
-    result.decls.add case cursor.cxKind:
+    case cursor.cxKind:
       of ckNamespace:
-        visitNamespace(cursor, parent, conf)
+        result.decls.add visitNamespace(cursor, parent, conf)
       of ckClassDecl, ckClassTemplate,
          ckClassTemplatePartialSpecialization,
          ckStructDecl:
-        @[ visitClass(cursor, parent, conf) ]
+        result.decls.add visitClass(cursor, parent, conf)
       of ckFunctionDecl, ckFunctionTemplate:
-        @[ visitFunction(cursor, parent, conf) ]
+        result.decls.add visitFunction(cursor, parent, conf)
       of ckTypedefDecl:
-        @[ visitAlias(cursor, parent, conf) ]
+        result.decls.add visitAlias(cursor, parent, conf) 
       of ckEnumDecl:
-        @[ visitEnum(cursor, parent, conf) ]
+        result.decls.add visitEnum(cursor, parent, conf) 
+      of ckInclusionDirective:
+        result.includes.add IncludeDep(
+          includedAs: $cursor,
+          includedFrom: cursor.getSpellingLocation().file,
+          includedPath: AbsFile $cursor.getIncludedFile()
+        )
+        # info "Found include ", cursor
+        # debug cursor.getSpellingLocation()
       else:
         # warn "Recursing on", cursor, "of kind", cursor.cxKind()
         result.recurse = true
-        return
+  # else:
+  #   warn "Skipping cursor ", cursor
+  #   debug cursor.getSpellingLocation()
 
 
 proc splitDeclarations*(
@@ -1599,7 +1631,8 @@ proc splitDeclarations*(
   var res: CApiUnit
   cursor.visitMainFile do:
     makeVisitor [tu, res, conf]:
-      let (decls, rec) = visitCursor(cursor, @[], conf)
+      let (decls, rec, incls) = visitCursor(cursor, @[], conf)
+      res.includes.add incls
       if rec:
         return cvrRecurse
       else:
@@ -1617,7 +1650,7 @@ proc getHCParseBinDir*(): AbsDir =
   ## Return absolute path `/bin` directory with helper cmdline tools;
   ## NOTE right now I have no idea how to handle dependencies like
   ## this - this is just a hacky solution.
-  for dir in currentSourcePath().parentDirs():
+  for dir in AbsDir(currentSourcePath()).parentDirs():
     if (dir /. "hcparse.nimble").fileExists():
       return dir / "bin"
 
@@ -1670,11 +1703,13 @@ proc parseBuildDepsTree*(outs: string): CDepsTree =
 
 proc buildDepsTree*(file: AbsFile, args: seq[string]): CDepsTree =
   let bin = getHCParseBinPath("deps")
-  assert file.existsFile()
-  let command = $bin & " " & args.joinw() & " " & $file
+  assert file.fileExists()
 
   try:
-    let (outs, _, _) = runShell(makeGnuCmd(command))
+    let (outs, _, _) = runShell makeGnuShellCmd($bin).withIt do:
+      it.raw args.joinw()
+      it.arg file
+
     result = parseBuildDepsTree(outs)
     result.file = file
 
@@ -1712,12 +1747,12 @@ proc getDepFiles*(deps: seq[CXCursor]): seq[AbsFile] =
   # TODO:DOC
   for dep in deps:
     var decl: (CXCursor, bool)
-    echov dep
+    # echov dep
     case dep.cxKind:
       of ckFunctionDecl, ckCXXMethod, ckConversionFunction:
         result.add getDepFiles(dep.params()).withIt do:
           for file in it:
-            echov file
+            # echov file
             assertExists file
 
         decl = (dep.retType().getTypeDeclaration(), true)
@@ -1727,6 +1762,14 @@ proc getDepFiles*(deps: seq[CXCursor]): seq[AbsFile] =
             assertExists file
       of ckTypeAliasTemplateDecl, ckTypeAliasDecl,
          ckTypedefDecl, ckUsingDeclaration:
+        # if dep.cxType().getTypeDeclaration() ==
+        #    dep.cxType().getCanonicalType().getTypeDeclaration()
+        #    :
+        #   info "type alias for ", dep.cxType(),
+        #    " uses on forward declaration"
+        #   debug dep.cxType().getCanonicalType().
+        #     getTypeDeclaration().getSpellingLocation()
+
         decl = (
           dep.cxType().getCanonicalType().getTypeDeclaration(),
           true
@@ -1764,9 +1807,9 @@ proc getDepFiles*(deps: seq[CXCursor]): seq[AbsFile] =
     if decl[1]:
       ignorePathErrors {pekInvalidEntry}:
         # WARNING ignore invalid `#include`
-        echov decl
+        # echov decl
         let (file, line, column, _) = decl[0].getSpellingLocation()
-        echov file
+        # echov file
         assertExists(file)
         result.add file
 
@@ -2090,7 +2133,7 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): PNode =
             )
 
           else:
-            echo toks
+            discard
 
       of ckUnaryOperator:
         let toks = val.tokens(conf.unit)
@@ -2181,12 +2224,6 @@ const HeaderGraphFlags = toInt({
   Directed, ValueIndex, UniqueEdges, UniqueNodes})
 
 type
-  IncludeDep* = object
-    # TODO use it as edge value
-    includedAs*: string
-    includedPath*: string
-    includedFrom*: string
-
   ParsedFile* = object
     unit*: CXTranslationUnit ## Translation unit
     filename*: AbsFile ## Name of the original file
@@ -2199,12 +2236,14 @@ type
   HeaderDepGraph* = Graph[AbsFile, bool, HeaderGraphFlags]
 
   ParseConfiguration* = object
-    globalFlags*: seq[string]
-    fileFlags*: Table[AbsFile, seq[string]]
+    globalFlags*: seq[string] ## List of parse flags applied on each
+    ## file parse. Mostly for things like include paths.
+    fileFlags*: Table[AbsFile, seq[string]] ## List of parse flags
+    ## specific only to particular file
 
 
   FileIndex* = object
-    index*: Table[AbsFile, ParsedFile]
+    index*: Table[AbsFile, ParsedFile] ## Index of all parsed files
     depGraph*: HeaderDepGraph
 
 
@@ -2216,7 +2255,7 @@ proc parseFile*(
   file: AbsFile, config: ParseConfiguration,
   wrapConf: WrapConfig): ParsedFile =
 
-  info "File", file
+  # info "File", file
   file.assertExists()
   identLog()
 
@@ -2224,10 +2263,11 @@ proc parseFile*(
   result.filename = file
   result.index = createIndex()
   result.unit = parseTranslationUnit(
-    result.index, file, flags, {tufSkipFunctionBodies})
+    result.index, file, flags, {
+      tufSkipFunctionBodies, tufDetailedPreprocessingRecord})
 
   result.api = result.unit.splitDeclarations(wrapConf)
-  info "Explicit dependencies for", file
+  # info "Explicit dependencies for", file
   result.explicitDeps = result.api.publicApi.
     getDepFiles().filterIt(it != file)
 
@@ -2372,7 +2412,7 @@ proc wrapAll*(
 
   while que.len > 0:
     let file = que.popFirst()
-    info "Parsing file", file
+    # info "Parsing file", file
     if file notin visited: # If dependency is new parse it
       parsed.index[file] = file.parseFile(parseConf, wrapConf)
       visited.incl file
