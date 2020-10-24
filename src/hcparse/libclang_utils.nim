@@ -1619,9 +1619,9 @@ proc visitCursor(
       of ckFunctionDecl, ckFunctionTemplate:
         result.decls.add visitFunction(cursor, parent, conf)
       of ckTypedefDecl:
-        result.decls.add visitAlias(cursor, parent, conf) 
+        result.decls.add visitAlias(cursor, parent, conf)
       of ckEnumDecl:
-        result.decls.add visitEnum(cursor, parent, conf) 
+        result.decls.add visitEnum(cursor, parent, conf)
       of ckInclusionDirective:
         let loc = cursor.getSpellingLocation()
         result.includes.add IncludeDep(
@@ -2475,6 +2475,10 @@ type
     infile*: AbsFile
     importName*: seq[string]
 
+proc boolCall*[A](
+  cb: proc(a: A): bool, arg: A, default: bool = true): bool =
+  if cb == nil: default else: cb(arg)
+
 proc wrapAll*(
   files: seq[AbsFile],
   parseConf: ParseConfiguration,
@@ -2510,7 +2514,7 @@ proc wrapAll*(
 
     for dep in parsed.index[file].api.includes:
       if dep.includedPath in visited or
-         wrapConf.ignoreFile(dep.includedPath):
+         wrapConf.ignoreFile.boolCall(dep.includedPath):
         discard
       else:
         que.addLast dep.includedPath
@@ -2528,3 +2532,46 @@ proc wrapAll*(
     )
 
   result.index = parsed
+
+let baseWrapConfig* = WrapConfig(
+  makeHeader: (
+    proc(conf: WrapConfig): PNode {.closure.} =
+      newPIdent("cxheader")
+  ),
+  getImport: (
+    proc(dep: AbsFile, conf: WrapConfig): seq[string] {.closure.} =
+      if dep.startsWith("/usr/include/c++"):
+        makeCXStdImport(dep)
+      else:
+        let (dir, name, ext) = dep.splitFile()
+        @[
+          name.splitCamel().
+            mapIt(it.toLowerAscii()).join("_").
+            fixFileName()
+        ]
+  ),
+  fixTypeName: (
+    proc(ntype: var NType[PNode],
+         conf: WrapConfig, idx: int) {.closure.} =
+      # Default implementation for type name fixes
+      fixTypeName(ntype, conf, 0)
+  ),
+  ignoreCursor: (
+    proc(cursor: CXCursor, conf: WrapConfig): bool {.closure.} =
+      if not ($cursor).startsWith("__cxx11") and
+        ($cursor).startsWith(@[ "__", "_" ]):
+        # debug "Ignore ", $cursor
+        return true
+      if cursor.cxKind == ckNamespace and
+         ($cursor in @["detail", "internal"]):
+        return true
+      else:
+        return false
+  )
+)
+
+let baseCppParseConfig* = ParseConfiguration(
+  globalFlags: getBuiltinHeaders().toIncludes() & @[
+    "-xc++", "-std=c++11",
+  ]
+)

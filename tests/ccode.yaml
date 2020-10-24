@@ -1,12 +1,12 @@
 -
   name: "Structure import"
-  comment: |
+  comment: |-
     Import struct from header file and wrap field
 
   cfiles:
     - filename: "cppfile.hpp"
       contents: |
-        struct Test { int val; }
+        struct Test { int val; };
   nimfiles:
     - filename: "importer.nim"
       contents: |
@@ -15,7 +15,7 @@
         test.val = 12
 -
   name: "Single method"
-  comment: |
+  comment: |-
     Wrap class method
 
   cfiles:
@@ -116,14 +116,14 @@
         };
 
   nimfiles:
-    - filename: "importer.hpp"
+    - filename: "importer.nim"
       contents: |
         import cppfile
         let z = Z[tuple[a: int, b: float]]()
         z.getParam()
 -
   name: "Imported class"
-  cppfiles:
+  cfiles:
     - filename: "cppmain.hpp"
       contents: |
         #include "dependency.hpp"
