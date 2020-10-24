@@ -9,7 +9,7 @@ import compiler/ast, options
 
 import unittest
 
-import hmisc/macros/kv_transform
+import yaml
 import hmisc/algo/make_rst
 import hmisc/[hexceptions, helpers]
 import hmisc/other/[hshell, colorlogger]

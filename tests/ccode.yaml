@@ -1,0 +1,223 @@
+-
+  name: "Structure import"
+  comment: |
+    Import struct from header file and wrap field
+
+  cfiles:
+    - filename: "cppfile.hpp"
+      contents: |
+        struct Test { int val; }
+  nimfiles:
+    - filename: "importer.nim"
+      contents: |
+        import cppfile
+        var test: Test
+        test.val = 12
+-
+  name: "Single method"
+  comment: |
+    Wrap class method
+
+  cfiles:
+    - filename: "cppfile.hpp"
+      contents: |
+        class Q {
+          public:
+            int a;
+            void hhh() { a += 2; };
+            int qq() { return 1; };
+        };
+  nimfiles:
+    - filename: "importer.nim"
+      contents: |
+        import cppfile
+        var q: Q
+        q.hhh()
+        echo q.qq()
+  stdout: |-
+    1
+-
+  name: "Includes"
+  cfiles:
+    - filename: "cppfile.hpp"
+      contents: |
+        #include <iostream>
+        int function() { return 12; }
+
+  nimfiles:
+    - filename: "importer.nim"
+      contents: |
+        import cppfile
+        echo function()
+  stdout: |-
+    1
+-
+  name: "Namespaces & includes"
+  cfiles:
+    - filename: "cppfile.hpp"
+      contents: |
+        #include <iostream>
+
+        namespace Q {
+          class Z {
+            public:
+              void hello() const {
+                std::cout << "Hello from C++ code";
+              };
+          };
+        }
+
+  nimfiles:
+    - filename: "importer.nim"
+      contents: |
+        import cppfile
+        let z = Z()
+        z.hello()
+
+  stdout: |-
+    Hello from C++ code
+
+-
+  name: "Porting operators"
+  cfiles:
+    - filename: "cppfile.hpp"
+      contents: |
+        #include <iostream>
+
+        class Z {
+          public:
+            int a;
+            void operator+=(const Z& rhs) { a += rhs.a; }
+        };
+  nimfiles:
+    - filename: "importer.nim"
+      contents: |
+        import cppfile
+        var z = Z(a: cint 12)
+        z += Z(a: cint 22)
+        echo z.a
+  stdout: |-
+    34
+-
+  name: "Template class wrap"
+  cfiles:
+    - filename: "cppfile.hpp"
+      contents: |
+        #include <iostream>
+        #include <typeinfo>
+
+        template <typename T>
+        class Z {
+          public:
+            void getParam() const {
+              std::cout << "Template parameter name [" <<
+                typeid(T).name() << "] \n";
+            }
+        };
+
+  nimfiles:
+    - filename: "importer.hpp"
+      contents: |
+        import cppfile
+        let z = Z[tuple[a: int, b: float]]()
+        z.getParam()
+-
+  name: "Imported class"
+  cppfiles:
+    - filename: "cppmain.hpp"
+      contents: |
+        #include "dependency.hpp"
+        // Main file that we are interseted in wrapping
+        // Public API uses type `D` that was imported
+        // from another header. In order to compile
+        // wraper we must know how this type is defined
+        // (where it is imported from etc.) or treat
+        // it as opaque handle - e.g provide no
+        // implementation except for
+        // `type D {.importcpp: "someheader".} = object`
+        class Q { public: D dep; };
+    - filename: "dependency.hpp"
+      contents: |
+        class D { public: int d; };
+  nimfiles:
+    - filename: "importer.nim"
+      contents: |
+        import cppmain
+        var q: Q
+        echo typeof q.dep
+
+        assert not compiles(var tmp: D)
+        import dependency
+        assert compiles(var tmp: D)
+-
+  name: "Multiple dependencies"
+  cfiles:
+    - filename: "cppfile.hpp"
+      contents: |
+        // Internal implementation dependency
+        #include "header0.hpp"
+
+        // External API dendendencies
+        #include "header1.hpp"
+        #include "header2.hpp"
+
+        class Q { D0 dep0; public: D1 dep1; D2 dep2; };
+    - filename: "header0.hpp"
+      contents: |
+        #pragma once
+        class D0 { public: int i; };
+    - filename: "header1.hpp"
+      contents: |
+        #pragma once
+        class D1 { public: int i; };
+    - filename: "header2.hpp"
+      contents: |
+        #pragma once
+        class D2 { public: int i; };
+  nimfiles:
+    -
+      filename: "importer.nim"
+      contents: |
+        import cppmain
+        var q: Q
+        echo typeof q.dep1.i
+        echo q.dep2.i
+-
+  name: "Multifile"
+  cfiles:
+    -
+      filename: "public0.hpp"
+      contents: |
+        // Contents of this file can be see from at least two
+        // elements in public API. You can use `Public0` by including
+        // either "public0" or "public1" (although second one is not
+        // advised to, since it is not clear where type comes from)
+        struct Public0 {};
+    -
+      filename: "public1.hpp"
+      contents: |
+        #include "public0.hpp"
+        struct Public1 {};
+  nimfiles:
+    -
+      filename: "alluser.nim"
+      contents: |
+        # Since original API is split into two files two nim wrappers will be
+        # created.
+        import public0
+        import public1
+
+        var pub0: Public0
+        var pub1: Public1
+
+    -
+      filename: "public0_user.nim"
+      contents: |
+        import public0
+        var pub0: Public0
+
+    -
+      filename: "public1_user.nim"
+      contents: |
+        import public1
+        var pub1: Public1

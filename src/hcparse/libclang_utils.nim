@@ -168,7 +168,7 @@ Translation unit parse failed due to errors.
 Compilation flags:
 {cmdline.joinql()}
 Input file:
-  {filename}
+  {filename.realpath}
       """)
 
 
@@ -486,6 +486,7 @@ proc getExpansionLocation*(location: CXSourceLocation): tuple[
   result.file = toAbsFile($file.getFileName(), true) # WARNING set root?
   # echov file.getFileName()
   # echov result.file
+  result.file = result.file.realpath
   result.line = line.int
   result.column = column.int
   result.offset = offset.int
@@ -715,6 +716,7 @@ type
     ## predicate for determining whether or not cursor should be
     ## considered a part of api. Things like `internal` namespaces.
     collapsibleNamespaces*: seq[string]
+    ignoreFile*: proc(file: AbsFile): bool
 
   WrapCache* = HashSet[Hash]
 
@@ -1551,7 +1553,9 @@ proc visitClass(
           res.name.head = "new" & result.name.head
         of ckCXXAccessSpecifier:
           currentAccs = subn.getCXXAccessSpecifier()
-        of ckFieldDecl:
+        of ckFieldDecl,
+           ckVarDecl # WARNING static fields might need to be wrapped differently
+             :
           result.members.add visitField(subn, currentAccs)
         of ckTemplateTypeParameter, ckFriendDecl,
            ckStaticAssert, ckDestructor, ckTemplateTemplateParameter:
@@ -1564,8 +1568,18 @@ proc visitClass(
           if not conf.ignoreCursor(subn, conf):
             result.members.add visitAlias(
               subn, parent & @[result.name], conf)
+        of ckStructDecl, ckClassDecl:
+          # WARNING IMPLEMENT nested structure/class declarations are
+          # not implemented
+          discard
+        of ckCXXBaseSpecifier:
+          # WARNING base class specifier ignored, FIXME need to
+          # implement
+          discard
         else:
           inc undefCnt
+          debug subn.getSpellingLocation()
+          debug subn.treeRepr()
           if undefCnt > 20:
             raiseAssert("Reached unknown class element limit")
           else:
@@ -1616,7 +1630,7 @@ proc visitCursor(
           fromLine: loc.line,
           fromColumn: loc.column,
           fromOffset: loc.offset,
-          includedPath: AbsFile $cursor.getIncludedFile()
+          includedPath: AbsFile($cursor.getIncludedFile()).realpath
         )
         # info "Found include ", cursor
         # debug cursor.getSpellingLocation()
@@ -2269,9 +2283,15 @@ proc parseFile*(
   let flags = config.getFlags(file)
   result.filename = file
   result.index = createIndex()
-  result.unit = parseTranslationUnit(
-    result.index, file, flags, {
-      tufSkipFunctionBodies, tufDetailedPreprocessingRecord})
+  try:
+    result.unit = parseTranslationUnit(
+      result.index, file, flags, {
+        tufSkipFunctionBodies, tufDetailedPreprocessingRecord})
+  except:
+    error file.realpath
+    debug config.getFlags(file).joinl()
+    raise
+
 
   result.api = result.unit.splitDeclarations(wrapConf)
   # info "Explicit dependencies for", file
@@ -2483,10 +2503,17 @@ proc wrapAll*(
 
     # Store all explicit dependencies for file
     for dep in parsed.index[file].explicitDeps:
-      if dep in visited:
+      if dep in visited or wrapConf.ignoreFile(dep):
         discard
       else:
         que.addLast dep
+
+    for dep in parsed.index[file].api.includes:
+      if dep.includedPath in visited or
+         wrapConf.ignoreFile(dep.includedPath):
+        discard
+      else:
+        que.addLast dep.includedPath
 
   var wrap = wrapConf
 
