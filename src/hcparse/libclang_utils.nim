@@ -1477,6 +1477,7 @@ proc visitFunction(
   result = CDecl(kind: cdkFunction, cursor: cursor, namespace: parent)
   result.name = newPType $cursor
   result.args = cursor.getArguments()
+  info "Found function", cursor
   for subn in cursor:
     case subn.cxKind:
       of ckTemplateTypeParameter:
@@ -1930,6 +1931,13 @@ proc wrapOperator*(
   result.addThis = kind in {cxoAsgnOp, cxoArrayOp, cxoDerefOp, cxoArrowOp}
 
 
+# proc wrapProcedure*(
+#   pr: CXCursor, conf: WrapConfig, cache: var WrapCache
+#     ): tuple[decl: PProcDecl, addThis: bool] =
+
+#   if pr.isOperat
+
+
 proc wrapMethods*(
   cd: CDecl, conf: WrapConfig,
   parent: NType[PNode], cache: var WrapCache): seq[PProcDecl] =
@@ -2233,8 +2241,7 @@ proc wrapApiUnit*(
       of cdkEnum:
         result.add decl.wrapEnum(conf)
       else:
-        # err "Not wrapping", decl.kind, decl.name
-        discard
+        err "Not wrapping", decl.kind, decl.name
 
 #*************************************************************************#
 #********************  Dependency graph construction  ********************#
@@ -2478,6 +2485,9 @@ type
 proc boolCall*[A](
   cb: proc(a: A): bool, arg: A, default: bool = true): bool =
   if cb == nil: default else: cb(arg)
+
+func wrapName*(res: WrapResult): string =
+  res.importName.join("/") & ".nim"
 
 proc wrapAll*(
   files: seq[AbsFile],

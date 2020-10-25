@@ -1,7 +1,7 @@
 import hcparse/libclang
 import hpprint, hnimast, hpprint/hpprint_repr
 import std/[unittest, macros, options, sugar, streams,
-            strutils, sequtils, strformat, os, tables]
+            strutils, sequtils, strformat, tables]
 import compiler/ast
 
 import yaml, yaml/[dom, presenter]
@@ -44,7 +44,10 @@ for file in files:
   iflet (comm = file.comment):
     debug comm
 
-  withTempDir(true):
+  withTempDir(false) do:
+    tempRoot = getTempDir() / "wrapgen"
+    tempPatt = file.name.dashedWords()
+  do:
     var cfiles: seq[AbsFile]
     var nimfiles: seq[AbsFile]
 
@@ -65,7 +68,7 @@ for file in files:
     dedentLog()
 
     for res in wrapped:
-      let file = res.importName.join("/") & ".nim"
+      let file = res.wrapName()
       file.writeFile($res.wrapped)
       info "Wrote wrapper file", file
 
@@ -73,13 +76,16 @@ for file in files:
       notice "Compiling", nfile
       try:
         execShell makeNimShellCmd("nim").withIt do:
-          it.cmd "c"
+          it.cmd "cpp"
+          it - ("nimcache", "cache.d")
           it.arg nfile
       except:
-        err "Compilation for'", file.name, "'has failed"
-        for file in wrapped:
-          let f = file.importName.join("/") & ".nim"
-          info f
-          debug f.readFile()
+        err "Compilation for '", file.name, "' has failed"
+        for file in
+            wrapped.mapIt(toAbsFile it.wrapName()) &
+            cfiles & nimfiles:
+          info file
+          debug file.readFile().strip().wrap(
+            "```" & file.ext & "\n", "\n```")
 
         quit 1
