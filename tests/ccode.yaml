@@ -71,7 +71,7 @@
     - filename: "importer.nim"
       contents: |
         import cppfile
-        let z = Z()
+        let z = QZ() # Imported from namespace `Q::Z`
         z.hello()
 
   stdout: |-
@@ -123,18 +123,17 @@
         z.getParam()
 -
   name: "Imported class"
+  comment: |
+    Main file that we are interseted in wrapping Public API uses type
+    `D` that was imported from another header. In order to compile
+    wraper we must know how this type is defined (where it is imported
+    from etc.) or treat it as opaque handle - e.g provide no
+    implementation except for `type D {.importcpp: "someheader".} =
+    object`
   cfiles:
     - filename: "cppmain.hpp"
       contents: |
         #include "dependency.hpp"
-        // Main file that we are interseted in wrapping
-        // Public API uses type `D` that was imported
-        // from another header. In order to compile
-        // wraper we must know how this type is defined
-        // (where it is imported from etc.) or treat
-        // it as opaque handle - e.g provide no
-        // implementation except for
-        // `type D {.importcpp: "someheader".} = object`
         class Q { public: D dep; };
     - filename: "dependency.hpp"
       contents: |
@@ -146,9 +145,9 @@
         var q: Q
         echo typeof q.dep
 
-        assert not compiles(var tmp: D)
+        assert not compiles(var tmp = D())
         import dependency
-        assert compiles(var tmp: D)
+        assert compiles(var tmp = D())
 -
   name: "Multiple dependencies"
   cfiles:

@@ -16,6 +16,7 @@ import compiler/ast
 import packages/docutils/rstast
 import hmisc/types/colorstring
 import hmisc/[hexceptions, helpers, hdebug_misc]
+import hmisc/macros/[iflet]
 import hmisc/other/[hshell, colorlogger, oswrap]
 
 
@@ -1319,6 +1320,12 @@ func isOperator*(cd: CDecl): bool =
   cd.name.head.startsWith("operator") and
   (not cd.name.head.validIdentifier())
 
+# func isOperator
+proc isOperator*(cx: CXCursor): bool =
+  ($cx).startsWith("operator") and
+  (not ($cx).validIdentifier())
+
+
 func classifyOperator*(cd: CDecl): CXOperatorKind =
   assert cd.isOperator()
   let name = cd.name.head.dropPrefix("operator")
@@ -1931,11 +1938,115 @@ proc wrapOperator*(
   result.addThis = kind in {cxoAsgnOp, cxoArrayOp, cxoDerefOp, cxoArrowOp}
 
 
-# proc wrapProcedure*(
-#   pr: CXCursor, conf: WrapConfig, cache: var WrapCache
-#     ): tuple[decl: PProcDecl, addThis: bool] =
+proc wrapProcedure*(
+  pr: CDecl, conf: WrapConfig, parent: Option[NType[PNode]],
+  cache: var WrapCache,
+  parentDecl: Option[CDecl]
+    ): tuple[decl: PProcDecl, canAdd: bool] =
 
-#   if pr.isOperat
+  var it = PProcDecl()
+  var addThis = (pr.kind == cdkMethod)
+  result.canAdd = true
+
+  if pr.isOperator():
+    var genp: seq[NType[PNode]]
+    iflet (par = parent):
+      genp.add par
+
+    let (decl, adt) = pr.wrapOperator(genp, conf)
+    it = decl
+    addThis = adt
+  else:
+    it.signature = newProcNType[PNode](@[])
+    it.name = pr.getNimName()
+    it.exported = true
+    iflet (par = parent):
+      it.genParams = par.genParams
+
+    if parent.isSome():
+      it.signature.pragma = newPPragma(
+        newPIdentColonString("importcpp", &"#.{it.name}(@)"),
+        newExprColonExpr(newPIdent "header",
+                         conf.makeHeader(conf)))
+    else:
+      it.signature.pragma = newPPragma(
+        newPIdentColonString("importcpp", &"{it.name}(@)"),
+        newExprColonExpr(newPIdent "header",
+                         conf.makeHeader(conf)))
+
+  if addThis:
+    assert parent.isSome()
+    it.signature.arguments.add PIdentDefs(
+      varname: "self",
+      vtype: parent.get(),
+      kind: pr.cursor.isConstMethod.tern(nvdVar, nvdLet))
+
+  for arg in pr.args:
+    var (vtype, mutable) = arg.cursor.cxType().toNType(conf)
+    if vtype.head == "UNEXPOSED":
+      # WARNING currently parameters which contain `tkUnexposed`
+      # types are not handled but are skipped instead. I don't
+      # know how to fix right now.
+      result.canAdd = false
+
+    if parentDecl.isSome() and
+       arg.cursor.inheritsGenParamsOf(parentDecl.get().cursor) and
+       parent.isSome()
+      :
+      # WARNING nested class definitions with additional template
+      # parameters are not handled right now. It will break for
+      # code like
+      # `<Ta> struct A { <Tb> struct B {void func(); }; };`
+      # and only add `Tb` as template parameter for `func()`.
+      vtype.genParams.add parent.get().genParams
+
+    it.signature.arguments.add PIdentDefs(
+      varname: fixIdentName(arg.name),
+      vtype: vtype,
+      kind: mutable.tern(nvdVar, nvdLet))
+
+  # Force override return type for assignment operators
+  if not (pr.isOperator and pr.classifyOperator() == cxoAsgnOp):
+    var (rtype, mutable) = toNType(pr.cursor.retType(), conf)
+    if parentDecl.isSome() and
+       parent.isSome() and
+       pr.cursor.retType().
+       getTypeDeclaration().
+       inheritsGenParamsOf(parentDecl.get().cursor):
+
+      rtype.genParams = parent.get().genParams
+
+    it.signature.setRtype rtype
+
+    if rtype.hasUnexposed():
+      # WARNING dropping all methods that use `tkUnexposed` type
+      # in return value. This must be fixed in future versions.
+      result.canAdd = false
+
+  else:
+    it.signature.setRType newPType("void")
+
+  result.decl = it
+
+
+proc fixNames(ppd: var PProcDecl,
+              conf: WrapConfig, parent: NType[PNode]) =
+  var idx: int = 0
+  for param in mitems(ppd.genParams):
+    conf.fixTypeName(param, conf, 0)
+    inc idx
+
+  idx = 0
+  for arg in mitems(ppd.signature.arguments):
+    conf.fixTypeName(arg.vtype, conf, idx)
+    inc idx
+
+  conf.fixTypeName(ppd.signature.rtype.get().getIt(), conf, 0)
+
+  ppd.name = ppd.name.fixIdentName()
+
+
+
 
 
 proc wrapMethods*(
@@ -1943,91 +2054,22 @@ proc wrapMethods*(
   parent: NType[PNode], cache: var WrapCache): seq[PProcDecl] =
   assert cd.kind in {cdkClass, cdkStruct}
   for meth in cd.methods({ckCXXMethod}):
-    var canAdd: bool = true
-    let decl = PProcDecl().withIt do:
-      var addThis = true
-      if meth.isOperator():
-        let (decl, adt) = meth.wrapOperator(parent.genParams, conf)
-        it = decl
-        addThis = adt
-      else:
-        it.signature = newProcNType[PNode](@[])
-        it.name = meth.getNimName()
-        it.exported = true
-        it.genParams = parent.genParams
-
-        it.signature.pragma = newPPragma(
-          newPIdentColonString("importcpp", &"#.{it.name}(@)"),
-          newExprColonExpr(newPIdent "header",
-                           conf.makeHeader(conf)))
-
-      if addThis:
-        it.signature.arguments.add PIdentDefs(
-          varname: "self",
-          vtype: parent,
-          kind: meth.cursor.isConstMethod.tern(nvdVar, nvdLet))
-
-      for arg in meth.args:
-        var (vtype, mutable) = arg.cursor.cxType().toNType(conf)
-        if vtype.head == "UNEXPOSED":
-          # WARNING currently parameters which contain `tkUnexposed`
-          # types are not handled but are skipped instead. I don't
-          # know how to fix right now.
-          canAdd = false
-
-        if arg.cursor.inheritsGenParamsOf(cd.cursor):
-          # WARNING nested class definitions with additional template
-          # parameters are not handled right now. It will break for
-          # code like
-          # `<Ta> struct A { <Tb> struct B {void func(); }; };`
-          # and only add `Tb` as template parameter for `func()`.
-          vtype.genParams.add parent.genParams
-
-        it.signature.arguments.add PIdentDefs(
-          varname: fixIdentName(arg.name),
-          vtype: vtype,
-          kind: mutable.tern(nvdVar, nvdLet))
-
-      # Force override return type for assignment operators
-      if not (meth.isOperator and meth.classifyOperator() == cxoAsgnOp):
-        var (rtype, mutable) = toNType(meth.cursor.retType(), conf)
-        if meth.cursor.retType().
-           getTypeDeclaration().
-           inheritsGenParamsOf(cd.cursor):
-
-          rtype.genParams = parent.genParams
-
-        it.signature.setRtype rtype
-
-        if rtype.hasUnexposed():
-          # WARNING dropping all methods that use `tkUnexposed` type
-          # in return value. This must be fixed in future versions.
-          canAdd = false
-
-      else:
-        it.signature.setRType newPType("void")
-
-
-      block: # Name fixes
-        var idx: int = 0
-        for param in mitems(it.genParams):
-          conf.fixTypeName(param, conf, 0)
-          inc idx
-
-        idx = 0
-        for arg in mitems(it.signature.arguments):
-          conf.fixTypeName(arg.vtype, conf, idx)
-          inc idx
-
-        conf.fixTypeName(it.signature.rtype.get().getIt(), conf, 0)
-
-        it.name = it.name.fixIdentName()
-
+    var (decl, canAdd) = wrapProcedure(
+      meth, conf, some(parent), cache, some(cd))
+    fixNames(decl, conf, parent)
     if canAdd:
       result.add decl
 
 
   result = result.deduplicate()
+
+proc wrapFunction*(
+  cd: CDecl, conf: WrapConfig,
+  cache: var WrapCache): seq[PProcDecl] =
+  var (decl, canAdd) = wrapProcedure(
+    cd, conf, none(NType[PNode]), cache, none(CDecl))
+  if canAdd:
+    result.add decl
 
 
 proc wrapTypeFromNamespace(
@@ -2240,6 +2282,9 @@ proc wrapApiUnit*(
         result.add decl.wrapAlias(decl.namespace, conf)
       of cdkEnum:
         result.add decl.wrapEnum(conf)
+      of cdkFunction:
+        for f in decl.wrapFunction(conf, cache):
+          result.add f.toNNode()
       else:
         err "Not wrapping", decl.kind, decl.name
 
@@ -2409,11 +2454,15 @@ proc getDepModules*(file: AbsFile, idx: FileIndex): seq[AbsFile] =
 #*************************************************************************#
 func makeImport*(names: seq[string]): PNode =
   nnkImportStmt.newPTree(
-    nnkInfix.newPTree(
-      newPIdent("/"),
-      newPIdent(names[0]),
-      newPIdent(names[1])
-    ))
+    names.mapIt(it.newPident()).foldl(
+      nnkInfix.newPTree(newPident("/"), a, b))
+    # names.foldl(nnk)
+    # nnkInfix.newPTree(
+    #   newPIdent("/"),
+    #   newPIdent(names[0]),
+    #   newPIdent(names[1])
+    # )
+  )
 
 proc fixFileName*(name: string): string =
   name.multiReplace({
