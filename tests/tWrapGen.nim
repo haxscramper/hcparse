@@ -7,6 +7,7 @@ import compiler/ast
 import yaml, yaml/[dom, presenter]
 import hmisc/algo/make_rst
 import hmisc/[hexceptions, helpers]
+import hmisc/types/colortext
 import hmisc/macros/[iflet]
 import hmisc/other/[hshell, colorlogger, oswrap]
 import hpprint
@@ -20,6 +21,7 @@ type
 
   TestRecord {.sparse.} = object
     name: string
+    forceFirst {.defaultVal: 0.}: int
     cfiles: seq[TestFile]
     nimfiles: seq[TestFile]
     stdout: Option[string]
@@ -39,8 +41,13 @@ var wrapConf = baseWrapConfig
 var parseConf = baseCppParseConfig
 # pprint files
 
-for file in files:
+# echo files.sortedByIt(-it.forceFirst).mapIt(it.name)
+
+# quit 0
+
+for file in files.sortedByIt(-it.forceFirst):
   notice file.name
+  identLog()
   iflet (comm = file.comment):
     debug comm
 
@@ -67,6 +74,17 @@ for file in files:
     let (wrapped, index) = wrapAll(cfiles, parseConf, wrapConf)
     dedentLog()
 
+    proc showFiles() =
+      for file in
+          sorted(wrapped.mapIt(toAbsFile it.wrapName()) &
+          cfiles & nimfiles):
+        info file
+        let body = file.readFile().strip().colorizeToStr(file.ext)
+        debug body.split("\n").enumerate().mapIt(
+          &"{(it[0] + 1):<2} {it[1]}"
+        ).join("\n").wrap("```" & file.ext & "\n", "\n```")
+
+
     for res in wrapped:
       let file = res.wrapName()
       file.writeFile($res.wrapped)
@@ -78,14 +96,23 @@ for file in files:
         execShell makeNimShellCmd("nim").withIt do:
           it.cmd "cpp"
           it - ("nimcache", "cache.d")
+          it - ("o", nfile.withExt "bin")
           it.arg nfile
-      except:
+      except ShellError:
         err "Compilation for '", file.name, "' has failed"
-        for file in
-            wrapped.mapIt(toAbsFile it.wrapName()) &
-            cfiles & nimfiles:
-          info file
-          debug file.readFile().strip().wrap(
-            "```" & file.ext & "\n", "\n```")
-
+        showFiles()
         quit 1
+
+    for nfile in nimfiles:
+      notice "Executing", nfile
+      try:
+        execShell makeFileShellCmd(nfile.withExt "bin")
+        echo ""
+      except ShellError:
+        err "Execution for '", file.name, "' has failed"
+        showFiles()
+        quit 1
+
+  dedentLog()
+
+notice "All tests passed"

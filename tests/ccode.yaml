@@ -145,14 +145,15 @@
         var q: Q
         echo typeof q.dep
 
-        assert not compiles(var tmp = D())
+        assert not compiles((var tmp: D))
         import dependency
-        assert compiles(var tmp = D())
+        assert compiles((var tmp: D))
 -
   name: "Multiple dependencies"
   cfiles:
-    - filename: "cppfile.hpp"
+    - filename: "cppmain.hpp"
       contents: |
+        #pragma once
         // Internal implementation dependency
         #include "header0.hpp"
 
@@ -183,6 +184,7 @@
         echo q.dep2.i
 -
   name: "Multifile"
+  forceFirst: 10
   cfiles:
     -
       filename: "public0.hpp"
@@ -191,10 +193,12 @@
         // elements in public API. You can use `Public0` by including
         // either "public0" or "public1" (although second one is not
         // advised to, since it is not clear where type comes from)
+        #pragma once
         struct Public0 {};
     -
       filename: "public1.hpp"
       contents: |
+        #pragma once
         #include "public0.hpp"
         struct Public1 {};
   nimfiles:
