@@ -14,9 +14,13 @@ import hpprint
 
 startColorLogger()
 
+# execShell(ShellExpr "kitty @ kitten icat /tmp/img.png")
+
+
 type
   TestFile = object
     filename: string
+    internal {.defaultVal: false}: bool
     contents: string
 
   TestRecord {.sparse.} = object
@@ -48,27 +52,33 @@ var parseConf = baseCppParseConfig
 for file in files.sortedByIt(-it.forceFirst):
   notice file.name
   identLog()
-  iflet (comm = file.comment):
-    debug comm
-
   withTempDir(false) do:
     tempRoot = getTempDir() / "wrapgen"
     tempPatt = file.name.dashedWords()
   do:
     var cfiles: seq[AbsFile]
     var nimfiles: seq[AbsFile]
-
+    var internFiles: seq[AbsFile]
     for file in file.cfiles & file.nimfiles:
       let path = tempDir /. file.filename
 
       if path.endsWith("nim"):
         nimfiles.add path
       else:
+        if file.internal:
+          internFiles.add path
+
         cfiles.add path
 
-      debug "Writing ", path
-
       writeFile(path, file.contents)
+
+    wrapConf.isInternal = proc(
+      dep: AbsFile, conf: WrapConfig, idx: FileIndex): bool =
+        if dep in internFiles:
+          return true
+        else:
+          return isInternalImpl(dep, conf, idx)
+
 
     identLog()
     let (wrapped, index) = wrapAll(cfiles, parseConf, wrapConf)
@@ -79,16 +89,17 @@ for file in files.sortedByIt(-it.forceFirst):
           sorted(wrapped.mapIt(toAbsFile it.wrapName()) &
           cfiles & nimfiles):
         info file
-        let body = file.readFile().strip().colorizeToStr(file.ext)
-        debug body.split("\n").enumerate().mapIt(
+        var body = file.readFile().strip().colorizeToStr(file.ext)
+        body = body.split("\n").enumerate().mapIt(
           &"{(it[0] + 1):<2} {it[1]}"
-        ).join("\n").wrap("```" & file.ext & "\n", "\n```")
+        ).join("\n")
+        # body = body.wrap("```" & file.ext & "\n", "\n```")
+        debug body, "\n"
 
 
     for res in wrapped:
       let file = res.wrapName()
       file.writeFile($res.wrapped)
-      info "Wrote wrapper file", file
 
     for nfile in nimfiles:
       notice "Compiling", nfile

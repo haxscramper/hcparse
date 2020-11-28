@@ -8,6 +8,7 @@ when not defined(libclangIncludeUtils):
 #==============================  includes  ===============================#
 import bitops, strformat, macros, terminal, sugar, std/decls, strutils,
        sequtils, options, re, hashes, deques, sets, hashes, logging
+import gram, tables
 
 import hpprint, hpprint/hpprint_repr
 import hnimast
@@ -243,7 +244,11 @@ proc visitChildren*[T](
     toCursorVisitor(callback.impl),
     toClientData(data))
 
-func makeVisitorImpl*(varnames: seq[NimNode], body: NimNode): NimNode =
+func makeVisitorImpl*(
+  varnames: seq[NimNode],
+  procArgs: openarray[(string, NType[NimNode])],
+  returnType: NType[NimNode],
+  body: NimNode): NimNode =
   var immutableCopies = newStmtList()
   let tupleData = nnkPar.newTree: collect(newSeq):
     for capture in varnames:
@@ -263,17 +268,32 @@ func makeVisitorImpl*(varnames: seq[NimNode], body: NimNode): NimNode =
   let
     cursorId = ident "cursor"
     parentId = ident "parent"
+    dataId = genSym(nskType, "Data")
+
+
+  var procDecl = newNProcDecl(
+    name = "visitor",
+    args = procArgs,
+    rtyp = some(returnType),
+    exported = false,
+    pragma = newNPragma("cdecl"),
+    impl = (
+      quote do:
+        let data {.inject.} = cast[ptr[`dataId`]](clientData)
+        `dataUnpack`
+        `body`
+    )
+  ).toNNode()
+
 
   result = quote do:
     block:
       `immutableCopies`
       var data {.inject.} = `tupleData`
-      type Data = typeof(data)
-      proc visitor(`cursorId`, `parentId`: CXCursor,
-                   clientData: pointer): CXChildVisitResult {.cdecl.} =
-        let data {.inject.} = cast[ptr[Data]](clientData)
-        `dataUnpack`
-        `body`
+      type `dataId` = typeof(data)
+      `procDecl`
+      # proc visitor(`cursorId`, `parentId`: CXCursor,
+      #              clientData: pointer): CXChildVisitResult {.cdecl.} =
 
       (data, visitor)
 
@@ -290,7 +310,28 @@ macro makeVisitor*(captureVars, body: untyped): untyped =
   ##      if cursor.cxKind == CXCursor_FunctionDecl:
   ##        buf.add $cursor
   captureVars.assertNodeKind({nnkBracket})
-  return makeVisitorImpl(toSeq(captureVars), body)
+  result = makeVisitorImpl(
+    toSeq(captureVars),
+    procArgs = {
+      "cursorId" : newNType("CXCursor"),
+      "parentId" : newNType("CXCursor"),
+      "clientData" : newNType("pointer"),
+    },
+    returnType = newNType("CXChildVisitResult"),
+    body
+  )
+
+macro makeDeclarationIndexer*(captureVars, body: untyped): untyped =
+  captureVars.assertNodeKind({nnkBracket})
+  result = makeVisitorImpl(
+    toSeq(captureVars),
+    procArgs = {
+      "clientData" : newNType("CXClientData"),
+      "idxDeclInfo" : newNType("ptr", @["CXIdxDeclInfo"]),
+    },
+    returnType = newNType("void"),
+    body
+  )
 
 
 
@@ -700,7 +741,118 @@ proc toNimDoc*(comment: CXComment): string =
 #****************************  Type wrappers  ****************************#
 #*************************************************************************#
 #==========================  Type declaration  ===========================#
+const HeaderGraphFlags* = toInt({
+  Directed, ValueIndex, UniqueEdges, UniqueNodes})
+
 type
+  CDeclKind* = enum
+    cdkClass
+    cdkStruct
+    cdkEnum
+    cdkFunction
+    cdkMethod
+    cdkField
+    cdkAlias
+
+  CArg* = object
+    name*: string
+    cursor*: CXCursor
+
+  CXOperatorKind* = enum
+    ## Classification for operators
+    cxoPrefixOp ## Prefix operator `@a`
+    cxoInfixOP ## Infix operator `a @ b`
+    cxoAsgnOp ## Assign operator `a = b`
+    cxoArrayOp ## Array access operator `a[b]`
+    cxoArrowOp ## Arrow operator `a->`
+    cxoCallOp ## Call operator `a()`
+    cxoDerefOp ## Prefix dereference operator
+
+  IncludeDep* = object
+    # TODO use it as edge value
+    includedAs*: string
+    includedPath*: AbsFile
+    includedFrom*: AbsFile
+    fromLine*: int
+    fromColumn*: int
+    fromOffset*: int
+
+
+
+  CNamespace* = seq[NType[PNode]]
+  CDecl* = object
+    ## Higher-level wrapper on top of CXCursor. Mostly used to
+    ## provide more intuitive API for working with things to be
+    ## wrapped.
+    name*: NType[PNode]
+    genConstraints*: seq[CXCursor]
+
+    namespace*: CNamespace
+    cursor* {.requiresinit.}: CXCursor
+    case kind*: CDeclKind
+      of cdkField:
+        fldAccs*: CX_CXXAccessSpecifier
+      of cdkMethod:
+        metAccs*: CX_CXXAccessSpecifier
+        metArgs*: seq[CArg]
+      of cdkFunction:
+        funArgs*: seq[CArg]
+      of cdkClass, cdkStruct:
+        members*: seq[CDecl]
+      of cdkEnum:
+        flds*: seq[tuple[
+          fldname: string,
+          value: Option[CXCursor]
+        ]]
+      else:
+        nil
+
+
+
+  CApiUnit* = object
+    ## Representation of single API unit - all public
+    ## methods/classes/fields/functions declared in main file of
+    ## single translation unit.
+    ##
+    ## ## Fields
+    ## :decls: List of declarations in main file
+    ## :publicTypes: List of public entries exposed by the API.
+    ##
+    ##     Class fields, function/method arguments/return values and
+    ##     so on. This list allows you to determine whether or not
+    ##     wrapping additional API unit & including them in main file
+    ##     is necessary.
+
+    # TODO infer 'derived' API that must also be acessible through
+    # object - things like public fields and methods of parent class.
+    decls*: seq[CDecl]
+    publicAPI*: seq[CXCursor]
+    includes*: seq[IncludeDep]
+
+  ParsedFile* = object
+    unit*: CXTranslationUnit ## Translation unit
+    filename*: AbsFile ## Name of the original file
+    api*: CApiUnit ## File's API
+    index*: CXIndex
+    explicitDeps*: seq[AbsFile] ## Filenames in which types exposed in
+    ## API are declared. Guaranteed to have every file listed once &
+    ## no self-dependencies.
+    isExplicitlyAdded*: bool ## Filename has been explicitly listed in
+    ## original files for wrapping, or was added as dependency
+    ## (/transtitive dependency) for other file?
+
+  HeaderDepGraph* = Graph[AbsFile, string, HeaderGraphFlags]
+
+  ParseConfiguration* = object
+    globalFlags*: seq[string] ## List of parse flags applied on each
+    ## file parse. Mostly for things like include paths.
+    fileFlags*: Table[AbsFile, seq[string]] ## List of parse flags
+    ## specific only to particular file
+
+  FileIndex* = object
+    index*: Table[AbsFile, ParsedFile] ## Index of all parsed files
+    depGraph*: HeaderDepGraph
+
   WrapConfig* = object
     ## Configuration for wrapping. Mostly deals with type renaming
     header*: AbsFile ## Current main translation file (header)
@@ -718,8 +870,17 @@ type
     ## considered a part of api. Things like `internal` namespaces.
     collapsibleNamespaces*: seq[string]
     ignoreFile*: proc(file: AbsFile): bool
+    isInternal*: proc(
+      dep: AbsFile, conf: WrapConfig, index: FileIndex): bool ## Determine
+    ## if particular dependency (`dep` file) should be re-exported.
+    ## Note that this decision is not tied to particular file *from
+    ## which* `dep` has been imported, but instead works the same way
+    ## for all headers that depend on `dep`
 
   WrapCache* = HashSet[Hash]
+
+
+
 
 
 #==========================  Helper utilities  ===========================#
@@ -1151,75 +1312,6 @@ func hasUnexposed*(nt: NType[PNode]): bool =
 #*************************************************************************#
 #***********************  Declaration conversion  ************************#
 #*************************************************************************#
-#=========================  C entry declaration  =========================#
-when true:
-  when true: # derive commonDerives:
-    type
-      CDeclKind* = enum
-        cdkClass
-        cdkStruct
-        cdkEnum
-        cdkFunction
-        cdkMethod
-        cdkField
-        cdkAlias
-
-      CArg* = object
-        name*: string
-        cursor*: CXCursor
-
-      CXOperatorKind* = enum
-        ## Classification for operators
-        cxoPrefixOp ## Prefix operator `@a`
-        cxoInfixOP ## Infix operator `a @ b`
-        cxoAsgnOp ## Assign operator `a = b`
-        cxoArrayOp ## Array access operator `a[b]`
-        cxoArrowOp ## Arrow operator `a->`
-        cxoCallOp ## Call operator `a()`
-        cxoDerefOp ## Prefix dereference operator
-
-      IncludeDep* = object
-        # TODO use it as edge value
-        includedAs*: string
-        includedPath*: AbsFile
-        includedFrom*: AbsFile
-        fromLine*: int
-        fromColumn*: int
-        fromOffset*: int
-
-
-
-      CNamespace* = seq[NType[PNode]]
-      CDecl* = object
-        ## Higher-level wrapper on top of CXCursor. Mostly used to
-        ## provide more intuitive API for working with things to be
-        ## wrapped.
-        name*: NType[PNode]
-        genConstraints*: seq[CXCursor]
-
-        namespace*: CNamespace
-        cursor* {.requiresinit.}: CXCursor
-        case kind*: CDeclKind
-          of cdkField:
-            fldAccs*: CX_CXXAccessSpecifier
-          of cdkMethod:
-            metAccs*: CX_CXXAccessSpecifier
-            metArgs*: seq[CArg]
-          of cdkFunction:
-            funArgs*: seq[CArg]
-          of cdkClass, cdkStruct:
-            members*: seq[CDecl]
-          of cdkEnum:
-            flds*: seq[tuple[
-              fldname: string,
-              value: Option[CXCursor]
-            ]]
-          else:
-            nil
-
-#=================================  ---  =================================#
-
-
 proc accs(self: CDecl): CX_CXXAccessSpecifier =
   if contains({cdkField}, self.kind):
     return self.fldAccs
@@ -1425,26 +1517,7 @@ proc getPublicAPI*(cd: CDecl): seq[CXCursor] =
 #*********************  Translation unit conversion  *********************#
 #*************************************************************************#
 #==========================  Type declarations  ==========================#
-type
-  CApiUnit* = object
-    ## Representation of single API unit - all public
-    ## methods/classes/fields/functions declared in main file of
-    ## single translation unit.
-    ##
-    ## ## Fields
-    ## :decls: List of declarations in main file
-    ## :publicTypes: List of public entries exposed by the API.
-    ##
-    ##     Class fields, function/method arguments/return values and
-    ##     so on. This list allows you to determine whether or not
-    ##     wrapping additional API unit & including them in main file
-    ##     is necessary.
 
-    # TODO infer 'derived' API that must also be acessible through
-    # object - things like public fields and methods of parent class.
-    decls*: seq[CDecl]
-    publicAPI*: seq[CXCursor]
-    includes*: seq[IncludeDep]
 
 
 #===========  Splitting translation unit into logical chunks  ============#
@@ -1626,7 +1699,7 @@ proc visitCursor(
         result.decls.add visitClass(cursor, parent, conf)
       of ckFunctionDecl, ckFunctionTemplate:
         result.decls.add visitFunction(cursor, parent, conf)
-      of ckTypedefDecl:
+      of ckTypedefDecl, ckTypeAliasDecl:
         result.decls.add visitAlias(cursor, parent, conf)
       of ckEnumDecl:
         result.decls.add visitEnum(cursor, parent, conf)
@@ -1643,7 +1716,7 @@ proc visitCursor(
         # info "Found include ", cursor
         # debug cursor.getSpellingLocation()
       else:
-        # warn "Recursing on", cursor, "of kind", cursor.cxKind()
+        warn "Recursing on", cursor, "of kind", cursor.cxKind()
         result.recurse = true
   # else:
   #   warn "Skipping cursor ", cursor
@@ -1770,6 +1843,10 @@ proc getDepFiles*(cxtype: CXType): seq[AbsFile] =
 
   for file in result:
     assertExists(file)
+
+proc isInternalImpl*(
+  dep: AbsFile, conf: WrapConfig, index: FileIndex): bool =
+  return not index.index[dep].isExplicitlyAdded
 
 proc getDepFiles*(deps: seq[CXCursor]): seq[AbsFile] =
   ## Generate list of files that have to be wrapped
@@ -2247,7 +2324,8 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): PNode =
   return en.toNNode(standalone = true)
 
 proc wrapApiUnit*(
-  api: CApiUnit, conf: WrapConfig, cache: var WrapCache): PNode =
+  api: CApiUnit, conf: WrapConfig,
+  cache: var WrapCache, index: FileIndex): PNode =
   ## Generate wrapper for api unit.
   result = nnkStmtList.newPTree()
   for decl in api.decls:
@@ -2256,6 +2334,7 @@ proc wrapApiUnit*(
     else:
       continue
 
+    debug decl.cursor
     case decl.kind:
       of cdkClass:
         identLog()
@@ -2291,33 +2370,6 @@ proc wrapApiUnit*(
 #*************************************************************************#
 #********************  Dependency graph construction  ********************#
 #*************************************************************************#
-import gram, tables
-
-const HeaderGraphFlags = toInt({
-  Directed, ValueIndex, UniqueEdges, UniqueNodes})
-
-type
-  ParsedFile* = object
-    unit*: CXTranslationUnit ## Translation unit
-    filename*: AbsFile ## Name of the original file
-    api*: CApiUnit ## File's API
-    index*: CXIndex
-    explicitDeps*: seq[AbsFile] ## Filenames in which types exposed in
-    ## API are declared. Guaranteed to have every file listed once &
-    ## no self-dependencies.
-
-  HeaderDepGraph* = Graph[AbsFile, string, HeaderGraphFlags]
-
-  ParseConfiguration* = object
-    globalFlags*: seq[string] ## List of parse flags applied on each
-    ## file parse. Mostly for things like include paths.
-    fileFlags*: Table[AbsFile, seq[string]] ## List of parse flags
-    ## specific only to particular file
-
-
-  FileIndex* = object
-    index*: Table[AbsFile, ParsedFile] ## Index of all parsed files
-    depGraph*: HeaderDepGraph
 
 
 proc getFlags*(config: ParseConfiguration, file: AbsFile): seq[string] =
@@ -2353,6 +2405,7 @@ proc parseFile*(
   # logIdented:
   #   for dep in result.explicitDeps:
   #     debug dep
+  result.isExplicitlyAdded = true
 
   dedentLog()
 
@@ -2392,14 +2445,13 @@ proc registerDeps*(graph: var HeaderDepGraph, parsed: ParsedFile) =
 
     graph.incl(path)
     graph.incl(ifrm)
-    notice ifrm, " -> ", path
+    # notice ifrm, " -> ", path
     graph.incl((ifrm, path), &"{dep.includedAs}:{dep.fromLine}",)
 
 
   for dep in parsed.explicitDeps:
     graph.incl(file.realpath)
     graph.incl(dep.realpath)
-    info file, " -> ", dep
     graph.incl((file.realpath, dep.realpath), "@@@")
 
 
@@ -2456,13 +2508,14 @@ func makeImport*(names: seq[string]): PNode =
   nnkImportStmt.newPTree(
     names.mapIt(it.newPident()).foldl(
       nnkInfix.newPTree(newPident("/"), a, b))
-    # names.foldl(nnk)
-    # nnkInfix.newPTree(
-    #   newPIdent("/"),
-    #   newPIdent(names[0]),
-    #   newPIdent(names[1])
-    # )
   )
+
+func makeExport*(names: seq[string]): PNode =
+  nnkExportStmt.newPTree(
+    names.mapIt(it.newPident()).foldl(
+      nnkInfix.newPTree(newPident("/"), a, b))
+  )
+
 
 proc fixFileName*(name: string): string =
   name.multiReplace({
@@ -2474,9 +2527,20 @@ proc makeCXStdImport*(path: AbsFile): seq[string] =
   let (dir, name, ext) = path.splitFile()
   @["cxstd", name.fixFileName()]
 
+proc getExports*(
+  parsed: ParsedFile, conf: WrapConfig, index: FileIndex): seq[AbsFile] =
+  ## Get list of absolute files that provide types, used in public API
+  ## for `parsed` file *and* marked as internal (e.g. not supposed to
+  ## be imported separately)
+  for dep in parsed.explicitDeps:
+    if conf.isInternal(dep, conf, index):
+      result.add dep
+
 proc wrapFile*(
-  parsed: ParsedFile, conf: WrapConfig, cache: var WrapCache): PNode =
-  result = parsed.api.wrapApiUnit(conf, cache)
+  parsed: ParsedFile, conf: WrapConfig,
+  cache: var WrapCache, index: FileIndex): PNode =
+  info "Wrapping", parsed.filename
+  result = parsed.api.wrapApiUnit(conf, cache, index)
 
   var imports = nnkStmtList.newPTree()
 
@@ -2494,6 +2558,10 @@ proc wrapFile*(
       mapIt(it.makeImport()):
     imports.add node
 
+  for node in parsed.getExports(conf, index).mapIt(
+    conf.getImport(it, conf)).deduplicate():
+    imports.add makeExport(node)
+
   # for dep in parsed.explicitDeps:
   #   imports.add conf.getImport(dep, conf).makeImport()
 
@@ -2504,8 +2572,12 @@ func toIncludes*(files: seq[AbsDir]): seq[string] =
     result.add file.getStr().addPrefix("-I")
 
 proc wrapFile*(
-  file: AbsFile, flags: seq[string],
-  conf: WrapConfig, cache: var WrapCache):
+  file: AbsFile,
+  flags: seq[string],
+  conf: WrapConfig,
+  cache: var WrapCache,
+  index: FileIndex
+             ):
   tuple[parsed: ParsedFile, wrapped: PNode] =
 
   let parsedConf = ParseConfiguration(
@@ -2514,15 +2586,18 @@ proc wrapFile*(
   )
 
   result.parsed = parseFile(file, parsedConf, conf)
-  result.wrapped = result.parsed.wrapFile(conf, cache)
+  result.wrapped = result.parsed.wrapFile(conf, cache, index)
 
 proc wrapFile*(
-  cmd: CXCompileCommand, extraFlags: seq[string],
-  conf: WrapConfig, cache: var WrapCache
+  cmd: CXCompileCommand,
+  extraFlags: seq[string],
+  conf: WrapConfig,
+  cache: var WrapCache,
+  index: FileIndex
              ): tuple[parsed: ParsedFile, wrapped: PNode] =
   wrapFile(
     toAbsFile($cmd.getFilename(), true),
-    extraFlags & cmd.getFlags(), conf, cache)
+    extraFlags & cmd.getFlags(), conf, cache, index)
 
 type
   WrapResult* = object
@@ -2587,7 +2662,7 @@ proc wrapAll*(
       parsed: parsed.index[file],
       infile: file,
       importName: wrap.getImport(file, wrap),
-      wrapped: parsed.index[file].wrapFile(wrap, cache)
+      wrapped: parsed.index[file].wrapFile(wrap, cache, parsed)
     )
 
   result.index = parsed
@@ -2626,6 +2701,11 @@ let baseWrapConfig* = WrapConfig(
         return true
       else:
         return false
+  ),
+  isInternal: (
+    proc(dep: AbsFile, conf: WrapConfig,
+         index: FileIndex): bool {.closure} =
+      isInternalImpl(dep, conf, index)
   )
 )
 

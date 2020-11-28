@@ -184,7 +184,6 @@
         echo q.dep2.i
 -
   name: "Multifile"
-  forceFirst: 10
   cfiles:
     -
       filename: "public0.hpp"
@@ -224,3 +223,95 @@
       contents: |
         import public1
         var pub1: Public1
+
+-
+  name: "Single internal"
+  comment: |
+    Internal class reused in two API units
+  cfiles:
+    -
+      filename: "internal.hpp"
+      internal: true
+      contents: |
+        #pragma once
+        struct Intern {};
+    - filename: "user-a.hpp"
+      contents: |
+        #pragma once
+        #include "internal.hpp"
+        Intern getVal1() {}
+  nimfiles:
+    - filename: "userA.nim"
+      contents: |
+        import user_a, std/os
+        let val: Intern = getVal1()
+        assert not fileExists("internla.nim")
+-
+  name: "Internal reuse"
+  comment: |
+    Internal class reused in two API units
+  cfiles:
+    -
+      filename: "internal.hpp"
+      internal: true
+      contents: |
+        #pragma once
+        struct Intern {};
+    - filename: "user-a.hpp"
+      contents: |
+        #pragma once
+        #include "internal.hpp"
+        Intern getVal1() {}
+    - filename: "user-b.hpp"
+      contents: |
+        #pragma once
+        #include "internal.hpp"
+        Intern getVal2() {}
+  nimfiles:
+    -
+      filename: "internUser.nim"
+      contents: |
+        import internal
+        var test: Intern
+    - filename: "userA.nim"
+      contents: |
+        import user_a
+        let val: Intern = getVal1()
+    - filename: "userB.nim"
+      contents: |
+        import user_b
+        let val: Intern = getVal2()
+-
+  name: "Forward typedef"
+  forceFirst: 10
+  comment: |
+    Forward declaration of the typedef, for API unit split across
+    multiple files (aka `std::string`-like). First forwar declare
+    template class and create typedefs, then actually define class.
+    C++ is such a nice language, right? And this is how stdlib shipped
+    with GCC is written. Fucking piece of trash
+  cfiles:
+    -
+      filename: "typedefs.hpp"
+      internal: true
+      contents: |
+        #pragma once
+        template <typename T> struct Temp;
+        using Using = Temp<char>;
+    - filename: "definition.hpp"
+      internal: true
+      contents: |
+        # pragma once
+        template <typename T> struct Temp { T fld; };
+    - filename: "mainapi.hpp"
+      contents: |
+        # pragma once
+        #include "definition.hpp"
+        #include "typedefs.hpp"
+  nimfiles:
+    -
+      filename: "apiuser.nim"
+      contents: |
+        import mainapi
+        var us: Using
+        var tm: Temp[string]
