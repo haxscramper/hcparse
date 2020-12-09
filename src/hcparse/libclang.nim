@@ -1136,7 +1136,7 @@ type
                               ## @
                               ## implementation for a category. 
     ckTypedefDecl = 20,         ##  A typedef. 
-    ckCXXMethod = 21,           ##  A C++ class method. 
+    ckMethod = 21,           ##  A C++ class method. 
     ckNamespace = 22,           ##  A C++ namespace. 
     ckLinkageSpec = 23,         ##  A linkage specification, e.g. 'extern "C"'. 
     ckConstructor = 24,         ##  A C++ constructor. 
@@ -1158,7 +1158,7 @@ type
     ckObjCDynamicDecl = 38,     ##  An Objective-C 
                          ## @
                          ## dynamic definition. 
-    ckCXXAccessSpecifier = 39,  ##  An access specifier. 
+    ckAccessSpecifier = 39,  ##  An access specifier. 
     ckFirstRef = 40, ckObjCProtocolRef = 41, ckObjCClassRef = 42, ckTypeRef = 43, ##  A reference to a type declaration.
                                                                       ##  A type reference occurs anywhere where a type is named but not
                                                                       ##  declared. For example, given:
@@ -1166,7 +1166,7 @@ type
                                                                       ##  The typedef is a declaration of size_type (CXCursor_TypedefDecl),
                                                                       ##  while the type of the variable "size" is referenced. The cursor
                                                                       ##  referenced by the type of size is the typedef for size_type.
-    ckCXXBaseSpecifier = 44, ckTemplateRef = 45, ##  A reference to a class template, function template, template
+    ckBaseSpecifier = 44, ckTemplateRef = 45, ##  A reference to a class template, function template, template
                                            ##  template parameter, or class template partial specialization.
     ckNamespaceRef = 46,        ##  A reference to a namespace or namespace alias.
     ckMemberRef = 47, ##  A reference to a member of a struct, union, or class that occurs in
@@ -1235,32 +1235,32 @@ type
                       ##  The __null extension is typically only used by system headers, which define
                       ##  NULL as __null in C++ rather than using 0 (which is an integer that may not
                       ##  match the size of a pointer).
-    ckCXXStaticCastExpr = 124,  ##  C++'s static_cast
+    ckStaticCastExpr = 124,  ##  C++'s static_cast
                             ## <
                             ## > expression.
-    ckCXXDynamicCastExpr = 125, ##  C++'s dynamic_cast
+    ckDynamicCastExpr = 125, ##  C++'s dynamic_cast
                              ## <
                              ## > expression.
-    ckCXXReinterpretCastExpr = 126, ##  C++'s reinterpret_cast
+    ckReinterpretCastExpr = 126, ##  C++'s reinterpret_cast
                                  ## <
                                  ## > expression.
-    ckCXXConstCastExpr = 127,   ##  C++'s const_cast
+    ckConstCastExpr = 127,   ##  C++'s const_cast
                            ## <
                            ## > expression.
-    ckCXXFunctionalCastExpr = 128, ##  Represents an explicit C++ type conversion that uses "functional"
+    ckFunctionalCastExpr = 128, ##  Represents an explicit C++ type conversion that uses "functional"
                                 ##  notion (C++ [expr.type.conv]).
                                 ##  Example:
                                 ## Error: cannot render: rnCodeBlock
-    ckCXXTypeidExpr = 129,      ##  A C++ typeid expression (C++ [expr.typeid]).
-    ckCXXBoolLiteralExpr = 130, ##  [C++ 2.13.5] C++ Boolean Literal.
-    ckCXXNullPtrLiteralExpr = 131, ##  [C++0x 2.14.7] C++ Pointer Literal.
-    ckCXXThisExpr = 132,        ##  Represents the "this" expression in C++
-    ckCXXThrowExpr = 133, ##  [C++ 15] C++ Throw Expression.
+    ckTypeidExpr = 129,      ##  A C++ typeid expression (C++ [expr.typeid]).
+    ckBoolLiteralExpr = 130, ##  [C++ 2.13.5] C++ Boolean Literal.
+    ckNullPtrLiteralExpr = 131, ##  [C++0x 2.14.7] C++ Pointer Literal.
+    ckThisExpr = 132,        ##  Represents the "this" expression in C++
+    ckThrowExpr = 133, ##  [C++ 15] C++ Throw Expression.
                        ##  This handles 'throw' and 'throw' assignment-expression. When
                        ##  assignment-expression isn't present, Op will be null.
-    ckCXXNewExpr = 134, ##  A new expression for memory allocation and constructor calls, e.g:
+    ckNewExpr = 134, ##  A new expression for memory allocation and constructor calls, e.g:
                      ##  "new CXXNewExpr(foo)".
-    ckCXXDeleteExpr = 135, ##  A delete expression for memory deallocation and destructor calls,
+    ckDeleteExpr = 135, ##  A delete expression for memory deallocation and destructor calls,
                         ##  e.g. "delete[] pArray".
     ckUnaryExpr = 136,          ##  A unary expression. (noexcept, sizeof, or other traits)
     ckObjCStringLiteral = 137,  ##  An Objective-C string literal i.e. 
@@ -1333,9 +1333,9 @@ type
                                  ## synchronized statement.
     ckObjCAutoreleasePoolStmt = 221, ##  Objective-C's autorelease pool statement.
     ckObjCForCollectionStmt = 222, ##  Objective-C's collection statement.
-    ckCXXCatchStmt = 223,       ##  C++'s catch statement.
-    ckCXXTryStmt = 224,         ##  C++'s try statement.
-    ckCXXForRangeStmt = 225,    ##  C++'s for (* : *) statement.
+    ckCatchStmt = 223,       ##  C++'s catch statement.
+    ckTryStmt = 224,         ##  C++'s try statement.
+    ckForRangeStmt = 225,    ##  C++'s for (* : *) statement.
     ckSEHTryStmt = 226,         ##  Windows Structured Exception Handling's try statement.
     ckSEHExceptStmt = 227,      ##  Windows Structured Exception Handling's except statement.
     ckSEHFinallyStmt = 228,     ##  Windows Structured Exception Handling's finally statement.
@@ -1402,7 +1402,7 @@ type
                           ##  The translation unit cursor exists primarily to act as the root
                           ##  cursor for traversing the contents of a translation unit.
     ckFirstAttr = 400, ckIBActionAttr = 401, ckIBOutletAttr = 402,
-    ckIBOutletCollectionAttr = 403, ckCXXFinalAttr = 404, ckCXXOverrideAttr = 405,
+    ckIBOutletCollectionAttr = 403, ckFinalAttr = 404, ckOverrideAttr = 405,
     ckAnnotateAttr = 406, ckAsmLabelAttr = 407, ckPackedAttr = 408, ckPureAttr = 409,
     ckConstAttr = 410, ckNoDuplicateAttr = 411, ckCUDAConstantAttr = 412,
     ckCUDADeviceAttr = 413, ckCUDAGlobalAttr = 414, ckCUDAHostAttr = 415,

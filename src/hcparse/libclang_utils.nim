@@ -394,7 +394,7 @@ proc comment*(cursor: CXCursor): CXComment =
 proc isConstMethod*(cursor: CXCursor): bool =
   ## Return true if cursor is a class method with `const`
   ## qualification. No exception is raised on invalid method
-  (cursor.kind in {ckCXXMethod}) and (cxxMethodIsConst(cursor) == 0)
+  (cursor.kind in {ckMethod}) and (cxxMethodIsConst(cursor) == 0)
 
 proc `==`*(c1, c2: CXCursor): bool = equalCursors(c1, c2) == 0
 
@@ -953,9 +953,11 @@ proc argTypes*(cursor: CXType): seq[CXType] =
 proc retType*(cursor: CXCursor): CXType =
   cursor.expectKind({
     ckFunctionDecl,
-    ckCXXMethod,
+    ckMethod,
     ckConversionFunction,
-    ckFunctionTemplate
+    ckFunctionTemplate,
+    ckConstructor,
+    ckDestructor
   })
 
   cursor.cxType().getResultType()
@@ -1224,11 +1226,8 @@ proc isMutableRef*(cxtype: CXType): bool =
     of tkTypeDef:
       # TODO implement mutability checking
       let decl = cxtype.getTypeDeclaration()
-      # info cxtype, "is defined on line", decl.getSpellingLocation().line
       if decl.len == 1 and decl[0].cxKind == ckTypeRef:
         discard
-        # info "Simple type alias for", decl[0].cxType()
-        # debug decl[0].cxType().getTypeDeclaration().treeRepr()
     else:
       raiseAssert(&"#[ IMPLEMENT Is {cxtype.cxKind} a mutable ref? ]#")
 
@@ -1589,19 +1588,13 @@ var undefCnt: int = 0
 proc visitAlias*(
   cursor: CXCursor, parent: CNamespace, conf: WrapConfig): CDecl =
   result = CDecl(kind: cdkAlias, cursor: cursor, namespace: parent)
-
   result.name = newPType $cursor
-
-  # if "string" in $cursor:
-  #   info "Visit alias ", cursor
-  #   debug cursor.treeRepr()
 
 proc visitFunction(
   cursor: CXCursor, parent: CNamespace, conf: WrapConfig): CDecl =
   result = CDecl(kind: cdkFunction, cursor: cursor, namespace: parent)
   result.name = newPType $cursor
   result.args = cursor.getArguments()
-  info "Found function", cursor
   for subn in cursor:
     case subn.cxKind:
       of ckTemplateTypeParameter:
@@ -1642,9 +1635,6 @@ proc requiredGenericParams(cursor: CXCursor): seq[NType[PNode]] =
       else:
         result.add newPType $subn # WARNING blow up on `a<b>`
 
-  debug "Required generic parameters for", cursor, "are:"
-  debug result.mapIt($it.toNNode())
-
 
 
 proc visitClass(
@@ -1659,8 +1649,6 @@ proc visitClass(
   result.namespace = parent
   result.name.genParams.add cursor.requiredGenericParams()
 
-  debug result.name.toNNode()
-
   identLog()
   defer: dedentLog()
 
@@ -1670,26 +1658,36 @@ proc visitClass(
     else:
       asPrivate
 
+
+  # debug cursor.treeRepr()
+
   for subn in cursor:
-    if subn.cxKind == ckCXXAccessSpecifier:
+    if subn.cxKind == ckAccessSpecifier:
       currentAccs = subn.getCXXAccessSpecifier()
 
     if currentAccs == asPublic:
       case subn.cxKind:
-        of ckCXXMethod, ckConversionFunction:
+        of ckMethod, ckConversionFunction:
           result.members.add visitMethod(subn, currentAccs)
         of ckConstructor:
           var res = visitMethod(subn, currentAccs)
-          res.name.head = "new" & result.name.head
-        of ckCXXAccessSpecifier:
+          res.name.head = result.name.head
+          result.members.add res
+        of ckAccessSpecifier:
           currentAccs = subn.getCXXAccessSpecifier()
         of ckFieldDecl,
            ckVarDecl # WARNING static fields might need to be wrapped differently
              :
           result.members.add visitField(subn, currentAccs)
         of ckTemplateTypeParameter, ckFriendDecl,
-           ckStaticAssert, ckDestructor, ckTemplateTemplateParameter:
+           ckStaticAssert, ckTemplateTemplateParameter:
           discard
+        of ckDestructor:
+          # QUESTION WARNING I think using `destroy=` hook from nim side is
+          # unnecessary, but still need to verify this later.
+          var res = visitMethod(subn, currentAccs)
+          res.name.head = result.name.head
+          result.members.add res
         of ckFunctionTemplate:
           result.members.add visitFunction(
             subn, parent & @[ result.name ], conf)
@@ -1701,20 +1699,18 @@ proc visitClass(
         of ckStructDecl, ckClassDecl:
           # WARNING IMPLEMENT nested structure/class declarations are
           # not implemented
-          discard
-        of ckCXXBaseSpecifier:
+          raiseAssert("#[ IMPLEMENT nested structure/class ]#") 
+        of ckBaseSpecifier:
           # WARNING base class specifier ignored, FIXME need to
           # implement
-          discard
+          raiseAssert("#[ IMPLEMENT base class specifier is ignored ]#")
         else:
           inc undefCnt
-          debug subn.getSpellingLocation()
-          debug subn.treeRepr()
           if undefCnt > 20:
             raiseAssert("Reached unknown class element limit")
           else:
             discard
-            # warn "IMPLEMENT class element:", ($subn.cxKind).toRed(), subn
+            warn "IMPLEMENT class element:", ($subn.cxKind).toRed(), subn
             # debug subn.treeRepr()
 
 
@@ -1730,9 +1726,6 @@ proc visitNamespace(
   if not conf.ignoreCursor(cursor, conf):
     for subn in cursor:
       result.add visitCursor(subn, parent & @[ newPType($cursor) ], conf).decls
-  # else:
-  #   warn "Skipping namespace", cursor
-  #   debug cursor.getSpellingLocation()
 
 proc visitCursor(
   cursor: CXCursor, parent: CNamespace, conf: WrapConfig): tuple[
@@ -1762,14 +1755,9 @@ proc visitCursor(
           fromOffset: loc.offset,
           includedPath: AbsFile($cursor.getIncludedFile()).realpath
         )
-        # info "Found include ", cursor
-        # debug cursor.getSpellingLocation()
       else:
         warn "Recursing on", cursor, "of kind", cursor.cxKind()
         result.recurse = true
-  # else:
-  #   warn "Skipping cursor ", cursor
-  #   debug cursor.getSpellingLocation()
 
 
 proc splitDeclarations*(
@@ -1904,7 +1892,7 @@ proc getDepFiles*(deps: seq[CXCursor]): seq[AbsFile] =
     var decl: (CXCursor, bool)
     # echov dep
     case dep.cxKind:
-      of ckFunctionDecl, ckCXXMethod, ckConversionFunction:
+      of ckFunctionDecl, ckMethod, ckConversionFunction:
         result.add getDepFiles(dep.params()).withIt do:
           for file in it:
             # echov file
@@ -1993,8 +1981,8 @@ proc wrapOperator*(
   let kind = oper.classifyOperator()
   it.kind = pkOperator
 
-  debug "Operrator class", kind
-  debug it.name
+  # debug "Operrator class", kind
+  # debug it.name
   if kind == cxoAsgnOp and it.name == "setFrom":
     it.signature.pragma = newPPragma(
       newPIdentColonString("importcpp", &"# = #"),
@@ -2009,7 +1997,7 @@ proc wrapOperator*(
           newExprColonExpr(newPIdent "header",
                            conf.makeHeader(conf)),
         )
-        debug "Assign operator"
+        # debug "Assign operator"
       of cxoArrayOp:
         let rtype = oper.cursor.retType()
         let (_, mutable) = rtype.toNType(conf)
@@ -2092,20 +2080,20 @@ proc wrapProcedure*(
     parentDecl: Option[CDecl]
   ): tuple[decl: WrappedEntry, canAdd: bool] =
 
-  info "Wrapping procedure", pr.cursor
-  debug pr.cursor.treeRepr()
-
   var it = PProcDecl()
-  var addThis = (pr.kind == cdkMethod)
+  var addThis = (
+    pr.kind == cdkMethod and
+    pr.cursor.cxKind notin {
+      ckConstructor, ckDestructor, ckConversionFunction
+    }
+  )
   result.canAdd = true
 
-  info "Is an operator", pr.isOperator()
   if pr.isOperator():
     var genp: seq[NType[PNode]]
     iflet (par = parent):
       genp.add par.genParams
 
-    debug genp.mapIt($it.toNNode())
     let (decl, adt) = pr.wrapOperator(genp, conf)
     it = decl
     addThis = adt
@@ -2136,7 +2124,6 @@ proc wrapProcedure*(
 
 
   for arg in pr.args:
-    # debug arg.cursor.cxType().cxKind()
     var (vtype, mutable) = arg.cursor.cxType().toNType(conf)
     if vtype.head == "UNEXPOSED":
       # WARNING currently parameters which contain `tkUnexposed`
@@ -2162,8 +2149,20 @@ proc wrapProcedure*(
       kind: mutable.tern(nvdVar, nvdLet))
 
 
-  # Force override return type for assignment operators
-  if not (pr.isOperator and pr.classifyOperator() == cxoAsgnOp):
+  if pr.isOperator and pr.classifyOperator() == cxoAsgnOp:
+    # Force override return type for assignment operators
+    it.signature.setRType newPType("void")
+  elif pr.cursor.kind in {ckConstructor, ckConversionFunction}:
+    # Override handling of return types for constructors
+    assert parent.isSome(), "Cannot wrap constructor without parent object"
+    it.signature.setRType newNType("ptr", @[parent.get()])
+
+    it.signature.pragma = newPPragma(
+      newPIdentColonString("importcpp", &"new {it.name}(@)"),
+      newExprColonExpr(newPIdent "header",
+                       conf.makeHeader(conf)))
+  else:
+    # Default handling of return types
     var (rtype, mutable) = toNType(pr.cursor.retType(), conf)
     if parentDecl.isSome() and
        parent.isSome() and
@@ -2180,11 +2179,20 @@ proc wrapProcedure*(
       # in return value. This must be fixed in future versions.
       result.canAdd = false
 
-  else:
-    it.signature.setRType newPType("void")
+    if pr.cursor.cxkind == ckDestructor:
+      # Implicitly calling destructor on object (if someone ever needs
+      # something like that)
+      it.signature.pragma = newPPragma(
+        newPIdentColonString("importcpp", &"~{it.name}()"),
+        newExprColonExpr(newPIdent "header",
+                         conf.makeHeader(conf)))
+
+  if pr.cursor.kind == ckDestructor:
+    it.name = "destroy" & it.name
+  elif pr.cursor.cxkind in {ckConstructor, ckConversionFunction}:
+    it.name = "new" & it.name
 
   result.decl = newWrappedEntry(toNimDecl(it), pr, pr.cursor)
-  debug $it.toNNode()
 
 
 proc fixNames(ppd: var PProcDecl,
@@ -2211,7 +2219,9 @@ proc wrapMethods*(
   cd: CDecl, conf: WrapConfig,
   parent: NType[PNode], cache: var WrapCache): seq[WrappedEntry] =
   assert cd.kind in {cdkClass, cdkStruct}
-  for meth in cd.methods({ckCXXMethod}):
+  for meth in cd.methods({
+    ckMethod, ckDestructor, ckConstructor, ckConversionFunction
+  }):
     var (decl, canAdd) = wrapProcedure(
       meth, conf, some(parent), cache, some(cd))
     fixNames(decl.wrapped.procdecl, conf, parent)
@@ -2274,13 +2284,9 @@ proc wrapAlias*(
       toNimDecl(namespace.wrapTypeFromNamespace(conf)), al, al.cursor
     )
   else:
-    # let (head, genparams) = al.name.toExported(true)
     result = newWrappedEntry(
       toNimDecl(newAliasDecl(al.name, full)), al, al.cursor
     )
-    # result = nnkTypeSection.newPTree(
-    #   nnkTypeDef.newPTree(head, genparams, full.toNNode())
-    # )
 
 proc wrapObject*(
     cd: CDecl, conf: WrapConfig, cache: var WrapCache
@@ -2315,6 +2321,11 @@ proc wrapObject*(
         result.other.add mem.wrapAlias(cd.namespace & @[cd.name], conf)
       else:
         discard
+
+  for node in cd.cursor:
+    if node.cxKind == ckBaseSpecifier:
+      # raiseAssert("#[ IMPLEMENT wrap referenced cursor fields/methods ]#")
+      debug node[0].getCursorReferenced().treeRepr()
 
   result.obj = newWrappedEntry(toNimDecl(obj), cd, cd.cursor)
 
@@ -2421,7 +2432,6 @@ proc wrapApiUnit*(
     else:
       continue
 
-    debug decl.cursor
     case decl.kind:
       of cdkClass:
         identLog()
@@ -2429,8 +2439,6 @@ proc wrapApiUnit*(
 
         if spec.cxKind() != ckFirstInvalid:
           discard
-          # warn "Skipping", decl.cursor.cxType()
-          # debug "Which is a specialization of", spec.cxKind()
         else:
           let (obj, procs, other) = decl.wrapObject(conf, cache)
 
@@ -2777,7 +2785,6 @@ let baseWrapConfig* = WrapConfig(
     proc(cursor: CXCursor, conf: WrapConfig): bool {.closure.} =
       if not ($cursor).startsWith("__cxx11") and
         ($cursor).startsWith(@[ "__", "_" ]):
-        # debug "Ignore ", $cursor
         return true
       if cursor.cxKind == ckNamespace and
          ($cursor in @["detail", "internal"]):
@@ -2797,3 +2804,79 @@ let baseCppParseConfig* = ParseConfiguration(
     "-xc++", "-std=c++11",
   ]
 )
+
+#*************************************************************************#
+#*********************  Wrapped code postprocessing  *********************#
+#*************************************************************************#
+proc nimifyInfixOperators*(we: WrappedEntry): seq[WrappedEntry] {.nimcall.} =
+  var we = we
+  if we.wrapped.kind == nekProcDecl and
+     we.wrapped.procdecl.kind == pkOperator:
+    var opd {.byaddr.} = we.wrapped.procdecl
+    case opd.name:
+      of "<<":
+        opd.name = "shl"
+        result.add we
+
+      of ">>":
+        opd.name = "shr"
+        result.add we
+
+      of "%":
+        opd.name = "mod"
+        result.add we
+
+      else:
+        discard
+
+
+type Postprocess* = proc(we: WrappedEntry): seq[WrappedEntry] {.closure.}
+
+var defaultPostprocessSteps*: seq[Postprocess]
+
+defaultPostprocessSteps.add(nimifyInfixOperators)
+
+
+proc postprocessWrapped*(
+    entries: seq[WrappedEntry], steps: seq[Postprocess] = defaultPostprocessSteps,
+  ): seq[WrappedEntry] =
+  for we in entries:
+    result.add we
+    for step in steps:
+      result.add step(we)
+
+
+
+proc wrapSingleFile*(
+  file: FsFile,
+  includePaths: seq[FsDir] = @[],
+  errorReparseVerbose: bool = false): PNode =
+
+  var
+    wrapConf = baseWrapConfig
+    parseConf = baseCppParseConfig
+    cache: WrapCache
+    index: FileIndex
+
+  wrapConf.isInternal = proc(
+      dep: AbsFile,
+      conf: WrapConfig,
+      index: FileIndex
+    ): bool {.closure} =
+      true
+
+  for path in includePaths:
+    parseConf.globalFlags.add("-I" & path.getStr().strip())
+
+  let parsed = parseFile(
+    file.toAbsFile(), parseConf, wrapConf,
+    reparseOnNil = errorReparseVerbose
+  )
+
+  let wrapped = parsed.wrapFile(wrapConf, cache, index)
+
+  result = nnkStmtList.newPTree()
+  for node in wrapped.postprocessWrapped():
+    result.add node.wrapped.toNNode()
+
+  # return wrapped.toNNode()

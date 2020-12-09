@@ -9,30 +9,9 @@ proc wrapCpp*(
   includePaths: seq[FsDir] = @[],
   errorReparseVerbose: bool = false) =
   startColorLogger()
-  var
-    wrapConf = baseWrapConfig
-    parseConf = baseCppParseConfig
-    cache: WrapCache
-    index: FileIndex
+  let wrapped = wrapSingleFile(file, includePaths, errorReparseVerbose)
 
-  wrapConf.isInternal = proc(
-      dep: AbsFile,
-      conf: WrapConfig,
-      index: FileIndex
-    ): bool {.closure} =
-      true
-
-  for path in includePaths:
-    parseConf.globalFlags.add("-I" & path.getStr().strip())
-
-  let parsed = parseFile(
-    file.toAbsFile(), parseConf, wrapConf,
-    reparseOnNil = errorReparseVerbose
-  )
-
-  let wrapped = parsed.wrapFile(wrapConf, cache, index)
   outFile.writeFile($wrapped)
-
   debug colorizeToStr($wrapped, "cpp")
 
 when isMainModule:
