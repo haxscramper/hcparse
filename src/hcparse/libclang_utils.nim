@@ -7,7 +7,7 @@ when not defined(libclangIncludeUtils):
 
 #==============================  includes  ===============================#
 import bitops, strformat, macros, terminal, sugar, std/decls, strutils,
-       sequtils, options, re, hashes, deques, sets, hashes, logging
+       sequtils, options, re, hashes, deques, sets, hashes, logging, deques
 import gram, tables
 
 import hpprint, hpprint/hpprint_repr
@@ -326,6 +326,8 @@ macro makeVisitor*(captureVars, body: untyped): untyped =
     body
   )
 
+  # echo result.repr
+
 macro makeDeclarationIndexer*(captureVars, body: untyped): untyped =
   captureVars.assertNodeKind({nnkBracket})
   result = makeVisitorImpl(
@@ -465,6 +467,14 @@ proc tokens*(cursor: CXCursor, tu: CXTranslationUnit): seq[string] =
     result.add $getTokenSpelling(
       tu, (cast[ptr UncheckedArray[CXToken]](tokens))[i])
 
+type
+  DepResolutionKind* = enum
+    drkIgnoreIfUsed
+    drkWrapDirectly
+    drkImportUses
+
+
+
 proc visitMainFile*[T](
   cursor: CXCursor,
   callback: tuple[
@@ -475,10 +485,11 @@ proc visitMainFile*[T](
   ## Call visitor in each subnode if it is in main file
   var mainParent = cursor
   cursor.visitChildren do:
-    makeVisitor [callback, mainParent]:
-      if cursor.isFromMainFile():
+    makeVisitor [callback, mainParent, getDepResolutionKind]:
+      if getDepResolutionKind(cursor) == drkWrapDirectly:
         return callback.impl(cursor, mainParent, addr callback.data)
       else:
+        debug cursor
         return cvrRecurse
 
 proc getFirstOfKind*(
@@ -518,8 +529,8 @@ proc isFromMainFile*(cursor: CXCursor): bool =
   let location = cursor.getCursorLocation()
   result = location.locationIsFromMainFile() != cint(0)
 
-proc getExpansionLocation*(location: CXSourceLocation): tuple[
-  file: AbsFile, line, column, offset: int] =
+proc getExpansionLocation*(location: CXSourceLocation): Option[tuple[
+  file: AbsFile, line, column, offset: int]] =
 
   var
     file: CXFile
@@ -530,17 +541,22 @@ proc getExpansionLocation*(location: CXSourceLocation): tuple[
   location.getSpellingLocation(
     addr file, addr line, addr column, addr offset)
 
-  result.file = toAbsFile($file.getFileName(), true) # WARNING set root?
-  # echov file.getFileName()
-  # echov result.file
-  result.file = result.file.realpath
-  result.line = line.int
-  result.column = column.int
-  result.offset = offset.int
+  if len($file.getFileName()) > 0:
+    result = some((
+      file: toAbsFile($file.getFileName(), true).realpath,
+      line: line.int,
+      column: column.int,
+      offset: offset.int
+    ))
+    # result.file =  # WARNING set root?
+    # result.file = result.file.
+    # result.line = 
+    # result.column = 
+    # result.offset = 
 
 
-proc getSpellingLocation*(cursor: CXCursor): tuple[
-  file: AbsFile, line, column, offset: int] =
+proc getSpellingLocation*(cursor: CXCursor): Option[tuple[
+  file: AbsFile, line, column, offset: int]] =
   result = cursor.getCursorLocation().getExpansionLocation()
   # echov result.file
 
@@ -797,9 +813,9 @@ type
     cursor* {.requiresinit.}: CXCursor
     case kind*: CDeclKind
       of cdkField:
-        fldAccs*: CX_CXXAccessSpecifier
+        fldAccs*: CX_AccessSpecifier
       of cdkMethod:
-        metAccs*: CX_CXXAccessSpecifier
+        metAccs*: CX_AccessSpecifier
         metArgs*: seq[CArg]
       of cdkFunction:
         funArgs*: seq[CArg]
@@ -882,6 +898,7 @@ type
     ## Note that this decision is not tied to particular file *from
     ## which* `dep` has been imported, but instead works the same way
     ## for all headers that depend on `dep`
+    depResolver*: proc(cursor: CXCursor): DepResolutionKind
 
   WrapCache* = HashSet[Hash]
 
@@ -916,7 +933,7 @@ func newWrappedEntry*(wrapped: PNimDecl): WrappedEntry =
 #==========================  Helper utilities  ===========================#
 
 proc declHash*(cursor: CXCursor): Hash =
-  let loc = cursor.getSpellingLocation()
+  let loc = cursor.getSpellingLocation().get()
   return !$(
     hash(loc.file) !& hash(loc.line) !&
     hash(loc.column) !& hash(loc.offset))
@@ -1347,14 +1364,14 @@ func hasUnexposed*(nt: NType[PNode]): bool =
 #*************************************************************************#
 #***********************  Declaration conversion  ************************#
 #*************************************************************************#
-proc accs(self: CDecl): CX_CXXAccessSpecifier =
+proc accs(self: CDecl): CX_AccessSpecifier =
   if contains({cdkField}, self.kind):
     return self.fldAccs
   if contains({cdkMethod}, self.kind):
     return self.metAccs
   raiseAssert("#[ IMPLEMENT:ERRMSG ]#")
 
-proc `accs=`(self: var CDecl; it: CX_CXXAccessSpecifier) =
+proc `accs=`(self: var CDecl; it: CX_AccessSpecifier) =
   var matched: bool = false
   if contains({cdkField}, self.kind):
     if true:
@@ -1573,13 +1590,13 @@ proc getArguments(cursor: CXCursor): seq[CArg] =
 
       result.add CArg(name: name, cursor: subn)
 
-proc visitMethod(cursor: CXCursor, accs: CX_CXXAccessSpecifier): CDecl =
+proc visitMethod(cursor: CXCursor, accs: CX_AccessSpecifier): CDecl =
   result = CDecl(kind: cdkMethod, cursor: cursor, name: newPType $cursor)
   result.accs = accs
   result.args = cursor.getArguments()
 
 
-proc visitField(cursor: CXCursor, accs: CX_CXXAccessSpecifier): CDecl =
+proc visitField(cursor: CXCursor, accs: CX_AccessSpecifier): CDecl =
   result = CDecl(kind: cdkField, cursor: cursor, name: newPType $cursor)
   result.accs = accs
 
@@ -1663,7 +1680,7 @@ proc visitClass(
 
   for subn in cursor:
     if subn.cxKind == ckAccessSpecifier:
-      currentAccs = subn.getCXXAccessSpecifier()
+      currentAccs = subn.getAccessSpecifier()
 
     if currentAccs == asPublic:
       case subn.cxKind:
@@ -1674,7 +1691,7 @@ proc visitClass(
           res.name.head = result.name.head
           result.members.add res
         of ckAccessSpecifier:
-          currentAccs = subn.getCXXAccessSpecifier()
+          currentAccs = subn.getAccessSpecifier()
         of ckFieldDecl,
            ckVarDecl # WARNING static fields might need to be wrapped differently
              :
@@ -1699,11 +1716,11 @@ proc visitClass(
         of ckStructDecl, ckClassDecl:
           # WARNING IMPLEMENT nested structure/class declarations are
           # not implemented
-          raiseAssert("#[ IMPLEMENT nested structure/class ]#") 
+          raiseAssert("#[ IMPLEMENT nested structure/class ]#")
         of ckBaseSpecifier:
-          # WARNING base class specifier ignored, FIXME need to
-          # implement
-          raiseAssert("#[ IMPLEMENT base class specifier is ignored ]#")
+          # Base class specifier is ignored. All additional wrapping
+          # operations should happend afterwards.
+          discard
         else:
           inc undefCnt
           if undefCnt > 20:
@@ -1746,7 +1763,7 @@ proc visitCursor(
       of ckEnumDecl:
         result.decls.add visitEnum(cursor, parent, conf)
       of ckInclusionDirective:
-        let loc = cursor.getSpellingLocation()
+        let loc = cursor.getSpellingLocation().get()
         result.includes.add IncludeDep(
           includedAs: $cursor,
           includedFrom: loc.file,
@@ -1768,18 +1785,21 @@ proc splitDeclarations*(
   assert not tu.isNil
   let cursor = tu.getTranslationUnitCursor()
   var res: CApiUnit
-  cursor.visitMainFile do:
+  cursor.visitChildren do:
     makeVisitor [tu, res, conf]:
-      let (decls, rec, incls) = visitCursor(cursor, @[], conf)
-      res.includes.add incls
-      if rec:
-        return cvrRecurse
-      else:
-        res.decls.add decls
-        for decl in decls:
-          res.publicAPI.add decl.getPublicAPI()
+      if conf.depResolver(cursor) == drkWrapDirectly:
+        let (decls, rec, incls) = visitCursor(cursor, @[], conf)
+        res.includes.add incls
+        if rec:
+          return cvrRecurse
+        else:
+          res.decls.add decls
+          for decl in decls:
+            res.publicAPI.add decl.getPublicAPI()
 
-        return cvrContinue
+          return cvrContinue
+      else:
+        return cvrRecurse
 
   return res
 
@@ -1875,7 +1895,7 @@ proc getDepFiles*(cxtype: CXType): seq[AbsFile] =
         result.add file
 
   ignorePathErrors {pekInvalidEntry}:
-    let (file, _, _, _) = decl.getSpellingLocation()
+    let (file, _, _, _) = decl.getSpellingLocation().get()
     result.add file
 
   for file in result:
@@ -1951,7 +1971,7 @@ proc getDepFiles*(deps: seq[CXCursor]): seq[AbsFile] =
       ignorePathErrors {pekInvalidEntry}:
         # WARNING ignore invalid `#include`
         # echov decl
-        let (file, line, column, _) = decl[0].getSpellingLocation()
+        let (file, line, column, _) = decl[0].getSpellingLocation().get()
         # echov file
         assertExists(file)
         result.add file
@@ -2288,6 +2308,102 @@ proc wrapAlias*(
       toNimDecl(newAliasDecl(al.name, full)), al, al.cursor
     )
 
+const tkPODKinds = {
+  tkVoid,
+  tkBool,
+  tkChar_U,
+  tkUChar,
+  tkChar16,
+  tkChar32,
+  tkUShort,
+
+  tkUInt,
+  tkULong,
+  tkULongLong,
+  tkUInt128,
+  tkChar_S,
+  tkSChar,
+
+  tkWChar,
+  tkShort,
+  tkInt,
+  tkLong,
+  tkLongLong,
+  tkInt128,
+
+  tkFloat,
+  tkDouble,
+  tkLongDouble,
+  tkNullPtr,
+  tkOverload,
+
+  tkDependent,
+  tkObjCId,
+  tkObjCClass,
+  tkObjCSel,
+  tkFloat128,
+
+}
+
+proc isConstQualifiedDeep(cxtype: CXType): bool =
+  var cxt = cxtype
+  while true:
+    debug cxt
+    if cxt.isConstQualified():
+      return true
+    elif cxt.kind in {tkRecord, tkPointer} + tkPODKinds:
+      info cxt.kind
+      return false
+    elif cxt.kind in {tkTypedef}:
+      cxt = cxt.getTypeDeclaration().getTypedefDeclUnderlyingType()
+    else:
+      return cxt.isConstQualified()
+
+
+proc getClassBaseCursors*(inCursor: CXCursor): seq[CXCursor] =
+  var baseQue = Deque[CXCursor]()
+  baseQue.addLast inCursor
+
+  while baseQue.len > 0:
+    let cursor = baseQue.popFirst
+    for node in cursor:
+      if node.cxKind == ckBaseSpecifier:
+        let base = node[0].getCursorReferenced()
+        baseQue.addLast base
+        result.add base
+
+
+proc getParentFields(
+    inCursor: CXCursor, obj: PObjectDecl, wrapConf: WrapConfig
+  ): seq[PProcDecl] =
+
+  for class in inCUrsor.getClassBaseCursors():
+    for entry in class:
+      if entry.kind in {ckFieldDecl}:
+        let
+          (fldType, _) = entry.cxType().toNType(wrapConf)
+          fldname = $entry
+
+
+        result.add newPProcDecl(
+          name = fldName,
+          rtyp = some(fldType),
+          pragma = newPPragma(newExprColonExpr(
+            newPIdent "importcpp", newRStrLit(&"#.{fldName}")))
+        )
+
+        if not entry.cxType().isConstQualifiedDeep():
+          result.add newPProcDecl(
+            name = fldName,
+            args = { "val" : fldType },
+            pragma = newPPragma(newExprColonExpr(
+              newPIdent "importcpp", newRStrLit(&"#.{fldName} = @")))
+          )
+
+          result[^1].kind = pkAssgn
+
+        debug entry.cxKind
+
 proc wrapObject*(
     cd: CDecl, conf: WrapConfig, cache: var WrapCache
   ): tuple[
@@ -2297,6 +2413,7 @@ proc wrapObject*(
   assert cd.kind in {cdkClass, cdkStruct}
   var obj = PObjectDecl(name: cd.inNamespace(cd.namespace), exported: true)
   # WARNING might die on `<T<T<T<T<T<T>>>>>` things
+  debug "Wrapping object", cd.cursor
 
   for fld in cd.pubFields:
     obj.flds.add PObjectField(
@@ -2322,10 +2439,8 @@ proc wrapObject*(
       else:
         discard
 
-  for node in cd.cursor:
-    if node.cxKind == ckBaseSpecifier:
-      # raiseAssert("#[ IMPLEMENT wrap referenced cursor fields/methods ]#")
-      debug node[0].getCursorReferenced().treeRepr()
+  result.procs.add getParentFields(cd.cursor, obj, conf).mapIt(
+    newWrappedEntry(toNimDecl(it)))
 
   result.obj = newWrappedEntry(toNimDecl(obj), cd, cd.cursor)
 
@@ -2650,13 +2765,13 @@ proc wrapFile*(
       conf.getImport(it, conf)).
       deduplicate().
       mapIt(it.makeImport()):
-    result.add node.toNimDecl().newWrappedEntry() 
+    result.add node.toNimDecl().newWrappedEntry()
 
   for node in parsed.getExports(conf, index).mapIt(
     conf.getImport(it, conf)).deduplicate():
-    result.add node.makeExport().toNimDecl().newWrappedEntry() 
+    result.add node.makeExport().toNimDecl().newWrappedEntry()
 
-  result = parsed.api.wrapApiUnit(conf, cache, index)
+  result.add parsed.api.wrapApiUnit(conf, cache, index)
 
 func toIncludes*(files: seq[AbsDir]): seq[string] =
   for file in files:
@@ -2794,8 +2909,25 @@ let baseWrapConfig* = WrapConfig(
   ),
   isInternal: (
     proc(dep: AbsFile, conf: WrapConfig,
-         index: FileIndex): bool {.closure} =
+         index: FileIndex): bool {.closure.} =
       isInternalImpl(dep, conf, index)
+  ),
+  depResolver: (
+    proc(cursor: CXCursor): DepResolutionKind {.closure.} =
+      if cursor.isFromMainFile():
+        result = drkWrapDirectly
+      else:
+        let loc = cursor.getSpellingLocation()
+        result = drkImportUses
+        if loc.isSome():
+          let loc = loc.get()
+          let (dir, file, ext) = loc.file.splitFile()
+          if "string" in file:
+            # This is of course temporary. Looks like I would also need to
+            # pass information about current translation unit, to determine
+            # name of the starting file for example.
+            debug cursor, loc
+            result = drkWrapDirectly
   )
 )
 
@@ -2862,7 +2994,7 @@ proc wrapSingleFile*(
       dep: AbsFile,
       conf: WrapConfig,
       index: FileIndex
-    ): bool {.closure} =
+    ): bool {.closure.} =
       true
 
   for path in includePaths:
@@ -2875,6 +3007,7 @@ proc wrapSingleFile*(
 
   let wrapped = parsed.wrapFile(wrapConf, cache, index)
 
+  debug wrapped.len
   result = nnkStmtList.newPTree()
   for node in wrapped.postprocessWrapped():
     result.add node.wrapped.toNNode()

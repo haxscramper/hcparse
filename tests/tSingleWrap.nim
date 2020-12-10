@@ -16,3 +16,10 @@ suite "single file wrap":
       srcd /. "incpp.cpp",
       srcd /. "resnim.nim"
     )
+
+suite "cxstdlib garbage wrap test":
+  test "std::string":
+    wrapCPP(
+      AbsFile("/usr/include/c++/10.2.0/string"),
+      AbsFile("/tmp/res.nim")
+    )

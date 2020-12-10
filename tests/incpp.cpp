@@ -1,10 +1,14 @@
 #include <vector>
 
+using const_int = const int;
+
 template <class Z>
 class Base
 {
   public:
-    void hell() {}
+    int       fld;
+    const_int fld2;
+    void      hell() {}
 };
 
 template <class Z0>
