@@ -7,7 +7,7 @@ when not defined(libclangIncludeUtils):
 
 #==============================  includes  ===============================#
 import bitops, strformat, macros, terminal, sugar, std/decls, strutils,
-       sequtils, options, re, hashes, deques, sets, hashes, logging, deques
+       sequtils, options, re, hashes, deques, sets, hashes, deques
 import gram, tables
 
 import hpprint, hpprint/hpprint_repr
@@ -17,6 +17,7 @@ import compiler/ast
 import packages/docutils/rstast
 import hmisc/types/colorstring
 import hmisc/[hexceptions, helpers, hdebug_misc]
+import hmisc/algo/hstring_algo
 import hmisc/macros/[iflet]
 import hmisc/other/[hshell, colorlogger, oswrap]
 
@@ -41,6 +42,16 @@ proc `$`*(cxRange: CXSourceRange): string =
 
 proc `$`*(cxkind: CXCursorKind): string = $getCursorKindSpelling(cxkind)
 proc `$`*(file: CXFile): string = $getFileName(file)
+
+func validCxxIdentifier*(str: string): bool =
+  if str[0] notin IdentStartChars:
+    return false
+
+  for ch in str:
+    if ch notin IdentChars:
+      return false
+
+  return true
 
 #*************************************************************************#
 #*****************************  Destructors  *****************************#
@@ -550,9 +561,9 @@ proc getExpansionLocation*(location: CXSourceLocation): Option[tuple[
     ))
     # result.file =  # WARNING set root?
     # result.file = result.file.
-    # result.line = 
-    # result.column = 
-    # result.offset = 
+    # result.line =
+    # result.column =
+    # result.offset =
 
 
 proc getSpellingLocation*(cursor: CXCursor): Option[tuple[
@@ -909,7 +920,7 @@ type
         discard
       of false:
         original*: CDecl
-        sourceCursor*: CXCursor
+        cursor*: CXCursor
 
 func `$`*(we: WrappedEntry): string = $we.wrapped
 func `$`*(we: seq[WrappedEntry]): string = we.mapPairs($rhs).join("\n")
@@ -924,7 +935,7 @@ func newWrappedEntry*(
   ): WrappedEntry =
   WrappedEntry(
     wrapped: wrapped, original: original,
-    sourceCursor: source, isPassthrough: false
+    cursor: source, isPassthrough: false
   )
 
 func newWrappedEntry*(wrapped: PNimDecl): WrappedEntry =
@@ -1001,12 +1012,14 @@ func toCamelCase*(str: string): string =
 proc fixIdentName*(str: string): string =
   result = str.toCamelCase()
   result = case result:
-    of "set": "cxset"
-    of "type": "cxtype"
-    of "range": "cxrange"
-    of "string": "cxstring"
-    of "begin": "cxbegin"
-    of "end": "cxend"
+    of "set": "cxSet"
+    of "type": "cxType"
+    of "range": "cxRange"
+    of "string": "cxString"
+    of "begin": "cxBegin"
+    of "end": "cxEnd"
+    of "is": "cxIs"
+    of "in": "cxIn"
     else: result
 
 func toPascalCase*(str: string): string =
@@ -1176,7 +1189,7 @@ proc fromElaboratedPType*(cxtype: CXType, conf: WrapConfig): NType[PNode] =
         result = newPType(decl.getTypeName(conf))
         for idx, parm in params:
           if parm.cxKind != tkInvalid:
-            result.genParams.add parm.toNType(conf).ntype
+            result.add parm.toNType(conf).ntype
 
       else:
         warn decl.treeRepr()
@@ -1285,6 +1298,8 @@ proc toNType*(
     of tkLong: newPType("clong")
     of tkUShort: newPType("cushort")
     of tkNullPtr: newPType("pointer") # WARNING C++ type is `nullptr_t`
+    of tkFloat: newPType("cfloat")
+    of tkLongDouble: newPType("clongdouble")
     of tkTypedef:
       result.mutable = cxType.isMutableRef()
       newPType(($cxtype).dropPrefix("const ")) # XXXX typedef processing -
@@ -1328,12 +1343,37 @@ proc toNType*(
       result.mutable = cxType.isMutableRef()
       toNType(cxType[], conf).ntype
     of tkUnexposed:
-      let strval = $cxType
-      if strval.validIdentifier():
+      let strval = ($cxType).dropPrefix("const ") # WARNING
+      if strval.validCxxIdentifier():
         newPtype(strval)
       else:
-        warn strval, "is not a valid identifier for type name, use UNEXPOSED"
-        newPType("UNEXPOSED")
+        # pprintStackTrace()
+        let decl = cxtype.getTypeDeclaration()
+        var res = newPType($decl)
+        if decl.cxKind in {
+          # HACK list of necessary kinds is determined by trial and error,
+          # I'm still not really sure what `tkUnexposed` actually
+          # represents.
+          ckClassTemplate, ckClassDecl
+        }:
+          for elem in decl:
+            if elem.cxKind() in {ckTemplateTypeParameter}:
+              let (sub, _) = elem.cxType().toNType(conf)
+              res.add sub
+
+          # info decl
+          # debug res.toNNode()
+        else:
+          # debug decl.cxKind()
+          res = newPType("UNEXPOSED")
+          # warn strval, "is not a valid identifier for type name, use UNEXPOSED"
+          # info cxtype.lispRepr()
+
+          if decl.cxKind() notin {ckNoDeclFound}:
+            raiseAssert("#[ IMPLEMENT ]#")
+
+
+        res
     of tkDependent: newPType("DEPENDENT")
     else:
       err "CANT CONVERT: ".toRed({styleItalic}),
@@ -1432,7 +1472,7 @@ func toCppImport*(ns: CNamespace): string =
 func toNType*(ns: CNamespace): NType[PNode] =
   var nameBuf: seq[string]
   for part in ns:
-    result.genParams.add part.genParams
+    result.add part.genParams
     nameBuf.add part.head
 
   result.head = nameBuf.join("::")
@@ -1442,7 +1482,7 @@ func inNamespace*(cd: CDecl, ns: CNamespace): NType[PNode] =
   var nameBuf: seq[string]
 
   for n in ns & @[ cd.name ]:
-    result.genParams.add n.genParams
+    result.add n.genParams
     nameBuf.add n.head
 
   result.head = nameBuf.join("::")
@@ -1615,7 +1655,7 @@ proc visitFunction(
   for subn in cursor:
     case subn.cxKind:
       of ckTemplateTypeParameter:
-        result.name.genParams.add newPType $subn
+        result.name.add newPType($subn)
       of ckNonTypeTemplateParameter, ckTemplateRef:
         result.genConstraints.add subn
       of ckParmDecl, ckTypeRef, ckNamespaceRef,
@@ -1664,7 +1704,7 @@ proc visitClass(
 
   result = CDecl(kind: cdkClass, cursor: cursor, name: newPType($cursor))
   result.namespace = parent
-  result.name.genParams.add cursor.requiredGenericParams()
+  result.name.add cursor.requiredGenericParams()
 
   identLog()
   defer: dedentLog()
@@ -1895,8 +1935,9 @@ proc getDepFiles*(cxtype: CXType): seq[AbsFile] =
         result.add file
 
   ignorePathErrors {pekInvalidEntry}:
-    let (file, _, _, _) = decl.getSpellingLocation().get()
-    result.add file
+    if decl.kind notin {ckNoDeclFound}:
+      let (file, _, _, _) = decl.getSpellingLocation().get()
+      result.add file
 
   for file in result:
     assertExists(file)
@@ -1971,10 +2012,12 @@ proc getDepFiles*(deps: seq[CXCursor]): seq[AbsFile] =
       ignorePathErrors {pekInvalidEntry}:
         # WARNING ignore invalid `#include`
         # echov decl
-        let (file, line, column, _) = decl[0].getSpellingLocation().get()
-        # echov file
-        assertExists(file)
-        result.add file
+        # debug decl[0].cxKind()
+        if decl[0].cxKind() notin {ckNoDeclFound}:
+          let (file, line, column, _) = decl[0].getSpellingLocation().get()
+          # echov file
+          assertExists(file)
+          result.add file
 
 
   result = result.deduplicate().
@@ -2161,7 +2204,7 @@ proc wrapProcedure*(
       # code like
       # `<Ta> struct A { <Tb> struct B {void func(); }; };`
       # and only add `Tb` as template parameter for `func()`.
-      vtype.genParams.add parent.get().genParams
+      vtype.add parent.get().genParams
 
     it.signature.arguments.add PIdentDefs(
       varname: fixIdentName(arg.name),
@@ -2605,7 +2648,7 @@ proc parseFile*(
       reparseOnNil = reparseOnNil
     )
   except:
-    error file.realpath
+    err file.realpath
     debug config.getFlags(file).joinl()
     raise
 
@@ -3010,6 +3053,11 @@ proc wrapSingleFile*(
   debug wrapped.len
   result = nnkStmtList.newPTree()
   for node in wrapped.postprocessWrapped():
+    # if node.wrapped.kind != nekPasstroughCode:
+      # debug node.cursor
+      # debug node.cursor.cxKind()
+      # debug node.cursor.cxType()
+
     result.add node.wrapped.toNNode()
 
   # return wrapped.toNNode()

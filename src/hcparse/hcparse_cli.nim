@@ -12,7 +12,7 @@ proc wrapCpp*(
   let wrapped = wrapSingleFile(file, includePaths, errorReparseVerbose)
 
   outFile.writeFile($wrapped)
-  debug colorizeToStr($wrapped, "cpp")
+  # debug colorizeToStr($wrapped, "cpp")
 
 when isMainModule:
   dispatchMulti(
