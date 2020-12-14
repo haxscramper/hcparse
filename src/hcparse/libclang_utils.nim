@@ -472,6 +472,7 @@ proc tokens*(cursor: CXCursor, tu: CXTranslationUnit): seq[string] =
   let range: CXSourceRange   = getCursorExtent(cursor);
   var tokens: ptr[CXToken]
   var nTokens: cuint = 0
+  assert not tu.isNil
   tokenize(tu, range, addr tokens, addr nTokens)
 
   for i in 0 ..< nTokens:
@@ -785,6 +786,7 @@ type
     cdkMethod
     cdkField
     cdkAlias
+    cdkMacro
 
   CArg* = object
     name*: string
@@ -876,7 +878,7 @@ type
 
   HeaderDepGraph* = Graph[AbsFile, string, HeaderGraphFlags]
 
-  ParseConfiguration* = object
+  ParseConfig* = object
     globalFlags*: seq[string] ## List of parse flags applied on each
     ## file parse. Mostly for things like include paths.
     fileFlags*: Table[AbsFile, seq[string]] ## List of parse flags
@@ -896,6 +898,12 @@ type
     ## Change type name for `ntype`. Used to convert things like
     ## `boost::wave::macro_handling_exception::bad_include_file` into
     ## human-readable names.
+    ##
+    ## First argument is a type to be fixed, second one is parent
+    ## configuration type. Third argument is mostly used for internal
+    ## purposes - index of the generic argument. For cases like `[__T,
+    ## _T]`, where both types should be mapped to `T` you can make `T` and
+    ## `T1` respectively, using value provided by `idx`
     getImport*: proc(dep: AbsFile, conf: WrapConfig): seq[string] ## Generate
     ## import statement for header file dependency
     ignoreCursor*: proc(curs: CXCursor, conf: WrapConfig): bool ## User-defined
@@ -909,7 +917,9 @@ type
     ## Note that this decision is not tied to particular file *from
     ## which* `dep` has been imported, but instead works the same way
     ## for all headers that depend on `dep`
+    isTypeInternal*: proc(cxt: CXType, conf: WrapConfig): bool
     depResolver*: proc(cursor: CXCursor): DepResolutionKind
+    isImportcpp*: bool
 
   WrapCache* = HashSet[Hash]
 
@@ -922,8 +932,14 @@ type
         original*: CDecl
         cursor*: CXCursor
 
+import hnimast/pprint
+
+func hasCursor*(we: WrappedEntry): bool = not we.isPassthrough
+
 func `$`*(we: WrappedEntry): string = $we.wrapped
-func `$`*(we: seq[WrappedEntry]): string = we.mapPairs($rhs).join("\n")
+func `$`*(we: seq[WrappedEntry]): string =
+  {.cast(noSideEffect).}:
+    we.mapPairs(rhs.wrapped.toNNode().toPString()).join("\n")
 
 func `==`*(a, b: WrappedEntry): bool =
   hnimast.`==`[Pnode](a.wrapped, b.wrapped)
@@ -1020,6 +1036,7 @@ proc fixIdentName*(str: string): string =
     of "end": "cxEnd"
     of "is": "cxIs"
     of "in": "cxIn"
+    of "include": "cxInclude"
     else: result
 
 func toPascalCase*(str: string): string =
@@ -1033,7 +1050,8 @@ proc fixTypeName*(str: string, idx: int, conf: WrapConfig): string =
     return "T" & $idx
   elif str in @[
     "bool", "cint", "cuint", "ptr", "void", "char",
-    "cuchar", "cstring", "cchar", "uint32", "uint16"
+    "cuchar", "cstring", "cchar", "uint32", "uint16",
+    "culong", "clong", "cshort", "cushort", "array"
   ]:
     return str
   else:
@@ -1061,12 +1079,26 @@ proc fixStdTypeName*(head: string, idx: int): string =
 
 proc fixTypeName*(
   ntype: var NType[PNode], conf: WrapConfig, idx: int = 0) =
-  ntype.head = fixTypeName(ntype.head, idx, conf)
+  if ntype.kind in {ntkIdent, ntkGenericSpec}:
+    ntype.head = fixTypeName(ntype.head, idx, conf)
 
-  var idx = idx
-  for gen in mitems(ntype.genParams):
-    conf.fixTypeName(gen, conf, idx)
-    inc idx
+    var idx = idx
+    for gen in mitems(ntype.genParams):
+      conf.fixTypeName(gen, conf, idx)
+      inc idx
+
+  else:
+    if ntype.rtype.isSome():
+      fixTypeName(ntype.rtype.get().getIt(), conf)
+
+    for idx, arg in mpairs(ntype.arguments):
+      arg.varname =
+        if
+          arg.varname.len == 0: "a" & $idx
+        else:
+          fixIdentName(arg.varname)
+
+      conf.fixtypename(arg.vtype, conf, idx)
 
 
 proc genParams*(cxtype: CXType): seq[CXType] =
@@ -1200,6 +1232,7 @@ proc fromElaboratedPType*(cxtype: CXType, conf: WrapConfig): NType[PNode] =
     result = ($cxtype).
       dropPrefix("enum ").
       dropPrefix("struct ").
+      dropPrefix("union ").
       dropPrefix("const "). # WARNING
       newPType()
 
@@ -1230,7 +1263,7 @@ proc toPIdentDefs*(cursor: CXCursor, conf: WrapConfig): PIdentDefs =
 proc getSemanticNamespaces*(curs: CXCursor): seq[string] =
   let parent = curs.getCursorSemanticParent()
   case parent.cxKind:
-    of ckNamespace:
+    of ckNamespace, ckClassDecl, ckClassTemplate:
       result = parent.getSemanticNamespaces() & @[$parent]
     else:
       discard
@@ -1282,24 +1315,25 @@ proc toNType*(
   ##   simply `E`) specifiers are simply dropped.
   var mutable: bool = false
   let restype = case cxtype.cxKind:
-    of tkBool: newPType("bool")
-    of tkInt: newPType("cint")
-    of tkVoid: newPType("void")
-    of tkUInt: newPType("cuint")
-    of tkLongLong: newPType("clonglong")
-    of tkULongLong: newPType("culonglong")
-    of tkDouble: newPType("cdouble")
-    of tkULong: newPType("culong")
-    of tkUChar: newPType("cuchar")
-    of tkChar16: newPType("uint16") # WARNING C++ type is `char16_t`
-    of tkChar32: newPType("uint32") # WARNING C++ type is `char32_t`
-    of tkWChar: newPType("uint32") # WARNING C++ type is `wchar_t`
-    of tkChar_S: newPType("cchar")
-    of tkLong: newPType("clong")
-    of tkUShort: newPType("cushort")
-    of tkNullPtr: newPType("pointer") # WARNING C++ type is `nullptr_t`
-    of tkFloat: newPType("cfloat")
+    of tkBool:       newPType("bool")
+    of tkInt:        newPType("cint")
+    of tkVoid:       newPType("void")
+    of tkUInt:       newPType("cuint")
+    of tkLongLong:   newPType("clonglong")
+    of tkULongLong:  newPType("culonglong")
+    of tkDouble:     newPType("cdouble")
+    of tkULong:      newPType("culong")
+    of tkUChar:      newPType("cuchar")
+    of tkChar16:     newPType("uint16") # WARNING C++ type is `char16_t`
+    of tkChar32:     newPType("uint32") # WARNING C++ type is `char32_t`
+    of tkWChar:      newPType("uint32") # WARNING C++ type is `wchar_t`
+    of tkChar_S:     newPType("cchar")
+    of tkLong:       newPType("clong")
+    of tkUShort:     newPType("cushort")
+    of tkNullPtr:    newPType("pointer") # WARNING C++ type is `nullptr_t`
+    of tkFloat:      newPType("cfloat")
     of tkLongDouble: newPType("clongdouble")
+    of tkShort:      newPType("cshort")
     of tkTypedef:
       result.mutable = cxType.isMutableRef()
       newPType(($cxtype).dropPrefix("const ")) # XXXX typedef processing -
@@ -1383,6 +1417,7 @@ proc toNType*(
       newPType("!!!")
 
   result.ntype = restype
+  conf.fixTypeName(result.ntype, conf, 0)
   result.mutable = mutable
 
 func hasUnexposed*(nt: NType[PNode]): bool =
@@ -1565,6 +1600,7 @@ proc convertCFunction*(cursor: CXCursor, conf: WrapConfig): ProcDecl[PNode] =
   cursor.expectKind(ckFunctionDecl)
   var prevName = ""
   result = ProcDecl[PNode]().withIt do:
+    it.iinfo = currIInfo()
     it.exported = true
     # WARNING temporarily disabled comment processing
     # it.comment = cursor.comment().toNimDoc()
@@ -1611,6 +1647,8 @@ proc getPublicAPI*(cd: CDecl): seq[CXCursor] =
       return @[cd.cursor]
     of cdkEnum:
       return @[]
+    of cdkMacro:
+      return @[]
 
 
 #*************************************************************************#
@@ -1652,6 +1690,7 @@ proc visitFunction(
   result = CDecl(kind: cdkFunction, cursor: cursor, namespace: parent)
   result.name = newPType $cursor
   result.args = cursor.getArguments()
+
   for subn in cursor:
     case subn.cxKind:
       of ckTemplateTypeParameter:
@@ -1659,7 +1698,9 @@ proc visitFunction(
       of ckNonTypeTemplateParameter, ckTemplateRef:
         result.genConstraints.add subn
       of ckParmDecl, ckTypeRef, ckNamespaceRef,
-         ckFirstExpr, ckCompoundStmt, ckMemberRef:
+         ckFirstExpr, ckCompoundStmt, ckMemberRef,
+         ckFirstAttr
+           :
          # WARNING right now these things are just droppped. Maybe it
          # will cause some errors in the future, I don't really know.
         discard
@@ -1699,10 +1740,16 @@ proc visitClass(
   ## Convert class under cursor to `CDecl`
   cursor.expectKind({
     ckClassDecl, ckClassTemplate, ckClassTemplatePartialSpecialization,
-    ckStructDecl
+    ckStructDecl, ckUnionDecl
   })
 
-  result = CDecl(kind: cdkClass, cursor: cursor, name: newPType($cursor))
+  let name =
+    if cursor.cxKind == ckStructDecl and len($cursor) == 0:
+      $cursor.cxType()
+    else:
+      $cursor
+
+  result = CDecl(kind: cdkClass, cursor: cursor, name: newPType(name))
   result.namespace = parent
   result.name.add cursor.requiredGenericParams()
 
@@ -1710,7 +1757,7 @@ proc visitClass(
   defer: dedentLog()
 
   var currentAccs =
-    if cursor.cxKind == ckStructDecl:
+    if cursor.cxKind in {ckStructDecl, ckUnionDecl}:
       asPublic
     else:
       asPrivate
@@ -1735,7 +1782,11 @@ proc visitClass(
         of ckFieldDecl,
            ckVarDecl # WARNING static fields might need to be wrapped differently
              :
-          result.members.add visitField(subn, currentAccs)
+
+          if not conf.ignoreCursor(subn, conf):
+            # debug subn.cxType().getTypeDeclaration()
+            result.members.add visitField(subn, currentAccs)
+
         of ckTemplateTypeParameter, ckFriendDecl,
            ckStaticAssert, ckTemplateTemplateParameter:
           discard
@@ -1753,10 +1804,10 @@ proc visitClass(
           if not conf.ignoreCursor(subn, conf):
             result.members.add visitAlias(
               subn, parent & @[result.name], conf)
-        of ckStructDecl, ckClassDecl:
-          # WARNING IMPLEMENT nested structure/class declarations are
-          # not implemented
-          raiseAssert("#[ IMPLEMENT nested structure/class ]#")
+        of ckStructDecl, ckClassDecl, ckUnionDecl:
+          # NOTE nested structs will be handled during object wrapping and
+          # moved into separate type declarations
+          discard
         of ckBaseSpecifier:
           # Base class specifier is ignored. All additional wrapping
           # operations should happend afterwards.
@@ -1784,10 +1835,17 @@ proc visitNamespace(
     for subn in cursor:
       result.add visitCursor(subn, parent & @[ newPType($cursor) ], conf).decls
 
+proc visitMacrodef(cursor: CXCursor, parent: CNamespace, conf: WrapConfig): CDecl =
+  CDecl(cursor: cursor, kind: cdkMacro)
+
 proc visitCursor(
   cursor: CXCursor, parent: CNamespace, conf: WrapConfig): tuple[
   decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]] =
 
+  # debug cursor.cxKind()
+  # debug $cursor.cxType()
+  # debug cursor.getCursorSemanticParent().cxKind()
+  # debug cursor.getCursorLexicalParent().cxKind()
   if not conf.ignoreCursor(cursor, conf):
     case cursor.cxKind:
       of ckNamespace:
@@ -1799,6 +1857,7 @@ proc visitCursor(
       of ckFunctionDecl, ckFunctionTemplate:
         result.decls.add visitFunction(cursor, parent, conf)
       of ckTypedefDecl, ckTypeAliasDecl:
+        # debug cursor.treeRepr()
         result.decls.add visitAlias(cursor, parent, conf)
       of ckEnumDecl:
         result.decls.add visitEnum(cursor, parent, conf)
@@ -1812,8 +1871,10 @@ proc visitCursor(
           fromOffset: loc.offset,
           includedPath: AbsFile($cursor.getIncludedFile()).realpath
         )
+      of ckMacroDefinition:
+        result.decls.add visitMacrodef(cursor, parent, conf)
       else:
-        warn "Recursing on", cursor, "of kind", cursor.cxKind()
+        # warn "Recursing on", cursor, "of kind", cursor.cxKind()
         result.recurse = true
 
 
@@ -2036,11 +2097,13 @@ proc wrapOperator*(
 
   var it = PProcDecl()
 
+  it.iinfo = currIInfo()
   it.signature = newProcNType[PNode](@[])
   it.name = oper.getNimName()
   it.genParams = genParams
   it.exported = true
 
+  assert conf.isImportcpp
   let kind = oper.classifyOperator()
   it.kind = pkOperator
 
@@ -2144,12 +2207,14 @@ proc wrapProcedure*(
   ): tuple[decl: WrappedEntry, canAdd: bool] =
 
   var it = PProcDecl()
+  it.iinfo = currIInfo()
   var addThis = (
     pr.kind == cdkMethod and
     pr.cursor.cxKind notin {
       ckConstructor, ckDestructor, ckConversionFunction
     }
   )
+
   result.canAdd = true
 
   if pr.isOperator():
@@ -2168,15 +2233,24 @@ proc wrapProcedure*(
       it.genParams = par.genParams
 
     if parent.isSome():
+      assert conf.isImportcpp,
+        "Cannot wrap methods for non-cxx targets"
+
       it.signature.pragma = newPPragma(
         newPIdentColonString("importcpp", &"#.{it.name}(@)"),
         newExprColonExpr(newPIdent "header",
                          conf.makeHeader(conf)))
     else:
+      let pragma =
+        if conf.isImportcpp:
+          newPIdentColonString("importcpp", &"{it.name}(@)")
+        else:
+          newPIdentColonString("importc", &"{it.name}")
+
       it.signature.pragma = newPPragma(
-        newPIdentColonString("importcpp", &"{it.name}(@)"),
-        newExprColonExpr(newPIdent "header",
-                         conf.makeHeader(conf)))
+        pragma,
+        newExprColonExpr(newPIdent "header", conf.makeHeader(conf))
+      )
 
   if addThis:
     assert parent.isSome()
@@ -2188,23 +2262,31 @@ proc wrapProcedure*(
 
   for arg in pr.args:
     var (vtype, mutable) = arg.cursor.cxType().toNType(conf)
-    if vtype.head == "UNEXPOSED":
-      # WARNING currently parameters which contain `tkUnexposed`
-      # types are not handled but are skipped instead. I don't
-      # know how to fix right now.
-      result.canAdd = false
+    if vtype.kind in {ntkIdent, ntkGenericSpec}:
+      if vtype.head == "UNEXPOSED":
+        # WARNING currently parameters which contain `tkUnexposed`
+        # types are not handled but are skipped instead. I don't
+        # know how to fix right now.
+        result.canAdd = false
 
-    if parentDecl.isSome() and
-       arg.cursor.inheritsGenParamsOf(parentDecl.get().cursor) and
-       parent.isSome() and
-       (arg.cursor.cxType().kind notin {tkUnexposed})
-      :
-      # WARNING nested class definitions with additional template
-      # parameters are not handled right now. It will break for
-      # code like
-      # `<Ta> struct A { <Tb> struct B {void func(); }; };`
-      # and only add `Tb` as template parameter for `func()`.
-      vtype.add parent.get().genParams
+      if parentDecl.isSome() and
+         arg.cursor.inheritsGenParamsOf(parentDecl.get().cursor) and
+         parent.isSome() and
+         (arg.cursor.cxType().kind notin {tkUnexposed})
+        :
+        # WARNING nested class definitions with additional template
+        # parameters are not handled right now. It will break for
+        # code like
+        # `<Ta> struct A { <Tb> struct B {void func(); }; };`
+        # and only add `Tb` as template parameter for `func()`.
+        vtype.add parent.get().genParams
+    else:
+      # FIXME determine and implement edge case handling for procvar
+      # arguments
+
+      # WARNING might cause duplication, for wrapping C++ functors better
+      # handling should be implemented
+      vtype.pragma.add newPident("cdecl")
 
     it.signature.arguments.add PIdentDefs(
       varname: fixIdentName(arg.name),
@@ -2254,6 +2336,9 @@ proc wrapProcedure*(
     it.name = "destroy" & it.name
   elif pr.cursor.cxkind in {ckConstructor, ckConversionFunction}:
     it.name = "new" & it.name
+
+  if pr.cursor.isVariadic() == 1:
+    it.signature.pragma.add newPIdent("varargs")
 
   result.decl = newWrappedEntry(toNimDecl(it), pr, pr.cursor)
 
@@ -2312,17 +2397,38 @@ proc wrapTypeFromNamespace(
   # general case.k
 
   var name: NType[PNode] = namespace.toNType()
+
   conf.fixTypeName(name, conf, 0)
+
   result = PObjectDecl(name: name, exported: true)
+
   result.annotation = some(newPPragma(
-    newExprColonExpr(newPIdent "importcpp",
-                     namespace.toCppImport().newRStrLit()),
+    newExprColonExpr(
+      newPIdent (if conf.isImportcpp: "importcpp" else: "importc"),
+      namespace.toCppImport().newRStrLit()
+    ),
     newExprColonExpr(newPIdent "header", conf.makeHeader(conf)),
   ))
 
 
+
+
+proc wrapObject*(
+    cd: CDecl, conf: WrapConfig, cache: var WrapCache
+  ): tuple[
+    obj: WrappedEntry, genAfter, genBefore: seq[WrappedEntry]
+  ]
+
 proc wrapAlias*(
-  al: CDecl, parent: CNamespace, conf: WrapConfig): WrappedEntry =
+    al: CDecl, parent: CNamespace, conf: WrapConfig, cache: var WrapCache,
+  ): seq[WrappedEntry] =
+  # NOTE returning multiple values because of
+  # `typedef struct A {} A, # *APtr` shit that can result in multple
+  # declarations.
+
+  # debug "Alias"
+  # debug al.cursor.treeRepr()
+
   # let importas = (parent & @[al.name]).toCppImport()
   var al = al
   al.name = al.inNamespace(parent)
@@ -2343,13 +2449,51 @@ proc wrapAlias*(
 
   if full.hasUnexposed():
     let namespace = parent & @[newPType($al.cursor)]
-    result = newWrappedEntry(
+    result = @[newWrappedEntry(
       toNimDecl(namespace.wrapTypeFromNamespace(conf)), al, al.cursor
-    )
+    )]
   else:
-    result = newWrappedEntry(
-      toNimDecl(newAliasDecl(al.name, full)), al, al.cursor
-    )
+    if al.cursor[0].cxKind() notin {ckStructDecl}:
+      # NOTE ignore `typedef struct` in C
+      result = @[newWrappedEntry(
+        toNimDecl(newAliasDecl(
+          al.name, full, iinfo = currIInfo())), al, al.cursor
+      )]
+    else:
+      if cache.canWrap(al.cursor[0]):
+        # Multiple trailing typedefs result in several `ckTypedefDecl`
+        # nodes
+
+        cache.markWrap(al.cursor[0])
+        let nested = visitClass(al.cursor[0], parent, conf)
+
+        let (obj, pre, post) = wrapObject(nested, conf, cache)
+
+        result.add pre & @[obj] & post
+        # debug "Trailing struct", al.name.toNNode(), full.toNNode()
+
+        # result = @[newWrappedEntry(
+        #   toNimDecl(newAliasDecl(
+        #     al.name, full, iinfo = currIInfo())), al, al.cursor
+        # )]
+      # else:
+
+      if al.name != full:
+        # `typedef struct {} A;` has the same typedef name and type, and
+        # should only be wrapped as type definition and not alias.
+        result.add newWrappedEntry(
+          toNimDecl(newAliasDecl(
+            al.name, full,
+            iinfo = currIInfo(),
+            isDistinct = false,
+          )), al, al.cursor
+        )
+
+      # warn "Ignoring alias"
+      # debug al.cursor.treeRepr()
+      # debug al.cursor[0].cxKind()
+      # result = newWrappedEntry()
+
 
 const tkPODKinds = {
   tkVoid,
@@ -2431,17 +2575,26 @@ proc getParentFields(
         result.add newPProcDecl(
           name = fldName,
           rtyp = some(fldType),
+          iinfo = currIInfo(),
           pragma = newPPragma(newExprColonExpr(
             newPIdent "importcpp", newRStrLit(&"#.{fldName}")))
         )
 
+        result[^1].addCodeComment(
+          &"Parent field getter passtrough from {class}\n")
+
         if not entry.cxType().isConstQualifiedDeep():
           result.add newPProcDecl(
             name = fldName,
+            iinfo = currIInfo(),
             args = { "val" : fldType },
             pragma = newPPragma(newExprColonExpr(
               newPIdent "importcpp", newRStrLit(&"#.{fldName} = @")))
           )
+
+
+          result[^1].addCodeComment(
+            &"Parent field assignment passtrough from {class}\n")
 
           result[^1].kind = pkAssgn
 
@@ -2450,39 +2603,78 @@ proc getParentFields(
 proc wrapObject*(
     cd: CDecl, conf: WrapConfig, cache: var WrapCache
   ): tuple[
-    obj: WrappedEntry, procs: seq[WrappedEntry], other: seq[WrappedEntry]
+    obj: WrappedEntry, genAfter, genBefore: seq[WrappedEntry]
   ] =
 
   assert cd.kind in {cdkClass, cdkStruct}
-  var obj = PObjectDecl(name: cd.inNamespace(cd.namespace), exported: true)
-  # WARNING might die on `<T<T<T<T<T<T>>>>>` things
-  debug "Wrapping object", cd.cursor
+  var obj = PObjectDecl(
+    name: cd.inNamespace(cd.namespace),
+    exported: true, iinfo: currIInfo(),
+  )
 
+  # WARNING might die on `<T<T<T<T<T<T>>>>>` things
   for fld in cd.pubFields:
-    obj.flds.add PObjectField(
+    var resFld = PObjectField(
       isTuple: false,
-      name: fld.name.head,
+      name: fixIdentName(fld.name.head),
       exported: true,
-      fldType: fld.cursor.cxType().toNType(conf).ntype
+      annotation: some newPPragma(
+        newExprColonExpr(
+          newPIdent("importc"), newRStrLit(fld.name.head))),
     )
 
+    if fld.cursor[0].cxKind() in {ckUnionDecl, ckStructDecl}:
+      let namespace = cd.namespace & @[newPType(cd.name.head)]
+      var nested = visitClass(fld.cursor[0], namespace, conf)
+
+      nested.name.head = resFld.name
+
+      nested.name = nested.inNamespace(@[])
+
+      let (obj, pre, post) = wrapObject(nested, conf, cache)
+
+      result.genBefore.add(pre & @[obj] & post)
+
+      resFld.fldType = obj.wrapped.objectDecl.name # pre # newPType(pre.name.head)
+    else:
+      resFld.fldType = fld.cursor.cxType().toNType(conf).ntype
+
+    if resFld.name == "db":
+      warn "sfasd"
+      debug resFld.fldType.toNNode()
+      debug fld.cursor.cxKind()
+      debug fld.cursor.cxType()
+      debug fld.cursor.cxType().getTypeDeclaration().treeRepr()
+
+
+    # if fld.cursor.cxType().getTypeDeclaration().cxKind() in {ckNoDeclFound}:
+    #   warn "Field", resFld.name, "has no declaration for type"
+
+    obj.flds.add resFld
+
   obj.annotation = some(newPPragma(
-    newExprColonExpr(newPIdent "importcpp",
-                     cd.namespaceName().newRStrLit()),
+    newExprColonExpr(
+      newPIdent (if conf.isImportcpp: "importcpp" else: "importc"),
+      cd.namespaceName().newRStrLit()
+    ),
     newExprColonExpr(newPIdent "header", conf.makeHeader(conf)),
   ))
 
-  result.procs = cd.wrapMethods(conf, obj.name, cache)
+  if cd.cursor.cxKind() == ckUnionDecl:
+    obj.annotation.get().add newPIdent("union")
+
+  result.genAfter = cd.wrapMethods(conf, obj.name, cache)
   conf.fixTypeName(obj.name, conf, 0)
 
   for mem in cd.members:
     case mem.kind:
       of cdkAlias:
-        result.other.add mem.wrapAlias(cd.namespace & @[cd.name], conf)
+        result.genBefore.add mem.wrapAlias(
+          cd.namespace & @[cd.name], conf, cache)
       else:
         discard
 
-  result.procs.add getParentFields(cd.cursor, obj, conf).mapIt(
+  result.genAfter.add getParentFields(cd.cursor, obj, conf).mapIt(
     newWrappedEntry(toNimDecl(it)))
 
   result.obj = newWrappedEntry(toNimDecl(obj), cd, cd.cursor)
@@ -2580,10 +2772,18 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): WrappedEntry =
 
   return newWrappedEntry(toNimDecl(en), declEn, declEn.cursor)
 
+proc wrapMacros*(declMacros: seq[CDecl], conf: WrapConfig): seq[WrappedEntry] =
+  discard
+  # for m in declMacros:
+  #   debug m.cursor.treeRepr(conf.unit)
+  #   debug "tokens:", $m.cursor.tokens(conf.unit)
+
+
 proc wrapApiUnit*(
   api: CApiUnit, conf: WrapConfig,
   cache: var WrapCache, index: FileIndex): seq[WrappedEntry] =
   ## Generate wrapper for api unit.
+  var macrolist: seq[CDecl]
   for decl in api.decls:
     if cache.canWrap(decl.cursor):
       cache.markWrap(decl.cursor)
@@ -2611,26 +2811,31 @@ proc wrapApiUnit*(
 
         dedentLog()
       of cdkAlias:
-        result.add decl.wrapAlias(decl.namespace, conf)
+        result.add decl.wrapAlias(decl.namespace, conf, cache)
       of cdkEnum:
         result.add decl.wrapEnum(conf)
       of cdkFunction:
         for f in decl.wrapFunction(conf, cache):
           result.add f
+      of cdkMacro:
+        macrolist.add decl
+        # result.add wrapMacro(decl, conf)
       else:
-        err "Not wrapping", decl.kind, decl.name
+        discard
+
+  result.add wrapMacros(macrolist, conf)
 
 #*************************************************************************#
 #********************  Dependency graph construction  ********************#
 #*************************************************************************#
 
 
-proc getFlags*(config: ParseConfiguration, file: AbsFile): seq[string] =
+proc getFlags*(config: ParseConfig, file: AbsFile): seq[string] =
   result.add config.globalFlags
   result.add config.fileFlags.getOrDefault(file)
 
 proc parseFile*(
-  file: AbsFile, config: ParseConfiguration,
+  file: AbsFile, config: ParseConfig,
   wrapConf: WrapConfig,
   reparseOnNil: bool = true): ParsedFile =
 
@@ -2713,7 +2918,7 @@ proc registerDeps*(graph: var HeaderDepGraph, parsed: ParsedFile) =
 
 proc parseAll*(
   files: seq[AbsFile],
-  conf: ParseConfiguration,
+  conf: ParseConfig,
   wrapConf: WrapConfig, ): FileIndex =
   for file in files:
     result.index[file] = parseFile(file, conf, wrapConf)
@@ -2766,11 +2971,11 @@ func makeImport*(names: seq[string]): PNode =
       nnkInfix.newPTree(newPident("/"), a, b))
   )
 
-func makeExport*(names: seq[string]): PNode =
-  nnkExportStmt.newPTree(
-    names.mapIt(it.newPident()).foldl(
-      nnkInfix.newPTree(newPident("/"), a, b))
-  )
+# func makeExport*(names: seq[string]): PNode =
+#   nnkExportStmt.newPTree(
+#     names.mapIt(it.newPident()).foldl(
+#       nnkInfix.newPTree(newPident("/"), a, b))
+#   )
 
 
 proc fixFileName*(name: string): string =
@@ -2797,6 +3002,13 @@ proc wrapFile*(
   cache: var WrapCache, index: FileIndex): seq[WrappedEntry] =
   info "Wrapping", parsed.filename
   result.add newWrappedEntry(
+    toNimDecl(
+      pquote do:
+        {.experimental: "codeReordering".}
+    )
+  )
+
+  result.add newWrappedEntry(
     toNimDecl(nnkConstSection.newPTree(
       nnkConstDef.newPTree(
         newPIdent("cxheader"),
@@ -2810,11 +3022,12 @@ proc wrapFile*(
       mapIt(it.makeImport()):
     result.add node.toNimDecl().newWrappedEntry()
 
-  for node in parsed.getExports(conf, index).mapIt(
-    conf.getImport(it, conf)).deduplicate():
-    result.add node.makeExport().toNimDecl().newWrappedEntry()
+  # for node in parsed.getExports(conf, index).mapIt(
+  #   conf.getImport(it, conf)).deduplicate():
+    # result.add node.makeExport().toNimDecl().newWrappedEntry()
 
   result.add parsed.api.wrapApiUnit(conf, cache, index)
+
 
 func toIncludes*(files: seq[AbsDir]): seq[string] =
   for file in files:
@@ -2828,7 +3041,7 @@ proc wrapFile*(
     index: FileIndex
    ): tuple[parsed: ParsedFile, wrapped: seq[WrappedEntry]] =
 
-  let parsedConf = ParseConfiguration(
+  let parsedConf = ParseConfig(
     globalFlags: getBuiltinHeaders().toIncludes(),
     fileFlags: { file : flags }.toTable()
   )
@@ -2864,7 +3077,7 @@ func wrapName*(res: WrapResult): string =
 
 proc wrapAll*(
   files: seq[AbsFile],
-  parseConf: ParseConfiguration,
+  parseConf: ParseConfig,
   wrapConf: WrapConfig
             ): tuple[wrapped: seq[WrapResult], index: FileIndex] =
 
@@ -2917,6 +3130,7 @@ proc wrapAll*(
   result.index = parsed
 
 let baseWrapConfig* = WrapConfig(
+  isImportcpp: true,
   makeHeader: (
     proc(conf: WrapConfig): PNode {.closure.} =
       newPIdent("cxheader")
@@ -2942,13 +3156,54 @@ let baseWrapConfig* = WrapConfig(
   ignoreCursor: (
     proc(cursor: CXCursor, conf: WrapConfig): bool {.closure.} =
       if not ($cursor).startsWith("__cxx11") and
-        ($cursor).startsWith(@[ "__", "_" ]):
-        return true
+        (
+          cursor.cxKind() notin { ckTypedefDecl } and
+          ($cursor).startsWith(@[ "__", "_" ])
+        ):
+
+        if cursor.cxKind() in {ckStructDecl, ckUnionDecl} and
+           not startsWith($cursor.cxType(), @["__", "_"]):
+          # `typedef struct _A {} A;` for C wrapping
+          return false
+        else:
+          return true
+
       if cursor.cxKind == ckNamespace and
          ($cursor in @["detail", "internal"]):
         return true
+
+      elif cursor.cxKind == ckFieldDecl:
+        if startsWith($cursor, "private"):
+          return true
+
+        else:
+          if conf.isTypeInternal(cursor.cxType(), conf):
+            return true
+
+          # else:
+          #   if cursor.cxType().getTypeDeclaration().cxKind() in
+          #      {ckNoDeclFound}:
+          #     return true
+
+          #   else:
+          #     return false
+
       else:
         return false
+  ),
+  isTypeInternal: (
+    proc(cxt: CXType, conf: WrapConfig): bool {.closure.} =
+      case cxt.cxKind:
+        of tkPodKinds:
+          result = false
+        of tkTypedef:
+          # debug cxt.lispRepr()
+          result = startsWith($cxt, "_")
+        of tkPointer:
+          result = conf.isTypeInternal(cxt[], conf)
+        else:
+          result = false
+
   ),
   isInternal: (
     proc(dep: AbsFile, conf: WrapConfig,
@@ -2969,12 +3224,13 @@ let baseWrapConfig* = WrapConfig(
             # This is of course temporary. Looks like I would also need to
             # pass information about current translation unit, to determine
             # name of the starting file for example.
-            debug cursor, loc
+
+            # debug cursor, loc
             result = drkWrapDirectly
   )
 )
 
-let baseCppParseConfig* = ParseConfiguration(
+let baseCppParseConfig* = ParseConfig(
   globalFlags: getBuiltinHeaders().toIncludes() & @[
     "-xc++", "-std=c++11",
   ]
@@ -2985,6 +3241,8 @@ let baseCppParseConfig* = ParseConfiguration(
 #*************************************************************************#
 proc nimifyInfixOperators*(we: WrappedEntry): seq[WrappedEntry] {.nimcall.} =
   var we = we
+  we.wrapped.iinfo = currIInfo()
+
   if we.wrapped.kind == nekProcDecl and
      we.wrapped.procdecl.kind == pkOperator:
     var opd {.byaddr.} = we.wrapped.procdecl
@@ -3004,60 +3262,103 @@ proc nimifyInfixOperators*(we: WrappedEntry): seq[WrappedEntry] {.nimcall.} =
       else:
         discard
 
+proc nep1Idents*(we: var WrappedEntry) {.nimcall.} =
+  if we.wrapped.kind == nekProcDecl and
+     we.wrapped.procdecl.kind == pkRegular:
+    we.wrapped.procdecl.name[0] = toLowerAscii(we.wrapped.procdecl.name[0])
 
-type Postprocess* = proc(we: WrappedEntry): seq[WrappedEntry] {.closure.}
+type
+  Postprocess* = object
+    case edit: bool
+      of true:
+        editor: proc(we: var WrappedEntry)
+      of false:
+        generator: proc(we: WrappedEntry): seq[WrappedEntry]
+
+
+func newPostprocess*(cb: proc(we: var WrappedEntry)): Postprocess =
+  Postprocess(edit: true, editor: cb)
+
+func newPostprocess*(
+    cb: proc(we: WrappedEntry): seq[WrappedEntry]
+  ): Postprocess =
+
+  Postprocess(edit: false, generator: cb)
 
 var defaultPostprocessSteps*: seq[Postprocess]
 
-defaultPostprocessSteps.add(nimifyInfixOperators)
+defaultPostprocessSteps.add @[
+  newPostprocess(nep1Idents),
+  newPostprocess(nimifyInfixOperators),
+]
 
 
 proc postprocessWrapped*(
-    entries: seq[WrappedEntry], steps: seq[Postprocess] = defaultPostprocessSteps,
+    entries: seq[WrappedEntry],
+    postprocess: seq[Postprocess] = defaultPostprocessSteps,
   ): seq[WrappedEntry] =
-  for we in entries:
-    result.add we
-    for step in steps:
-      result.add step(we)
 
+  for we in entries:
+    var we = we
+    for step in postprocess:
+      if step.edit:
+        step.editor(we)
+
+    result.add we
+    for step in postprocess:
+      if not step.edit:
+        result.add step.generator(we)
 
 
 proc wrapSingleFile*(
-  file: FsFile,
-  includePaths: seq[FsDir] = @[],
-  errorReparseVerbose: bool = false): PNode =
+    file: FsFile,
+    # includePaths: seq[FsDir] = @[],
+    errorReparseVerbose: bool = false,
+    # globalFlags: seq[string] = @[],
+    # isImportcpp: bool = true,
+    wrapConf: WrapConfig = baseWrapConfig,
+    parseConf: ParseConfig = baseCppParseConfig,
+    postprocess: seq[Postprocess] = defaultPostprocessSteps
+  ): seq[NimDecl[PNode]] =
 
   var
-    wrapConf = baseWrapConfig
-    parseConf = baseCppParseConfig
     cache: WrapCache
     index: FileIndex
 
-  wrapConf.isInternal = proc(
-      dep: AbsFile,
-      conf: WrapConfig,
-      index: FileIndex
-    ): bool {.closure.} =
-      true
+  # wrapConf.isImportcpp = isImportcpp
 
-  for path in includePaths:
-    parseConf.globalFlags.add("-I" & path.getStr().strip())
+  # wrapConf.isInternal = proc(
+  #     dep: AbsFile,
+  #     conf: WrapConfig,
+  #     index: FileIndex
+  #   ): bool {.closure.} =
+  #     true
+
+  # for path in includePaths:
+  #   parseConf.globalFlags.add("-I" & path.getStr().strip())
+
+  # parseConf.globalFlags.add globalFlags
 
   let parsed = parseFile(
     file.toAbsFile(), parseConf, wrapConf,
     reparseOnNil = errorReparseVerbose
   )
 
+  var wrapConf = wrapConf
+
+  wrapConf.unit = parsed.unit
+
   let wrapped = parsed.wrapFile(wrapConf, cache, index)
 
-  debug wrapped.len
-  result = nnkStmtList.newPTree()
-  for node in wrapped.postprocessWrapped():
-    # if node.wrapped.kind != nekPasstroughCode:
-      # debug node.cursor
-      # debug node.cursor.cxKind()
-      # debug node.cursor.cxType()
+  for node in wrapped.postprocessWrapped(postprocess):
+    result.add node.wrapped
+    if node.hasCursor():
+      result[^1].addCodeComment(
+        "Wrapper for `" &
+        (node.cursor.getSemanticNamespaces() & @[$node.cursor]).join("::") &
+        "`\n"
+      )
 
-    result.add node.wrapped.toNNode()
-
-  # return wrapped.toNNode()
+      if node.cursor.getSpellingLocation().getSome(loc):
+        result[^1].addCodeComment(
+          &"Declared in {loc.file}:{loc.line}")
