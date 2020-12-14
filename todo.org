@@ -1,13 +1,18 @@
-* 'Cleaned' libclang wrappers
+* COMPLETED 'Cleaned' libclang wrappers
+  CLOSED: [2020-12-14 Mon 20:08]
+  :LOGBOOK:
+  - State "COMPLETED"  from              [2020-12-14 Mon 20:08]
+  :END:
 
-- [ ] Instead of simply dropping duplicate enum values generate
+- [X] Instead of simply dropping duplicate enum values generate
   constants with dropped names.
-- [ ] Improve enum name conversion algorithm to also drop ~CXX~ in in
+- [X] Improve enum name conversion algorithm to also drop ~CXX~ in in
   the name.
-- [ ] Completely remove underscores from generated type and function
+- [X] Completely remove underscores from generated type and function
   names
 
 * Wrapper generator
 
-- [ ] Follow typedef alias dependencies
+- [X] Follow typedef alias dependencies
 - [ ] Wrap alias as ~type A = B~ instead of declaring separate object
+- [ ] Do not create constructors procs for abstract classes

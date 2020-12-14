@@ -141,11 +141,16 @@ suite "X11 garbage wrap test":
   test "X11":
     proc doWrap(infile, outfile: AbsFile) =
       let wconf = baseWrapConfig.withIt do:
-        it.isImportcpp = false
-        # it.isTypeInternal = (
-        #   proc(cxt: CXtype, conf: WrapConfig): bool {.closure.} =
-        #     if ""
-        # )
+        # it.isImportcpp = false
+        it.depResolver = (
+          proc(cursor: CXCursor): DepResolutionKind {.closure.} =
+            if cursor.isFromMainFile():
+              drkWrapDirectly
+            else:
+              # debug cursor
+              # debug cursor.getSpellingLocation()
+              drkIgnoreIfUsed
+        )
 
       let pconf = baseCppParseConfig.withIt do:
         it.globalFlags = @["-DXLIB_ILLEGAL_ACCESS"]
@@ -159,23 +164,27 @@ suite "X11 garbage wrap test":
         errorReparseVerbose = false,
         wrapConf = wconf,
         parseConf = pconf
-        # isImportcpp = false,
-        # globalFlags = @["-DXLIB_ILLEGAL_ACCESS"],
       )
 
       withStreamFile(outfile):
         for entry in wrapped:
+          stdout.writeLine(entry)
           file.write(entry)
 
 
 
 
-    if true:
+    if false:
       doWrap(AbsFile("/usr/include/X11/Xlib.h"), AbsFile("/tmp/xlib.nim"))
       doWrap(AbsFile("/usr/include/X11/X.h"), AbsFile("/tmp/x.nim"))
+      doWrap(
+        AbsFile("/usr/lib/clang/11.0.0/include/stddef.h"),
+        AbsFile("/tmp/stddef.nim"))
 
+      info "Done wrapping, running check"
       execShell shCmd(nim, check, "/tmp/xlib.nim")
 
+      info "Done check, wrap OK !"
     else:
       doWrap(AbsFile("/tmp/a.hpp"), AbsFile("/tmp/b.nim"))
 
