@@ -16,3 +16,11 @@
 - [X] Follow typedef alias dependencies
 - [ ] Wrap alias as ~type A = B~ instead of declaring separate object
 - [ ] Do not create constructors procs for abstract classes
+
+* TODO Todo list
+  :PROPERTIES:
+  :CREATED:  <2020-12-16 Wed 00:06>
+  :END:
+
+- [ ] Create fully qualified namespace access names
+

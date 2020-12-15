@@ -143,7 +143,7 @@ suite "X11 garbage wrap test":
       let wconf = baseWrapConfig.withIt do:
         # it.isImportcpp = false
         it.depResolver = (
-          proc(cursor: CXCursor): DepResolutionKind {.closure.} =
+          proc(cursor, referecendBy: CXCursor): DepResolutionKind {.closure.} =
             if cursor.isFromMainFile():
               drkWrapDirectly
             else:
@@ -194,3 +194,12 @@ suite "single file wrap":
       srcd /. "incpp.cpp",
       srcd /. "resnim.nim"
     )
+
+suite "WIP tests":
+  test "test":
+    wrapCpp(
+      srcd /. "wip.cpp",
+      AbsFile("/tmp/res_a.nim")
+    )
+
+    execShell shCmd(nim, check, "/tmp/res_a.nim")

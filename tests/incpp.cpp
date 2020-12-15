@@ -84,3 +84,11 @@ char operator/(std::vector<int> c, int v) {}
 char operator%(std::vector<int> c, int v) {}
 
 typedef int(GetSyncData)(double, double*, double, int, int, int, void*);
+
+struct S {};
+
+S    operator""_S(const char* s, unsigned long len) { return S(); }
+void operator"" _km(long double); // OK, will be called for 1.0_km
+int  operator"" _i18n(const char*, unsigned long); // OK
+
+float operator""_e(const char*); // OK

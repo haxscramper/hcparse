@@ -536,10 +536,30 @@ proc getFirstOfKind*(
 #========================  Location information  =========================#
 
 
+proc getFile*(tu: CXTranslationUnit): AbsFile =
+  AbsFile($tu.getTranslationUnitSpelling())
+
+proc getTuFile*(cx: CXCursor): AbsFile =
+  assert cx.kind == ckTranslationUnit
+  AbsFile($cx)
+
 proc isFromMainFile*(cursor: CXCursor): bool =
   ## Return true if cursor posints to main file
   let location = cursor.getCursorLocation()
   result = location.locationIsFromMainFile() != cint(0)
+
+proc `$`*(loc: CXSourceLocation): string =
+  var
+    file: CXFile
+    line: cuint
+    column: cuint
+    offset: cuint
+
+  loc.getSpellingLocation(
+    addr file, addr line, addr column, addr offset)
+
+  return &"{file}:{line}:{column}"
+
 
 proc getExpansionLocation*(location: CXSourceLocation): Option[tuple[
   file: AbsFile, line, column, offset: int]] =
@@ -803,6 +823,7 @@ type
     cxoDerefOp ## Prefix dereference operator
     cxoCommaOp ## Comma operator
     cxoConvertOp ## User-defined conversion operator
+    cxoUserLitOp ## User-defined literal operators
 
   IncludeDep* = object
     # TODO use it as edge value
@@ -824,7 +845,8 @@ type
     genConstraints*: seq[CXCursor]
 
     namespace*: CNamespace
-    cursor* {.requiresinit.}: CXCursor
+    cursor* # {.requiresinit.} # FIXME
+    : CXCursor
     case kind*: CDeclKind
       of cdkField:
         fldAccs*: CX_AccessSpecifier
@@ -893,8 +915,8 @@ type
     ## Configuration for wrapping. Mostly deals with type renaming
     header*: AbsFile ## Current main translation file (header)
     unit*: CXTranslationUnit
-    makeHeader*: proc(conf: WrapConfig): PNode ## Genreate identifier for
-    ## `{.header: ... .}`
+    makeHeader*: proc(cursor: CXCursor, conf: WrapConfig): PNode ## Genreate
+    ## identifier for `{.header: ... .}`
     fixTypeName*: proc(ntype: var NType[PNode], conf: WrapConfig, idx: int)
     ## Change type name for `ntype`. Used to convert things like
     ## `boost::wave::macro_handling_exception::bad_include_file` into
@@ -919,7 +941,7 @@ type
     ## which* `dep` has been imported, but instead works the same way
     ## for all headers that depend on `dep`
     isTypeInternal*: proc(cxt: CXType, conf: WrapConfig): bool
-    depResolver*: proc(cursor: CXCursor): DepResolutionKind
+    depResolver*: proc(cursor, referencedBy: CXCursor): DepResolutionKind
     isImportcpp*: bool
 
   WrapCache* = object
@@ -927,13 +949,20 @@ type
     visited: HashSet[cuint]
 
   WrappedEntry* = object
-    wrapped*: PNimDecl
-    case isPassthrough*: bool
+    case isMultitype*: bool
       of true:
-        discard
+        decls*: seq[WrappedEntry]
       of false:
-        original*: CDecl
-        cursor*: CXCursor
+        wrapped*: PNimDecl
+        case isPassthrough*: bool
+          of true:
+            discard
+          of false:
+            original*: CDecl
+            cursor*: CXCursor
+
+
+
 
 import hnimast/pprint
 
@@ -952,13 +981,21 @@ func `==`*(a, b: WrappedEntry): bool =
 func newWrappedEntry*(
     wrapped: PNimDecl, original: CDecl, source: CXCursor
   ): WrappedEntry =
+
   WrappedEntry(
-    wrapped: wrapped, original: original,
-    cursor: source, isPassthrough: false
+    wrapped: wrapped,
+    original: original,
+    cursor: source,
+    isPassthrough: false,
+    isMultitype: false
   )
 
+
+func newWrappedEntry*(wrapped: seq[WrappedEntry]): WrappedEntry =
+  WrappedEntry(decls: wrapped, isMultitype: true)
+
 func newWrappedEntry*(wrapped: PNimDecl): WrappedEntry =
-  WrappedEntry(wrapped: wrapped, isPassthrough: true)
+  WrappedEntry(wrapped: wrapped, isPassthrough: true, isMultitype: false)
 
 #==========================  Helper utilities  ===========================#
 
@@ -1573,8 +1610,10 @@ proc classifyOperator*(cd: CDecl): CXOperatorKind =
        "<<=", ">>=", "&=", "|=", "/=", "%=", "^="
       : # NOTE `=`
       cxoAsgnOp
+
     of "[]":
       cxoArrayOp
+
     of "-", "+", "/",
        "++", "--", # NOTE this is an operator implementation, so we are
                   # not (i hope) dropping information about
@@ -1583,22 +1622,34 @@ proc classifyOperator*(cd: CDecl): CXOperatorKind =
        "%", "^", "&", "|", "<", ">", "<=", ">="
          :
       cxoInfixOp
+
     of "*": # NOTE this heuristics might not be valid in all cases.
       if cd.args.len == 0:
         cxoDerefOp
       else:
         cxoInfixOp
+
     of "->", "->*":
       cxoArrowOp
+
     of "()":
       cxoCallOp
+
     of "~", "!":
       cxoPrefixOp
+
     of ",":
       cxoCommaOp
+
     else:
       if cd.cursor.cxKind() == ckConversionFunction:
         cxoConvertOp
+
+      elif (cd.cursor.cxKind() in {
+        ckFunctionDecl, ckFunctionTemplate
+      }) and (name.startsWith("\"\"")):
+        cxoUserLitOp
+
       else:
         raiseAssert(
           &"#[ IMPLEMENT '{name}', {cd.cursor.cxKind()} ]#" &
@@ -1875,7 +1926,7 @@ proc visitCursor(
   decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]] =
 
   # debug cursor.cxKind()
-  # debug $cursor.cxType()
+  debug $cursor.cxType()
   # debug cursor.getCursorSemanticParent().cxKind()
   # debug cursor.getCursorLexicalParent().cxKind()
   if not conf.ignoreCursor(cursor, conf):
@@ -1916,11 +1967,12 @@ proc splitDeclarations*(
   ## high-level declarations. All cursors for objects/structs are
   ## retained. Public API elements are stored in `publicAPI` field
   assert not tu.isNil
-  let cursor = tu.getTranslationUnitCursor()
+  let tuCursor = tu.getTranslationUnitCursor()
   var res: CApiUnit
-  cursor.visitChildren do:
-    makeVisitor [tu, res, conf]:
-      if conf.depResolver(cursor) == drkWrapDirectly:
+  tuCursor.visitChildren do:
+    makeVisitor [tu, res, conf, tuCursor]:
+      let resolve = conf.depResolver(cursor, tuCursor)
+      if resolve == drkWrapDirectly:
         let (decls, rec, incls) = visitCursor(cursor, @[], conf)
         res.includes.add incls
         if rec:
@@ -2144,19 +2196,15 @@ proc wrapOperator*(
   # debug it.name
   if kind == cxoAsgnOp and it.name == "setFrom":
     it.signature.pragma = newPPragma(
-      newPIdentColonString("importcpp", &"# = #"),
-      newExprColonExpr(newPIdent "header",
-                       conf.makeHeader(conf)))
+      newPIdentColonString("importcpp", &"# = #"))
+
     it.kind = pkRegular
   else:
     case kind:
       of cxoAsgnOp:
         it.signature.pragma = newPPragma(
-          newPIdentColonString("importcpp", &"# {it.name} #"),
-          newExprColonExpr(newPIdent "header",
-                           conf.makeHeader(conf)),
-        )
-        # debug "Assign operator"
+          newPIdentColonString("importcpp", &"# {it.name} #"))
+
       of cxoArrayOp:
         let rtype = oper.cursor.retType()
         let (_, mutable) = rtype.toNType(conf)
@@ -2164,24 +2212,17 @@ proc wrapOperator*(
           it.name = "[]="
           # WARNING potential source of horrible c++ codegen errors
           it.signature.pragma = newPPragma(
-            newPIdentColonString("importcpp", &"#[#]= #"),
-            newExprColonExpr(newPIdent "header",
-                             conf.makeHeader(conf)))
+            newPIdentColonString("importcpp", &"#[#]= #"))
 
         else:
           it.signature.pragma = newPPragma(
-            newPIdentColonString("importcpp", &"#[#]"),
-            newExprColonExpr(newPIdent "header",
-                             conf.makeHeader(conf)))
+            newPIdentColonString("importcpp", &"#[#]"))
 
 
 
       of cxoInfixOp:
         it.signature.pragma = newPPragma(
-          newPIdentColonString("importcpp", &"# {it.name} #"),
-          newExprColonExpr(newPIdent "header",
-                           conf.makeHeader(conf)),
-        )
+          newPIdentColonString("importcpp", &"# {it.name} #"))
 
         if oper.args.len == 1:
           result.addThis = true
@@ -2189,10 +2230,8 @@ proc wrapOperator*(
       of cxoArrowOp:
         # WARNING
         it.signature.pragma = newPPragma(
-          newPIdentColonString("importcpp", &"#.operator->()"),
-          newExprColonExpr(newPIdent "header",
-                           conf.makeHeader(conf)),
-        )
+          newPIdentColonString("importcpp", &"#.operator->()"))
+
       of cxoCallOp:
         # NOTE nim does have experimental support for call
         # operator, but I think it is better to wrap this one as
@@ -2200,29 +2239,22 @@ proc wrapOperator*(
         it.name = "call"
         it.kind = pkRegular
         it.signature.pragma = newPPragma(
-          newPIdentColonString("importcpp", &"#(@)"),
-          newExprColonExpr(newPIdent "header",
-                           conf.makeHeader(conf)),
-        )
+          newPIdentColonString("importcpp", &"#(@)"))
+
       of cxoDerefOp:
         it.name = "[]"
         # it.kind = pkRegular
         it.signature.pragma = newPPragma(
-          newPIdentColonString("importcpp", &"*#"),
-          newExprColonExpr(newPIdent "header",
-                           conf.makeHeader(conf)))
+          newPIdentColonString("importcpp", &"*#"))
+
       of cxoPrefixOp:
         it.signature.pragma = newPPragma(
-          newPIdentColonString("importcpp", &"{it.name}#"),
-          newExprColonExpr(newPIdent "header",
-                           conf.makeHeader(conf)))
+          newPIdentColonString("importcpp", &"{it.name}#"))
 
       of cxoCommaOp:
         it.name = "commaOp"
         it.signature.pragma = newPPragma(
-          newPIdentColonString("importcpp", &"commaOp(@)"),
-          newExprColonExpr(newPIdent "header",
-                           conf.makeHeader(conf)))
+          newPIdentColonString("importcpp", &"commaOp(@)"))
 
         it.kind = pkRegular
       of cxoConvertOp:
@@ -2230,18 +2262,28 @@ proc wrapOperator*(
 
         it.name = "to" & capitalizeAscii(restype.head)
         it.signature.pragma = newPPragma(
-          newPIdentColonString("importcpp", &"@"),
-          newExprColonExpr(
-            newPIdent "header",
-            conf.makeHeader(conf)
-        ))
+          newPIdentColonString("importcpp", &"@"))
 
 
         it.signature.setRType(restype)
         it.declType = ptkConverter
         it.kind = pkRegular
+      of cxoUserLitOp:
+        let restype = oper.cursor.retType().toNType(conf).ntype
+
+        it.name = "to" & capitalizeAscii(restype.head)
+        it.signature.pragma = newPPragma(
+          newPIdentColonString("importcpp", &"{oper.cursor}(@)"))
+
+        it.signature.setRType(restype)
+        it.kind = pkRegular
       else:
         raiseAssert("#[ IMPLEMENT ]#")
+
+  it.signature.pragma.add newExprColonExpr(
+    newPIdent "header",
+    conf.makeHeader(oper.cursor, conf)
+  )
 
   result.decl = it
   result.addThis = result.addThis or
@@ -2289,8 +2331,9 @@ proc wrapProcedure*(
 
       it.signature.pragma = newPPragma(
         newPIdentColonString("importcpp", &"#.{it.name}(@)"),
-        newExprColonExpr(newPIdent "header",
-                         conf.makeHeader(conf)))
+        newExprColonExpr(
+          newPIdent "header",
+          conf.makeHeader(pr.cursor, conf)))
     else:
       let pragma =
         if conf.isImportcpp:
@@ -2299,8 +2342,10 @@ proc wrapProcedure*(
           newPIdentColonString("importc", &"{it.name}")
 
       it.signature.pragma = newPPragma(
-        pragma,
-        newExprColonExpr(newPIdent "header", conf.makeHeader(conf))
+        pragma, newExprColonExpr(
+          newPIdent "header",
+          conf.makeHeader(pr.cursor, conf)
+        )
       )
 
   if addThis:
@@ -2357,8 +2402,9 @@ proc wrapProcedure*(
       it.signature.setRType newNType("ptr", @[parent.get()])
       it.signature.pragma = newPPragma(
         newPIdentColonString("importcpp", &"new {it.name}(@)"),
-        newExprColonExpr(newPIdent "header",
-                         conf.makeHeader(conf)))
+        newExprColonExpr(
+          newPIdent "header",
+          conf.makeHeader(pr.cursor, conf)))
   else:
     # Default handling of return types
     var (rtype, mutable) = toNType(pr.cursor.retType(), conf)
@@ -2382,8 +2428,9 @@ proc wrapProcedure*(
       # something like that)
       it.signature.pragma = newPPragma(
         newPIdentColonString("importcpp", &"~{it.name}()"),
-        newExprColonExpr(newPIdent "header",
-                         conf.makeHeader(conf)))
+        newExprColonExpr(
+          newPIdent "header",
+          conf.makeHeader(pr.cursor, conf)))
 
   if pr.cursor.kind == ckDestructor:
     it.name = "destroy" & it.name
@@ -2444,7 +2491,8 @@ proc wrapFunction*(
 
 
 proc wrapTypeFromNamespace(
-  namespace: CNamespace, conf: WrapConfig): PObjectDecl =
+  namespace: CNamespace, conf: WrapConfig, cursor: CXCursor): PObjectDecl =
+  ## `cursor` points to type declaration being wrapped
   # WARNING for now I assume that 'UNEXPOSED' type only occurs in
   # situations like `std::move_iterator<'0>::pointer` where typedef
   # uses it's semantic parent (class or struct declaration) to get
@@ -2462,7 +2510,9 @@ proc wrapTypeFromNamespace(
       newPIdent (if conf.isImportcpp: "importcpp" else: "importc"),
       namespace.toCppImport().newRStrLit()
     ),
-    newExprColonExpr(newPIdent "header", conf.makeHeader(conf)),
+    newExprColonExpr(
+      newPIdent "header",
+      conf.makeHeader(cursor, conf)),
   ))
 
 
@@ -2505,7 +2555,10 @@ proc wrapAlias*(
   if full.hasUnexposed():
     let namespace = parent & @[newPType($al.cursor)]
     result = @[newWrappedEntry(
-      toNimDecl(namespace.wrapTypeFromNamespace(conf)), al, al.cursor
+      toNimDecl(
+        namespace.wrapTypeFromNamespace(conf, al.cursor)
+      ),
+      al, al.cursor
     )]
   else:
     if al.cursor[0].cxKind() notin {ckStructDecl}:
@@ -2731,7 +2784,10 @@ proc wrapObject*(
       newPIdent (if conf.isImportcpp: "importcpp" else: "importc"),
       cd.namespaceName().newRStrLit()
     ),
-    newExprColonExpr(newPIdent "header", conf.makeHeader(conf)),
+    newExprColonExpr(
+      newPIdent "header",
+      conf.makeHeader(cd.cursor, conf)
+    ),
   ))
 
   if cd.cursor.cxKind() == ckUnionDecl:
@@ -3076,20 +3132,20 @@ proc wrapFile*(
   cache: var WrapCache, index: FileIndex): seq[WrappedEntry] =
   info "Wrapping", parsed.filename
   var tmpRes: seq[WrappedEntry]
-  tmpRes.add newWrappedEntry(
-    toNimDecl(
-      pquote do:
-        {.experimental: "codeReordering".}
-    )
-  )
+  # tmpRes.add newWrappedEntry(
+  #   toNimDecl(
+  #     pquote do:
+  #       {.experimental: "codeReordering".}
+  #   )
+  # )
 
-  tmpRes.add newWrappedEntry(
-    toNimDecl(nnkConstSection.newPTree(
-      nnkConstDef.newPTree(
-        newPIdent("cxheader"),
-        newEmptyPNode(),
-        newPLit(parsed.filename.getStr())
-      ))))
+  # tmpRes.add newWrappedEntry(
+  #   toNimDecl(nnkConstSection.newPTree(
+  #     nnkConstDef.newPTree(
+  #       newPIdent("cxheader"),
+  #       newEmptyPNode(),
+  #       newPLit(parsed.filename.getStr())
+  #     ))))
 
   for node in parsed.explicitDeps.mapIt(
       conf.getImport(it, conf)).
@@ -3108,11 +3164,13 @@ proc wrapFile*(
   for elem in tmpRes:
     if elem.wrapped.kind == nekObjectDecl:
       let name = elem.wrapped.objectdecl.name.head
-
-      # if name in res:
-        # warn "Override type declaration for ", name
-
       res[name] = elem
+
+
+    elif elem.wrapped.kind == nekEnumDecl:
+      let name = elem.wrapped.enumdecl.name
+      res[name] = elem
+
     elif elem.wrapped.kind == nekAliasDecl:
       let name = elem.wrapped.aliasdecl.newType.head
       if name in res:
@@ -3124,8 +3182,12 @@ proc wrapFile*(
       result.add elem
 
 
-  for k, v in res:
-    result.add v
+  block:
+    let elems = collect(newSeq):
+      for k, v in res:
+        v
+
+    result.add(newWrappedEntry(elems))
 
   for elem in tmpRes:
     if elem.wrapped.kind notin {
@@ -3238,7 +3300,7 @@ proc wrapAll*(
 let baseWrapConfig* = WrapConfig(
   isImportcpp: true,
   makeHeader: (
-    proc(conf: WrapConfig): PNode {.closure.} =
+    proc(cursor: CXCursor, conf: WrapConfig): PNode {.closure.} =
       newPIdent("cxheader")
   ),
   getImport: (
@@ -3309,7 +3371,7 @@ let baseWrapConfig* = WrapConfig(
       isInternalImpl(dep, conf, index)
   ),
   depResolver: (
-    proc(cursor: CXCursor): DepResolutionKind {.closure.} =
+    proc(cursor, referencedBy: CXCursor): DepResolutionKind {.closure.} =
       if cursor.isFromMainFile():
         result = drkWrapDirectly
       else:
@@ -3333,6 +3395,9 @@ let baseCppParseConfig* = ParseConfig(
 #*********************  Wrapped code postprocessing  *********************#
 #*************************************************************************#
 proc nimifyInfixOperators*(we: WrappedEntry): seq[WrappedEntry] {.nimcall.} =
+  if we.isMultitype:
+    return
+
   var we = we
   we.wrapped.iinfo = currIInfo()
 
@@ -3356,9 +3421,10 @@ proc nimifyInfixOperators*(we: WrappedEntry): seq[WrappedEntry] {.nimcall.} =
         discard
 
 proc nep1Idents*(we: var WrappedEntry) {.nimcall.} =
-  if we.wrapped.kind == nekProcDecl and
-     we.wrapped.procdecl.kind == pkRegular:
-    we.wrapped.procdecl.name[0] = toLowerAscii(we.wrapped.procdecl.name[0])
+  if not we.isMultitype:
+    if we.wrapped.kind == nekProcDecl and
+       we.wrapped.procdecl.kind == pkRegular:
+      we.wrapped.procdecl.name[0] = toLowerAscii(we.wrapped.procdecl.name[0])
 
 type
   Postprocess* = object
@@ -3426,15 +3492,37 @@ proc wrapSingleFile*(
 
   let wrapped = parsed.wrapFile(wrapConf, cache, index)
 
-  for node in wrapped.postprocessWrapped(postprocess):
-    result.add node.wrapped
-    if node.hasCursor():
-      result[^1].addCodeComment(
-        "Wrapper for `" &
-        (node.cursor.getSemanticNamespaces() & @[$node.cursor]).join("::") &
-        "`\n"
-      )
+  proc updateComments(decl: var PNimDecl, node: WrappedEntry) =
+    decl.addCodeComment(
+      "Wrapper for `" &
+      (node.cursor.getSemanticNamespaces() & @[$node.cursor]).join("::") &
+      "`\n"
+    )
 
-      if node.cursor.getSpellingLocation().getSome(loc):
-        result[^1].addCodeComment(
-          &"Declared in {loc.file}:{loc.line}")
+    if node.cursor.getSpellingLocation().getSome(loc):
+      decl.addCodeComment(
+        &"Declared in {loc.file}:{loc.line}")
+
+
+
+
+  for node in wrapped.postprocessWrapped(postprocess):
+    if node.isMultitype:
+      var resdecl: seq[PNimTypeDecl]
+      for t in node.decls:
+        assert not t.isMultitype
+        var decl = t.wrapped
+
+        updateComments(decl, t)
+        resdecl.add toNimTypeDecl(decl)
+
+      result.add toNimDecl(resdecl)
+    else:
+      if node.hasCursor:
+        var decl = node.wrapped
+        updateComments(decl, node)
+
+        result.add decl
+      else:
+        result.add node.wrapped
+
