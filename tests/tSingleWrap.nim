@@ -203,4 +203,4 @@ suite "WIP tests":
       AbsFile("/tmp/res_a.nim")
     )
 
-    execShell shCmd(nim, check, "/tmp/res_a.nim")
+    # execShell shCmd(nim, check, "/tmp/res_a.nim")

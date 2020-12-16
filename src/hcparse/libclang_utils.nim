@@ -15,7 +15,7 @@ import hnimast
 import nimtraits
 import compiler/ast
 import packages/docutils/rstast
-import hmisc/types/colorstring
+import hmisc/types/[colorstring, hmap]
 import hmisc/[hexceptions, helpers, hdebug_misc]
 import hmisc/algo/hstring_algo
 import hmisc/macros/[iflet]
@@ -956,7 +956,7 @@ type
         wrapped*: PNimDecl
         case isPassthrough*: bool
           of true:
-            discard
+            postTypes*: bool 
           of false:
             original*: CDecl
             cursor*: CXCursor
@@ -994,8 +994,12 @@ func newWrappedEntry*(
 func newWrappedEntry*(wrapped: seq[WrappedEntry]): WrappedEntry =
   WrappedEntry(decls: wrapped, isMultitype: true)
 
-func newWrappedEntry*(wrapped: PNimDecl): WrappedEntry =
-  WrappedEntry(wrapped: wrapped, isPassthrough: true, isMultitype: false)
+func newWrappedEntry*(
+    wrapped: PNimDecl, postTypes: bool = false
+  ): WrappedEntry =
+
+  WrappedEntry(wrapped: wrapped, isPassthrough: true,
+               isMultitype: false, postTypes: postTypes)
 
 #==========================  Helper utilities  ===========================#
 
@@ -2766,7 +2770,7 @@ proc getParentFields(
           result[^1].kind = pkAssgn
 
 
-proc wrapEnum*(declEn: CDecl, conf: WrapConfig): WrappedEntry
+proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry]
 
 proc wrapObject*(
     cd: CDecl, conf: WrapConfig, cache: var WrapCache
@@ -2867,55 +2871,50 @@ proc wrapObject*(
 
   result.obj = newWrappedEntry(toNimDecl(obj), cd, cd.cursor)
 
-proc wrapEnum*(declEn: CDecl, conf: WrapConfig): WrappedEntry =
-  let pref = declEn.flds.mapIt(it.fldName).commonPrefix()
+type
+  EnFieldVal = object
+    case isRefOther*: bool
+      of true:
+        othername*: string
+      of false:
+         value*: BiggestInt
 
-  let enumPref = declEn.name.head.
-    splitCamel().
-    mapIt(it[0].toLowerAscii()).
-    join("")
+proc initEnFieldVal(v: BiggestInt): EnFieldVal =
+  EnFieldVal(isRefOther: false, value: v)
 
-  var nt = declEn.inNamespace(declEn.namespace)
-  conf.fixTypeName(nt, conf, 0)
-  var en = newPEnumDecl(name = nt.head, iinfo = currIInfo())
+proc getFields*(declEn: CDecl, conf: WrapConfig): tuple[
+    namedvals: Table[string, BiggestInt],
+    enfields: seq[tuple[name: string, value: Option[EnFieldVal]]]
+  ] =
 
-  proc renameField(fld: string): string {.closure.} =
-    fld.dropPrefix(pref).dropPrefix("_").addPrefix(enumPref)
-
-  var prevVal: BiggestInt = -123124912
   for (name, value) in declEn.flds:
     let val = value.get()
-    var fld = EnumField[PNode](name: name, kind: efvOrdinal)
-
-    var skip = false # C++ allows duplicate elements in enums, so we
-                     # need to skip them when wrapping things into nim.
+    var resval: Option[EnFieldVal]
     case val.kind:
       of ckIntegerLiteral:
-        fld.ordVal = makeRTOrdinal(val.tokens(conf.unit)[0].parseInt())
+        resVal = some initEnFieldVal(
+          val.tokens(conf.unit)[0].parseInt())
+
       of ckBinaryOperator:
         let subn = val.children()
-        let toks = val.tokens(conf.unit)[1]
+        let toks = val.tokens(conf.unit)[1] # TEST for `(1 << 2) | (1 << 3)`
         case toks:
           of "<<":
-            fld.ordVal = makeRTOrdinal(
+            resval = some initEnFieldVal(
               subn[0].tokens(conf.unit)[0].parseInt() shl
               subn[1].tokens(conf.unit)[0].parseInt(),
             )
+
           of "|":
             let toks = val.tokens(conf.unit)
             # NOTE assuming `EnumField | OtherField` for now
             let
-              lhs = renameField(toks[0])
-              rhs = renameField(toks[2])
-              lhsVal = en.values.findItFirst(it.name == lhs)
-              rhsVal = en.values.findItFirst(it.name == rhs)
+              lhs = toks[0]
+              rhs = toks[2]
+              lhsVal = result.namedVals[lhs]
+              rhsVal = result.namedVals[rhs]
 
-            fld.ordVal = makeRTOrdinal(
-              bitor(
-                lhsVal.ordVal.intVal,
-                rhsVal.ordVal.intVal,
-              )
-            )
+            resval = some initEnFieldVal(bitor(lhsVal, rhsVal))
 
           else:
             discard
@@ -2924,54 +2923,180 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): WrappedEntry =
         let toks = val.tokens(conf.unit)
         case toks[0]:
           of "-":
-            fld.ordVal = makeRTOrdinal(toks[1].parseInt())
+            resval = some initEnFieldVal(toks[1].parseInt())
+
           else:
             raiseAssert("#[ IMPLEMENT ]#")
-      of ckDeclRefExpr:
-        skip = true
+
+      elif $val.kind == "OverloadCandidate": # HACK
+        resval = none EnFieldVal
+
       else:
-        if $val.kind == "OverloadCandidate":
-          fld = EnumField[PNode](name: name, kind: efvNone)
+        raiseAssert(
+          &"#[ IMPLEMENT for kind {val.kind} {instantiationInfo()} ]#")
+
+    result.enfields.add (name: name, value: resval)
+
+proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
+
+  var nt = declEn.inNamespace(declEn.namespace)
+  conf.fixTypeName(nt, conf, 0)
+  let namespace = (declEn.namespace & newPType($declEn.cursor)).toCppImport()
+
+  var ennames: seq[string]
+
+  proc cEnumName(str: string): string =
+    result = nt.head
+    result[0] = result[0].toLowerAscii()
+    result &= "_" & str
+
+  var vals: OrderedTable[string, tuple[
+    resName: string,
+    resVal: BiggestInt,
+    stringif: string
+  ]]
+
+  let implName = nt.head & "_Impl"
+  block:
+    var implEn = newPEnumDecl(name = implName, iinfo = currIInfo())
+
+    implEn.pragma.add newPIdentColonString(
+      (if conf.isImportcpp: "importcpp" else: "importc"),
+      namespace
+    )
+
+    implEn.exported = true
+
+
+    let (namedvals, enfields) = getFields(declEn, conf)
+    var fldVals: Table[BiggestInt, string]
+    var repeated: Table[string, seq[string]]
+
+    for (key, val) in enfields:
+      if val.isSome():
+        if val.get().isRefOther:
+          repeated.mgetOrPut(val.get().othername, @[ key ]).add key
         else:
-          fld = EnumField[PNode](name: name, kind: efvNone)
+          let val = val.get().value
+          if val notin fldVals:
+            fldVals[val] = key
+          else:
+            repeated.mgetOrPut(fldVals[val], @[ key ]).add key
 
 
-    if not skip:
-      if fld.kind == efvOrdinal:
-        if fld.ordVal.intVal != prevVal:
-          en.values.add fld
-          prevVal = fld.ordVal.intVal
-      else:
-        inc prevVal
-        en.values.add fld
+    var flds: seq[(string, BiggestInt)]
+
+    block:
+      var prev: BiggestInt = 0
+      for (key, val) in enfields:
+        if val.isSome():
+          if val.get().isRefOther:
+            discard
+          else:
+            prev = val.get().value
+            flds.add (key, prev)
+
+        else:
+          inc prev
+          flds.add (key, prev)
 
 
-  proc fldCmp(f1, f2: EnumField[PNode]): int {.closure.} =
-    # NOTE possible source of incompatibility - only fields with
-    # specified ordinal values should be sorted.
-    if f1.kind == f2.kind and f1.kind == efvOrdinal:
-      cmp(f1.ordVal.intVal, f2.ordVal.intVal)
-    else:
-      0
+      flds = flds.sorted(
+        proc(f1, f2: (string, BiggestInt)): int {.closure.} =
+          cmp(f1[1], f2[1])
+      )
 
-  en.values.sort(fldCmp)
-  let namespace = (
-    declEn.namespace & newPType($declEn.cursor)).toCppImport()
+    block:
+      var prev = BiggestInt(-120948783)
+      for (name, val) in flds:
+        if val != prev:
+          prev = val
+          implEn.addField(name.cEnumName(), some newPLit(val))
 
-  en.pragma.add newPIdentColonString(
-    (if conf.isImportcpp: "importcpp" else: "importc"),
-    namespace
-  )
+          vals[name] = (
+            resName: name.cEnumName(),
+            resVal: val,
+            stringif:
+              declEn.inNamespace(declEn.namespace).head & "::" & name
+          )
 
-  en.exported = true
 
-  return newWrappedEntry(toNimDecl(en), declEn, declEn.cursor)
+    debug flds
+    debug vals
+
+    debug repeated
+    debug fldVals
+    debug enfields
+
+
+    result.add newWrappedEntry(toNimDecl(implEn), declEn, declEn.cursor)
+
+  block:
+    let pref = declEn.flds.mapIt(it.fldName).commonPrefix()
+
+    let enumPref = declEn.name.head.
+      splitCamel().
+      mapIt(it[0].toLowerAscii()).
+      join("")
+
+    var en = newPEnumDecl(name = nt.head, iinfo = currIInfo())
+
+    proc renameField(fld: string): string {.closure.} =
+      fld.dropPrefix(pref).dropPrefix("_").addPrefix(enumPref)
+
+    var arr = nnkBracket.newPTree()
+
+    for name, wrap in vals:
+      en.addField(name.renameField())
+
+      arr.add pquote do:
+        (
+          name: `newPLit(name)`,
+          cEnum: `newPIdent(name.cEnumName())`,
+          cName: `newPLit(wrap.stringif)`,
+          value: `newPLit(wrap.resVal)`
+        )
+
+    let
+      enName = newPIdent(en.name)
+      arrName = newPIdent("arr" & en.name & "mapping")
+
+    let helpers = pquote do:
+      const `arrName`: array[`enName`, tuple[
+        name: string,
+        cEnum: `newPIdent(implName)`,
+        cName: string,
+        value: int
+      ]] = `arr`
+
+      proc toInt*(en: `enName`): int =
+        `arrName`[en]
+
+      proc toInt*(en: set[`enName`]): int =
+        if a == 12:
+          discard
+
+        for val in en:
+          result = bitor(result, `arrName`[val])
+
+          if 1 == 1:
+            discard
+          else:
+            if 1 == 0:
+              discard
+
+
+
+    result.add newWrappedEntry(toNimDecl(helpers), true)
+
+    debug arr
+
+    en.exported = true
+
+    result.add newWrappedEntry(toNimDecl(en), declEn, declEn.cursor)
 
 proc wrapMacros*(declMacros: seq[CDecl], conf: WrapConfig): seq[WrappedEntry] =
   discard
-  # for m in declMacros:
-  #   debug m.cursor.treeRepr(conf.unit)
-  #   debug "tokens:", $m.cursor.tokens(conf.unit)
 
 
 proc wrapApiUnit*(
@@ -3244,7 +3369,8 @@ proc wrapFile*(
       res[name] = elem
 
     elif elem.wrapped.kind == nekPasstroughCode:
-      result.add elem
+      if not elem.postTypes:
+        result.add elem
 
 
   block:
@@ -3260,6 +3386,12 @@ proc wrapFile*(
     }:
 
       result.add elem
+
+    elif elem.wrapped.kind == nekPasstroughCode and
+         elem.postTypes:
+
+      result.add elem
+
 
 
 func toIncludes*(files: seq[AbsDir]): seq[string] =
