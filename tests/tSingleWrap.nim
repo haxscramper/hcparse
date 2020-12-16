@@ -168,7 +168,7 @@ suite "X11 garbage wrap test":
 
       withStreamFile(outfile):
         for entry in wrapped:
-          stdout.writeLine(entry)
+          # stdout.writeLine(entry)
           file.write(entry)
 
 
@@ -197,6 +197,7 @@ suite "single file wrap":
 
 suite "WIP tests":
   test "test":
+    startHax()
     wrapCpp(
       srcd /. "wip.cpp",
       AbsFile("/tmp/res_a.nim")

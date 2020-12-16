@@ -33,6 +33,7 @@ proc wrapCpp*(
 
   withStreamFile(outFile):
     for entry in wrapped:
+      # stdout.write(entry)
       file.write(entry)
 
 when isMainModule:

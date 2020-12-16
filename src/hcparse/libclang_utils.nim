@@ -1245,28 +1245,25 @@ proc treeRepr*(cursor: CXCursor, showtype: bool = true): string =
 
 
 #===========================  Type conversion  ===========================#
-proc getTypeName*(curs: CXCursor, conf: WrapConfig): string
+proc getTypeName*(cxtype: CXType, conf: WrapConfig): string
 
 proc toNType*(
   cxtype: CXType,
   conf: WrapConfig): tuple[ntype: NType[PNode], mutable: bool]
 
-
 proc fromElaboratedPType*(cxtype: CXType, conf: WrapConfig): NType[PNode] =
+  # debug cxtype
   let genParams = cxtype.getNumTemplateArguments()
-  # echov genParams
-  # echov cxtype
+  let decl = cxtype.getTypeDeclaration()
   if genParams > 0:
-    let decl = cxtype.getTypeDeclaration()
-    # echov decl.cxKind
-    # echov decl
     case decl.cxKind:
       of ckTypedefDecl:
         # WARNING `template <J, Q> using` is not handled
-        result = newPType(decl.getTypeName(conf))
+        result = newPType(cxtype.getTypeName(conf))
       of ckClassDecl, ckStructDecl:
+        debug "Class decl"
         let params = cxtype.genParams()
-        result = newPType(decl.getTypeName(conf))
+        result = newPType(cxtype.getTypeName(conf))
         for idx, parm in params:
           if parm.cxKind != tkInvalid:
             result.add parm.toNType(conf).ntype
@@ -1278,12 +1275,15 @@ proc fromElaboratedPType*(cxtype: CXType, conf: WrapConfig): NType[PNode] =
     conf.fixTypeName(result, conf, 0)
 
   else:
-    result = ($cxtype).
-      dropPrefix("enum ").
-      dropPrefix("struct ").
-      dropPrefix("union ").
-      dropPrefix("const "). # WARNING
-      newPType()
+    result = newPType(getTypeName(cxtype, conf))
+    # result = ($cxtype).
+    #   dropPrefix("enum ").
+    #   dropPrefix("struct ").
+    #   dropPrefix("union ").
+    #   dropPrefix("const "). # WARNING
+    #   newPType()
+
+  # debug "Result form elaboreated type", result.toNNode()
 
 
 proc dropPOD*(cxtype: CXType, conf: WrapConfig): string =
@@ -1309,19 +1309,57 @@ proc toPIdentDefs*(cursor: CXCursor, conf: WrapConfig): PIdentDefs =
   if mutable:
     result.kind = nvdVar
 
-proc getSemanticNamespaces*(curs: CXCursor): seq[string] =
-  let parent = curs.getCursorSemanticParent()
-  case parent.cxKind:
-    of ckNamespace, ckClassDecl, ckClassTemplate:
-      result = parent.getSemanticNamespaces() & @[$parent]
-    else:
-      discard
 
-proc getTypeName*(curs: CXCursor, conf: WrapConfig): string =
+proc getSemanticNamespaces*(
+    parent: CXCursor, filterInline: bool = true, withType: bool = true
+  ): seq[CXCursor] =
+
+  # info "Semantic namespaces for", parent
+
+  var parent = parent
+
+  if withType:
+    result.add parent
+
+  parent = parent.getCursorSemanticParent()
+
+  # info parent
+
+  while parent.cxKind() in {
+    # TEST might be necessary to add templated namespacess (fuck, why C++
+    # is just so god-awful vomit-inducing garbage?)
+    ckNamespace, ckStructDecl, ckClassDecl
+  }:
+    if filterInline and (parent.isInlineNamespace() == 1):
+      discard
+    else:
+      result.add parent
+
+    parent = parent.getCursorSemanticParent()
+    # info parent.cxKind()
+
+  reverse(result)
+
+
+
+proc getTypeNamespaces*(
+    cxtype: CXType, filterInline: bool = true, withType: bool = true
+  ): seq[CXCursor] =
+  ## Return list of parent namespaces for given type `cxtype`.
+  ## `filterInline` - remove namespaces that are marked as `inline`.
+  ## `withType` - return type name too, or only namespaces.
+
+  var parent = cxtype.getTypeDeclaration()
+
+  return getSemanticNamespaces(
+    parent, filterInline =  filterInline, withType = withType)
+
+proc getTypeName*(cxtype: CXType, conf: WrapConfig): string =
+  let curs = cxtype.getTypeDeclaration()
   case curs.cxKind:
     of ckTypedefDecl:
       return $curs.cxType()
-    of ckClassDecl, ckStructDecl:
+    of ckClassDecl, ckStructDecl, ckEnumDecl, ckUnionDecl:
       result = $curs
     else:
       err $curs
@@ -1329,7 +1367,12 @@ proc getTypeName*(curs: CXCursor, conf: WrapConfig): string =
       raiseAssert(
         &"Cannot convert cursor of kind {curs.cxKind} to type")
 
-  result = (curs.getSemanticNamespaces() & @[result]).join("::")
+  result = cxtype.getTypeNamespaces().mapIt(
+    dropPrefix($it, toStrPart(["const ", "enum ", "struct ", "union "]))
+  ).join("::")
+
+  # debug cxtype.getTypeNamespaces()
+  # debug result
 
 proc isMutableRef*(cxtype: CXType): bool =
   case cxType.cxKind:
@@ -1387,8 +1430,11 @@ proc toNType*(
     of tkTypedef:
       result.mutable = cxType.isMutableRef()
       newPType(($cxtype).dropPrefix("const ")) # XXXX typedef processing -
+
     of tkElaborated, tkRecord, tkEnum:
+      # debug "From elaborated type"
       fromElaboratedPType(cxtype, conf)
+
     of tkPointer:
       case cxtype[].cxkind:
         of tkChar_S:
@@ -1914,9 +1960,16 @@ proc visitNamespace(
   cursor: CXCursor, parent: CNamespace, conf: WrapConfig): seq[CDecl] =
   ## Convert all elements in namespace into sequence of `CDecl`
   ## elements.
+
+  let namespace =
+    if not (cursor.isInlineNamespace() == 1):
+      @[ newPType($cursor) ]
+    else:
+      @[]
+
   if not conf.ignoreCursor(cursor, conf):
     for subn in cursor:
-      result.add visitCursor(subn, parent & @[ newPType($cursor) ], conf).decls
+      result.add visitCursor(subn, parent & namespace, conf).decls
 
 proc visitMacrodef(cursor: CXCursor, parent: CNamespace, conf: WrapConfig): CDecl =
   CDecl(cursor: cursor, kind: cdkMacro)
@@ -1926,7 +1979,7 @@ proc visitCursor(
   decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]] =
 
   # debug cursor.cxKind()
-  debug $cursor.cxType()
+  # debug $cursor.cxType()
   # debug cursor.getCursorSemanticParent().cxKind()
   # debug cursor.getCursorLexicalParent().cxKind()
   if not conf.ignoreCursor(cursor, conf):
@@ -2221,8 +2274,10 @@ proc wrapOperator*(
 
 
       of cxoInfixOp:
+        let namespace = (oper.namespace & newPType("operator")).toCppImport()
+
         it.signature.pragma = newPPragma(
-          newPIdentColonString("importcpp", &"# {it.name} #"))
+          newPIdentColonString("importcpp", &"{namespace}{it.name}(#, #)"))
 
         if oper.args.len == 1:
           result.addThis = true
@@ -2358,6 +2413,7 @@ proc wrapProcedure*(
 
   for arg in pr.args:
     var (vtype, mutable) = arg.cursor.cxType().toNType(conf)
+    # debug vtype
     if vtype.kind in {ntkIdent, ntkGenericSpec}:
       if vtype.head == "UNEXPOSED":
         # WARNING currently parameters which contain `tkUnexposed`
@@ -2710,6 +2766,8 @@ proc getParentFields(
           result[^1].kind = pkAssgn
 
 
+proc wrapEnum*(declEn: CDecl, conf: WrapConfig): WrappedEntry
+
 proc wrapObject*(
     cd: CDecl, conf: WrapConfig, cache: var WrapCache
   ): tuple[
@@ -2718,26 +2776,26 @@ proc wrapObject*(
 
   let tdecl = cd.cursor.cxType().getTypeDeclaration()
 
-  # info "Wrapping", cd.cursor
-  # logIndented:
-  #   debug cd.cursor.getCanonicalCursor()
-  #   debug cd.cursor.getCanonicalCursor().getSpellingLocation()
-  #   debug cd.cursor.getSpellingLocation()
-  #   debug tdecl.getSpellingLocation()
-
-  # if not cache.seenCursor(tdecl):
-  #   warn "!!! already seen !!!", tdecl.cxKind()
-  #   debug tdecl.declHash()
-  #   return
-  # else:
-  #   cache.markSeen(tdecl)
-
-
   assert cd.kind in {cdkClass, cdkStruct}
   var obj = PObjectDecl(
     name: cd.inNamespace(cd.namespace),
     exported: true, iinfo: currIInfo(),
   )
+
+  for entry in cd.cursor:
+    case entry.cxKind():
+      of ckEnumDecl:
+        # debug cd.namespace
+        # debug cd.name
+        let visited = visitEnum(entry, cd.namespace & @[cd.name], conf)
+
+        result.genBefore.add wrapEnum(visited, conf)
+
+      of ckFieldDecl, ckMethod:
+        discard
+
+      else:
+        warn &"#[ IMPLEMENT for kind {entry.cxkind()} {instantiationInfo()} ]#"
 
   # WARNING might die on `<T<T<T<T<T<T>>>>>` things
   for fld in cd.pubFields:
@@ -2819,7 +2877,7 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): WrappedEntry =
 
   var nt = declEn.inNamespace(declEn.namespace)
   conf.fixTypeName(nt, conf, 0)
-  var en = PEnumDecl(name: nt.head)
+  var en = newPEnumDecl(name = nt.head, iinfo = currIInfo())
 
   proc renameField(fld: string): string {.closure.} =
     fld.dropPrefix(pref).dropPrefix("_").addPrefix(enumPref)
@@ -2897,6 +2955,13 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): WrappedEntry =
       0
 
   en.values.sort(fldCmp)
+  let namespace = (
+    declEn.namespace & newPType($declEn.cursor)).toCppImport()
+
+  en.pragma.add newPIdentColonString(
+    (if conf.isImportcpp: "importcpp" else: "importc"),
+    namespace
+  )
 
   en.exported = true
 
@@ -3139,13 +3204,13 @@ proc wrapFile*(
   #   )
   # )
 
-  # tmpRes.add newWrappedEntry(
-  #   toNimDecl(nnkConstSection.newPTree(
-  #     nnkConstDef.newPTree(
-  #       newPIdent("cxheader"),
-  #       newEmptyPNode(),
-  #       newPLit(parsed.filename.getStr())
-  #     ))))
+  tmpRes.add newWrappedEntry(
+    toNimDecl(nnkConstSection.newPTree(
+      nnkConstDef.newPTree(
+        newPIdent("cxheader"),
+        newEmptyPNode(),
+        newPLit(parsed.filename.getStr())
+      ))))
 
   for node in parsed.explicitDeps.mapIt(
       conf.getImport(it, conf)).
@@ -3191,7 +3256,7 @@ proc wrapFile*(
 
   for elem in tmpRes:
     if elem.wrapped.kind notin {
-      nekObjectDecl, nekAliasDecl, nekPasstroughCode
+      nekObjectDecl, nekAliasDecl, nekPasstroughCode, nekEnumDecl
     }:
 
       result.add elem
@@ -3326,7 +3391,12 @@ let baseWrapConfig* = WrapConfig(
       if not ($cursor).startsWith("__cxx11") and
         (
           cursor.cxKind() notin { ckTypedefDecl } and
-          ($cursor).startsWith(@[ "__", "_" ])
+          (
+            # Default convention is to prefix private parts with underscores
+            ($cursor).startsWith(@[ "__", "_" ]) and
+            # But inlien namespaces are still parsed by default
+            (not (cursor.isInlineNamespace() == 1))
+          )
         ):
 
         if cursor.cxKind() in {ckStructDecl, ckUnionDecl} and
@@ -3495,7 +3565,8 @@ proc wrapSingleFile*(
   proc updateComments(decl: var PNimDecl, node: WrappedEntry) =
     decl.addCodeComment(
       "Wrapper for `" &
-      (node.cursor.getSemanticNamespaces() & @[$node.cursor]).join("::") &
+      (
+        node.cursor.getSemanticNamespaces(filterInline = false)).join("::") &
       "`\n"
     )
 
