@@ -129,7 +129,7 @@ let h = loadHtml(htmlfile.getStr())
 # fillTable(h)
 
 
-proc x11DocAnnotation(we: var WrappedEntry) =
+proc x11DocAnnotation(we: var WrappedEntry): seq[WrappedEntry] =
   if we.wrapped.kind in {nekProcDecl}:
     let name = we.wrapped.procdecl.name
     if name in annotTable:
@@ -146,9 +146,8 @@ suite "X11 garbage wrap test":
           proc(cursor, referecendBy: CXCursor): DepResolutionKind {.closure.} =
             if cursor.isFromMainFile():
               drkWrapDirectly
+
             else:
-              # debug cursor
-              # debug cursor.getSpellingLocation()
               drkIgnoreIfUsed
         )
 
@@ -203,4 +202,4 @@ suite "WIP tests":
       AbsFile("/tmp/res_a.nim")
     )
 
-    # execShell shCmd(nim, check, "/tmp/res_a.nim")
+    execShell shCmd(nim, check, "/tmp/res_a.nim")

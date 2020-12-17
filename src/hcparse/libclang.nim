@@ -2630,45 +2630,45 @@ proc module_getTopLevelHeader*(argCXTranslationUnit: CXTranslationUnit;
   ##  top level header index (zero-based).
   ## **
   ##  the specified top level header associated with the module.
-proc cXXConstructor_isConvertingConstructor*(c: CXCursor): cuint {.cdecl,
+proc constructor_isConvertingConstructor*(c: CXCursor): cuint {.cdecl,
     dynlib: libclang, importc: "clang_CXXConstructor_isConvertingConstructor".}
   ##  Determine if a C++ constructor is a converting constructor.
-proc cXXConstructor_isCopyConstructor*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc constructor_isCopyConstructor*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
     importc: "clang_CXXConstructor_isCopyConstructor".}
   ##  Determine if a C++ constructor is a copy constructor.
-proc cXXConstructor_isDefaultConstructor*(c: CXCursor): cuint {.cdecl,
+proc constructor_isDefaultConstructor*(c: CXCursor): cuint {.cdecl,
     dynlib: libclang, importc: "clang_CXXConstructor_isDefaultConstructor".}
   ##  Determine if a C++ constructor is the default constructor.
-proc cXXConstructor_isMoveConstructor*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc constructor_isMoveConstructor*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
     importc: "clang_CXXConstructor_isMoveConstructor".}
   ##  Determine if a C++ constructor is a move constructor.
-proc cXXField_isMutable*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc field_isMutable*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
     importc: "clang_CXXField_isMutable".}
   ##  Determine if a C++ field is declared 'mutable'.
-proc cXXMethod_isDefaulted*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc method_isDefaulted*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
     importc: "clang_CXXMethod_isDefaulted".}
   ##  Determine if a C++ method is declared '= default'.
-proc cXXMethod_isPureVirtual*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc method_isPureVirtual*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
     importc: "clang_CXXMethod_isPureVirtual".}
   ##  Determine if a C++ member function or member function template is
   ##  pure virtual.
-proc cXXMethod_isStatic*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc method_isStatic*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
     importc: "clang_CXXMethod_isStatic".}
   ##  Determine if a C++ member function or member function template is
   ##  declared 'static'.
-proc cXXMethod_isVirtual*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc method_isVirtual*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
     importc: "clang_CXXMethod_isVirtual".}
   ##  Determine if a C++ member function or member function template is
   ##  explicitly declared 'virtual' or if it overrides a virtual method from
   ##  one of the base classes.
-proc cXXRecord_isAbstract*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc record_isAbstract*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
     importc: "clang_CXXRecord_isAbstract".}
   ##  Determine if a C++ record is abstract, i.e. whether a class or struct
   ##  has a pure virtual member function.
 proc enumDecl_isScoped*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
     importc: "clang_EnumDecl_isScoped".}
   ##  Determine if an enum declaration refers to a scoped enum.
-proc cXXMethod_isConst*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc method_isConst*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
     importc: "clang_CXXMethod_isConst".}
   ##  Determine if a C++ member function or member function template is
   ##  declared 'const'.
