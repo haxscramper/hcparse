@@ -21,6 +21,14 @@ proc parseTranslationUnit*(
     reparseOnNil: bool = true
   ): CXTranslationUnit =
 
+  ## Parse translation unit for file `filenam`. `cmdline` contains list fo
+  ## command-line flags that will be passed to clang parser, file `-xc++`
+  ## for enforcing `C++` parse mode for example. List of builtin includes
+  ## is added automaticallyt.
+  ##
+  ## By default, if first parse attempt failed it is repeated in verbose
+  ## mode, and all command-line flags are printed into stdout.
+
   filename.assertExists()
 
   let cmdline = getBuiltinHeaders().mapIt(&"-I{it}") & cmdline
@@ -103,6 +111,8 @@ proc parseTranslationUnit*(
 
 
 proc getFlags*(config: ParseConfig, file: AbsFile): seq[string] =
+  ## Get list of command-line flags for partigular `file`. This includes
+  ## both global flags, and file-specific ones
   result.add config.includepaths.toIncludes()
   result.add config.globalFlags
   result.add config.fileFlags.getOrDefault(file)
@@ -211,7 +221,7 @@ export toPng, toXDot, AbsFile
 
 func dotRepr*(idx: FileIndex, onlyPP: bool = true): DotGraph =
   result.styleNode = makeRectConsolasNode()
-  # result.splines = spsLine
+  ## Generate dot representation of dependencies in file index
 
   result.rankdir = grdLeftRight
   for file in idx.depGraph.nodes:
@@ -266,15 +276,12 @@ proc getExports*(
 proc wrapFile*(
   parsed: ParsedFile, conf: WrapConfig,
   cache: var WrapCache, index: FileIndex): seq[WrappedEntry] =
+  ## Create wrapper for parsed file and return list of wrapped entries. All
+  ## type declarations are deduplicated and combined into single
+  ## `WrappedEntry` multitype declaration.
+
   info "Wrapping", parsed.filename
   var tmpRes: seq[WrappedEntry]
-  # tmpRes.add newWrappedEntry(
-  #   toNimDecl(
-  #     pquote do:
-  #       {.experimental: "codeReordering".}
-  #   )
-  # )
-
   tmpRes.add newWrappedEntry(
     toNimDecl(
       pquote do:
@@ -282,23 +289,11 @@ proc wrapFile*(
     )
   )
 
-  # tmpRes.add newWrappedEntry(
-  #   toNimDecl(nnkConstSection.newPTree(
-  #     nnkConstDef.newPTree(
-  #       newPIdent("cxheader"),
-  #       newEmptyPNode(),
-  #       newPLit(parsed.filename.getStr())
-  #     ))))
-
   for node in parsed.explicitDeps.mapIt(
       conf.getImport(it, conf)).
       deduplicate().
       mapIt(it.makeImport()):
     tmpRes.add node.toNimDecl().newWrappedEntry()
-
-  # for node in parsed.getExports(conf, index).mapIt(
-  #   conf.getImport(it, conf)).deduplicate():
-    # result.add node.makeExport().toNimDecl().newWrappedEntry()
 
   tmpRes.add parsed.api.wrapApiUnit(conf, cache, index)
 
@@ -466,6 +461,20 @@ proc wrapSingleFile*(
     parseConf: ParseConfig = baseCppParseConfig,
     postprocess: seq[Postprocess] = defaultPostprocessSteps
   ): seq[NimDecl[PNode]] =
+  ## Generate wrapper for a single file.
+  ##
+  ##`wrapConf` provide user-defined implementation heuristics for necessary
+  ## edge cases (see `WrapConfig` type documentation). `postprocess` is a
+  ## sequence of postprocessing actions that will be run on generated
+  ## `WrappedEntry` structures and then added to final declaration. Default
+  ## implementation of postprocessing includes automatic enum overload
+  ## derivation, nim-like infix operators (`<<` and `>>` converter to `shl`
+  ## and `shr` respectively) and final fixup for all identifiers. Order of
+  ## postprocessint steps is important, as every original wrapped entry is
+  ## passed to each postprocess in sequential order (if you have three
+  ## steps, `class C{};` wrapper will be passed to each of them, before
+  ## being added to final result).
+
 
   var
     cache: WrapCache

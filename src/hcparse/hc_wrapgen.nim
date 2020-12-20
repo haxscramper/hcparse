@@ -707,6 +707,16 @@ proc getFields*(declEn: CDecl, conf: WrapConfig): tuple[
     result.enfields.add (name: name, value: resval)
 
 proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
+  ## Generate wrapper for enum declaration
+  ##
+  ## Generates wrapper for enum declaration, using wrap configuration.
+  ## Wrapping is performed in two steps - underlying C enum is wrapped
+  ## as-is, and additional nim `enum` is generated. Nim version does not
+  ## have holes, which allows it to be used in `array`, iterated upon etc.
+  ##
+  ## In order to perform conversion between 'proxy' and underlying enum
+  ## several helper procs are introduces, such as `toInt`.
+
 
   var nt = declEn.inNamespace(declEn.namespace)
   conf.fixTypeName(nt, conf, 0)
@@ -727,6 +737,7 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
 
   let implName = nt.head & "_Impl"
   block:
+    # Generate wrapper for default implementation of the enum
     var implEn = newPEnumDecl(name = implName, iinfo = currIInfo())
 
     implEn.pragma.add newPIdentColonString(
@@ -737,6 +748,8 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
     implEn.exported = true
 
 
+    # Get list of all enum fields with values, construct table of values
+    # without filtering.
     let (namedvals, enfields) = getFields(declEn, conf)
     var fldVals: Table[BiggestInt, string]
     var repeated: Table[string, seq[string]]
@@ -753,6 +766,8 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
             repeated.mgetOrPut(fldVals[val], @[ key ]).add key
 
 
+    # List of field with respective values. Holes are filled with correct
+    # values, and duplicated fields are dropped.
     var flds: seq[(string, BiggestInt)]
 
     block:
@@ -770,12 +785,14 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
           flds.add (key, prev)
 
 
+      # Sort fields based on value
       flds = flds.sorted(
         proc(f1, f2: (string, BiggestInt)): int {.closure.} =
           cmp(f1[1], f2[1])
       )
 
     block:
+      # Generate wrapped for C enum. Each field has value assigned to it.
       var prev = BiggestInt(-120948783)
       for (name, val) in flds:
         if val != prev:
@@ -800,30 +817,35 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
 
     result.add newWrappedEntry(toNimDecl(implEn), declEn, declEn.cursor)
 
-  block:
+  block: # Nim proxy proc declaration.
+    # Determine common prefix for C++ enum (if any)
     let pref = declEn.flds.mapIt(it.fldName).commonPrefix()
 
+    # Get name of the enum type itsel by combining first letters of
+    # `PascalCase` or `snake_case` name.
     let enumPref = declEn.name.head.
-      splitCamel().
-      mapIt(it[0].toLowerAscii()).
-      join("")
+      splitCamel().mapIt(it[0].toLowerAscii()).join("")
 
     var en = newPEnumDecl(name = nt.head, iinfo = currIInfo())
 
     proc renameField(fld: string): string {.closure.} =
+      # Drop common prefix for enum declaration and add one generated from
+      # enum name
       fld.dropPrefix(pref).dropPrefix("_").addPrefix(enumPref)
 
+    # Metadata associated with proxy enum
     var arr = nnkBracket.newPTree()
 
     for name, wrap in vals:
+      # Add fields to nim enum without values
       en.addField(name.renameField())
 
       arr.add pquote do:
         (
-          name: `newPLit(name)`,
-          cEnum: `newPIdent(name.cEnumName())`,
-          cName: `newPLit(wrap.stringif)`,
-          value: `newPLit(wrap.resVal)`
+          name: `newPLit(name)`, # Name of the original enum
+          cEnum: `newPIdent(name.cEnumName())`, # Original enum value
+          cName: `newPLit(wrap.stringif)`, # Namespaced C++ enum name
+          value: `newPLit(wrap.resVal)` # Integer value for field
         )
 
     let
@@ -838,21 +860,22 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
         value: int
       ]] = `arr`
 
+      # Convert proxy enum to integer value
       proc toInt*(en: `enName`): int {.inline.} =
         `arrName`[en].value
 
+      # Convert set of enums to bitmasked integer
       proc toInt*(en: set[`enName`]): int {.inline.} =
         for val in en:
           result = bitor(result, `arrName`[val].value)
 
+      # Return namespaced name of the original enum
       proc `$`*(en: `enName`): string {.inline.} =
         `arrName`[en].cName
 
 
 
     result.add newWrappedEntry(toNimDecl(helpers), true)
-
-    # debug arr
 
     en.exported = true
 
