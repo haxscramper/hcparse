@@ -1,0 +1,520 @@
+import std/[tables, options, strutils, strformat,
+            sequtils, bitops, sugar, deques, sets]
+
+import hnimast
+
+import hmisc/helpers
+import hmisc/algo/hstring_algo
+import hmisc/other/[oswrap, colorlogger]
+import hmisc/types/colorstring
+import gram
+
+import cxtypes, cxcommon, hc_types, hc_visitors, hc_typeconv,
+       hc_depresolve, hc_wrapgen, hc_impls, hc_postprocess
+
+
+proc parseTranslationUnit*(
+    trIndex: CXIndex,
+    filename: AbsFile,
+    cmdline: seq[string] = @[],
+    trOptions: set[CXTranslationUnit_Flags] = {tufSingleFileParse},
+    reparseOnNil: bool = true
+  ): CXTranslationUnit =
+
+  filename.assertExists()
+
+  let cmdline = getBuiltinHeaders().mapIt(&"-I{it}") & cmdline
+
+  var flags: int
+  for opt in trOptions:
+    flags = bitor(flags, int(opt))
+
+  block:
+    let argc = cmdline.len
+    let cmdlineC = allocCSTringArray(cmdline)
+
+    result = parseTranslationUnit(
+      trIndex, filename.cstring, cmdlineC, cint(argc), nil, 0, cuint(flags))
+    deallocCStringArray(cmdlineC)
+
+  var hadErrors = false
+  for diag in result.getDiagnostics():
+    if diag.getDiagnosticSeverity() in {dsError, dsFatal}:
+      hadErrors = true
+      echo ($diag).toRed()
+
+  if hadErrors or (reparseOnNil and result.isNil):
+    echo(&"""
+Translation unit parse failed due to errors.
+Compilation flags:
+{cmdline.joinql()}
+Input file:
+  {filename.realpath}
+      """)
+
+
+    if reparseOnNil:
+      echo "Translation unit parse failed, repeating parse in verbose mode"
+
+      let cmdline = @["-v"] & cmdline
+      let argc = cmdline.len
+      let cmdlineC = allocCSTringArray(cmdline)
+
+      result = parseTranslationUnit(
+        trIndex, filename.cstring, cmdlinec, cint(argc), nil, 0, cuint(flags))
+
+      deallocCStringArray(cmdlineC)
+
+    raiseAssert("Translation unit parse failed")
+
+proc getFlags*(command: CXCompileCommand): seq[string] =
+  for arg in command.getArgs():
+    if arg.startsWith("-"):
+      result.add arg
+
+proc parseTranslationUnit*(
+    index: CXIndex,
+    command: CXCompileCommand,
+    extraFlags: seq[string] = @[],
+    reparseOnNil: bool = true
+  ): CXTranslationUnit =
+
+  ## Get file and compilation flags from compilation command `command`
+  ## and parse translation unit.
+  ##
+  ## ## Parameters
+  ##
+  ## :index: compilation index
+  ## :command: Compilation command from database
+  ## :extraFlags: Additional compilation flags for compiler. When parsing
+  ##              c++ header files with `.h` extension you are most
+  ##              likely need to use `@["-xc++"]` to make clang correctly
+  ##              recognize the language.
+
+  let args = extraFlags & getBuiltinHeaders().mapIt(&"-I{it}") &
+    command.getFlags()
+
+  let file = $command.getFilename()
+  index.parseTranslationUnit(
+    file.toAbsFile(true), args, {},
+    reparseOnNIl = reparseOnNil
+  )
+
+
+
+proc getFlags*(config: ParseConfig, file: AbsFile): seq[string] =
+  result.add config.includepaths.toIncludes()
+  result.add config.globalFlags
+  result.add config.fileFlags.getOrDefault(file)
+
+proc parseFile*(
+    file: AbsFile,
+    config: ParseConfig,
+    wrapConf: WrapConfig,
+    reparseOnNil: bool = true
+  ): ParsedFile =
+
+
+  file.assertExists()
+  identLog()
+
+  let flags = config.getFlags(file)
+  result.filename = file
+  result.index = createIndex()
+
+  var wrapConf = wrapConf
+  try:
+    result.unit = parseTranslationUnit(
+      result.index, file, flags, {
+        tufSkipFunctionBodies, tufDetailedPreprocessingRecord},
+      reparseOnNil = reparseOnNil
+    )
+
+    wrapConf.unit = result.unit
+
+  except:
+    err file.realpath
+    debug config.getFlags(file).joinl()
+    raise
+
+
+  result.api = result.unit.splitDeclarations(wrapConf)
+  result.explicitDeps = result.api.publicApi.
+    getDepFiles(wrapConf).filterIt(it != file)
+
+  result.isExplicitlyAdded = true
+
+  dedentLog()
+
+proc incl*[N, E, F](gr: var Graph[N, E, F], val: N) =
+  if val notin gr:
+    discard gr.add(val)
+
+proc contains*[N, E, F](gr: Graph[N, E, F], pair: (N, N)): bool =
+  if (pair[0] notin gr) or (pair[1] notin gr):
+    return false
+
+  for (edge, node) in gr[pair[0]].incoming():
+    if node.value == pair[1]:
+    # if edge in gr:
+      return true
+
+
+  for (edge, node) in gr[pair[0]].outgoing():
+    # if edge in gr:
+    if node.value == pair[1]:
+      return true
+
+proc incl*[N, E, F](
+  gr: var Graph[N, E, F], pair: (N, N), edgeVal: E) =
+  if pair notin gr:
+    discard gr.edge(gr[pair[0]], edgeVal, gr[pair[1]])
+
+
+
+proc registerDeps*(graph: var HeaderDepGraph, parsed: ParsedFile) =
+  let file = parsed.filename
+
+  for dep in parsed.api.includes:
+    let
+      path = dep.includedPath.realpath
+      ifrm = dep.includedFrom.realpath
+
+    graph.incl(path)
+    graph.incl(ifrm)
+    # notice ifrm, " -> ", path
+    graph.incl((ifrm, path), &"{dep.includedAs}:{dep.fromLine}",)
+
+
+  for dep in parsed.explicitDeps:
+    graph.incl(file.realpath)
+    graph.incl(dep.realpath)
+    graph.incl((file.realpath, dep.realpath), "@@@")
+
+
+proc parseAll*(
+  files: seq[AbsFile],
+  conf: ParseConfig,
+  wrapConf: WrapConfig, ): FileIndex =
+  for file in files:
+    result.index[file] = parseFile(file, conf, wrapConf)
+
+  result.depGraph = newGraph[AbsFile, string](HeaderGraphFlags)
+
+  for file, parsed in result.index:
+    result.depGraph.registerDeps(parsed)
+
+
+
+import hasts/graphviz_ast
+export toPng, toXDot, AbsFile
+
+func dotRepr*(idx: FileIndex, onlyPP: bool = true): DotGraph =
+  result.styleNode = makeRectConsolasNode()
+  # result.splines = spsLine
+
+  result.rankdir = grdLeftRight
+  for file in idx.depGraph.nodes:
+    result.addNode(makeDotNode(hash file.value, file.value.getStr()))
+
+  for (source, edge, target) in idx.depGraph.edges:
+    var e =  makeDotEdge(
+      hash source.value,
+      hash target.value,
+      edge.value
+    )
+
+    if edge.value == "@@@":
+      e.style = edsDashed
+      e.label = none(string)
+      if not onlyPP:
+        result.addEdge e
+    else:
+      result.addEdge e
+
+proc getDepModules*(file: AbsFile, idx: FileIndex): seq[AbsFile] =
+  ## Get list of modules that have to be imported in wrapper for file
+  ## `file`.
+  for dep in idx.depGraph[file].outgoing():
+    result.add dep.target.value
+
+#*************************************************************************#
+#****************************  File wrapping  ****************************#
+#*************************************************************************#
+func makeImport*(names: seq[string]): PNode =
+  nnkImportStmt.newPTree(
+    names.mapIt(it.newPident()).foldl(
+      nnkInfix.newPTree(newPident("/"), a, b))
+  )
+
+# func makeExport*(names: seq[string]): PNode =
+#   nnkExportStmt.newPTree(
+#     names.mapIt(it.newPident()).foldl(
+#       nnkInfix.newPTree(newPident("/"), a, b))
+#   )
+
+
+proc getExports*(
+  parsed: ParsedFile, conf: WrapConfig, index: FileIndex): seq[AbsFile] =
+  ## Get list of absolute files that provide types, used in public API
+  ## for `parsed` file *and* marked as internal (e.g. not supposed to
+  ## be imported separately)
+  for dep in parsed.explicitDeps:
+    if conf.isInternal(dep, conf, index):
+      result.add dep
+
+proc wrapFile*(
+  parsed: ParsedFile, conf: WrapConfig,
+  cache: var WrapCache, index: FileIndex): seq[WrappedEntry] =
+  info "Wrapping", parsed.filename
+  var tmpRes: seq[WrappedEntry]
+  # tmpRes.add newWrappedEntry(
+  #   toNimDecl(
+  #     pquote do:
+  #       {.experimental: "codeReordering".}
+  #   )
+  # )
+
+  tmpRes.add newWrappedEntry(
+    toNimDecl(
+      pquote do:
+        import bitops
+    )
+  )
+
+  # tmpRes.add newWrappedEntry(
+  #   toNimDecl(nnkConstSection.newPTree(
+  #     nnkConstDef.newPTree(
+  #       newPIdent("cxheader"),
+  #       newEmptyPNode(),
+  #       newPLit(parsed.filename.getStr())
+  #     ))))
+
+  for node in parsed.explicitDeps.mapIt(
+      conf.getImport(it, conf)).
+      deduplicate().
+      mapIt(it.makeImport()):
+    tmpRes.add node.toNimDecl().newWrappedEntry()
+
+  # for node in parsed.getExports(conf, index).mapIt(
+  #   conf.getImport(it, conf)).deduplicate():
+    # result.add node.makeExport().toNimDecl().newWrappedEntry()
+
+  tmpRes.add parsed.api.wrapApiUnit(conf, cache, index)
+
+  var res: Table[string, WrappedEntry]
+
+  for elem in tmpRes:
+    if elem.wrapped.kind == nekObjectDecl:
+      let name = elem.wrapped.objectdecl.name.head
+      res[name] = elem
+
+
+    elif elem.wrapped.kind == nekEnumDecl:
+      let name = elem.wrapped.enumdecl.name
+      res[name] = elem
+
+    elif elem.wrapped.kind == nekAliasDecl:
+      let name = elem.wrapped.aliasdecl.newType.head
+      if name in res:
+        warn "Override type alias for ", name
+
+      res[name] = elem
+
+    elif elem.wrapped.kind == nekPasstroughCode:
+      if not elem.postTypes:
+        result.add elem
+
+
+  block:
+    let elems = collect(newSeq):
+      for k, v in res:
+        v
+
+    result.add(newWrappedEntry(elems))
+
+  for elem in tmpRes:
+    if elem.wrapped.kind notin {
+      nekObjectDecl, nekAliasDecl, nekPasstroughCode, nekEnumDecl
+    }:
+
+      result.add elem
+
+    elif elem.wrapped.kind == nekPasstroughCode and
+         elem.postTypes:
+
+      result.add elem
+
+
+
+proc wrapFile*(
+    file: AbsFile,
+    flags: seq[string],
+    conf: WrapConfig,
+    cache: var WrapCache,
+    index: FileIndex
+   ): tuple[parsed: ParsedFile, wrapped: seq[WrappedEntry]] =
+
+  let parsedConf = ParseConfig(
+    globalFlags: getBuiltinHeaders().toIncludes(),
+    fileFlags: { file : flags }.toTable()
+  )
+
+  result.parsed = parseFile(file, parsedConf, conf)
+  result.wrapped = result.parsed.wrapFile(conf, cache, index)
+
+proc wrapFile*(
+    cmd: CXCompileCommand,
+    extraFlags: seq[string],
+    conf: WrapConfig,
+    cache: var WrapCache,
+    index: FileIndex
+  ): tuple[parsed: ParsedFile, wrapped: seq[WrappedEntry]] =
+
+  wrapFile(
+    toAbsFile($cmd.getFilename(), true),
+    extraFlags & cmd.getFlags(), conf, cache, index)
+
+type
+  WrapResult* = object
+    parsed*: ParsedFile
+    wrapped*: seq[WrappedEntry]
+    infile*: AbsFile
+    importName*: seq[string]
+
+proc boolCall*[A](
+  cb: proc(a: A): bool, arg: A, default: bool = true): bool =
+  if cb == nil: default else: cb(arg)
+
+func wrapName*(res: WrapResult): string =
+  res.importName.join("/") & ".nim"
+
+proc wrapAll*(
+  files: seq[AbsFile],
+  parseConf: ParseConfig,
+  wrapConf: WrapConfig
+            ): tuple[wrapped: seq[WrapResult], index: FileIndex] =
+
+  var
+    que = initDeque[AbsFile]()
+    visited: HashSet[AbsFile]
+    cache: WrapCache
+    parsed: FileIndex = files.parseAll(parseConf, wrapConf)
+
+  for file, _ in parsed.index:
+    que.addLast file # Add all files to que
+    visited.incl file # Mark all as visited
+
+  while que.len > 0:
+    let file = que.popFirst()
+    # info "Parsing file", file
+    if file notin visited: # If dependency is new parse it
+      parsed.index[file] = file.parseFile(parseConf, wrapConf)
+      visited.incl file
+
+    # Add to graph
+    parsed.depGraph.registerDeps(parsed.index[file])
+
+    # Store all explicit dependencies for file
+    for dep in parsed.index[file].explicitDeps:
+      if dep in visited or wrapConf.ignoreFile(dep):
+        discard
+      else:
+        que.addLast dep
+
+    for dep in parsed.index[file].api.includes:
+      if dep.includedPath in visited or
+         wrapConf.ignoreFile.boolCall(dep.includedPath):
+        discard
+      else:
+        que.addLast dep.includedPath
+
+  var wrap = wrapConf
+
+  for file in visited:
+    wrap.header = file
+    wrap.unit = parsed.index[file].unit
+    result.wrapped.add WrapResult(
+      parsed: parsed.index[file],
+      infile: file,
+      importName: wrap.getImport(file, wrap),
+      wrapped: parsed.index[file].wrapFile(wrap, cache, parsed)
+    )
+
+  result.index = parsed
+
+proc postprocessWrapped*(
+    entries: seq[WrappedEntry],
+    postprocess: seq[Postprocess] = defaultPostprocessSteps,
+  ): seq[WrappedEntry] =
+
+  for we in entries:
+    var we = we
+    var res: seq[WrappedEntry]
+
+    for step in postprocess:
+      res.add step.impl(we)
+
+    result.add we
+    result.add res
+
+
+proc wrapSingleFile*(
+    file: FsFile,
+    errorReparseVerbose: bool = false,
+    wrapConf: WrapConfig = baseWrapConfig,
+    parseConf: ParseConfig = baseCppParseConfig,
+    postprocess: seq[Postprocess] = defaultPostprocessSteps
+  ): seq[NimDecl[PNode]] =
+
+  var
+    cache: WrapCache
+    index: FileIndex
+
+  let parsed = parseFile(
+    file.toAbsFile(), parseConf, wrapConf,
+    reparseOnNil = errorReparseVerbose
+  )
+
+  var wrapConf = wrapConf
+
+  wrapConf.unit = parsed.unit
+  warn wrapConf.unit.getTranslationUnitCursor().cxKind()
+  # quit 0
+
+  let wrapped = parsed.wrapFile(wrapConf, cache, index)
+
+  proc updateComments(decl: var PNimDecl, node: WrappedEntry) =
+    decl.addCodeComment(
+      "Wrapper for `" &
+      (
+        node.cursor.getSemanticNamespaces(filterInline = false)).join("::") &
+      "`\n"
+    )
+
+    if node.cursor.getSpellingLocation().getSome(loc):
+      decl.addCodeComment(
+        &"Declared in {loc.file}:{loc.line}")
+
+
+
+
+  for node in wrapped.postprocessWrapped(postprocess):
+    if node.isMultitype:
+      var resdecl: seq[PNimTypeDecl]
+      for t in node.decls:
+        assert not t.isMultitype
+        var decl = t.wrapped
+
+        updateComments(decl, t)
+        resdecl.add toNimTypeDecl(decl)
+
+      result.add toNimDecl(resdecl)
+    else:
+      if node.hasCursor:
+        var decl = node.wrapped
+        updateComments(decl, node)
+
+        result.add decl
+      else:
+        result.add node.wrapped

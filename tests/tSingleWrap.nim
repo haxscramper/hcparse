@@ -3,7 +3,7 @@ import std/[
   xmltree, unittest, tables, strtabs
 ]
 
-import hcparse/[hcparse_cli, libclang_utils]
+import hcparse/[hcparse_cli, libclang]
 import hmisc/other/[oswrap, hshell, colorlogger]
 import hmisc/types/colorstring
 import hmisc/helpers

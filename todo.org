@@ -22,5 +22,6 @@
   :CREATED:  <2020-12-16 Wed 00:06>
   :END:
 
-- [ ] Create fully qualified namespace access names
+- [X] Create fully qualified namespace access names
+- [ ] Default operators assignment, constructors, move etc.
 

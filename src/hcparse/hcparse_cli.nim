@@ -3,7 +3,7 @@ import hmisc/algo/halgorithm
 import hmisc/types/colortext
 import hmisc/hdebug_misc
 import hnimast, hnimast/pprint
-import libclang_utils
+import libclang
 
 
 proc wrapCpp*(

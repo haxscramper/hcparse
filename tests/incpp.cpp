@@ -92,3 +92,33 @@ void operator"" _km(long double); // OK, will be called for 1.0_km
 int  operator"" _i18n(const char*, unsigned long); // OK
 
 float operator""_e(const char*); // OK
+
+
+namespace cxx {
+struct B;
+
+inline namespace __impl12 {
+    struct S {
+        enum class C
+        {
+            Hello = 33,
+            World = 12,
+            Nice  = 13,
+            HHHZ,
+            ZZZZ = 13
+        };
+        B* s;
+    };
+} // namespace __impl12
+
+void operator*(S a, S b) {}
+
+struct B {
+    void        hello() {}
+    static void explode(B b, S s) {}
+    B() {}
+};
+
+} // namespace cxx
+
+void usesEnum(cxx::S::C en, cxx::S other) {}
