@@ -440,6 +440,7 @@ proc wrapAll*(
 
 proc postprocessWrapped*(
     entries: seq[WrappedEntry],
+    wrapConf: WrapConfig,
     postprocess: seq[Postprocess] = defaultPostprocessSteps,
   ): seq[WrappedEntry] =
 
@@ -448,7 +449,7 @@ proc postprocessWrapped*(
     var res: seq[WrappedEntry]
 
     for step in postprocess:
-      res.add step.impl(we)
+      res.add step.impl(we, wrapConf)
 
     result.add we
     result.add res
@@ -508,7 +509,7 @@ proc wrapSingleFile*(
 
 
 
-  for node in wrapped.postprocessWrapped(postprocess):
+  for node in wrapped.postprocessWrapped(wrapConf, postprocess):
     if node.isMultitype:
       var resdecl: seq[PNimTypeDecl]
       for t in node.decls:

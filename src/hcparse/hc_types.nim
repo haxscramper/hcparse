@@ -130,12 +130,29 @@ type
     index*: Table[AbsFile, ParsedFile] ## Index of all parsed files
     depGraph*: HeaderDepGraph
 
+  NimHeaderSpecKind* = enum
+    nhskGlobal
+    nhskAbsolute
+    nhskPNode
+
+  NimHeaderSpec* = object
+    case kind*: NimHeaderSpecKind
+      of nhskGlobal:
+        global*: string ## Global include like `<string>`
+
+      of nhskAbsolute:
+        file*: AbsFile ## Absolute path to header file
+
+      of nhskPNode:
+        pnode*: PNode ## Anything else
+
   WrapConfig* = object
     ## Configuration for wrapping. Mostly deals with type renaming
     header*: AbsFile ## Current main translation file (header)
     unit*: CXTranslationUnit
-    makeHeader*: proc(cursor: CXCursor, conf: WrapConfig): PNode ## Genreate
-    ## identifier for `{.header: ... .}`
+    makeHeader*: proc(cursor: CXCursor, conf: WrapConfig): NimHeaderSpec ## |
+    ## Generate identifier for `{.header: ... .}`
+
     fixTypeName*: proc(ntype: var NType[PNode], conf: WrapConfig, idx: int)
     ## Change type name for `ntype`. Used to convert things like
     ## `boost::wave::macro_handling_exception::bad_include_file` into
@@ -183,7 +200,8 @@ type
             cursor*: CXCursor
 
   Postprocess* = object
-    impl*: proc(we: var WrappedEntry): seq[WrappedEntry]
+    impl*: proc(we: var WrappedEntry,
+                conf: WrapConfig): seq[WrappedEntry]
 
 
   EnFieldVal* = object
@@ -192,6 +210,12 @@ type
         othername*: string
       of false:
          value*: BiggestInt
+
+  CxxCodegen* = object
+    cursor*: CXCursor
+    # TODO replace with htsparse AST tree
+    code*: string
+    filename*: RelFile
 
 
 
@@ -385,5 +409,19 @@ proc initEnFieldVal*(v: BiggestInt): EnFieldVal =
 
 
 func newPostprocess*(
-  cb: proc(we: var WrappedEntry): seq[WrappedEntry]): Postprocess =
+  cb: proc(we: var WrappedEntry,
+           conf: WrapConfig): seq[WrappedEntry]): Postprocess =
+
   Postprocess(impl: cb)
+
+func toNNode*(nhs: NimHeaderSpec): PNode =
+  case nhs.kind:
+    of nhskPNode:
+      nhs.pnode
+
+    of nhskAbsolute:
+      newRStrLit("\"" & nhs.file.getStr() & "\"")
+
+    of nhskGlobal:
+      newRStrLit("<" & nhs.global & ">")
+

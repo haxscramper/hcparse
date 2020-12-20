@@ -24,7 +24,7 @@ proc asGlobalInclude*(cursor: CXCursor, conf: WrapConfig): string =
     if loc.file in dir:
       return loc.file.getStr().dropPrefix(dir.getStr()).dropPrefix("/")
 
-  return $loc
+  return $loc.file
 
 proc fixTypeName*(str: string, idx: int, conf: WrapConfig): string =
   if str.len == 0:
@@ -98,8 +98,12 @@ let baseWrapConfig* = WrapConfig(
   isImportcpp: true,
   parseConf: baseCppParseConfig,
   makeHeader: (
-    proc(cursor: CXCursor, conf: WrapConfig): PNode {.closure.} =
-      return newPLit("<" & cursor.asGlobalInclude(conf) & ">")
+    proc(cursor: CXCursor, conf: WrapConfig): NimHeaderSpec {.closure.} =
+      let file = cursor.asGlobalInclude(conf)
+      if file.startsWith("/"):
+        NimHeaderSpec(kind: nhskAbsolute, file: AbsFile(file))
+      else:
+        NimHeaderSpec(kind: nhskGlobal, global: file)
   ),
   getImport: (
     proc(dep: AbsFile, conf: WrapConfig): seq[string] {.closure.} =

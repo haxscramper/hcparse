@@ -29,13 +29,12 @@ proc wrapOperator*(
   let kind = oper.classifyOperator()
   it.kind = pkOperator
 
-  # debug "Operrator class", kind
-  # debug it.name
   if kind == cxoAsgnOp and it.name == "setFrom":
     it.signature.pragma = newPPragma(
       newPIdentColonString("importcpp", &"# = #"))
 
     it.kind = pkRegular
+
   else:
     case kind:
       of cxoAsgnOp:
@@ -69,7 +68,7 @@ proc wrapOperator*(
       of cxoArrowOp:
         # WARNING
         it.signature.pragma = newPPragma(
-          newPIdentColonString("importcpp", &"#.operator->()"))
+          newPIdentColonString("importcpp", &"#.operator->(@)"))
 
       of cxoCallOp:
         # NOTE nim does have experimental support for call
@@ -82,7 +81,6 @@ proc wrapOperator*(
 
       of cxoDerefOp:
         it.name = "[]"
-        # it.kind = pkRegular
         it.signature.pragma = newPPragma(
           newPIdentColonString("importcpp", &"*#"))
 
@@ -96,6 +94,7 @@ proc wrapOperator*(
           newPIdentColonString("importcpp", &"commaOp(@)"))
 
         it.kind = pkRegular
+
       of cxoConvertOp:
         let restype = oper.cursor.retType().toNType(conf).ntype
 
@@ -107,6 +106,7 @@ proc wrapOperator*(
         it.signature.setRType(restype)
         it.declType = ptkConverter
         it.kind = pkRegular
+
       of cxoUserLitOp:
         let restype = oper.cursor.retType().toNType(conf).ntype
 
@@ -116,12 +116,10 @@ proc wrapOperator*(
 
         it.signature.setRType(restype)
         it.kind = pkRegular
-      else:
-        raiseAssert("#[ IMPLEMENT ]#")
 
   it.signature.pragma.add newExprColonExpr(
     newPIdent "header",
-    conf.makeHeader(oper.cursor, conf)
+    conf.makeHeader(oper.cursor, conf).toNNode()
   )
 
   result.decl = it
@@ -160,10 +158,12 @@ proc wrapProcedure*(
     it = decl
     it.iinfo = currIInfo()
     addThis = adt
+
   else:
     it.signature = newProcNType[PNode](@[])
     it.name = pr.getNimName()
     it.exported = true
+
     iflet (par = parent):
       it.genParams = par.genParams
 
@@ -184,7 +184,7 @@ proc wrapProcedure*(
         ),
         newExprColonExpr(
           newPIdent "header",
-          conf.makeHeader(pr.cursor, conf)))
+          conf.makeHeader(pr.cursor, conf).toNNode()))
 
     else:
       let pragma =
@@ -204,7 +204,7 @@ proc wrapProcedure*(
       it.signature.pragma = newPPragma(
         pragma, newExprColonExpr(
           newPIdent "header",
-          conf.makeHeader(pr.cursor, conf)
+          conf.makeHeader(pr.cursor, conf).toNNode()
         )
       )
 
@@ -278,7 +278,7 @@ proc wrapProcedure*(
         ),
         newExprColonExpr(
           newPIdent "header",
-          conf.makeHeader(pr.cursor, conf)))
+          conf.makeHeader(pr.cursor, conf).toNNode()))
 
   else:
     # Default handling of return types
@@ -305,7 +305,7 @@ proc wrapProcedure*(
         newPIdentColonString("importcpp", &"~{it.name}()"),
         newExprColonExpr(
           newPIdent "header",
-          conf.makeHeader(pr.cursor, conf)))
+          conf.makeHeader(pr.cursor, conf).toNNode()))
 
   if pr.cursor.kind == ckDestructor:
     it.name = "destroy" & it.name
@@ -410,8 +410,7 @@ proc wrapTypeFromNamespace(
     ),
     newExprColonExpr(
       newPIdent "header",
-      conf.makeHeader(cursor, conf)),
-  ))
+      conf.makeHeader(cursor, conf).toNNode())))
 
 
 
@@ -572,12 +571,13 @@ proc wrapObject*(
 
       of ckFieldDecl, ckMethod, ckFriendDecl,
          ckFunctionTemplate, ckAccessSpecifier,
-         ckConstructor, ckDestructor
-           :
+         ckConstructor, ckDestructor:
+        # Constructors, field access and other implementation parts have
+        # already been added in `visitClass`, now we can ignore them
+        # altogether.
         discard
 
       else:
-        # debug entry.getSpellingLocation()
         warn &"#[ IMPLEMENT for kind {entry.cxkind()} {instantiationInfo()} ]#"
 
   # WARNING might die on `<T<T<T<T<T<T>>>>>` things
@@ -603,20 +603,11 @@ proc wrapObject*(
 
       result.genBefore.add(pre & @[obj] & post)
 
-      resFld.fldType = obj.wrapped.objectDecl.name # pre # newPType(pre.name.head)
+      resFld.fldType = obj.wrapped.objectDecl.name 
+
     else:
       resFld.fldType = fld.cursor.cxType().toNType(conf).ntype
 
-    if resFld.name == "db":
-      warn "sfasd"
-      debug resFld.fldType.toNNode()
-      debug fld.cursor.cxKind()
-      debug fld.cursor.cxType()
-      debug fld.cursor.cxType().getTypeDeclaration().treeRepr()
-
-
-    # if fld.cursor.cxType().getTypeDeclaration().cxKind() in {ckNoDeclFound}:
-    #   warn "Field", resFld.name, "has no declaration for type"
 
     obj.flds.add resFld
 
@@ -627,7 +618,7 @@ proc wrapObject*(
     ),
     newExprColonExpr(
       newPIdent "header",
-      conf.makeHeader(cd.cursor, conf)
+      conf.makeHeader(cd.cursor, conf).toNNode()
     ),
   ))
 
@@ -665,6 +656,12 @@ proc getFields*(declEn: CDecl, conf: WrapConfig): tuple[
           val.tokenStrings(conf.unit)[0].parseInt())
 
       of ckBinaryOperator:
+        # FIXME C++ allows to have arbitrary complex expressions for enum
+        # values, so in the end I would have to implement simple math
+        # expression AST interpreter in order to evaluate all of this, or
+        # take some existing one (it is possible to convert expression back
+        # to tokens and use something like
+        # https://github.com/Yardanico/nim-mathexpr)
         let subn = val.children()
         let toks = val.tokenStrings(conf.unit)[1] # TEST for `(1 << 2) | (1 << 3)`
         case toks:
@@ -882,6 +879,8 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
     result.add newWrappedEntry(toNimDecl(en), declEn, declEn.cursor)
 
 proc wrapMacros*(declMacros: seq[CDecl], conf: WrapConfig): seq[WrappedEntry] =
+  return
+
   info "Wrapping macros"
   for decl in declMacros:
     debug decl.cursor

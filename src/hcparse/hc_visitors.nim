@@ -2,6 +2,7 @@ import hc_types, cxtypes, cxvisitors
 
 import hnimast
 
+import std/[sequtils, strutils]
 import hmisc/other/[colorlogger, oswrap]
 import hmisc/algo/hstring_algo
 import hmisc/types/colorstring
@@ -33,6 +34,31 @@ proc getArguments*(cursor: CXCursor): seq[CArg] =
         name = "a" & $idx
 
       result.add CArg(name: name, cursor: subn)
+
+proc argsSignature*(
+  cursor: CXCursor, types: bool = true, names: bool = true,
+  wrap: (bool, bool) = (false, false)): string =
+
+  let args = cursor.getArguments()
+
+  if args.len > 0 and wrap[0]:
+    result = ","
+
+  if types and names:
+    result &= args.mapIt($it.cursor.cxType() & " " & it.name).join(", ")
+
+  elif types:
+    result &= args.mapIt($it.cursor.cxType()).join(", ")
+
+  elif names:
+    result &= args.mapIt(it.name).join(", ")
+
+  else:
+    raiseAssert("Either `types` or `arguments` must be enabled")
+
+  if args.len > 0 and wrap[1]:
+    result &= ","
+
 
 proc visitMethod*(cursor: CXCursor, accs: CX_AccessSpecifier): CDecl =
   result = CDecl(kind: cdkMethod, cursor: cursor, name: newPType $cursor)

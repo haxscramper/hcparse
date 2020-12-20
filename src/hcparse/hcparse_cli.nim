@@ -8,6 +8,7 @@ import libclang
 
 proc wrapCpp*(
     file, outfile: FsFile,
+    codegens: Option[FsDir] = none(FsDir),
     includePaths: seq[FsDir] = @[],
     errorReparseVerbose: bool = false,
     isImportcpp: bool = true,
@@ -35,6 +36,12 @@ proc wrapCpp*(
     for entry in wrapped:
       # stdout.write(entry)
       file.write(entry)
+
+  if codegens.isSome():
+    for gen in codegen:
+      writeFile(codegens.get() / gen.filename, gen.code)
+
+    codegen = @[]
 
 when isMainModule:
   dispatchMulti(

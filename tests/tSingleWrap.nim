@@ -22,7 +22,7 @@ proc `[]`(x: XmlNode, k: string): string =
   else:
     x.attrs[k]
 
-startColorLogger()
+startColorLogger(showfile = true)
 
 proc treeRepr(xml: XmlNode, prefIdx: bool = false): string =
   func aux(x: XmlNode, level: int, idx: seq[int]): string =
@@ -129,7 +129,7 @@ let h = loadHtml(htmlfile.getStr())
 # fillTable(h)
 
 
-proc x11DocAnnotation(we: var WrappedEntry): seq[WrappedEntry] =
+proc x11DocAnnotation(we: var WrappedEntry, conf: WrapConfig): seq[WrappedEntry] =
   if we.wrapped.kind in {nekProcDecl}:
     let name = we.wrapped.procdecl.name
     if name in annotTable:
@@ -199,7 +199,30 @@ suite "WIP tests":
     startHax()
     wrapCpp(
       srcd /. "wip.cpp",
-      AbsFile("/tmp/res_a.nim")
+      AbsFile("/tmp/res_a.nim"),
+      some AbsDir("/tmp/")
     )
 
-    execShell shCmd(nim, check, "/tmp/res_a.nim")
+    "/tmp/main.nim".writeFile """
+import res_a
+
+var second = block:
+  var derived = newCppBaseNim[int]()
+
+  derived.setBaseMethod proc(
+    this: var CppBaseNim[int], arg: cint) {.closure.} =
+      echo "Override callback with nim implementation ", arg
+
+  derived.baseMethod(12)
+
+  derived
+
+second.baseMethod(12333)
+"""
+
+    execShell shCmd(nim).withIt do:
+      it.arg "r"
+      it - ("backend", "cpp")
+      it - ("nimcache", "cache")
+      it.arg "/tmp/main.nim"
+

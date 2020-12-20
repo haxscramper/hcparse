@@ -320,9 +320,14 @@ proc children*(cursor: CXCursor, kind: set[CXCursorKind]): seq[CXCursor] =
       result.add ch
 
 
-iterator items*(cursor: CXCursor): CXCursor =
+iterator items*(
+    cursor: CXCursor,
+    filter: set[CXCursorKind] = {low(CXCursorKind) .. high(CXCursorKind)}
+  ): CXCursor =
+
   for child in cursor.children():
-    yield child
+    if child.kind in filter:
+      yield child
 
 proc `[]`*(cursor: CXCursor, idx: int): CXCursor =
   ## Get `idx`'th subnode of cursor. If index is greater than number
@@ -416,6 +421,9 @@ proc nthArg*(cxtype: CXType, idx: int): CXType =
   assert idx < cxtype.argc()
   getArgType(cxtype, cuint(idx))
 
+proc argTypes*(cursor: CXCursor): seq[CXType] =
+  cursor.cxType().argTypes()
+
 
 
 #=============================  Predicates  ==============================#
@@ -441,6 +449,10 @@ proc `==`*(c1, c2: CXCursor): bool = equalCursors(c1, c2) == 0
 proc getSpellingLocation*(cursor: CXCursor): Option[tuple[
   file: AbsFile, line, column, offset: int]] =
   result = cursor.getCursorLocation().getExpansionLocation()
+
+proc relSpellingFile*(cursor: CXCursor): RelFile =
+  cursor.getSpellingLocation().get().file.splitFile2().file.RelFile()
+
 
 proc getCursorSemanticSiblings*(cursor: CXCursor): tuple[
   before, after: seq[CXCursor]] =
