@@ -186,11 +186,16 @@ proc callbackOverride*(we: var WrappedEntry, conf: WrapConfig): seq[WrappedEntry
                                        newPIdent("impl"))
 
           for arg in meth.getArguments():
-            call.add newPIdent(eName)
-            nimArgs.add (ename, arg.cursor.cxType().toNType(conf).ntype)
+            call.add newPIdent(arg.name)
+            nimArgs.add (arg.name, arg.cursor.cxType().toNType(conf).ntype)
 
           var subImpl = newPProcDecl(
             name = $meth & "Wrap",
+            exported = false,
+            args = (
+              "raw",
+              newPType("ptr", [eName & "NimRaw"])
+            ) & nimArgs,
             pragma = newPPragma(
               newExprColonExpr(newPIdent("header"), inclSpec.toNNode()),
               newPidentColonString("importcpp", &"#.{meth}(@)")
@@ -215,7 +220,8 @@ proc callbackOverride*(we: var WrappedEntry, conf: WrapConfig): seq[WrappedEntry
           )
 
 
-          result.add newWrappedEntry(toNimDecl(pr), entry.original, entry.cursor)
+          result.add newWrappedEntry(
+            toNimDecl(pr), entry.original, entry.cursor)
 
         for meth in items(entry.cursor, {ckMethod}):
           let
@@ -230,10 +236,11 @@ proc callbackOverride*(we: var WrappedEntry, conf: WrapConfig): seq[WrappedEntry
             )
 
 
+          let rawid = newPIdent(eName & "Nim")
           let impl = pquote do:
             proc `prIdent`*[T](
-                self: var CppBaseDerived[T],
-                cb: proc(this: var CppBaseDerived[T],
+                self: var `rawId`[T],
+                cb: proc(this: var `rawId`[T],
                          arg: @@@^nArgList
                 ) {.closure.}
               ) =
@@ -252,13 +259,17 @@ proc callbackOverride*(we: var WrappedEntry, conf: WrapConfig): seq[WrappedEntry
                 var derived = cast[ptr SelfType](derivedImpl)
 
                 # Call closure implementation, arguments and closure environment.
-                cast[ClosImplType](cbImpl)(derived[], arg: @@@^nArgList, cbEnv)
+                cast[ClosImplType](cbImpl)(
+                  derived[],
+                  arg: @@@^(meth.getArguments().mapIt(newPIdent(it.name))),
+                  cbEnv
+                )
 
 
-              self.d.`newPIdent(mn2 & $$$"Wrap")` = wrap
-              self.d.derivedImpl = addr self
-              self.d.`newPIdent(mn2 & $$$"Env")` = cb.rawEnv()
-              self.d.`newPIdent(mn2 & $$$"Proc")` = cb.rawProc()
+              self.impl.@@@!(newPIdent(mn2 & "Wrap")) = wrap
+              self.impl.derivedImpl = addr self
+              self.impl.@@@!(newPIdent(mn2 & "Env")) = cb.rawEnv()
+              self.impl.@@@!(newPIdent(mn2 & "Proc")) = cb.rawProc()
 
           result.add newWrappedEntry(toNimDecl(impl))
 
@@ -267,18 +278,19 @@ proc callbackOverride*(we: var WrappedEntry, conf: WrapConfig): seq[WrappedEntry
         let decls = collect(newSeq):
           for meth in items(entry.cursor, {ckMethod}):
             let args = (
-              "void* derivedImpl" &
-                meth.argTypes().mapIt($it) &
-                "void* closureEnv" &
+              "void* derivedImpl, " &
+                meth.argsSignature(wrap = (false, true)) & " " &
+                "void* closureEnv, " &
                 "void* closureProc"
-            ).join(", ")
+            )
 
-            let overrideArgs = meth.argTypes().join(", ")
+            # let overrideArgs = "void* derivedImpl, " &
+            #   meth.argsSignature(names = false, wrap = (false, true))
 
             let name = meth.getSemanticNamespaces().join("::")
             &"""
     // Override wrapper for `{name}`
-    {meth.retType()} (*{meth}Wrap)({meth.argsSignature(names = false)});
+    {meth.retType()} (*{meth}Wrap)({args}) = 0;
     void* {meth}Proc = 0;
     void* {meth}Env = 0;
 
@@ -292,6 +304,7 @@ proc callbackOverride*(we: var WrappedEntry, conf: WrapConfig): seq[WrappedEntry
 
 
         let res = &"""
+#pragma once
 #include {inclFile}
 
 // Final overide struct
@@ -315,12 +328,11 @@ struct {entry.cursor}NimRaw : public {entry.cursor} {{
             let args = meth.getArguments()
 
             &"""
-#pragma once
 #include "{headerFile}"
 
 {meth.retType()} {entry.cursor}NimRaw::{meth}({meth.argsSignature()}) {{
     if (this->{meth}Wrap == 0) {{
-        {entry.cursor}::{meth}();
+        {entry.cursor}::{meth}({meth.argsSignature(types = false)});
 
     }} else {{
         this->{meth}Wrap(

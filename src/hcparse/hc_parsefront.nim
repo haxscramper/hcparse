@@ -285,7 +285,7 @@ proc wrapFile*(
   tmpRes.add newWrappedEntry(
     toNimDecl(
       pquote do:
-        import bitops
+        import bitops, hcparse/wraphelp
     )
   )
 

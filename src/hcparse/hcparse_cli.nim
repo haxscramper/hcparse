@@ -3,6 +3,7 @@ import hmisc/algo/halgorithm
 import hmisc/types/colortext
 import hmisc/hdebug_misc
 import hnimast, hnimast/pprint
+import std/[strformat]
 import libclang
 
 
@@ -33,6 +34,11 @@ proc wrapCpp*(
   )
 
   withStreamFile(outFile):
+    for gen in codegen:
+      if gen.filename.hasExt("cpp"):
+        file.writeLine(&"{{.compile: \"{gen.filename}\".}}")
+
+
     for entry in wrapped:
       # stdout.write(entry)
       file.write(entry)
