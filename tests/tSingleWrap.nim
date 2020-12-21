@@ -213,7 +213,7 @@ suite "WIP tests":
 import res_a
 
 var second = block:
-  var derived = newCppBaseNim[int]()
+  var derived = newCppBaseNim[int]("hello".cstring)
 
   derived.setBaseMethod proc(
     this: var CppBaseNim[int], arg: cint) {.closure.} =

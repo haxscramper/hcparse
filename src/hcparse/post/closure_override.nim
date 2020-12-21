@@ -19,6 +19,165 @@ import hmisc/other/colorlogger
 
 import std/[decls, strutils, sequtils, tables, sugar, strformat]
 
+proc toNIdentDefs*(args: seq[CArg], conf: WrapConfig): seq[NIdentDefs[PNode]] =
+  toNIdentDefs: collect(newSeq):
+    for arg in args:
+      let (ntype, mutable) = toNType(arg.cursor.cxType(), conf)
+      (name: arg.name,
+       atype: ntype,
+       nvd: tern(mutable, nvdVar, nvdLet))
+
+
+proc argsNIdents*(cursor: CXCursor, conf: WrapConfig): seq[NIdentDefs[PNode]] =
+  cursor.getArguments().toNIdentDefs(conf)
+
+
+proc genConstructors(
+    entry: WrappedEntry, conf: WrapConfig
+  ): tuple[wrapped: seq[WrappedEntry],
+           constructors: tuple[declarations,
+                               definitions: string]] =
+
+  let eName = $entry.cursor
+  let inclSpec = conf.makeHeader(entry.cursor, conf)
+
+  proc makeConstructor(inArgs: seq[CArg], res: var typeof(result)) =
+    let
+      args = inArgs
+      nargs = toNIdentDefs(args, conf)
+      signArgs = argsSignature(args)
+
+    res.constructors.declarations.add &"""
+
+  // Declared in {currIInfo()}
+  {eName}NimRaw({signArgs});
+
+"""
+
+    res.constructors.definitions.add &"""
+
+// Declared in {currIInfo()}
+{eName}NimRaw::{eName}NimRaw({signArgs}) :
+  {eName}({argsSignature(args, types = false)}) {{
+
+}}
+
+"""
+
+    block:
+      var pr = newPProcDecl(
+        name = "new" & eName & "NimRaw",
+        rtyp = some(newPType("ptr", [eName & "NimRaw"])),
+        pragma = newPPragma(
+          newPIdent("constructor"),
+          newExprColonExpr(newPident("header"), inclSpec.toNNode()),
+          newPIdentColonString("importcpp", &"new {eName}NimRaw(@)")
+        )
+      )
+
+      pr.signature.arguments = nargs
+
+      res.wrapped.add newWrappedEntry(
+        toNimDecl(pr), entry.original, entry.cursor)
+
+    block:
+      let
+        n1 = newPIdent(eName & "Nim")
+        n2 = newPIdent("new" & eName & "NimRaw")
+
+      var pr = newPProcDecl(
+        name = "new" & eName & "Nim",
+        genParams = @[newPType("T")],
+        rtyp = some(newPType(eName & "Nim", ["T"])),
+        iinfo = currIInfo(),
+        impl = (
+          pquote do:
+            `n1`[T](rawImpl: `n2`(@@@(args.mapIt(newPIdent(it.name)))))
+        )
+      )
+
+      pr.signature.arguments = nargs
+
+      # NOTE I have no fucking idea about `entry.original`
+      res.wrapped.add newWrappedEntry(
+        toNimDecl(pr), entry.original, entry.cursor)
+
+  var hasConstructors: bool = false
+  for constructor in items(entry.cursor, {ckConstructor}):
+    makeConstructor(constructor.getArguments(), result)
+    hasConstructors = true
+
+  if not hasConstructors:
+    makeConstructor(newSeq[CArg](0), result)
+
+proc genObjects(
+    entry: WrappedEntry, conf: WrapConfig, codegen: var seq[CxxCodegen]
+  ): seq[WrappedEntry] =
+
+  let eName = $entry.cursor
+  let inclSpec = conf.makeHeader(entry.cursor, conf)
+
+  block:
+    var wrap = newPObjectDecl(
+      $entry.cursor & "Nim",
+      iinfo = currIInfo(),
+      genParams = @[newPType("T")]
+    )
+
+    wrap.addField("rawImpl", newPType("ptr", @[$entry.cursor & "NimRaw"]))
+    wrap.addField("userData", newPType("T"))
+
+    result.add newWrappedEntry(toNimDecl(wrap), entry.original, entry.cursor)
+
+
+
+  for meth in items(entry.cursor, {ckMethod}):
+    var call = nnkCall.newPTree(newPIdent($meth & "Wrap"))
+    var nimArgs: seq[(string, NType[PNode])]
+
+    call.add nnkDotExpr.newPTree(newPIdent("derived"),
+                                 newPIdent("rawImpl"))
+
+    for arg in meth.getArguments():
+      call.add newPIdent(arg.name)
+      nimArgs.add (arg.name, arg.cursor.cxType().toNType(conf).ntype)
+
+    var subImpl = newPProcDecl(
+      name = $meth & "Wrap",
+      exported = false,
+      args = (
+        "raw",
+        newPType("ptr", [eName & "NimRaw"])
+      ) & nimArgs,
+      pragma = newPPragma(
+        newExprColonExpr(newPIdent("header"), inclSpec.toNNode()),
+        newPidentColonString("importcpp", &"#.{meth}(@)")
+      )
+    )
+
+
+    var pr = newPProcDecl(
+      name = $meth,
+      genParams = @[newPType("T")],
+      args = (
+        "derived",
+        newNType("var", [newPType(eName & "Nim", ["T"])])
+
+      ) & nimArgs,
+      rtyp = some meth.retType().toNType(conf).ntype,
+      impl = (
+        pquote do:
+          `subImpl.toNNode()`
+          `call`
+      )
+    )
+
+
+    result.add newWrappedEntry(
+      toNimDecl(pr), entry.original, entry.cursor)
+ 
+
+
 proc callbackOverride*(
     we: var WrappedEntry, conf: WrapConfig, codegen: var seq[CxxCodegen]
   ): seq[WrappedEntry] {.nimcall.} =
@@ -67,95 +226,11 @@ proc callbackOverride*(
 
           result.add newWrappedEntry(toNimDecl(obj), entry.original, entry.cursor)
 
-        block:
-          var wrap = newPObjectDecl(
-            $entry.cursor & "Nim",
-            iinfo = currIInfo(),
-            genParams = @[newPType("T")]
-          )
-
-          wrap.addField("rawImpl", newPType("ptr", @[$entry.cursor & "NimRaw"]))
-          wrap.addField("userData", newPType("T"))
-
-          result.add newWrappedEntry(toNimDecl(wrap), entry.original, entry.cursor)
-
-        block:
-          var pr = newPProcDecl(
-            name = "new" & eName & "NimRaw",
-            rtyp = some(newPType("ptr", [eName & "NimRaw"])),
-            pragma = newPPragma(
-              newPIdent("constructor"),
-              newExprColonExpr(newPident("header"), inclSpec.toNNode()),
-              newPIdentColonString("importcpp", &"new {eName}NimRaw(@)")
-            )
-          )
-
-          result.add newWrappedEntry(toNimDecl(pr), entry.original, entry.cursor)
-
-        block:
-          let
-            n1 = newPIdent(eName & "Nim")
-            n2 = newPIdent("new" & eName & "NimRaw")
-
-          var pr = newPProcDecl(
-            name = "new" & eName & "Nim",
-            genParams = @[newPType("T")],
-            rtyp = some(newPType(eName & "Nim", ["T"])),
-            iinfo = currIInfo(),
-            impl = (
-              pquote do:
-                `n1`[T](rawImpl: `n2`())
-            )
-          )
-
-          # NOTE I have no fucking idea about `entry.original`
-          result.add newWrappedEntry(toNimDecl(pr), entry.original, entry.cursor)
 
 
-        for meth in items(entry.cursor, {ckMethod}):
-          var call = nnkCall.newPTree(newPIdent($meth & "Wrap"))
-          var nimArgs: seq[(string, NType[PNode])]
-
-          call.add nnkDotExpr.newPTree(newPIdent("derived"),
-                                       newPIdent("rawImpl"))
-
-          for arg in meth.getArguments():
-            call.add newPIdent(arg.name)
-            nimArgs.add (arg.name, arg.cursor.cxType().toNType(conf).ntype)
-
-          var subImpl = newPProcDecl(
-            name = $meth & "Wrap",
-            exported = false,
-            args = (
-              "raw",
-              newPType("ptr", [eName & "NimRaw"])
-            ) & nimArgs,
-            pragma = newPPragma(
-              newExprColonExpr(newPIdent("header"), inclSpec.toNNode()),
-              newPidentColonString("importcpp", &"#.{meth}(@)")
-            )
-          )
-
-
-          var pr = newPProcDecl(
-            name = $meth,
-            genParams = @[newPType("T")],
-            args = (
-              "derived",
-              newNType("var", [newPType(eName & "Nim", ["T"])])
-
-            ) & nimArgs,
-            rtyp = some meth.retType().toNType(conf).ntype,
-            impl = (
-              pquote do:
-                `subImpl.toNNode()`
-                `call`
-            )
-          )
-
-
-          result.add newWrappedEntry(
-            toNimDecl(pr), entry.original, entry.cursor)
+        result.add genObjects(entry, conf, codegen)
+        let (wrapped, constructors) = genConstructors(entry, conf)
+        result.add wrapped
 
         for meth in items(entry.cursor, {ckMethod}):
           let
@@ -223,6 +298,8 @@ proc callbackOverride*(
 
             let name = meth.getSemanticNamespaces().join("::")
             &"""
+
+    // Declared in {currIInfo()}
     // Override wrapper for `{name}`
     {meth.retType()} (*{meth}Wrap)({args}) = 0;
     void* {meth}Proc = 0;
@@ -246,6 +323,8 @@ struct {entry.cursor}NimRaw : public {entry.cursor} {{
     // Pointer to wrapper object
     void* userData = 0;
 
+{constructors.declarations}
+
 {decls.joinl()}
 
 }};
@@ -262,8 +341,7 @@ struct {entry.cursor}NimRaw : public {entry.cursor} {{
             let args = meth.getArguments()
 
             &"""
-#include "{headerFile}"
-
+// Declared in {currIInfo()}
 {meth.retType()} {entry.cursor}NimRaw::{meth}({meth.argsSignature()}) {{
     if (this->{meth}Wrap == 0) {{
         {entry.cursor}::{meth}({meth.argsSignature(types = false)});
@@ -282,6 +360,13 @@ struct {entry.cursor}NimRaw : public {entry.cursor} {{
 
         codegen.add CxxCodegen(
           cursor: entry.cursor,
-          code: impls.join("\n"),
+          code: &"""
+#include "{headerFile}"
+// Generated in {currIInfo()}
+
+{constructors.definitions}
+
+{impls.join("\n")}
+""",
           filename: entry.cursor.relSpellingFile().withExt("cpp")
         )

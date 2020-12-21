@@ -40,5 +40,5 @@ To allow use of custom data associated with object generic wrapper type
 where ``userData`` is an arbitrary nim type and ``rawImpl`` is pointer to
 wrapper for `*NimRaw` class. Generate C++ class contains ``void*`` pointer
 to nim wrapper and is passed as first argument to closure implementation.
-Pointer to class is update each time `set<method-name>` is called.
+Pointer to class is update each time `set<method-name>` is called. 
 

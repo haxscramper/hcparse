@@ -35,11 +35,10 @@ proc getArguments*(cursor: CXCursor): seq[CArg] =
 
       result.add CArg(name: name, cursor: subn)
 
-proc argsSignature*(
-  cursor: CXCursor, types: bool = true, names: bool = true,
-  wrap: (bool, bool) = (false, false)): string =
 
-  let args = cursor.getArguments()
+proc argsSignature*(
+  args: seq[CArg], types: bool = true, names: bool = true,
+  wrap: (bool, bool) = (false, false)): string =
 
   if args.len > 0 and wrap[0]:
     result = ","
@@ -58,6 +57,14 @@ proc argsSignature*(
 
   if args.len > 0 and wrap[1]:
     result &= ","
+
+
+
+proc argsSignature*(
+  cursor: CXCursor, types: bool = true, names: bool = true,
+  wrap: (bool, bool) = (false, false)): string =
+
+  argsSignature(cursor.getArguments(), types, names, wrap)
 
 
 proc visitMethod*(cursor: CXCursor, accs: CX_AccessSpecifier): CDecl =
