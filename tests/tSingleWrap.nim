@@ -129,7 +129,12 @@ let h = loadHtml(htmlfile.getStr())
 # fillTable(h)
 
 
-proc x11DocAnnotation(we: var WrappedEntry, conf: WrapConfig): seq[WrappedEntry] =
+proc x11DocAnnotation(
+    we: var WrappedEntry,
+    conf: WrapConfig,
+    codegen: var seq[CxxCodegen]
+  ): seq[WrappedEntry] =
+
   if we.wrapped.kind in {nekProcDecl}:
     let name = we.wrapped.procdecl.name
     if name in annotTable:
@@ -154,7 +159,7 @@ suite "X11 garbage wrap test":
       let pconf = baseCppParseConfig.withIt do:
         it.globalFlags = @["-DXLIB_ILLEGAL_ACCESS"]
 
-      let wrapped = wrapSingleFile(
+      let (wrapped, codegen) = wrapSingleFile(
         infile,
         postprocess = @[
           newPostprocess(x11DocAnnotation),
@@ -184,6 +189,7 @@ suite "X11 garbage wrap test":
       execShell shCmd(nim, check, "/tmp/xlib.nim")
 
       info "Done check, wrap OK !"
+
     else:
       doWrap(AbsFile("/tmp/a.hpp"), AbsFile("/tmp/b.nim"))
 
@@ -225,4 +231,3 @@ second.baseMethod(12333)
       it - ("backend", "cpp")
       it - ("nimcache", "cache")
       it.arg "/tmp/main.nim"
-

@@ -201,7 +201,8 @@ type
 
   Postprocess* = object
     impl*: proc(we: var WrappedEntry,
-                conf: WrapConfig): seq[WrappedEntry]
+                conf: WrapConfig,
+                codegen: var seq[CxxCodegen]): seq[WrappedEntry]
 
 
   EnFieldVal* = object
@@ -408,10 +409,7 @@ proc initEnFieldVal*(v: BiggestInt): EnFieldVal =
 
 
 
-func newPostprocess*(
-  cb: proc(we: var WrappedEntry,
-           conf: WrapConfig): seq[WrappedEntry]): Postprocess =
-
+func newPostprocess*(cb: Postprocess.impl): Postprocess =
   Postprocess(impl: cb)
 
 func toNNode*(nhs: NimHeaderSpec): PNode =
@@ -424,4 +422,3 @@ func toNNode*(nhs: NimHeaderSpec): PNode =
 
     of nhskGlobal:
       newRStrLit("<" & nhs.global & ">")
-

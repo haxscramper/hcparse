@@ -26,7 +26,7 @@ proc wrapCpp*(
   let wconf = baseWrapConfig.withIt do:
     discard
 
-  let wrapped = wrapSingleFile(
+  let (wrapped, codegen) = wrapSingleFile(
     file,
     errorReparseVerbose,
     wrapConf = wconf,
@@ -46,8 +46,6 @@ proc wrapCpp*(
   if codegens.isSome():
     for gen in codegen:
       writeFile(codegens.get() / gen.filename, gen.code)
-
-    codegen = @[]
 
 when isMainModule:
   dispatchMulti(

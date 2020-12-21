@@ -442,17 +442,17 @@ proc postprocessWrapped*(
     entries: seq[WrappedEntry],
     wrapConf: WrapConfig,
     postprocess: seq[Postprocess] = defaultPostprocessSteps,
-  ): seq[WrappedEntry] =
+  ): tuple[wrapped: seq[WrappedEntry], codegen: seq[CxxCodegen]] =
 
   for we in entries:
     var we = we
     var res: seq[WrappedEntry]
 
     for step in postprocess:
-      res.add step.impl(we, wrapConf)
+      res.add step.impl(we, wrapConf, result.codegen)
 
-    result.add we
-    result.add res
+    result.wrapped.add we
+    result.wrapped.add res
 
 
 proc wrapSingleFile*(
@@ -461,7 +461,7 @@ proc wrapSingleFile*(
     wrapConf: WrapConfig = baseWrapConfig,
     parseConf: ParseConfig = baseCppParseConfig,
     postprocess: seq[Postprocess] = defaultPostprocessSteps
-  ): seq[NimDecl[PNode]] =
+  ): tuple[decls: seq[NimDecl[PNode]], codegen: seq[CxxCodegen]] =
   ## Generate wrapper for a single file.
   ##
   ##`wrapConf` provide user-defined implementation heuristics for necessary
@@ -475,6 +475,10 @@ proc wrapSingleFile*(
   ## passed to each postprocess in sequential order (if you have three
   ## steps, `class C{};` wrapper will be passed to each of them, before
   ## being added to final result).
+  ##
+  ## Returns list of nim declarations with associated metadata
+  ## (instantiation info in codegen callback, comments etc.) and list of
+  ## C++ codegen files.
 
 
   var
@@ -509,7 +513,10 @@ proc wrapSingleFile*(
 
 
 
-  for node in wrapped.postprocessWrapped(wrapConf, postprocess):
+  let (wrapResults, codegen) = wrapped.postprocessWrapped(wrapConf, postprocess)
+  result.codegen = codegen
+
+  for node in wrapResults:
     if node.isMultitype:
       var resdecl: seq[PNimTypeDecl]
       for t in node.decls:
@@ -519,12 +526,12 @@ proc wrapSingleFile*(
         updateComments(decl, t)
         resdecl.add toNimTypeDecl(decl)
 
-      result.add toNimDecl(resdecl)
+      result.decls.add toNimDecl(resdecl)
     else:
       if node.hasCursor:
         var decl = node.wrapped
         updateComments(decl, node)
 
-        result.add decl
+        result.decls.add decl
       else:
-        result.add node.wrapped
+        result.decls.add node.wrapped
