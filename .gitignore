@@ -19,3 +19,5 @@ nimcache/
 callgrind.out.*
 nimdoc.cfg
 wrap-examples.rst
+**/*.out
+**/*cache*
