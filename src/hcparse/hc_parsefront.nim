@@ -460,7 +460,7 @@ proc wrapSingleFile*(
     errorReparseVerbose: bool = false,
     wrapConf: WrapConfig = baseWrapConfig,
     parseConf: ParseConfig = baseCppParseConfig,
-    postprocess: seq[Postprocess] = defaultPostprocessSteps
+    postprocess: seq[Postprocess] = defaultPostprocessSteps,
   ): tuple[decls: seq[NimDecl[PNode]], codegen: seq[CxxCodegen]] =
   ## Generate wrapper for a single file.
   ##

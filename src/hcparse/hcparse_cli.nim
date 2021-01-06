@@ -17,11 +17,15 @@ proc wrapCpp*(
   ) =
 
   let pconf = baseCppParseConfig.withIt do:
+    if not isImportcpp:
+      it.globalFlags = @[]
+
     for fl in includePaths:
       it.globalFlags.add "-I" & fl.getStr()
 
     for fl in globalFlags:
       it.globalFlags.add fl
+
 
   let wconf = baseWrapConfig.withIt do:
     discard

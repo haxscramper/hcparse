@@ -5,7 +5,7 @@ import std/[
 
 import hcparse/[hcparse_cli, libclang]
 import hmisc/other/[oswrap, hshell, colorlogger]
-import hmisc/types/colorstring
+import hmisc/types/[colorstring, colortext]
 import hmisc/helpers
 import hasts/html_ast
 import hnimast
@@ -212,18 +212,8 @@ suite "WIP tests":
     "/tmp/main.nim".writeFile """
 import res_a
 
-var second = block:
-  var derived = newCppBaseNim[int]("hello".cstring)
-
-  derived.setBaseMethod proc(
-    this: var CppBaseNim[int], arg: cint) {.closure.} =
-      echo "Override callback with nim implementation ", arg
-
-  derived.baseMethod(12)
-
-  derived
-
-second.baseMethod(12333)
+test(initH(12))
+test()
 """
 
     execShell shCmd(nim).withIt do:
