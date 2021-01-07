@@ -499,7 +499,6 @@ proc wrapSingleFile*(
 
   wrapConf.unit = parsed.unit
   warn wrapConf.unit.getTranslationUnitCursor().cxKind()
-  # quit 0
 
   let wrapped = parsed.wrapFile(wrapConf, cache, index)
 
@@ -546,12 +545,3 @@ proc wrapSingleFile*(
         var decl = node.wrapped
         updateComments(decl, node)
         result.decls.add decl
-
-    # else:
-    #   case node.kin
-    #   if node.hasCursor:
-    #     var decl = node.wrapped
-    #     updateComments(decl, node)
-
-    #     result.decls.add decl
-    #   else:

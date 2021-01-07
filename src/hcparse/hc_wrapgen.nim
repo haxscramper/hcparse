@@ -138,7 +138,6 @@ proc wrapProcedure*(
 
   else:
     it.name = pr.getNimName()
-    # it.exported = true
 
     iflet (par = parent):
       it.genParams = par.genParams
@@ -148,9 +147,6 @@ proc wrapProcedure*(
         "Cannot wrap methods for non-cxx targets"
 
       it.iinfo = currIInfo()
-      # it.signature.pragma = newPPragma(
-      #   newPIdentColonString(
-      #     "importcpp",
       if pr.cursor.isStatic():
         let namespace = (@[parent.get()]).toCppImport()
         addThis = false
@@ -159,26 +155,16 @@ proc wrapProcedure*(
         it.icpp = &"#.{it.name}(@)"
 
       it.header = conf.makeHeader(pr.cursor, conf)
-        # # ),
-        # newExprColonExpr(
-        #   newPIdent "header",
-        #   .toNNode()))
 
     else:
-      # let pragma =
       if conf.isImportcpp:
         let namespace = pr.namespace.toCppImport()
-        # newPIdentColonString(
-        #   "importcpp",
         if namespace.len > 1:
           it.icpp = &"{namespace}::{it.name}(@)"
 
         else:
           it.icpp = &"{it.name}(@)"
-        # it.icpp = tern(namespace.len > 0,
-        #                , 
-        #                )
-        # )
+
       else:
         it.icpp = &"{it.name}"
 
@@ -189,15 +175,9 @@ proc wrapProcedure*(
     assert parent.isSome()
     it.args.add initCArg(
       "self", parent.get(), pr.cursor.isConstMethod.tern(nvdVar, nvdLet))
-    # it.signature.arguments.add PIdentDefs(
-    #   varname: "self",
-    #   vtype: parent.get(),
-    #   kind: )
-
 
   for arg in pr.args:
     var (vtype, mutable) = arg.cursor.cxType().toNType(conf)
-    # debug vtype
     if vtype.kind in {ntkIdent, ntkGenericSpec}:
       if vtype.head == "UNEXPOSED":
         # WARNING currently parameters which contain `tkUnexposed`
@@ -239,10 +219,6 @@ proc wrapProcedure*(
       # `operator T()`
       assert parent.isSome(), "Cannot wrap constructor without parent object"
 
-      # it.signature.setRType tern(asNewConstructor,
-      #                            ,
-      #                            )
-
       it.iinfo = currIInfo()
       it.header = conf.makeHeader(pr.cursor, conf)
       if asNewConstructor:
@@ -252,17 +228,6 @@ proc wrapProcedure*(
       else:
         it.retType = parent.get()
         it.icpp = &"{parent.get().head}(@)"
-      # it.signature.pragma = newPPragma(
-      #   newPIdentColonString(
-      #     "importcpp",
-      #     tern(,
-      #          ,
-      #     )
-      #   ),
-        # newExprColonExpr(
-        #   newPIdent "header",
-        #   .toNNode()))
-
   else:
     # Default handling of return types
     var (rtype, mutable) = toNType(pr.cursor.retType(), conf)
@@ -286,11 +251,6 @@ proc wrapProcedure*(
       # something like that)
       it.icpp = &"~{it.name}()"
       it.header = conf.makeHeader(pr.cursor, conf)
-      # it.signature.pragma = newPPragma(
-      #   newPIdentColonString("importcpp", ),
-      #   newExprColonExpr(
-      #     newPIdent "header",
-      #     .toNNode()))
 
   if pr.cursor.kind == ckDestructor:
     it.name = "destroy" & it.name
@@ -361,8 +321,6 @@ proc wrapMethods*(
   for decl in mitems(result):
     fixNames(decl.gproc, conf, parent)
 
-  # result = result.deduplicate()
-
 proc wrapFunction*(
     cd: CDecl, conf: WrapConfig, cache: var WrapCache
   ): seq[WrappedEntry] =
@@ -414,10 +372,6 @@ proc wrapAlias*(
   # `typedef struct A {} A, # *APtr` shit that can result in multple
   # declarations.
 
-  # debug "Alias"
-  # debug al.cursor.treeRepr()
-
-  # let importas = (parent & @[al.name]).toCppImport()
   var al = al
   al.name = al.inNamespace(parent)
   conf.fixTypeName(al.name, conf, 0)
@@ -461,13 +415,6 @@ proc wrapAlias*(
         let (obj, pre, post) = wrapObject(nested, conf, cache)
 
         result.add pre & @[obj] & post
-        # debug "Trailing struct", al.name.toNNode(), full.toNNode()
-
-        # result = @[newWrappedEntry(
-        #   toNimDecl(newAliasDecl(
-        #     al.name, full, iinfo = currIInfo())), al, al.cursor
-        # )]
-      # else:
 
       if al.name != full:
         # `typedef struct {} A;` has the same typedef name and type, and
@@ -479,11 +426,6 @@ proc wrapAlias*(
             isDistinct = false,
           )), al, al.cursor
         )
-
-      # warn "Ignoring alias"
-      # debug al.cursor.treeRepr()
-      # debug al.cursor[0].cxKind()
-      # result = newWrappedEntry()
 
 proc getParentFields*(
     inCursor: CXCursor, obj: PObjectDecl, wrapConf: WrapConfig
@@ -788,14 +730,6 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
             stringif:
               declEn.inNamespace(declEn.namespace).head & "::" & name
           )
-
-
-    # debug flds
-    # debug vals
-
-    # debug repeated
-    # debug fldVals
-    # debug enfields
 
 
     result.add newWrappedEntry(toNimDecl(implEn), declEn, declEn.cursor)
