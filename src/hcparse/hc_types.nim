@@ -1,7 +1,7 @@
 import gram, cxtypes, cxcommon
 import hmisc/other/oswrap
 import hnimast, hnimast/pprint
-import std/[tables, sets, strutils, sequtils, hashes, strformat]
+import std/[tables, sets, strutils, sequtils, hashes, strformat, macros]
 import hmisc/algo/[hseq_mapping, hstring_algo]
 
 const HeaderGraphFlags* = toInt({
@@ -27,7 +27,14 @@ type
 
   CArg* = object
     name*: string
-    cursor*: CXCursor
+    case isRaw*: bool
+      of true:
+        cursor*: CXCursor
+
+      of false:
+        varkind*: NVarDeclKind
+        ntype*: NType[PNode]
+
 
   CXOperatorKind* = enum
     ## Classification for operators
@@ -188,13 +195,18 @@ type
 
   GenProc* = object
     ## Generated wrapped proc
+    iinfo*: LineInfo
     name*: string ## Name of the generated proc on nim side
     icpp*: string ## `importcpp` pattern string
     private*: bool ## Generated proc should be private?
     args*: seq[CArg]
-    pragmas*: PNode ## Additional pragmas on top of `importcpp`
+    retType*: NType[PNode]
+    genParams*: seq[NType[PNode]]
+    declType*: ProcDeclType
+    header*: NimHeaderSpec
+    pragma*: PPragma ## Additional pragmas on top of `importcpp`
     kind*: ProcKind ## Kind of generated nim proc
-    cursor*: CXCursor ## Original cursor for proc declaration
+    cursor* {.requiresinit.}: CXCursor ## Original cursor for proc declaration
 
   WrappedEntryKind* = enum
     wekMultitype
@@ -282,6 +294,9 @@ func newWrappedEntry*(
   )
 
 
+func newWrappedEntry*(gproc: GenProc): WrappedEntry =
+  WrappedEntry(gproc: gproc, kind: wekProc)
+
 func newWrappedEntry*(wrapped: seq[WrappedEntry]): WrappedEntry =
   WrappedEntry(decls: wrapped, kind: wekMultitype)
 
@@ -340,6 +355,24 @@ func methods*(cd: CDecl, kinds: set[CXCursorKind]): seq[CDecl] =
     if (member.kind == cdkMethod) and (member.cursor.cxKind in kinds):
       result.add member
 
+func initCArg*(
+    name: string, ntype: NType[PNode], varkind: NVarDeclKind = nvdLet
+  ): CArg =
+
+  CArg(isRaw: false, name: name, ntype: ntype, varkind: varkind)
+
+
+func initCArg*(
+    name: string, ntype: NType[PNode], mutable: bool = false
+  ): CArg =
+
+  initCArg(name, ntype, if mutable: nvdVar else: nvdLet)
+
+func initCArg*(name: string, cursor: CXCursor): CArg =
+  CArg(isRaw: true, name: name, cursor: cursor)
+
+func initGenProc*(cursor: CXCursor): GenProc =
+  GenProc(cursor: cursor)
 
 #==========================  Helper utilities  ===========================#
 proc declHash*(cursor: CXCursor): Hash =

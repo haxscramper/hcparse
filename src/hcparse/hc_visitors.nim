@@ -33,7 +33,7 @@ proc getArguments*(cursor: CXCursor): seq[CArg] =
       if name.len == 0:
         name = "a" & $idx
 
-      result.add CArg(name: name, cursor: subn)
+      result.add initCArg(name, subn)
 
 
 proc argsSignature*(

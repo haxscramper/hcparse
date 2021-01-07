@@ -1,4 +1,4 @@
-import std/[strutils, sequtils, strformat, tables, lenientops, bitops]
+import std/[strutils, sequtils, strformat, tables, lenientops, bitops, with]
 
 import hc_types, cxtypes, cxcommon, libclang_wrap, hc_typeconv
 
@@ -15,31 +15,26 @@ proc wrapOperator*(
     oper: CDecl,
     genParams: seq[NType[PNode]],
     conf: WrapConfig
-  ): tuple[decl: PProcDecl, addThis: bool] =
+  ): tuple[decl: GenProc, addThis: bool] =
 
-  var it = PProcDecl()
+  var it = initGenProc(oper.cursor)
 
   it.iinfo = currIInfo()
-  it.signature = newProcNType[PNode](@[])
   it.name = oper.getNimName()
   it.genParams = genParams
-  it.exported = true
 
   assert conf.isImportcpp
   let kind = oper.classifyOperator()
   it.kind = pkOperator
 
   if kind == cxoAsgnOp and it.name == "setFrom":
-    it.signature.pragma = newPPragma(
-      newPIdentColonString("importcpp", &"# = #"))
-
+    it.icpp = &"# = #"
     it.kind = pkRegular
 
   else:
     case kind:
       of cxoAsgnOp:
-        it.signature.pragma = newPPragma(
-          newPIdentColonString("importcpp", &"# {it.name} #"))
+        it.icpp = &"# {it.name} #"
 
       of cxoArrayOp:
         let rtype = oper.cursor.retType()
@@ -47,28 +42,22 @@ proc wrapOperator*(
         if mutable:
           it.name = "[]="
           # WARNING potential source of horrible c++ codegen errors
-          it.signature.pragma = newPPragma(
-            newPIdentColonString("importcpp", &"#[#]= #"))
+          it.icpp = &"#[#]= #"
 
         else:
-          it.signature.pragma = newPPragma(
-            newPIdentColonString("importcpp", &"#[#]"))
-
-
+          it.icpp = &"#[#]"
 
       of cxoInfixOp:
         let namespace = (oper.namespace & newPType("operator")).toCppImport()
 
-        it.signature.pragma = newPPragma(
-          newPIdentColonString("importcpp", &"{namespace}{it.name}(#, #)"))
+        it.icpp = &"{namespace}{it.name}(#, #)"
 
         if oper.args.len == 1:
           result.addThis = true
 
       of cxoArrowOp:
         # WARNING
-        it.signature.pragma = newPPragma(
-          newPIdentColonString("importcpp", &"#.operator->(@)"))
+        it.icpp = &"#.operator->(@)"
 
       of cxoCallOp:
         # NOTE nim does have experimental support for call
@@ -76,52 +65,40 @@ proc wrapOperator*(
         # separate function `call()`
         it.name = "call"
         it.kind = pkRegular
-        it.signature.pragma = newPPragma(
-          newPIdentColonString("importcpp", &"#(@)"))
+        it.icpp = &"#(@)"
 
       of cxoDerefOp:
         it.name = "[]"
-        it.signature.pragma = newPPragma(
-          newPIdentColonString("importcpp", &"*#"))
+        it.icpp = &"*#"
 
       of cxoPrefixOp:
-        it.signature.pragma = newPPragma(
-          newPIdentColonString("importcpp", &"{it.name}#"))
+        it.icpp = &"{it.name}#"
 
       of cxoCommaOp:
         it.name = "commaOp"
-        it.signature.pragma = newPPragma(
-          newPIdentColonString("importcpp", &"commaOp(@)"))
-
+        it.icpp = &"commaOp(@)"
         it.kind = pkRegular
 
       of cxoConvertOp:
         let restype = oper.cursor.retType().toNType(conf).ntype
 
-        it.name = "to" & capitalizeAscii(restype.head)
-        it.signature.pragma = newPPragma(
-          newPIdentColonString("importcpp", &"@"))
-
-
-        it.signature.setRType(restype)
-        it.declType = ptkConverter
-        it.kind = pkRegular
+        with it:
+          name = "to" & capitalizeAscii(restype.head)
+          icpp = &"@"
+          retType = resType
+          declType = ptkConverter
+          kind = pkRegular
 
       of cxoUserLitOp:
         let restype = oper.cursor.retType().toNType(conf).ntype
 
-        it.name = "to" & capitalizeAscii(restype.head)
-        it.signature.pragma = newPPragma(
-          newPIdentColonString("importcpp", &"{oper.cursor}(@)"))
+        with it:
+          name = "to" & capitalizeAscii(restype.head)
+          icpp = &"{oper.cursor}(@)"
+          retType = restype
+          kind = pkRegular
 
-        it.signature.setRType(restype)
-        it.kind = pkRegular
-
-  it.signature.pragma.add newExprColonExpr(
-    newPIdent "header",
-    conf.makeHeader(oper.cursor, conf).toNNode()
-  )
-
+  it.header = conf.makeHeader(oper.cursor, conf)
   result.decl = it
   result.addThis = result.addThis or
     (kind in {
@@ -138,7 +115,7 @@ proc wrapProcedure*(
     asNewConstructor: bool
   ): tuple[decl: WrappedEntry, canAdd: bool] =
 
-  var it = PProcDecl()
+  var it = initGenProc(pr.cursor)
   var addThis = (
     pr.kind == cdkMethod and
     pr.cursor.cxKind notin {
@@ -160,9 +137,8 @@ proc wrapProcedure*(
     addThis = adt
 
   else:
-    it.signature = newProcNType[PNode](@[])
     it.name = pr.getNimName()
-    it.exported = true
+    # it.exported = true
 
     iflet (par = parent):
       it.genParams = par.genParams
@@ -172,48 +148,51 @@ proc wrapProcedure*(
         "Cannot wrap methods for non-cxx targets"
 
       it.iinfo = currIInfo()
-      it.signature.pragma = newPPragma(
-        newPIdentColonString(
-          "importcpp",
-          if pr.cursor.isStatic():
-            let namespace = (@[parent.get()]).toCppImport()
-            addThis = false
-            &"{namespace}::{it.name}(@)"
-          else:
-            &"#.{it.name}(@)"
-        ),
-        newExprColonExpr(
-          newPIdent "header",
-          conf.makeHeader(pr.cursor, conf).toNNode()))
+      # it.signature.pragma = newPPragma(
+      #   newPIdentColonString(
+      #     "importcpp",
+      if pr.cursor.isStatic():
+        let namespace = (@[parent.get()]).toCppImport()
+        addThis = false
+        it.icpp = &"{namespace}::{it.name}(@)"
+      else:
+        it.icpp = &"#.{it.name}(@)"
+
+      it.header = conf.makeHeader(pr.cursor, conf)
+        # # ),
+        # newExprColonExpr(
+        #   newPIdent "header",
+        #   .toNNode()))
 
     else:
-      let pragma =
-        if conf.isImportcpp:
-          let namespace = pr.namespace.toCppImport()
-          newPIdentColonString(
-            "importcpp",
-            tern(namespace.len > 0,
-                 &"{namespace}::{it.name}(@)",
-                 &"{it.name}(@)"
-            )
-          )
+      # let pragma =
+      if conf.isImportcpp:
+        let namespace = pr.namespace.toCppImport()
+        # newPIdentColonString(
+        #   "importcpp",
+        if namespace.len > 1:
+          it.icpp = &"{namespace}::{it.name}(@)"
+
         else:
-          newPIdentColonString("importc", &"{it.name}")
+          it.icpp = &"{it.name}(@)"
+        # it.icpp = tern(namespace.len > 0,
+        #                , 
+        #                )
+        # )
+      else:
+        it.icpp = &"{it.name}"
 
       it.iinfo = currIInfo()
-      it.signature.pragma = newPPragma(
-        pragma, newExprColonExpr(
-          newPIdent "header",
-          conf.makeHeader(pr.cursor, conf).toNNode()
-        )
-      )
+      it.header = conf.makeHeader(pr.cursor, conf)
 
   if addThis:
     assert parent.isSome()
-    it.signature.arguments.add PIdentDefs(
-      varname: "self",
-      vtype: parent.get(),
-      kind: pr.cursor.isConstMethod.tern(nvdVar, nvdLet))
+    it.args.add initCArg(
+      "self", parent.get(), pr.cursor.isConstMethod.tern(nvdVar, nvdLet))
+    # it.signature.arguments.add PIdentDefs(
+    #   varname: "self",
+    #   vtype: parent.get(),
+    #   kind: )
 
 
   for arg in pr.args:
@@ -246,15 +225,12 @@ proc wrapProcedure*(
       # handling should be implemented
       vtype.pragma.add newPident("cdecl")
 
-    it.signature.arguments.add PIdentDefs(
-      varname: fixIdentName(arg.name),
-      vtype: vtype,
-      kind: mutable.tern(nvdVar, nvdLet))
+    it.args.add initCArg(fixIdentName(arg.name), vtype, mutable)
 
 
   if pr.isOperator and pr.classifyOperator() == cxoAsgnOp:
     # Force override return type for assignment operators
-    it.signature.setRType newPType("void")
+    it.retType = newPType("void")
 
   elif pr.cursor.kind in {ckConstructor, ckConversionFunction}:
     # Override handling of return types for constructors
@@ -263,22 +239,29 @@ proc wrapProcedure*(
       # `operator T()`
       assert parent.isSome(), "Cannot wrap constructor without parent object"
 
-      it.signature.setRType tern(asNewConstructor,
-                                 newNType("ptr", @[parent.get()]),
-                                 parent.get())
+      # it.signature.setRType tern(asNewConstructor,
+      #                            ,
+      #                            )
 
       it.iinfo = currIInfo()
-      it.signature.pragma = newPPragma(
-        newPIdentColonString(
-          "importcpp",
-          tern(asNewConstructor,
-               &"new {parent.get().head}(@)",
-               &"{parent.get().head}(@)"
-          )
-        ),
-        newExprColonExpr(
-          newPIdent "header",
-          conf.makeHeader(pr.cursor, conf).toNNode()))
+      it.header = conf.makeHeader(pr.cursor, conf)
+      if asNewConstructor:
+        it.retType = newNType("ptr", @[parent.get()])
+        it.icpp = &"new {parent.get().head}(@)"
+
+      else:
+        it.retType = parent.get()
+        it.icpp = &"{parent.get().head}(@)"
+      # it.signature.pragma = newPPragma(
+      #   newPIdentColonString(
+      #     "importcpp",
+      #     tern(,
+      #          ,
+      #     )
+      #   ),
+        # newExprColonExpr(
+        #   newPIdent "header",
+        #   .toNNode()))
 
   else:
     # Default handling of return types
@@ -291,7 +274,7 @@ proc wrapProcedure*(
 
       rtype.genParams = parent.get().genParams
 
-    it.signature.setRtype rtype
+    it.retType = rtype
 
     if rtype.hasUnexposed():
       # WARNING dropping all methods that use `tkUnexposed` type
@@ -301,11 +284,13 @@ proc wrapProcedure*(
     if pr.cursor.cxkind == ckDestructor:
       # Implicitly calling destructor on object (if someone ever needs
       # something like that)
-      it.signature.pragma = newPPragma(
-        newPIdentColonString("importcpp", &"~{it.name}()"),
-        newExprColonExpr(
-          newPIdent "header",
-          conf.makeHeader(pr.cursor, conf).toNNode()))
+      it.icpp = &"~{it.name}()"
+      it.header = conf.makeHeader(pr.cursor, conf)
+      # it.signature.pragma = newPPragma(
+      #   newPIdentColonString("importcpp", ),
+      #   newExprColonExpr(
+      #     newPIdent "header",
+      #     .toNNode()))
 
   if pr.cursor.kind == ckDestructor:
     it.name = "destroy" & it.name
@@ -316,9 +301,9 @@ proc wrapProcedure*(
         it.name.capitalizeAscii()
 
   if pr.cursor.isVariadic() == 1:
-    it.signature.pragma.add newPIdent("varargs")
+    it.pragma.add newPIdent("varargs")
 
-  result.decl = newWrappedEntry(toNimDecl(it), pr, pr.cursor)
+  result.decl = newWrappedEntry(it)
 
 
 proc fixNames(ppd: var PProcDecl,
