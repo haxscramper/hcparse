@@ -27,13 +27,16 @@ proc asGlobalInclude*(cursor: CXCursor, conf: WrapConfig): string =
   return $loc.file
 
 proc fixTypeName*(str: string, idx: int, conf: WrapConfig): string =
+  ## Correct C++ type name to be used in nim wrappers. Convert `::` to
+  ## joined name, use correct upper/lowercasing (nep1 style). 
   if str.len == 0:
     return "T" & $idx
+
   elif str in @[
     "bool", "cint", "cuint", "ptr", "void", "char",
     "cuchar", "cstring", "cchar", "uint32", "uint16",
     "culong", "clong", "cshort", "cushort", "array",
-    "ushort",
+    "ushort", "cfloat"
   ]:
     return str
   else:

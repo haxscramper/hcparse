@@ -11,14 +11,24 @@ import hmisc/types/colorstring
 
 import hc_visitors, hc_types
 
+proc toInitCall*(cursor: CXCursor, conf: WrapConfig): PNode =
+  case cursor.cxKind():
+    # of ckUnexposedExpr:
+
+    else:
+      err "Implement for kind", cursor.cxKind()
+      debug cursor.treeRepr(conf.unit)
+      raiseAssert("#[ IMPLEMENT ]#")
+
 proc setDefaultForArg*(arg: var CArg, cursor: CXCursor, conf: WrapConfig) =
   ## Update default value for argument.
   ## - @arg{arg} :: Non-raw argument to update default for
   ## - @arg{cursor} :: original cursor for argument declaration
   ## - @arg{conf} :: Default wrap configuration
 
-  if cursor.len == 2:
+  if cursor.len == 2 and cursor[1].cxKind() == ckUnexposedExpr:
     debug cursor.treeRepr(conf.unit)
+    # arg.default = some(toInitCall(cursor[1], conf))
 
 proc wrapOperator*(
     oper: CDecl,

@@ -1079,25 +1079,6 @@ proc getPointerWidth*(info: CXTargetInfo): cint {.cdecl, dynlib: libclang,
   ##  Returns -1 in case of error.
 type
   CXCursorKind* = enum ##  Describes the kind of entity that a cursor refers to.
-                    ## **SKipped enum values**
-                    ## - CXCursor_FirstDecl = CXCursor_UnexposedDecl
-                    ## - CXCursor_LastDecl = CXCursor_CXXAccessSpecifier
-                    ## - CXCursor_ObjCSuperClassRef = 40
-                    ## - CXCursor_LastRef = CXCursor_VariableRef
-                    ## - CXCursor_InvalidFile = 70
-                    ## - CXCursor_LastInvalid = CXCursor_InvalidCode
-                    ## - CXCursor_UnexposedExpr = 100
-                    ## - CXCursor_LastExpr = CXCursor_FixedPointLiteral
-                    ## - CXCursor_UnexposedStmt = 200
-                    ## - CXCursor_AsmStmt = CXCursor_GCCAsmStmt
-                    ## - CXCursor_LastStmt = CXCursor_OMPParallelMasterDirective
-                    ## - CXCursor_UnexposedAttr = 400
-                    ## - CXCursor_LastAttr = CXCursor_AlignedAttr
-                    ## - CXCursor_MacroInstantiation = CXCursor_MacroExpansion
-                    ## - CXCursor_FirstPreprocessing = CXCursor_PreprocessingDirective
-                    ## - CXCursor_LastPreprocessing = CXCursor_InclusionDirective
-                    ## - CXCursor_FirstExtraDecl = CXCursor_ModuleImportDecl
-                    ## - CXCursor_LastExtraDecl = CXCursor_FriendDecl
     ckUnexposedDecl = 1, ##  A declaration whose specific kind is not exposed via this
                       ##  interface.
                       ##  Unexposed declarations have the same operations as any other kind
@@ -1421,6 +1402,28 @@ type
     ckTypeAliasTemplateDecl = 601, ckStaticAssert = 602, ##  A static_assert or _Static_assert node
     ckFriendDecl = 603,         ##  a friend declaration.
     ckOverloadCandidate = 700   ##  A code completion overload candidate.
+
+const
+  ckFirstDecl*          = ckUnexposedDecl
+  ckLastDecl*           = ckAccessSpecifier
+  ckObjCSuperClassRef*  = ckFirstRef
+  ckLastRef*            = ckVariableRef
+  ckInvalidFile*        = ckFirstInvalid
+  ckLastInvalid*        = ckInvalidCode
+  ckUnexposedExpr*      = ckFirstExpr
+  ckLastExpr*           = ckFixedPointLiteral
+  ckUnexposedStmt*      = ckFirstStmt
+  ckAsmStmt*            = ckGCCAsmStmt
+  ckLastStmt*           = ckOMPParallelMasterDirective
+  ckUnexposedAttr*      = ckFirstAttr
+  ckLastAttr*           = ckAlignedAttr
+  ckMacroInstantiation* = ckMacroExpansion
+  ckFirstPreprocessing* = ckPreprocessingDirective
+  ckLastPreprocessing*  = ckInclusionDirective
+  ckFirstExtraDecl*     = ckModuleImportDecl
+  ckLastExtraDecl*      = ckFriendDecl
+
+
 type
   CXCursor* {.pure, bycopy.} = object
     kind*: CXCursorKind
