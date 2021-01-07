@@ -140,7 +140,7 @@ proc x11DocAnnotation(
     if name in annotTable:
       # debug "Annotate", name
       # debug annotTable[name]
-      we.wrapped.procdecl.docComment = annotTable[name]
+      we.mwrapped.procdecl.docComment = annotTable[name]
 
 suite "X11 garbage wrap test":
   test "X11":

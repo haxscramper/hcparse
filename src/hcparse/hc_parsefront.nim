@@ -517,10 +517,10 @@ proc wrapSingleFile*(
   result.codegen = codegen
 
   for node in wrapResults:
-    if node.isMultitype:
+    if node.kind == wekMultitype:
       var resdecl: seq[PNimTypeDecl]
       for t in node.decls:
-        assert not t.isMultitype
+        assert t.kind != wekMultitype
         var decl = t.wrapped
 
         updateComments(decl, t)

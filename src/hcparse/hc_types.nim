@@ -186,18 +186,47 @@ type
     hset: HashSet[Hash]
     visited: HashSet[cuint]
 
+  GenProc* = object
+    ## Generated wrapped proc
+    name*: string ## Name of the generated proc on nim side
+    icpp*: string ## `importcpp` pattern string
+    private*: bool ## Generated proc should be private?
+    args*: seq[CArg]
+    pragmas*: PNode ## Additional pragmas on top of `importcpp`
+    kind*: ProcKind ## Kind of generated nim proc
+    cursor*: CXCursor ## Original cursor for proc declaration
+
+  WrappedEntryKind* = enum
+    wekMultitype
+    wekProc
+    wekNimDecl
+    wekNimPass
+
   WrappedEntry* = object
-    case isMultitype*: bool
-      of true:
+    case kind*: WrappedEntryKind
+      of wekMultitype:
         decls*: seq[WrappedEntry]
-      of false:
-        wrapped*: PNimDecl
-        case isPassthrough*: bool
-          of true:
-            postTypes*: bool
-          of false:
-            original*: CDecl
-            cursor*: CXCursor
+
+      of wekProc:
+        gproc*: GenProc
+
+      of wekNimDecl:
+        wrapped: PNimDecl
+        original*: CDecl
+        cursor*: CXCursor
+
+      of wekNimPass:
+        npass: PNimDecl
+        postTypes*: bool
+
+
+    # case isMultitype*: bool
+    #   of true:
+    #   of false:
+    #     wrapped*: PNimDecl
+    #     case isPassthrough*: bool
+    #       of true:
+    #       of false:
 
   Postprocess* = object
     impl*: proc(we: var WrappedEntry,
@@ -219,8 +248,17 @@ type
     filename*: RelFile
 
 
+template impl1() {.dirty.} =
+  case we.kind:
+    of wekNimDecl: result = we.wrapped
+    of wekNimPass: result = we.npass
+    else: raiseAssert(&"Cannot get wrpped for kind {we.kind}")
 
-func hasCursor*(we: WrappedEntry): bool = not we.isPassthrough
+proc wrapped*(we: WrappedEntry): PNimDecl {.inline.} = impl1()
+proc mWrapped*(we: var WrappedEntry): var PNimDecl {.inline.} = impl1()
+
+func hasCursor*(we: WrappedEntry): bool =
+  (we.kind in {wekNimDecl, wekProc})
 
 func `$`*(we: WrappedEntry): string = $we.wrapped
 func `$`*(we: seq[WrappedEntry]): string =
@@ -237,23 +275,21 @@ func newWrappedEntry*(
   ): WrappedEntry =
 
   WrappedEntry(
+    kind: wekNimDecl,
     wrapped: wrapped,
     original: original,
-    cursor: source,
-    isPassthrough: false,
-    isMultitype: false
+    cursor: source
   )
 
 
 func newWrappedEntry*(wrapped: seq[WrappedEntry]): WrappedEntry =
-  WrappedEntry(decls: wrapped, isMultitype: true)
+  WrappedEntry(decls: wrapped, kind: wekMultitype)
 
 func newWrappedEntry*(
     wrapped: PNimDecl, postTypes: bool = false
   ): WrappedEntry =
 
-  WrappedEntry(wrapped: wrapped, isPassthrough: true,
-               isMultitype: false, postTypes: postTypes)
+  WrappedEntry(npass: wrapped, kind: wekNimPass, postTypes: postTypes)
 
 proc accs*(self: CDecl): CX_AccessSpecifier =
   if contains({cdkField}, self.kind):

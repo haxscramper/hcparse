@@ -183,7 +183,7 @@ proc callbackOverride*(
   ): seq[WrappedEntry] {.nimcall.} =
 
   ## Generate additional derivation for each encountered class.
-  if we.isMultitype:
+  if we.kind == wekMultitype:
     for entry in we.decls:
       if entry.wrapped.kind == nekObjectDecl:
         info "Object decl", entry.cursor

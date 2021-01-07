@@ -13,15 +13,15 @@ proc nimifyInfixOperators*(
     codegen: var seq[CxxCodegen]
   ): seq[WrappedEntry] {.nimcall.} =
 
-  if we.isMultitype:
+  if we.kind == wekMultitype:
     return
 
   var we = we
-  we.wrapped.iinfo = currIInfo()
+  we.mwrapped.iinfo = currIInfo()
 
   if we.wrapped.kind == nekProcDecl and
      we.wrapped.procdecl.kind == pkOperator:
-    var opd {.byaddr.} = we.wrapped.procdecl
+    var opd {.byaddr.} = we.mwrapped.procdecl
     case opd.name:
       of "<<":
         opd.name = "shl"
@@ -44,10 +44,10 @@ proc nep1Idents*(
     codegen: var seq[CxxCodegen]
   ): seq[WrappedEntry] {.nimcall.} =
 
-  if not we.isMultitype:
+  if we.kind == wekNimDecl:
     if we.wrapped.kind == nekProcDecl and
        we.wrapped.procdecl.kind == pkRegular:
-      we.wrapped.procdecl.name[0] = toLowerAscii(we.wrapped.procdecl.name[0])
+      we.mwrapped.procdecl.name[0] = toLowerAscii(we.wrapped.procdecl.name[0])
 
 proc enumOverloads*(
     we: var WrappedEntry,
@@ -55,7 +55,7 @@ proc enumOverloads*(
     codegen: var seq[CxxCodegen]
   ): seq[WrappedEntry] {.nimcall.} =
 
-  if we.isMultitype:
+  if we.kind == wekMultitype:
     return
 
   if we.wrapped.kind == nekProcDecl:
@@ -66,7 +66,7 @@ proc enumOverloads*(
 
     # info enArgs
 
-    var pr {.byaddr.} = we.wrapped.procdecl
+    var pr {.byaddr.} = we.mwrapped.procdecl
     if enArgs.len > 0:
       var reproc = we.wrapped.procdecl
       reproc.iinfo = currIInfo()

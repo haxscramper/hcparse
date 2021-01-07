@@ -373,7 +373,7 @@ proc wrapMethods*(
 
 
   for decl in mitems(result):
-    fixNames(decl.wrapped.procdecl, conf, parent)
+    fixNames(decl.mwrapped.procdecl, conf, parent)
 
   result = result.deduplicate()
 
