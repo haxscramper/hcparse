@@ -34,6 +34,7 @@ type
       of false:
         varkind*: NVarDeclKind
         ntype*: NType[PNode]
+        default*: Option[PNode]
 
 
   CXOperatorKind* = enum

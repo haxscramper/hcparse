@@ -11,6 +11,15 @@ import hmisc/types/colorstring
 
 import hc_visitors, hc_types
 
+proc setDefaultForArg*(arg: var CArg, cursor: CXCursor, conf: WrapConfig) =
+  ## Update default value for argument.
+  ## - @arg{arg} :: Non-raw argument to update default for
+  ## - @arg{cursor} :: original cursor for argument declaration
+  ## - @arg{conf} :: Default wrap configuration
+
+  if cursor.len == 2:
+    debug cursor.treeRepr(conf.unit)
+
 proc wrapOperator*(
     oper: CDecl,
     genParams: seq[NType[PNode]],
@@ -205,7 +214,9 @@ proc wrapProcedure*(
       # handling should be implemented
       vtype.pragma.add newPident("cdecl")
 
-    it.args.add initCArg(fixIdentName(arg.name), vtype, mutable)
+    var newArg = initCArg(fixIdentName(arg.name), vtype, mutable)
+    setDefaultForArg(newArg, arg.cursor, conf)
+    it.args.add newArg
 
 
   if pr.isOperator and pr.classifyOperator() == cxoAsgnOp:
@@ -866,12 +877,19 @@ proc getNType*(carg: CArg): NType[PNode] =
 proc toNNode*(gp: GenProc): PProcDecl =
   result = newPProcDecl(
     name = gp.name,
-    args = gp.args.mapIt((it.name, it.getNType())),
     iinfo = gp.iinfo,
     exported = true,
     rtyp = some(gp.retType),
     genParams = gp.genParams,
   )
+
+  for arg in gp.args:
+    result.signature.arguments.add newNIdentDefs(
+      vname = arg.name,
+      value = arg.default,
+      vtype = arg.getNTYpe(),
+      kind = arg.varkind
+    )
 
   result.signature.pragma = gp.pragma
 

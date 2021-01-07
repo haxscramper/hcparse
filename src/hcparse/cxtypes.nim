@@ -678,7 +678,9 @@ proc objTreeRepr*(
 
   if cursor.len  == 0:
     let val = pptconst(
-      cursor.tokens(tu).join(" "), initprintstyling(fg = fggreen))
+      cursor.tokens(tu).mapIt(
+        getTokenSpelling(tu, it)
+      ).join(" "), initprintstyling(fg = fggreen))
     var flds = if showtype: @[ctype, val] else: @[val]
 
     if cursor.cxKind in {ckMacroExpansion}:
