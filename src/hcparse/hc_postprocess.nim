@@ -13,7 +13,7 @@ proc nimifyInfixOperators*(
     codegen: var seq[CxxCodegen]
   ): seq[WrappedEntry] {.nimcall.} =
 
-  if we.kind == wekMultitype:
+  if we.kind != wekNimDecl:
     return
 
   var we = we
@@ -55,7 +55,7 @@ proc enumOverloads*(
     codegen: var seq[CxxCodegen]
   ): seq[WrappedEntry] {.nimcall.} =
 
-  if we.kind == wekMultitype:
+  if we.kind != wekNimDecl:
     return
 
   if we.wrapped.kind == nekProcDecl:
@@ -63,8 +63,6 @@ proc enumOverloads*(
       for idx, arg in we.cursor.getArguments():
         if arg.cursor.cxType().getTypeDeclaration().cxKind() in {ckEnumDecl}:
           (idx, arg)
-
-    # info enArgs
 
     var pr {.byaddr.} = we.mwrapped.procdecl
     if enArgs.len > 0:

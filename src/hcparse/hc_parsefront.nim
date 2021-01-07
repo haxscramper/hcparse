@@ -300,25 +300,26 @@ proc wrapFile*(
   var res: Table[string, WrappedEntry]
 
   for elem in tmpRes:
-    if elem.wrapped.kind == nekObjectDecl:
-      let name = elem.wrapped.objectdecl.name.head
-      res[name] = elem
+    if elem.kind == wekNimDecl:
+      if elem.wrapped.kind == nekObjectDecl:
+        let name = elem.wrapped.objectdecl.name.head
+        res[name] = elem
 
 
-    elif elem.wrapped.kind == nekEnumDecl:
-      let name = elem.wrapped.enumdecl.name
-      res[name] = elem
+      elif elem.wrapped.kind == nekEnumDecl:
+        let name = elem.wrapped.enumdecl.name
+        res[name] = elem
 
-    elif elem.wrapped.kind == nekAliasDecl:
-      let name = elem.wrapped.aliasdecl.newType.head
-      if name in res:
-        warn "Override type alias for ", name
+      elif elem.wrapped.kind == nekAliasDecl:
+        let name = elem.wrapped.aliasdecl.newType.head
+        if name in res:
+          warn "Override type alias for ", name
 
-      res[name] = elem
+        res[name] = elem
 
-    elif elem.wrapped.kind == nekPasstroughCode:
-      if not elem.postTypes:
-        result.add elem
+      elif elem.wrapped.kind == nekPasstroughCode:
+        if not elem.postTypes:
+          result.add elem
 
 
   block:
@@ -329,14 +330,18 @@ proc wrapFile*(
     result.add(newWrappedEntry(elems))
 
   for elem in tmpRes:
-    if elem.wrapped.kind notin {
+    if elem.kind == wekProc or 
+      (elem.kind == wekProc and elem.wrapped.kind notin {
       nekObjectDecl, nekAliasDecl, nekPasstroughCode, nekEnumDecl
-    }:
+    }):
 
       result.add elem
 
-    elif elem.wrapped.kind == nekPasstroughCode and
-         elem.postTypes:
+    elif
+      elem.kind == wekNimPass or (
+      elem.kind == wekNimDecl and
+      elem.wrapped.kind == nekPasstroughCode
+      ) and elem.postTypes:
 
       result.add elem
 
@@ -502,11 +507,11 @@ proc wrapSingleFile*(
     decl.addCodeComment(
       "Wrapper for `" &
       (
-        node.cursor.getSemanticNamespaces(filterInline = false)).join("::") &
+        node.getCursor().getSemanticNamespaces(filterInline = false)).join("::") &
       "`\n"
     )
 
-    if node.cursor.getSpellingLocation().getSome(loc):
+    if node.getCursor().getSpellingLocation().getSome(loc):
       decl.addCodeComment(
         &"Declared in {loc.file}:{loc.line}")
 
@@ -517,21 +522,36 @@ proc wrapSingleFile*(
   result.codegen = codegen
 
   for node in wrapResults:
-    if node.kind == wekMultitype:
-      var resdecl: seq[PNimTypeDecl]
-      for t in node.decls:
-        assert t.kind != wekMultitype
-        var decl = t.wrapped
+    case node.kind:
+      of wekMultitype:
+        var resdecl: seq[PNimTypeDecl]
+        for t in node.decls:
+          assert t.kind != wekMultitype
+          var decl = t.wrapped
 
-        updateComments(decl, t)
-        resdecl.add toNimTypeDecl(decl)
+          updateComments(decl, t)
+          resdecl.add toNimTypeDecl(decl)
 
-      result.decls.add toNimDecl(resdecl)
-    else:
-      if node.hasCursor:
+        result.decls.add toNimDecl(resdecl)
+
+      of wekProc:
+        var decl = node.gproc.toNNode().toNimDecl()
+        updateComments(decl, node)
+        result.decls.add decl
+
+      of wekNimPass:
+        result.decls.add node.wrapped
+
+      of wekNimDecl:
         var decl = node.wrapped
         updateComments(decl, node)
-
         result.decls.add decl
-      else:
-        result.decls.add node.wrapped
+
+    # else:
+    #   case node.kin
+    #   if node.hasCursor:
+    #     var decl = node.wrapped
+    #     updateComments(decl, node)
+
+    #     result.decls.add decl
+    #   else:

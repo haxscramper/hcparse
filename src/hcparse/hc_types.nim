@@ -272,6 +272,12 @@ proc mWrapped*(we: var WrappedEntry): var PNimDecl {.inline.} = impl1()
 func hasCursor*(we: WrappedEntry): bool =
   (we.kind in {wekNimDecl, wekProc})
 
+func getCursor*(we: WrappedEntry): CXCursor =
+  case we.kind:
+    of wekNimDecl: result = we.cursor
+    of wekProc: result = we.gproc.cursor
+    else: raiseAssert(&"No cursor for kind {we.kind}")
+
 func `$`*(we: WrappedEntry): string = $we.wrapped
 func `$`*(we: seq[WrappedEntry]): string =
   {.cast(noSideEffect).}:

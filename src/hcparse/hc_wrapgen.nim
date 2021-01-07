@@ -306,19 +306,20 @@ proc wrapProcedure*(
   result.decl = newWrappedEntry(it)
 
 
-proc fixNames(ppd: var PProcDecl,
-              conf: WrapConfig, parent: NType[PNode]) =
+proc fixNames(
+  ppd: var GenProc, conf: WrapConfig, parent: NType[PNode]) =
+
   var idx: int = 0
   for param in mitems(ppd.genParams):
     conf.fixTypeName(param, conf, 0)
     inc idx
 
   idx = 0
-  for arg in mitems(ppd.signature.arguments):
-    conf.fixTypeName(arg.vtype, conf, idx)
+  for arg in mitems(ppd.args):
+    conf.fixTypeName(arg.ntype, conf, idx)
     inc idx
 
-  conf.fixTypeName(ppd.signature.rtype.get().getIt(), conf, 0)
+  conf.fixTypeName(ppd.retType, conf, 0)
 
   ppd.name = ppd.name.fixIdentName()
 
@@ -358,9 +359,9 @@ proc wrapMethods*(
 
 
   for decl in mitems(result):
-    fixNames(decl.mwrapped.procdecl, conf, parent)
+    fixNames(decl.gproc, conf, parent)
 
-  result = result.deduplicate()
+  # result = result.deduplicate()
 
 proc wrapFunction*(
     cd: CDecl, conf: WrapConfig, cache: var WrapCache
@@ -920,3 +921,29 @@ proc wrapApiUnit*(
         debug decl.kind
 
   result.add wrapMacros(macrolist, conf)
+
+proc getNType*(carg: CArg): NType[PNode] =
+  if carg.isRaw:
+    raiseAssert("#[ IMPLEMENT ]#")
+
+  else:
+    return carg.ntype
+
+proc toNNode*(gp: GenProc): PProcDecl =
+  result = newPProcDecl(
+    name = gp.name,
+    args = gp.args.mapIt((it.name, it.getNType())),
+    iinfo = gp.iinfo,
+    exported = true,
+    rtyp = some(gp.retType),
+    genParams = gp.genParams,
+  )
+
+  result.signature.pragma = gp.pragma
+
+  result.signature.pragma.add(
+    newPIdentColonString("importcpp", gp.icpp))
+
+  result.signature.pragma.add(
+    newExprColonExpr(newPIdent "header", gp.header.toNNode()))
+
