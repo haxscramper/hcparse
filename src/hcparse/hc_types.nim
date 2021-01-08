@@ -390,7 +390,7 @@ func initCArg*(
 
 
 func initCArg*(
-    name: string, ntype: NType[PNode], mutable: bool = false
+    name: string, ntype: NType[PNode], mutable: bool
   ): CArg =
 
   initCArg(name, ntype, if mutable: nvdVar else: nvdLet)

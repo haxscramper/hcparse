@@ -1815,6 +1815,10 @@ type
     tkOCLIntelSubgroupAVCImeResultDualRefStreamout = 173,
     tkOCLIntelSubgroupAVCImeSingleRefStreamin = 174,
     tkOCLIntelSubgroupAVCImeDualRefStreamin = 175, tkExtVector = 176
+
+const
+  tkTypeRef* = tkRecord
+
 type
   CXCallingConv* = enum ##  Describes the calling convention of a function type
                      ## **SKipped enum values**

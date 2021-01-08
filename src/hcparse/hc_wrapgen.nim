@@ -12,64 +12,76 @@ import hmisc/types/colorstring
 import hc_visitors, hc_types
 
 proc toInitCall*(cursor: CXCursor, conf: WrapConfig): PNode =
-  case cursor.cxKind():
-    of ckUnexposedExpr:
-      result = toInitCall(cursor[0], conf)
-
-    of ckCallExpr:
-      case cursor[0].cxKind():
-        of ckUnexposedExpr, ckCallExpr, ckFunctionalCastExpr:
-          result = toInitCall(cursor[0], conf)
-
-        of ckIntegerLiteral:
-          result = cursor[0].toInitCall(conf)
+  proc aux(cursor: CXCursor, ilist: bool): PNode = 
+    case cursor.cxKind():
+      of ckUnexposedExpr:
+        if startsWith($cursor[0].cxType(), "std::initializer_list"):
+          result = aux(cursor[0], true)
 
         else:
-          info cursor[0].cxKind()
-          debug "\n" & cursor.treeRepr(conf.unit)
-          raiseAssert("#[ IMPLEMENT ]#")
+          result = aux(cursor[0], false)
+
+      of ckCallExpr:
+        case cursor[0].cxKind():
+          of ckUnexposedExpr, ckCallExpr, ckFunctionalCastExpr:
+            result = aux(cursor[0], ilist)
+
+          of ckIntegerLiteral:
+            result = cursor[0].aux(ilist)
+
+          else:
+            info cursor[0].cxKind()
+            debug "\n" & cursor.treeRepr(conf.unit)
+            raiseAssert("#[ IMPLEMENT ]#")
 
 
-      let str = "init" & $cursor.cxType()
-      if result.kind in nkTokenKinds:
-        result = newPCall(str, result)
+        let str = "init" & $cursor.cxType()
+        if result.kind in nkTokenKinds:
+          result = newPCall(str, result)
 
-      elif result.kind == nkCall and
-           result[0].getStrVal() != str:
-        debug result[0]
-        debug newPIdent(str)
-        result = newPCall(str, result)
+        elif result.kind == nkCall and
+             result[0].getStrVal() != str:
+          result = newPCall(str, result)
 
 
-    of ckFunctionalCastExpr:
-      result = toInitCall(cursor[1], conf)
+      of ckFunctionalCastExpr:
+        result = aux(cursor[1], ilist)
 
-    of ckInitListExpr:
-      result = newPCall("cxxInitList")
-      for arg in cursor:
-        result.add toInitCall(arg, conf)
-
-    of ckIntegerLiteral, ckCharacterLiteral, ckFloatingLiteral:
-      let tokens = cursor.tokenStrings(conf.unit)
-
-      case cursor.cxKind():
-        of ckIntegerLiteral:
-          result = newPCall("cint", newPLit(parseInt(tokens[0])))
-
-        of ckCharacterLiteral:
-          result = newPLit(tokens[0][1])
-
-        of ckFloatingLiteral:
-          result = newPLit(parseFloat(tokens[0]))
+      of ckInitListExpr:
+        debug "Creating initList"
+        debug ilist
+        if ilist:
+          result = newPCall("cxxInitList")
 
         else:
-          discard
+          result = newPCall("init" & $cursor.cxType())
 
-    else:
-      err "Implement for kind", cursor.cxKind()
-      debug cursor.tokenStrings(conf.unit)
-      debug cursor.treeRepr(conf.unit)
-      raiseAssert("#[ IMPLEMENT ]#")
+        for arg in cursor:
+          result.add aux(arg, false)
+
+      of ckIntegerLiteral, ckCharacterLiteral, ckFloatingLiteral:
+        let tokens = cursor.tokenStrings(conf.unit)
+
+        case cursor.cxKind():
+          of ckIntegerLiteral:
+            result = newPCall("cint", newPLit(parseInt(tokens[0])))
+
+          of ckCharacterLiteral:
+            result = newPLit(tokens[0][1])
+
+          of ckFloatingLiteral:
+            result = newPLit(parseFloat(tokens[0]))
+
+          else:
+            discard
+
+      else:
+        err "Implement for kind", cursor.cxKind()
+        debug cursor.tokenStrings(conf.unit)
+        debug cursor.treeRepr(conf.unit)
+        raiseAssert("#[ IMPLEMENT ]#")
+
+  return aux(cursor, false)
 
 proc setDefaultForArg*(arg: var CArg, cursor: CXCursor, conf: WrapConfig) =
   ## Update default value for argument.
@@ -77,7 +89,9 @@ proc setDefaultForArg*(arg: var CArg, cursor: CXCursor, conf: WrapConfig) =
   ## - @arg{cursor} :: original cursor for argument declaration
   ## - @arg{conf} :: Default wrap configuration
 
-  if cursor.len == 2 and cursor[1].cxKind() == ckUnexposedExpr:
+  info cursor.len
+  if cursor.len == 2 and
+     cursor[1].cxKind() in {ckUnexposedExpr, ckInitListExpr}:
     debug cursor.treeRepr(conf.unit)
     arg.default = some(toInitCall(cursor[1], conf))
     debug arg.default
@@ -209,6 +223,7 @@ proc wrapProcedure*(
 
   else:
     it.name = pr.getNimName()
+    it.iinfo = currIInfo()
 
     iflet (par = parent):
       it.genParams = par.genParams
@@ -239,7 +254,6 @@ proc wrapProcedure*(
       else:
         it.icpp = &"{it.name}"
 
-      it.iinfo = currIInfo()
       it.header = conf.makeHeader(pr.cursor, conf)
 
   if addThis:
@@ -549,6 +563,54 @@ proc getParentFields*(
 
 proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry]
 
+proc isAggregateInitable*(cd: CDecl, initArgs: var seq[CArg], conf: WrapConfig): bool =
+  ## Determine if entry pointed to by `cd`'s cursor is subject to aggregate
+  ## initalization. Add all fields for aggregate initalization into
+  ## @arg{initArgs}. NOTE: fields will be added unconditionally, so first
+  ## check return value.
+
+  # List of entries that immediately mean aggregate initalization is not
+  # supported.
+  const failKinds = {
+    ckConstructor
+  }
+
+  proc aux(cursor: CXCursor): bool =
+    ## Recursively determine if cursor points to type that is subject to
+    ## aggregate initalization.
+    case cursor.cxType().cxKind():
+      of tkPodKinds:
+        return true
+
+      of tkTypeRef:
+        for entry in cursor.cxType().getTypeDeclaration():
+          if not aux(entry):
+            return false
+
+        return true
+
+      else:
+        debug cast[int](cursor.cxType().cxKind())
+        err cursor.cxType()
+        raiseAssert("#[ IMPLEMENT ]#")
+
+  result = true
+  for entry in cd.cursor:
+    case entry.cxKind():
+      of ckFieldDecl:
+        debug entry.treeRepr()
+        if aux(entry):
+          var arg = initCArg($entry, entry.cxType().toNType(conf).ntype, false)
+          setDefaultForArg(arg, entry, conf)
+          initArgs.add arg
+
+      of failKinds:
+        return false
+
+      else:
+        raiseAssert(&"#[ IMPLEMENT for kind {entry.kind} ]#")
+
+
 proc wrapObject*(
     cd: CDecl, conf: WrapConfig, cache: var WrapCache
   ): tuple[
@@ -562,6 +624,22 @@ proc wrapObject*(
     name: cd.inNamespace(cd.namespace),
     exported: true, iinfo: currIInfo(),
   )
+
+  block:
+    var initArgs: seq[CArg]
+    if isAggregateInitable(cd, initArgs, conf):
+      info obj.name.head, "can be aggregate initialized"
+      result.genAfter.add newWrappedEntry(
+        initGenProc(CXCursor()).withIt do:
+          it.name = "init" & obj.name.head
+          it.args = initArgs
+          it.header = conf.makeHeader(cd.cursor, conf)
+          it.icpp = &"{cd.cursor}({{@}})"
+          it.retType = obj.name
+      )
+
+    else:
+      warn obj.name.head, "no aggr init"
 
   for entry in cd.cursor:
     case entry.cxKind():
@@ -630,7 +708,7 @@ proc wrapObject*(
   if cd.cursor.cxKind() == ckUnionDecl:
     obj.annotation.get().add newPIdent("union")
 
-  result.genAfter = cd.wrapMethods(conf, obj.name, cache)
+  result.genAfter.add cd.wrapMethods(conf, obj.name, cache)
   conf.fixTypeName(obj.name, conf, 0)
 
   for mem in cd.members:
