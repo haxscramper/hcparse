@@ -336,19 +336,20 @@ proc splitDeclarations*(
   var res: CApiUnit
   tuCursor.visitChildren do:
     makeVisitor [tu, res, conf, tuCursor]:
-      # debug cursor.cxKind()
       let resolve = conf.depResolver(cursor, tuCursor)
       if resolve == drkWrapDirectly:
         let (decls, rec, incls) = visitCursor(cursor, @[], conf)
         res.includes.add incls
         if rec:
           return cvrRecurse
+
         else:
           res.decls.add decls
           for decl in decls:
             res.publicAPI.add decl.getPublicAPI()
 
           return cvrContinue
+
       else:
         return cvrRecurse
 

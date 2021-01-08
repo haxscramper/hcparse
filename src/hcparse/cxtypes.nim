@@ -266,7 +266,7 @@ proc getFile*(tu: CXTranslationUnit): AbsFile =
 
 proc getTuFile*(cx: CXCursor): AbsFile =
   assert cx.kind == ckTranslationUnit
-  AbsFile($cx)
+  AbsFile($getCursorSpelling(cx))
 
 #*************************************************************************#
 #******************************  CXCursor  *******************************#

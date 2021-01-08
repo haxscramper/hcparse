@@ -126,6 +126,7 @@ proc parseFile*(
 
 
   file.assertExists()
+  info "Parsing file", file
   identLog()
 
   let flags = config.getFlags(file)
@@ -146,7 +147,6 @@ proc parseFile*(
     err file.realpath
     debug config.getFlags(file).joinl()
     raise
-
 
   result.api = result.unit.splitDeclarations(wrapConf)
   result.explicitDeps = result.api.publicApi.
@@ -280,7 +280,7 @@ proc wrapFile*(
   ## type declarations are deduplicated and combined into single
   ## `WrappedEntry` multitype declaration.
 
-  # info "Wrapping", parsed.filename
+  info "Wrapping", parsed.filename
   var tmpRes: seq[WrappedEntry]
   tmpRes.add newWrappedEntry(
     toNimDecl(
@@ -482,6 +482,10 @@ proc wrapSingleFile*(
   ): tuple[decls: seq[NimDecl[PNode]], codegen: seq[CxxCodegen]] =
   ## Generate wrapper for a single file.
   ##
+  ## - @arg{postprocess} :: collection of postprocessing actions on
+  ##  generated delarations, before they are converter to sequence of
+  ##  `NimDecl`
+  ##
   ##`wrapConf` provide user-defined implementation heuristics for necessary
   ## edge cases (see `WrapConfig` type documentation). `postprocess` is a
   ## sequence of postprocessing actions that will be run on generated
@@ -511,7 +515,7 @@ proc wrapSingleFile*(
   var wrapConf = wrapConf
 
   wrapConf.unit = parsed.unit
-  # warn wrapConf.unit.getTranslationUnitCursor().cxKind()
+  info "Wrapping file", file
 
   let wrapped = parsed.wrapFile(wrapConf, cache, index)
 

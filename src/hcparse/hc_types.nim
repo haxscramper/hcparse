@@ -262,6 +262,13 @@ template impl1() {.dirty.} =
 proc wrapped*(we: WrappedEntry): PNimDecl {.inline.} = impl1()
 proc mWrapped*(we: var WrappedEntry): var PNimDecl {.inline.} = impl1()
 
+proc initHeaderSpec*(file: AbsFile): NimHeaderSpec =
+  NimHeaderSpec(kind: nhskAbsolute, file: file)
+
+proc initHeaderSpec*(global: string): NimHeaderSpec =
+  NimHeaderSpec(kind: nhskGlobal, global: global)
+
+
 func hasCursor*(we: WrappedEntry): bool =
   (we.kind in {wekNimDecl, wekProc})
 

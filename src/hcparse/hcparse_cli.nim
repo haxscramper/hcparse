@@ -31,46 +31,19 @@ proc wrapCpp*(
   let wconf = baseWrapConfig.withIt do:
     discard
 
-  let (wrapped, codegen) = wrapSingleFile(
-    file,
-    errorReparseVerbose,
-    wrapConf = wconf,
-    parseConf = pconf
+  writeWrapped(
+    wrapSingleFile(
+      file,
+      errorReparseVerbose,
+      wrapConf = wconf,
+      parseConf = pconf
+    ),
+    outFile,
+    codegens,
+    compile,
+    wconf
   )
 
-  var filenames: HashSet[string]
-  withStreamFile(outFile):
-    for gen in codegen:
-      if gen.filename.hasExt("cpp") and $gen.filename notin filenames:
-        let res = gen.filename.withBasePrefix("gen_")
-        file.writeLine(&"{{.compile: \"{res}\".}}")
-        filenames.incl $gen.filename
-
-    for gen in compile:
-      file.writeLine(&"{{.compile: \"{gen}\".}}")
-
-
-    for entry in wrapped:
-      # stdout.write(entry)
-      file.write(entry)
-
-  var resFiles: Table[string, File]
-
-  if codegens.isSome():
-    for gen in codegen:
-      let target = codegens.get() / gen.filename
-      # info "Writing generated code into", target
-      # debug gen.code
-      if $target notin resFiles:
-        let res = target.withBasePrefix("gen_")
-        resFiles[$target] = open($res, fmWrite)
-        resFiles[$target].write(gen.header)
-
-      resFiles[$target].write(gen.code)
-
-  for _, file in pairs(resFiles):
-    file.close()
-      # writeFile(target, gen.code)
 
 when isMainModule:
   dispatchMulti(

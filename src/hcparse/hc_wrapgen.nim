@@ -1,4 +1,5 @@
-import std/[strutils, sequtils, strformat, tables, lenientops, bitops, with]
+import std/[strutils, sequtils, strformat, tables, lenientops,
+            bitops, with, sets]
 
 import hc_types, cxtypes, cxcommon, libclang_wrap, hc_typeconv
 
@@ -578,21 +579,35 @@ proc isAggregateInitable*(cd: CDecl, initArgs: var seq[CArg], conf: WrapConfig):
     ckConstructor
   }
 
+  const ignoreKinds = {
+    ckTemplateTypeParameter,
+    ckTypedefDecl,
+    ckAccessSpecifier,
+  }
+
   proc aux(cursor: CXCursor): bool =
     ## Recursively determine if cursor points to type that is subject to
     ## aggregate initalization.
+    debug cursor.treeRepr(conf.unit)
     case cursor.cxType().cxKind():
       of tkPodKinds:
         return true
 
       of tkTypeRef:
         for entry in cursor.cxType().getTypeDeclaration():
-          if not aux(entry):
+          if (entry.cxKind() notin ignoreKinds) and (not aux(entry)):
             return false
 
         return true
 
+      of tkTypedef:
+        return aux(cursor.cxType().getCanonicalType().getTypeDeclaration())
+
+      of tkInvalid:
+        return false
+
       else:
+        debug cursor.cxType().cxKind()
         debug cast[int](cursor.cxType().cxKind())
         err cursor.cxType()
         raiseAssert("#[ IMPLEMENT ]#")
@@ -610,7 +625,11 @@ proc isAggregateInitable*(cd: CDecl, initArgs: var seq[CArg], conf: WrapConfig):
       of failKinds:
         return false
 
+      of ignoreKinds:
+        discard
+
       else:
+        debug entry.treeRepr(conf.unit)
         raiseAssert(&"#[ IMPLEMENT for kind {entry.kind} ]#")
 
 
@@ -1051,3 +1070,50 @@ proc toNNode*(gp: GenProc): PProcDecl =
   result.signature.pragma.add(
     newExprColonExpr(newPIdent "header", gp.header.toNNode()))
 
+
+proc writeWrapped*(
+    res: tuple[decls: seq[NimDecl[PNode]], codegen: seq[CxxCodegen]],
+    outFile: FsFile,
+    codegens: Option[FsDir],
+    compile: seq[FsFile],
+    wrapConf: WrapConfig
+  ) =
+  ## Write generated wrappers to single file
+  ##
+  ## - @arg{res} :: Generated wrappers - just pass results of
+  ##  `wrapSingleFile`
+  ## - @arg{outFile} :: target file to write generated nim code to
+  ## - @arg{codegens} :: directory for saving codegen files
+  ## - @arg{compile} :: Additional list of files to add as `{.compile.}`
+  ## - @arg{wrapConf} :: Wrap configuration state object
+
+  var filenames: HashSet[string]
+  withNewStreamFile(outFile):
+    for gen in res.codegen:
+      if gen.filename.hasExt("cpp") and $gen.filename notin filenames:
+        let res = gen.filename.withBasePrefix("gen_")
+        file.writeLine(&"{{.compile: \"{res}\".}}")
+        filenames.incl $gen.filename
+
+    for gen in compile:
+      file.writeLine(&"{{.compile: \"{gen}\".}}")
+
+    for entry in res.decls:
+      file.write(entry)
+
+  var resFiles: Table[string, File]
+
+  if codegens.isSome():
+    for gen in res.codegen:
+      let target = codegens.get() / gen.filename
+      let res = target.withBasePrefix("gen_")
+      # info "Writing generated code into", res
+      if $target notin resFiles:
+        resFiles[$target] = open($res, fmWrite)
+        resFiles[$target].write(gen.header)
+
+      resFiles[$target].write(gen.code)
+
+  for _, file in pairs(resFiles):
+    file.close()
+      # writeFile(target, gen.code)
