@@ -16,6 +16,10 @@
 - [X] Follow typedef alias dependencies
 - [ ] Wrap alias as ~type A = B~ instead of declaring separate object
 - [ ] Do not create constructors procs for abstract classes
+- [ ] Make closure override opt-in instead of opt-out feature as it largely
+  useless for most libraries.
+  - [ ] operator overloading reimplementation is broken and needs partial
+    logic refactoring to fix.
 
 * TODO Todo list
   :PROPERTIES:
