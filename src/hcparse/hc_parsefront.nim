@@ -297,29 +297,42 @@ proc wrapFile*(
 
   tmpRes.add parsed.api.wrapApiUnit(conf, cache, index)
 
+  # Coollect all types into single wrapped entry type block. All duplicate
+  # types (caused by forward declarations which is not really possible to
+  # differentiated) will be overwritten. This should be fine I guess,
+  # because you can't declare type again after defining it (I hope), so all
+  # last type encounter will always be it's definition.
   var res: Table[string, WrappedEntry]
 
   for elem in tmpRes:
     if elem.kind == wekNimDecl:
-      if elem.wrapped.kind == nekObjectDecl:
-        let name = elem.wrapped.objectdecl.name.head
-        res[name] = elem
+      case elem.wrapped.kind:
+        # Filter out all type declarations.
+        of nekObjectDecl:
+          let name = elem.wrapped.objectdecl.name.head
+          res[name] = elem
 
+        of nekEnumDecl:
+          let name = elem.wrapped.enumdecl.name
+          res[name] = elem
 
-      elif elem.wrapped.kind == nekEnumDecl:
-        let name = elem.wrapped.enumdecl.name
-        res[name] = elem
+        of nekAliasDecl:
+          let name = elem.wrapped.aliasdecl.newType.head
+          if name in res:
+            warn "Override type alias for ", name
 
-      elif elem.wrapped.kind == nekAliasDecl:
-        let name = elem.wrapped.aliasdecl.newType.head
-        if name in res:
-          warn "Override type alias for ", name
+          res[name] = elem
 
-        res[name] = elem
+        of nekPasstroughCode:
+          raiseAssert("Passthrough code blocks should use `wekNimPass`")
 
-      elif elem.wrapped.kind == nekPasstroughCode:
-        if not elem.postTypes:
-          result.add elem
+        of nekProcDecl, nekMultitype:
+          discard
+
+    elif elem.kind == wekNimPass and
+         not elem.postTypes:
+      # Immediately append non-`postTypes` declarations
+      result.add elem
 
 
   block:

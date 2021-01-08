@@ -342,6 +342,8 @@ proc wrapMethods*(
   for decl in mitems(result):
     fixNames(decl.gproc, conf, parent)
 
+  result = result.deduplicate()
+
 proc wrapFunction*(
     cd: CDecl, conf: WrapConfig, cache: var WrapCache
   ): seq[WrappedEntry] =
@@ -418,6 +420,7 @@ proc wrapAlias*(
       ),
       al, al.cursor
     )]
+
   else:
     if al.cursor[0].cxKind() notin {ckStructDecl}:
       # NOTE ignore `typedef struct` in C
@@ -425,6 +428,7 @@ proc wrapAlias*(
         toNimDecl(newAliasDecl(
           al.name, full, iinfo = currIInfo())), al, al.cursor
       )]
+      
     else:
       if cache.canWrap(al.cursor[0]):
         # Multiple trailing typedefs result in several `ckTypedefDecl`
@@ -850,6 +854,7 @@ proc wrapApiUnit*(
 
         if spec.cxKind() != ckFirstInvalid:
           discard
+
         else:
           let (obj, procs, other) = decl.wrapObject(conf, cache)
 
@@ -861,17 +866,21 @@ proc wrapApiUnit*(
           for pr in procs:
             result.add pr
 
-
         dedentLog()
+
       of cdkAlias:
         result.add decl.wrapAlias(decl.namespace, conf, cache)
+
       of cdkEnum:
         result.add decl.wrapEnum(conf)
+
       of cdkFunction:
         for f in decl.wrapFunction(conf, cache):
           result.add f
+
       of cdkMacro:
         macrolist.add decl
+
       else:
         debug decl.kind
 

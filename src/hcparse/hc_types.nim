@@ -232,15 +232,6 @@ type
         npass: PNimDecl
         postTypes*: bool
 
-
-    # case isMultitype*: bool
-    #   of true:
-    #   of false:
-    #     wrapped*: PNimDecl
-    #     case isPassthrough*: bool
-    #       of true:
-    #       of false:
-
   Postprocess* = object
     impl*: proc(we: var WrappedEntry,
                 conf: WrapConfig,
@@ -284,8 +275,37 @@ func `$`*(we: seq[WrappedEntry]): string =
   {.cast(noSideEffect).}:
     we.mapPairs(rhs.wrapped.toNNode().toPString()).join("\n")
 
+func `==`*(a, b: NimHeaderSpec): bool =
+  a.kind == b.kind and ((
+    case a.kind:
+      of nhskGlobal: a.global == b.global
+      of nhskAbsolute: a.file == b.file
+      of nhskPNode: a.pnode == b.pnode
+  ))
+
+func `==`*(a, b: CArg): bool =
+  a.name == b.name and
+  a.isRaw == b.isRaw and ((
+    if a.isRaw:
+      a.cursor == b.cursor
+
+    else:
+      a.varkind == b.varkind and
+      a.ntype == b.ntype and
+      a.default == b.default
+  ))
+
 func `==`*(a, b: WrappedEntry): bool =
-  hnimast.`==`[Pnode](a.wrapped, b.wrapped)
+  a.kind == b.kind and
+  ((
+    case a.kind:
+      of wekProc: a.gproc == b.gproc
+      of wekMultitype: a.decls == b.decls
+      of wekNimDecl: hnimast.`==`(a.wrapped, b.wrapped)
+      of wekNimPass: hnimast.`==`(a.wrapped, b.wrapped) and
+                     a.postTypes == b.postTypes
+  ))
+  # hnimast.`==`[Pnode](a.wrapped, b.wrapped)
   # (a.wrapped == b.wrapped)
 
 

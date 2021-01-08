@@ -212,8 +212,8 @@ suite "WIP tests":
     "/tmp/main.nim".writeFile """
 import res_a
 
-test(initH(12))
-test()
+test1(initH(12))
+test1()
 """
 
     execShell shCmd(nim).withIt do:
