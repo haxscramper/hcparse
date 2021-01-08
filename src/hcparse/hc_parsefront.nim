@@ -280,7 +280,7 @@ proc wrapFile*(
   ## type declarations are deduplicated and combined into single
   ## `WrappedEntry` multitype declaration.
 
-  info "Wrapping", parsed.filename
+  # info "Wrapping", parsed.filename
   var tmpRes: seq[WrappedEntry]
   tmpRes.add newWrappedEntry(
     toNimDecl(
@@ -511,7 +511,7 @@ proc wrapSingleFile*(
   var wrapConf = wrapConf
 
   wrapConf.unit = parsed.unit
-  warn wrapConf.unit.getTranslationUnitCursor().cxKind()
+  # warn wrapConf.unit.getTranslationUnitCursor().cxKind()
 
   let wrapped = parsed.wrapFile(wrapConf, cache, index)
 

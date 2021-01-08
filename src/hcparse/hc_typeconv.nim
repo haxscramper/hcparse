@@ -30,7 +30,7 @@ proc fromElaboratedPType*(cxtype: CXType, conf: WrapConfig): NType[PNode] =
         result = newPType(cxtype.getTypeName(conf))
 
       of ckClassDecl, ckStructDecl:
-        debug "Class decl"
+        # debug "Class decl"
         let params = cxtype.genParams()
         result = newPType(cxtype.getTypeName(conf))
         for idx, parm in params:

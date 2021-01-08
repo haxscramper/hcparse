@@ -15,11 +15,13 @@ proc toInitCall*(cursor: CXCursor, conf: WrapConfig): PNode =
   proc aux(cursor: CXCursor, ilist: bool): PNode = 
     case cursor.cxKind():
       of ckUnexposedExpr:
-        if startsWith($cursor[0].cxType(), "std::initializer_list"):
+        # info $cursor.cxType()
+        if startsWith($cursor.cxType(), "std::initializer_list"):
+          # info "Found init list"
           result = aux(cursor[0], true)
 
         else:
-          result = aux(cursor[0], false)
+          result = aux(cursor[0], ilist)
 
       of ckCallExpr:
         case cursor[0].cxKind():
@@ -48,8 +50,9 @@ proc toInitCall*(cursor: CXCursor, conf: WrapConfig): PNode =
         result = aux(cursor[1], ilist)
 
       of ckInitListExpr:
-        debug "Creating initList"
-        debug ilist
+        # debug "Creating initList"
+        # debug ilist
+        # raiseAssert("#[ IMPLEMENT ]#")
         if ilist:
           result = newPCall("cxxInitList")
 
@@ -89,12 +92,12 @@ proc setDefaultForArg*(arg: var CArg, cursor: CXCursor, conf: WrapConfig) =
   ## - @arg{cursor} :: original cursor for argument declaration
   ## - @arg{conf} :: Default wrap configuration
 
-  info cursor.len
+  # info cursor.len
   if cursor.len == 2 and
      cursor[1].cxKind() in {ckUnexposedExpr, ckInitListExpr}:
-    debug cursor.treeRepr(conf.unit)
+    # debug cursor.treeRepr(conf.unit)
     arg.default = some(toInitCall(cursor[1], conf))
-    debug arg.default
+    # debug arg.default
 
 proc wrapOperator*(
     oper: CDecl,
@@ -598,7 +601,7 @@ proc isAggregateInitable*(cd: CDecl, initArgs: var seq[CArg], conf: WrapConfig):
   for entry in cd.cursor:
     case entry.cxKind():
       of ckFieldDecl:
-        debug entry.treeRepr()
+        # debug entry.treeRepr()
         if aux(entry):
           var arg = initCArg($entry, entry.cxType().toNType(conf).ntype, false)
           setDefaultForArg(arg, entry, conf)
@@ -628,7 +631,7 @@ proc wrapObject*(
   block:
     var initArgs: seq[CArg]
     if isAggregateInitable(cd, initArgs, conf):
-      info obj.name.head, "can be aggregate initialized"
+      # info obj.name.head, "can be aggregate initialized"
       result.genAfter.add newWrappedEntry(
         initGenProc(CXCursor()).withIt do:
           it.name = "init" & obj.name.head
@@ -638,8 +641,8 @@ proc wrapObject*(
           it.retType = obj.name
       )
 
-    else:
-      warn obj.name.head, "no aggr init"
+    # else:
+    #   warn obj.name.head, "no aggr init"
 
   for entry in cd.cursor:
     case entry.cxKind():

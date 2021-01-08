@@ -204,9 +204,10 @@ suite "WIP tests":
   test "test":
     startHax()
     wrapCpp(
-      srcd /. "wip.cpp",
+      srcd /. "wip_in.hpp",
       AbsFile("/tmp/res_a.nim"),
-      some AbsDir("/tmp/")
+      some AbsDir("/tmp/"),
+      compile = @[srcd /. "wip_in.cpp"]
     )
 
     "/tmp/main.nim".writeFile """

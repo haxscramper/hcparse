@@ -47,16 +47,19 @@ proc genConstructors(
       nargs = toNIdentDefs(args, conf)
       signArgs = argsSignature(args)
 
+
+    let iinfo1 = currIInfo()
     res.constructors.declarations.add &"""
 
-  // Declared in {currIInfo()}
-  {eName}NimRaw({signArgs});
+    // Declared in {iinfo1}
+    {eName}NimRaw({signArgs});
 
 """
 
+    let iinfo = currIInfo()
     res.constructors.definitions.add &"""
 
-// Declared in {currIInfo()}
+// Declared in {iinfo}
 {eName}NimRaw::{eName}NimRaw({signArgs}) :
   {eName}({argsSignature(args, types = false)}) {{
 
@@ -186,7 +189,7 @@ proc callbackOverride*(
   if we.kind == wekMultitype:
     for entry in we.decls:
       if entry.wrapped.kind == nekObjectDecl:
-        info "Object decl", entry.cursor
+        # info "Object decl", entry.cursor
         let eName = $entry.cursor
         let headerFile = entry.cursor.relSpellingFile().withExt("hpp")
         let inclSpec = conf.makeHeader(entry.cursor, conf)
@@ -295,11 +298,11 @@ proc callbackOverride*(
 
             # let overrideArgs = "void* userData, " &
             #   meth.argsSignature(names = false, wrap = (false, true))
-
+            let iinfo = currIInfo()
             let name = meth.getSemanticNamespaces().join("::")
             &"""
 
-    // Declared in {currIInfo()}
+    // Declared in {iinfo}
     // Override wrapper for `{name}`
     {meth.retType()} (*{meth}Wrap)({args}) = 0;
     void* {meth}Proc = 0;
@@ -315,9 +318,6 @@ proc callbackOverride*(
 
 
         let res = &"""
-#pragma once
-#include {inclFile}
-
 // Final overide struct
 struct {entry.cursor}NimRaw : public {entry.cursor} {{
     // Pointer to wrapper object
@@ -332,6 +332,10 @@ struct {entry.cursor}NimRaw : public {entry.cursor} {{
         codegen.add CxxCodegen(
           cursor: entry.cursor,
           code: res,
+          header: &"""
+#pragma once
+#include {inclFile}
+""",
           filename: headerFile
         )
 
@@ -358,12 +362,14 @@ struct {entry.cursor}NimRaw : public {entry.cursor} {{
 
 """
 
+        let iinfo = currIInfo()
         codegen.add CxxCodegen(
           cursor: entry.cursor,
-          code: &"""
+          header: &"""
+// Generated in {iinfo}
 #include "{headerFile}"
-// Generated in {currIInfo()}
-
+""",
+          code: &"""
 {constructors.definitions}
 
 {impls.join("\n")}

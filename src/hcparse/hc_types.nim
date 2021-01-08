@@ -249,6 +249,7 @@ type
     cursor*: CXCursor
     # TODO replace with htsparse AST tree
     code*: string
+    header*: string
     filename*: RelFile
 
 
