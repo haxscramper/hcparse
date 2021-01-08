@@ -13,10 +13,61 @@ import hc_visitors, hc_types
 
 proc toInitCall*(cursor: CXCursor, conf: WrapConfig): PNode =
   case cursor.cxKind():
-    # of ckUnexposedExpr:
+    of ckUnexposedExpr:
+      result = toInitCall(cursor[0], conf)
+
+    of ckCallExpr:
+      case cursor[0].cxKind():
+        of ckUnexposedExpr, ckCallExpr, ckFunctionalCastExpr:
+          result = toInitCall(cursor[0], conf)
+
+        of ckIntegerLiteral:
+          result = cursor[0].toInitCall(conf)
+
+        else:
+          info cursor[0].cxKind()
+          debug "\n" & cursor.treeRepr(conf.unit)
+          raiseAssert("#[ IMPLEMENT ]#")
+
+
+      let str = "init" & $cursor.cxType()
+      if result.kind in nkTokenKinds:
+        result = newPCall(str, result)
+
+      elif result.kind == nkCall and
+           result[0].getStrVal() != str:
+        debug result[0]
+        debug newPIdent(str)
+        result = newPCall(str, result)
+
+
+    of ckFunctionalCastExpr:
+      result = toInitCall(cursor[1], conf)
+
+    of ckInitListExpr:
+      result = newPCall("cxxInitList")
+      for arg in cursor:
+        result.add toInitCall(arg, conf)
+
+    of ckIntegerLiteral, ckCharacterLiteral, ckFloatingLiteral:
+      let tokens = cursor.tokenStrings(conf.unit)
+
+      case cursor.cxKind():
+        of ckIntegerLiteral:
+          result = newPCall("cint", newPLit(parseInt(tokens[0])))
+
+        of ckCharacterLiteral:
+          result = newPLit(tokens[0][1])
+
+        of ckFloatingLiteral:
+          result = newPLit(parseFloat(tokens[0]))
+
+        else:
+          discard
 
     else:
       err "Implement for kind", cursor.cxKind()
+      debug cursor.tokenStrings(conf.unit)
       debug cursor.treeRepr(conf.unit)
       raiseAssert("#[ IMPLEMENT ]#")
 
@@ -28,7 +79,8 @@ proc setDefaultForArg*(arg: var CArg, cursor: CXCursor, conf: WrapConfig) =
 
   if cursor.len == 2 and cursor[1].cxKind() == ckUnexposedExpr:
     debug cursor.treeRepr(conf.unit)
-    # arg.default = some(toInitCall(cursor[1], conf))
+    arg.default = some(toInitCall(cursor[1], conf))
+    debug arg.default
 
 proc wrapOperator*(
     oper: CDecl,
