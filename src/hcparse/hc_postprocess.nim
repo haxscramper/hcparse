@@ -103,5 +103,5 @@ defaultPostprocessSteps.add @[
   newPostprocess(nep1Idents),
   newPostprocess(nimifyInfixOperators),
   newPostprocess(enumOverloads),
-  newPostprocess(callbackOverride)
+  # newPostprocess(callbackOverride)
 ]

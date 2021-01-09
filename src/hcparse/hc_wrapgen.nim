@@ -13,7 +13,7 @@ import hmisc/types/colorstring
 import hc_visitors, hc_types
 
 proc toInitCall*(cursor: CXCursor, conf: WrapConfig): PNode =
-  proc aux(cursor: CXCursor, ilist: bool): PNode = 
+  proc aux(cursor: CXCursor, ilist: bool): PNode =
     case cursor.cxKind():
       of ckUnexposedExpr:
         # info $cursor.cxType()
@@ -106,9 +106,9 @@ proc wrapOperator*(
     conf: WrapConfig
   ): tuple[decl: GenProc, addThis: bool] =
 
-  var it = initGenProc(oper.cursor)
+  var it = initGenProc(oper.cursor, currIInfo())
 
-  it.iinfo = currIInfo()
+  # it.iinfo = currIInfo()
   it.name = oper.getNimName()
   it.genParams = genParams
 
@@ -204,7 +204,7 @@ proc wrapProcedure*(
     asNewConstructor: bool
   ): tuple[decl: WrappedEntry, canAdd: bool] =
 
-  var it = initGenProc(pr.cursor)
+  var it = initGenProc(pr.cursor, currIInfo())
   var addThis = (
     pr.kind == cdkMethod and
     pr.cursor.cxKind notin {
@@ -213,7 +213,7 @@ proc wrapProcedure*(
   )
 
   result.canAdd = true
-  it.iinfo = currIInfo()
+  # it.iinfo = currIInfo()
 
   if pr.isOperator():
     var genp: seq[NType[PNode]]
@@ -227,7 +227,7 @@ proc wrapProcedure*(
 
   else:
     it.name = pr.getNimName()
-    it.iinfo = currIInfo()
+    # it.iinfo = currIInfo()
 
     iflet (par = parent):
       it.genParams = par.genParams
@@ -498,7 +498,7 @@ proc wrapAlias*(
         toNimDecl(newAliasDecl(
           al.name, full, iinfo = currIInfo())), al, al.cursor
       )]
-      
+
     else:
       if cache.canWrap(al.cursor[0]):
         # Multiple trailing typedefs result in several `ckTypedefDecl`
@@ -588,7 +588,7 @@ proc isAggregateInitable*(cd: CDecl, initArgs: var seq[CArg], conf: WrapConfig):
   proc aux(cursor: CXCursor): bool =
     ## Recursively determine if cursor points to type that is subject to
     ## aggregate initalization.
-    debug cursor.treeRepr(conf.unit)
+    # debug cursor.treeRepr(conf.unit)
     case cursor.cxType().cxKind():
       of tkPodKinds:
         return true
@@ -647,17 +647,20 @@ proc wrapObject*(
     exported: true, iinfo: currIInfo(),
   )
 
+  conf.fixTypeName(obj.name, conf, 0)
+
   block:
     var initArgs: seq[CArg]
     if isAggregateInitable(cd, initArgs, conf):
       # info obj.name.head, "can be aggregate initialized"
       result.genAfter.add newWrappedEntry(
-        initGenProc(CXCursor()).withIt do:
+        initGenProc(CXCursor(), currIInfo()).withIt do:
           it.name = "init" & obj.name.head
           it.args = initArgs
           it.header = conf.makeHeader(cd.cursor, conf)
           it.icpp = &"{cd.cursor}({{@}})"
           it.retType = obj.name
+          it.genParams = obj.name.genParams
       )
 
     # else:
@@ -676,7 +679,7 @@ proc wrapObject*(
 
       of ckFieldDecl, ckMethod, ckFriendDecl,
          ckFunctionTemplate, ckAccessSpecifier,
-         ckConstructor, ckDestructor:
+         ckConstructor, ckDestructor, ckTypedefDecl:
         # Constructors, field access and other implementation parts have
         # already been added in `visitClass`, now we can ignore them
         # altogether.
@@ -708,7 +711,7 @@ proc wrapObject*(
 
       result.genBefore.add(pre & @[obj] & post)
 
-      resFld.fldType = obj.wrapped.objectDecl.name 
+      resFld.fldType = obj.wrapped.objectDecl.name
 
     else:
       resFld.fldType = fld.cursor.cxType().toNType(conf).ntype
@@ -731,7 +734,6 @@ proc wrapObject*(
     obj.annotation.get().add newPIdent("union")
 
   result.genAfter.add cd.wrapMethods(conf, obj.name, cache)
-  conf.fixTypeName(obj.name, conf, 0)
 
   for mem in cd.members:
     case mem.kind:
@@ -1052,6 +1054,8 @@ proc toNNode*(gp: GenProc): PProcDecl =
     exported = true,
     rtyp = some(gp.retType),
     genParams = gp.genParams,
+    declType = gp.declType,
+    kind = gp.kind
   )
 
   for arg in gp.args:
@@ -1061,6 +1065,8 @@ proc toNNode*(gp: GenProc): PProcDecl =
       vtype = arg.getNTYpe(),
       kind = arg.varkind
     )
+
+  result.docComment = gp.docs.join("\n")
 
   result.signature.pragma = gp.pragma
 

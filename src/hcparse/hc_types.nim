@@ -196,7 +196,7 @@ type
 
   GenProc* = object
     ## Generated wrapped proc
-    iinfo*: LineInfo
+    iinfo* {.requiresinit.}: LineInfo
     name*: string ## Name of the generated proc on nim side
     icpp*: string ## `importcpp` pattern string
     private*: bool ## Generated proc should be private?
@@ -208,6 +208,7 @@ type
     pragma*: PPragma ## Additional pragmas on top of `importcpp`
     kind*: ProcKind ## Kind of generated nim proc
     cursor* {.requiresinit.}: CXCursor ## Original cursor for proc declaration
+    docs*: seq[string]
 
   WrappedEntryKind* = enum
     wekMultitype
@@ -406,8 +407,8 @@ func initCArg*(
 func initCArg*(name: string, cursor: CXCursor): CArg =
   CArg(isRaw: true, name: name, cursor: cursor)
 
-func initGenProc*(cursor: CXCursor): GenProc =
-  GenProc(cursor: cursor)
+func initGenProc*(cursor: CXCursor, iinfo: LineInfo): GenProc =
+  GenProc(cursor: cursor, iinfo: iinfo)
 
 #==========================  Helper utilities  ===========================#
 proc declHash*(cursor: CXCursor): Hash =

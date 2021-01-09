@@ -343,7 +343,7 @@ proc wrapFile*(
     result.add(newWrappedEntry(elems))
 
   for elem in tmpRes:
-    if elem.kind == wekProc or 
+    if elem.kind == wekProc or
       (elem.kind == wekProc and elem.wrapped.kind notin {
       nekObjectDecl, nekAliasDecl, nekPasstroughCode, nekEnumDecl
     }):
@@ -551,7 +551,15 @@ proc wrapSingleFile*(
         result.decls.add toNimDecl(resdecl)
 
       of wekProc:
-        var decl = node.gproc.toNNode().toNimDecl()
+        var gproc = node.gproc
+#         let text = split($gproc.cursor.getRawCommentText(), "\n").mapIt("    " & it).join("\n")
+#         gproc.docs.add &"""
+# .. code-block::
+# {text}
+# """
+
+        var decl = gproc.toNNode().toNimDecl()
+
         updateComments(decl, node)
         result.decls.add decl
 
