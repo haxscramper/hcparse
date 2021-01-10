@@ -126,7 +126,7 @@ proc parseFile*(
 
 
   file.assertExists()
-  info "Parsing file", file
+  # info "Parsing file", file
   identLog()
 
   let flags = config.getFlags(file)
@@ -257,13 +257,6 @@ func makeImport*(names: seq[string]): PNode =
       nnkInfix.newPTree(newPident("/"), a, b))
   )
 
-# func makeExport*(names: seq[string]): PNode =
-#   nnkExportStmt.newPTree(
-#     names.mapIt(it.newPident()).foldl(
-#       nnkInfix.newPTree(newPident("/"), a, b))
-#   )
-
-
 proc getExports*(
   parsed: ParsedFile, conf: WrapConfig, index: FileIndex): seq[AbsFile] =
   ## Get list of absolute files that provide types, used in public API
@@ -280,7 +273,7 @@ proc wrapFile*(
   ## type declarations are deduplicated and combined into single
   ## `WrappedEntry` multitype declaration.
 
-  info "Wrapping", parsed.filename
+  # info "Wrapping", parsed.filename
   var tmpRes: seq[WrappedEntry]
   tmpRes.add newWrappedEntry(
     toNimDecl(
@@ -476,7 +469,7 @@ proc postprocessWrapped*(
 proc wrapSingleFile*(
     file: FsFile,
     errorReparseVerbose: bool = false,
-    wrapConf: WrapConfig = baseWrapConfig,
+    wrapConf: WrapConfig = baseWrapConf,
     parseConf: ParseConfig = baseCppParseConfig,
     postprocess: seq[Postprocess] = defaultPostprocessSteps,
   ): tuple[decls: seq[NimDecl[PNode]], codegen: seq[CxxCodegen]] =
@@ -515,7 +508,7 @@ proc wrapSingleFile*(
   var wrapConf = wrapConf
 
   wrapConf.unit = parsed.unit
-  info "Wrapping file", file
+  # info "Wrapping file", file
 
   let wrapped = parsed.wrapFile(wrapConf, cache, index)
 

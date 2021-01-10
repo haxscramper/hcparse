@@ -607,6 +607,7 @@ proc isAggregateInitable*(cd: CDecl, initArgs: var seq[CArg], conf: WrapConfig):
     ckUnionDecl,
     ckMethod,
     ckFunctionTemplate,
+    ckDestructor
     # ckBaseClassSpecifier
   }
 
@@ -618,9 +619,11 @@ proc isAggregateInitable*(cd: CDecl, initArgs: var seq[CArg], conf: WrapConfig):
       of tkPodKinds:
         return true
 
-      of tkTypeRef:
+      of tkTypeRef, tkElaborated:
         for entry in cursor.cxType().getTypeDeclaration():
-          if (entry.cxKind() notin ignoreKinds) and (not aux(entry)):
+          if entry.cxKind() in failKinds or
+             (entry.cxKind() notin ignoreKinds) and
+             (not aux(entry)):
             return false
 
         return true
@@ -634,6 +637,8 @@ proc isAggregateInitable*(cd: CDecl, initArgs: var seq[CArg], conf: WrapConfig):
       else:
         debug cursor.cxType().cxKind()
         debug cast[int](cursor.cxType().cxKind())
+        debug cursor.getSpellingLocation()
+        debug cursor.treeRepr(conf.unit)
         err cursor.cxType()
         raiseAssert("#[ IMPLEMENT ]#")
 
@@ -722,7 +727,8 @@ proc wrapObject*(
 
       of ckFieldDecl, ckMethod, ckFriendDecl,
          ckFunctionTemplate, ckAccessSpecifier,
-         ckConstructor, ckDestructor, ckTypedefDecl:
+         ckConstructor, ckDestructor, ckTypedefDecl,
+         ckBaseSpecifier:
         # Constructors, field access and other implementation parts have
         # already been added in `visitClass`, now we can ignore them
         # altogether.

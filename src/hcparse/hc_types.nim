@@ -154,7 +154,7 @@ type
       of nhskPNode:
         pnode*: PNode ## Anything else
 
-  WrapConfig* = object
+  WrapConfig* = ref object
     ## Configuration for wrapping. Mostly deals with type renaming
     header*: AbsFile ## Current main translation file (header)
     unit*: CXTranslationUnit
@@ -186,6 +186,8 @@ type
     ## for all headers that depend on `dep`
     isTypeInternal*: proc(cxt: CXType, conf: WrapConfig): bool
     depResolver*: proc(cursor, referencedBy: CXCursor): DepResolutionKind
+    isInLibrary*: proc(dep: AbsFile): bool ## Determine if `dep` file is in
+    ## the library.
 
     isImportcpp*: bool
     parseConf*: ParseConfig

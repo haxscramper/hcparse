@@ -28,7 +28,7 @@ proc wrapCpp*(
       it.globalFlags.add fl
 
 
-  let wconf = baseWrapConfig.withIt do:
+  let wconf = baseWrapConf.withIt do:
     discard
 
   writeWrapped(

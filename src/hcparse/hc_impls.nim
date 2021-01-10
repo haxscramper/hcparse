@@ -28,7 +28,7 @@ proc asGlobalInclude*(cursor: CXCursor, conf: WrapConfig): string =
 
 proc fixTypeName*(str: string, idx: int, conf: WrapConfig): string =
   ## Correct C++ type name to be used in nim wrappers. Convert `::` to
-  ## joined name, use correct upper/lowercasing (nep1 style). 
+  ## joined name, use correct upper/lowercasing (nep1 style).
   if str.len == 0:
     return "T" & $idx
 
@@ -97,9 +97,12 @@ let baseCppParseConfig* = ParseConfig(
   globalFlags: @["-xc++", "-std=c++11"]
 )
 
-let baseWrapConfig* = WrapConfig(
+let baseWrapConf* = WrapConfig(
   isImportcpp: true,
   parseConf: baseCppParseConfig,
+  isInLIbrary: (
+    proc(dep: AbsFile): bool {.closure.} = true
+  ),
   makeHeader: (
     proc(cursor: CXCursor, conf: WrapConfig): NimHeaderSpec {.closure.} =
       let file = cursor.asGlobalInclude(conf)
@@ -110,16 +113,16 @@ let baseWrapConfig* = WrapConfig(
   ),
   getImport: (
     proc(dep: AbsFile, conf: WrapConfig): seq[string] {.closure.} =
-      if dep.startsWith("/usr/include/c++"):
-        let (dir, name, ext) = dep.splitFile()
-        @["cxxstd", name.fixFileName()]
-      else:
-        let (dir, name, ext) = dep.splitFile()
-        @[
-          name.splitCamel().
-            mapIt(it.toLowerAscii()).join("_").
-            fixFileName()
-        ]
+      # if dep.startsWith("/usr/include/c++"):
+      #   let (dir, name, ext) = dep.splitFile()
+      #   @["cxxstd", "cxx_" & name.fixFileName()]
+      # else:
+      let (dir, name, ext) = dep.splitFile()
+      @[
+        name.splitCamel().
+          mapIt(it.toLowerAscii()).join("_").
+          fixFileName()
+      ]
   ),
   fixTypeName: (
     proc(ntype: var NType[PNode],
