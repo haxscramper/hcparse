@@ -198,11 +198,26 @@ proc wrapOperator*(
 proc wrapProcedure*(
     pr: CDecl,
     conf: WrapConfig,
-    parent: Option[NType[PNode]],
+    parent: Option[tuple[nimname, cname: NType[PNode]]],
     cache: var WrapCache,
     parentDecl: Option[CDecl],
     asNewConstructor: bool
   ): tuple[decl: WrappedEntry, canAdd: bool] =
+  ## Generate wrapped entry for procedure, method, operator, or function
+  ## declaration
+  ##
+  ## - @arg{pr} :: Procedure declaration
+  ## - @arg{parent} :: Names of parent type declaration if present.
+  ##   Parent class for methods and operator overloads.
+  ## - @arg{parent.nimname} :: Nim name of the parent type
+  ## - @arg{parent.cnmae} :: C/C++ name of the parent type
+  ## - @arg{parentDecl} :: Optional parent declaration
+  ## - @arg{asNewConstructor} :: Of `pr` is a declaration for constructor
+  ##   generate `new` or `init` procedure.
+  ## - TODO :: allow creating placement new constructors that generate
+  ##   nim `ref` types and allow for nim-managed memory.
+
+
 
   var it = initGenProc(pr.cursor, currIInfo())
   var addThis = (
@@ -218,7 +233,7 @@ proc wrapProcedure*(
   if pr.isOperator():
     var genp: seq[NType[PNode]]
     iflet (par = parent):
-      genp.add par.genParams
+      genp.add par.nimname.genParams
 
     let (decl, adt) = pr.wrapOperator(genp, conf)
     it = decl
@@ -230,7 +245,7 @@ proc wrapProcedure*(
     # it.iinfo = currIInfo()
 
     iflet (par = parent):
-      it.genParams = par.genParams
+      it.genParams = par.nimname.genParams
 
     if parent.isSome():
       assert conf.isImportcpp,
@@ -238,7 +253,7 @@ proc wrapProcedure*(
 
       it.iinfo = currIInfo()
       if pr.cursor.isStatic():
-        let namespace = (@[parent.get()]).toCppImport()
+        let namespace = (@[parent.get().cname]).toCppImport()
         addThis = false
         it.icpp = &"({namespace}::{it.name}(@))"
       else:
@@ -263,7 +278,7 @@ proc wrapProcedure*(
   if addThis:
     assert parent.isSome()
     it.args.add initCArg(
-      "self", parent.get(), pr.cursor.isConstMethod.tern(nvdVar, nvdLet))
+      "self", parent.get().nimname, pr.cursor.isConstMethod.tern(nvdVar, nvdLet))
 
   for arg in pr.args:
     var (vtype, mutable) = arg.cursor.cxType().toNType(conf)
@@ -284,7 +299,7 @@ proc wrapProcedure*(
         # code like
         # `<Ta> struct A { <Tb> struct B {void func(); }; };`
         # and only add `Tb` as template parameter for `func()`.
-        vtype.add parent.get().genParams
+        vtype.add parent.get().nimname.genParams
 
     else:
       # FIXME determine and implement edge case handling for procvar
@@ -313,12 +328,12 @@ proc wrapProcedure*(
       it.iinfo = currIInfo()
       it.header = conf.makeHeader(pr.cursor, conf)
       if asNewConstructor:
-        it.retType = newNType("ptr", @[parent.get()])
-        it.icpp = &"(new {parent.get().head}(@))"
+        it.retType = newNType("ptr", @[parent.get().nimname])
+        it.icpp = &"new {parent.get().cname.head}(@)"
 
       else:
-        it.retType = parent.get()
-        it.icpp = &"({parent.get().head}(@))"
+        it.retType = parent.get().nimname
+        it.icpp = &"{parent.get().cname.head}(@)"
   else:
     # Default handling of return types
     var (rtype, mutable) = toNType(pr.cursor.retType(), conf)
@@ -328,7 +343,7 @@ proc wrapProcedure*(
        getTypeDeclaration().
        inheritsGenParamsOf(parentDecl.get().cursor):
 
-      rtype.genParams = parent.get().genParams
+      rtype.genParams = parent.get().nimname.genParams
 
     it.retType = rtype
 
@@ -379,8 +394,18 @@ proc fixNames(
 
 
 proc wrapMethods*(
-  cd: CDecl, conf: WrapConfig,
-  parent: NType[PNode], cache: var WrapCache): seq[WrappedEntry] =
+    cd: CDecl,
+    conf: WrapConfig,
+    parent: NType[PNode],
+    cname: NType[PNode],
+    cache: var WrapCache
+  ): seq[WrappedEntry] =
+
+  ## - @arg{cd} :: Class declaration to wrap methods for
+  ## - @arg{parent} :: Nim name of class declaration
+  ## - @arg{cname} :: C++ name of class declaration (with unconverted
+  ##   namespaces etc.)
+
   assert cd.kind in {cdkClass, cdkStruct}
   for meth in cd.methods({
     ckMethod, ckDestructor, ckConstructor, ckConversionFunction
@@ -389,7 +414,7 @@ proc wrapMethods*(
       block:
         # Wrap as `new` constructor
         let (decl, canAdd) = wrapProcedure(
-          meth, conf, some(parent), cache, some(cd), true)
+          meth, conf, some((parent, cname)), cache, some(cd), true)
 
         if canAdd:
           result.add decl
@@ -397,13 +422,13 @@ proc wrapMethods*(
       block:
         # Wrap as `init` constructor
         let (decl, canAdd) = wrapProcedure(
-          meth, conf, some(parent), cache, some(cd), false)
+          meth, conf, some((parent, cname)), cache, some(cd), false)
 
         if canAdd:
           result.add decl
     else:
       let (decl, canAdd) = wrapProcedure(
-        meth, conf, some(parent), cache, some(cd), true)
+        meth, conf, some((parent, cname)), cache, some(cd), true)
 
       if canAdd:
         result.add decl
@@ -419,7 +444,7 @@ proc wrapFunction*(
   ): seq[WrappedEntry] =
 
   var (decl, canAdd) = wrapProcedure(
-    cd, conf, none(NType[PNode]), cache, none(CDecl), false)
+    cd, conf, none((NType[PNode], NType[PNode])), cache, none(CDecl), false)
 
   if canAdd:
     result.add decl
@@ -540,7 +565,7 @@ proc getParentFields*(
           args = { "self" : obj.name },
           iinfo = currIInfo(),
           pragma = newPPragma(newExprColonExpr(
-            newPIdent "importcpp", newRStrLit(&"#.{fldName}")))
+            newPIdent "importcpp", newRStrLit(&"(#.{fldName})")))
         )
 
         result[^1].genParams.add(obj.name.genParams)
@@ -549,12 +574,13 @@ proc getParentFields*(
           &"Parent field getter passtrough from {class}\n")
 
         if not entry.cxType().isConstQualifiedDeep():
+          # FIXME replace with `GProc` declaration
           result.add newPProcDecl(
             name = fldName,
             iinfo = currIInfo(),
             args = { "self" : obj.name, "val" : fldType },
             pragma = newPPragma(newExprColonExpr(
-              newPIdent "importcpp", newRStrLit(&"#.{fldName} = @")))
+              newPIdent "importcpp", newRStrLit(&"(#.{fldName} = @)")))
           )
 
           result[^1].genParams.add(obj.name.genParams)
@@ -690,29 +716,23 @@ proc wrapObject*(
   let tdecl = cd.cursor.cxType().getTypeDeclaration()
 
   assert cd.kind in {cdkClass, cdkStruct}
-  var obj = PObjectDecl(
-    name: cd.inNamespace(cd.namespace),
-    exported: true, iinfo: currIInfo(),
-  )
-
+  let cname = cd.inNamespace(cd.namespace)
+  var obj = PObjectDecl(name: cname, exported: true, iinfo: currIInfo())
   conf.fixTypeName(obj.name, conf, 0)
 
   block:
     var initArgs: seq[CArg]
-    if isAggregateInitable(cd, initArgs, conf):
+    if isAggregateInitable(cd, initArgs, conf) and initArgs.len > 0:
       # info obj.name.head, "can be aggregate initialized"
       result.genAfter.add newWrappedEntry(
         initGenProc(CXCursor(), currIInfo()).withIt do:
           it.name = "init" & obj.name.head
           it.args = initArgs
           it.header = conf.makeHeader(cd.cursor, conf)
-          it.icpp = &"{cd.cursor}({{@}})"
+          it.icpp = &"{cname.head}({{@}}) /* aggregate init */"
           it.retType = obj.name
           it.genParams = obj.name.genParams
       )
-
-    # else:
-    #   warn obj.name.head, "no aggr init"
 
   for entry in cd.cursor:
     case entry.cxKind():
@@ -782,7 +802,7 @@ proc wrapObject*(
   if cd.cursor.cxKind() == ckUnionDecl:
     obj.annotation.get().add newPIdent("union")
 
-  result.genAfter.add cd.wrapMethods(conf, obj.name, cache)
+  result.genAfter.add cd.wrapMethods(conf, obj.name, cname, cache)
 
   for mem in cd.members:
     case mem.kind:
