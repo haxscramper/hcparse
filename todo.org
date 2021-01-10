@@ -32,4 +32,4 @@
   arguments, newly generated args, removed, compressed and so on) should
   provide additional documentation for such parameters (via ~@arg{}~
   annotation).
-
+- [ ] ~static~ fields

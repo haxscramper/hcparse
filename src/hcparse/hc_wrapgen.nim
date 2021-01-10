@@ -117,13 +117,13 @@ proc wrapOperator*(
   it.kind = pkOperator
 
   if kind == cxoAsgnOp and it.name == "setFrom":
-    it.icpp = &"# = #"
+    it.icpp = &"(# = #)"
     it.kind = pkRegular
 
   else:
     case kind:
       of cxoAsgnOp:
-        it.icpp = &"# {it.name} #"
+        it.icpp = &"(# {it.name} #)"
 
       of cxoArrayOp:
         let rtype = oper.cursor.retType()
@@ -139,14 +139,14 @@ proc wrapOperator*(
       of cxoInfixOp:
         let namespace = (oper.namespace & newPType("operator")).toCppImport()
 
-        it.icpp = &"{namespace}{it.name}(#, #)"
+        it.icpp = &"({namespace}{it.name}(#, #))"
 
         if oper.args.len == 1:
           result.addThis = true
 
       of cxoArrowOp:
         # WARNING
-        it.icpp = &"#.operator->(@)"
+        it.icpp = &"(#.operator->(@))"
 
       of cxoCallOp:
         # NOTE nim does have experimental support for call
@@ -158,10 +158,10 @@ proc wrapOperator*(
 
       of cxoDerefOp:
         it.name = "[]"
-        it.icpp = &"*#"
+        it.icpp = &"(*#)"
 
       of cxoPrefixOp:
-        it.icpp = &"{it.name}#"
+        it.icpp = &"({it.name}#)"
 
       of cxoCommaOp:
         it.name = "commaOp"
@@ -183,7 +183,7 @@ proc wrapOperator*(
 
         with it:
           name = "to" & capitalizeAscii(restype.head)
-          icpp = &"{oper.cursor}(@)"
+          icpp = &"({oper.cursor}(@))"
           retType = restype
           kind = pkRegular
 
@@ -240,9 +240,9 @@ proc wrapProcedure*(
       if pr.cursor.isStatic():
         let namespace = (@[parent.get()]).toCppImport()
         addThis = false
-        it.icpp = &"{namespace}::{it.name}(@)"
+        it.icpp = &"({namespace}::{it.name}(@))"
       else:
-        it.icpp = &"#.{it.name}(@)"
+        it.icpp = &"(#.{it.name}(@))"
 
       it.header = conf.makeHeader(pr.cursor, conf)
 
@@ -250,13 +250,13 @@ proc wrapProcedure*(
       if conf.isImportcpp:
         let namespace = pr.namespace.toCppImport()
         if namespace.len > 1:
-          it.icpp = &"{namespace}::{it.name}(@)"
+          it.icpp = &"({namespace}::{it.name}(@))"
 
         else:
-          it.icpp = &"{it.name}(@)"
+          it.icpp = &"({it.name}(@))"
 
       else:
-        it.icpp = &"{it.name}"
+        it.icpp = &"({it.name})"
 
       it.header = conf.makeHeader(pr.cursor, conf)
 
@@ -314,11 +314,11 @@ proc wrapProcedure*(
       it.header = conf.makeHeader(pr.cursor, conf)
       if asNewConstructor:
         it.retType = newNType("ptr", @[parent.get()])
-        it.icpp = &"new {parent.get().head}(@)"
+        it.icpp = &"(new {parent.get().head}(@))"
 
       else:
         it.retType = parent.get()
-        it.icpp = &"{parent.get().head}(@)"
+        it.icpp = &"({parent.get().head}(@))"
   else:
     # Default handling of return types
     var (rtype, mutable) = toNType(pr.cursor.retType(), conf)
@@ -567,11 +567,31 @@ proc getParentFields*(
 
 proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry]
 
+proc getDefaultAccess*(cursor: CXCursor): CXAccessSpecifier =
+  case cursor.cxKind():
+    of ckClassDecl, ckClassTemplate:
+      asPrivate
+
+    of ckStructDecl:
+      asPublic
+
+    else:
+      raiseAssert("Cannot get default visibility for cursor of kind " & $cursor.cxKind())
+
 proc isAggregateInitable*(cd: CDecl, initArgs: var seq[CArg], conf: WrapConfig): bool =
   ## Determine if entry pointed to by `cd`'s cursor is subject to aggregate
   ## initalization. Add all fields for aggregate initalization into
   ## @arg{initArgs}. NOTE: fields will be added unconditionally, so first
   ## check return value.
+
+  if cd.cursor.cxKind() in {ckUnionDecl, ckEnumDecl}:
+    return false
+
+  elif cd.cursor.cxKind() notin {ckClassDecl, ckStructDecl, ckClassTemplate}:
+    assertionFail:
+      "Invalid cursor kind of aggregate initalization check."
+      "Expected type declaration (union/enum/struct/class),"
+      "but found {toRed($cd.cursor.cxKind())}"
 
   # List of entries that immediately mean aggregate initalization is not
   # supported.
@@ -582,7 +602,12 @@ proc isAggregateInitable*(cd: CDecl, initArgs: var seq[CArg], conf: WrapConfig):
   const ignoreKinds = {
     ckTemplateTypeParameter,
     ckTypedefDecl,
-    ckAccessSpecifier,
+    ckStructDecl,
+    ckEnumDecl,
+    ckUnionDecl,
+    ckMethod,
+    ckFunctionTemplate,
+    # ckBaseClassSpecifier
   }
 
   proc aux(cursor: CXCursor): bool =
@@ -613,6 +638,7 @@ proc isAggregateInitable*(cd: CDecl, initArgs: var seq[CArg], conf: WrapConfig):
         raiseAssert("#[ IMPLEMENT ]#")
 
   result = true
+  var access = cd.cursor.getDefaultAccess()
   for entry in cd.cursor:
     case entry.cxKind():
       of ckFieldDecl:
@@ -628,8 +654,25 @@ proc isAggregateInitable*(cd: CDecl, initArgs: var seq[CArg], conf: WrapConfig):
       of ignoreKinds:
         discard
 
+      of ckAccessSpecifier:
+        access = entry.getAccessSpecifier()
+
+      of ckVarDecl:
+        debug entry.treeRepr(conf.unit)
+        discard
+
+      of ckBaseSpecifier:
+        if aux(entry[0]):
+          discard
+
+        else:
+          return false
+
       else:
         debug entry.treeRepr(conf.unit)
+        debug cast[int](entry.cxType().cxKind())
+        debug cast[int](entry.cxKind())
+        debug entry.getSpellingLocation()
         raiseAssert(&"#[ IMPLEMENT for kind {entry.kind} ]#")
 
 

@@ -274,7 +274,13 @@ proc getTuFile*(cx: CXCursor): AbsFile =
 proc `$`*(cursor: CXCursor): string =
   $getCursorSpelling(cursor)
 
-proc `$`*(cxkind: CXCursorKind): string = $getCursorKindSpelling(cxkind)
+proc `$`*(cxkind: CXCursorKind): string =
+  case cxkind:
+    of ckBaseSpecifier:
+      "BaseSpecifier"
+
+    else:
+      $getCursorKindSpelling(cxkind)
 
 #===========================  Kind/Type acess  ===========================#
 
