@@ -341,3 +341,19 @@ func pubFields*(cd: CDecl): seq[CDecl] =
 
 func namespaceName*(cd: CDecl): string =
   (cd.namespace & @[cd.name]).toCppImport()
+
+proc isEnum*(cxtype: CXType): bool =
+  case cxtype.cxKind():
+    of tkEnum:
+      return true
+
+    of tkElaborated:
+      if cxtype.getTypeDeclaration().cxKind() in {ckEnumDecl}:
+        return true
+
+      else:
+        return false
+      # debug cxtype.lispRepr()
+
+    else:
+      return false

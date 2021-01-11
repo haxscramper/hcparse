@@ -145,7 +145,7 @@ proc x11DocAnnotation(
 suite "X11 garbage wrap test":
   test "X11":
     proc doWrap(infile, outfile: AbsFile) =
-      let wconf = baseWrapConfig.withIt do:
+      let wconf = baseWrapConf.withIt do:
         # it.isImportcpp = false
         it.depResolver = (
           proc(cursor, referecendBy: CXCursor): DepResolutionKind {.closure.} =
@@ -210,15 +210,21 @@ suite "WIP tests":
       compile = @[srcd /. "wip_in.cpp"]
     )
 
-    "/tmp/main.nim".writeFile """
+    if true:
+      execShell shCmd(nim).withIt do:
+        it.arg "check"
+        it.arg "/tmp/res_a.nim"
+
+    else:
+      "/tmp/main.nim".writeFile """
 import res_a
 
 test1(initH(12))
 test1()
 """
 
-    execShell shCmd(nim).withIt do:
-      it.arg "r"
-      it - ("backend", "cpp")
-      it - ("nimcache", "cache")
-      it.arg "/tmp/main.nim"
+      execShell shCmd(nim).withIt do:
+        it.arg "r"
+        it - ("backend", "cpp")
+        it - ("nimcache", "cache")
+        it.arg "/tmp/main.nim"

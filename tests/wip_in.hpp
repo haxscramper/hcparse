@@ -1,34 +1,14 @@
 #pragma once
 
-#include <initializer_list>
+struct Test {
+  enum class Enum {
+    first = 1 << 0,
+    second = 1 << 1,
+    third = 1 << 2
+    // secondDifferentName = second
+  };
 
-template <class T>
-struct HashIterator
-{
-  typedef T* pointer;
-  typedef T& reference;
-  typedef T valueType;
-
-  reference operator()(const T){}
-  reference operator++();
-
-  bool operator!=(const T& other) {}
-  bool operator==(const T& other) {}
+  void acceptsEnum(Enum en) {}
 };
 
-template <class T>
-class HashImpl {
-  typedef HashIterator<T> iterator;
-
-public:
-  iterator begin() {}
-  iterator end() {}
-};
-
-template <class T>
-class Set {
-  HashImpl<T> table;
-
-public:
-  Set(std::initializer_list<T> ilist) {}
-};
+void acceptsEnum(Test::Enum en) {}

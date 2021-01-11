@@ -282,6 +282,9 @@ proc wrapProcedure*(
 
   for arg in pr.args:
     var (vtype, mutable) = arg.cursor.cxType().toNType(conf)
+    if arg.cursor.cxType().isEnum():
+      vtype.head &= "Cxx"
+
     if vtype.kind in {ntkIdent, ntkGenericSpec}:
       if vtype.head == "UNEXPOSED":
         # WARNING currently parameters which contain `tkUnexposed`
@@ -840,6 +843,8 @@ proc getFields*(declEn: CDecl, conf: WrapConfig): tuple[
         # https://github.com/Yardanico/nim-mathexpr)
         let subn = val.children()
         let toks = val.tokenStrings(conf.unit)[1] # TEST for `(1 << 2) | (1 << 3)`
+        # debug toks
+        # debug subn.mapIt(it.tokenStrings(conf.unit))
         case toks:
           of "<<":
             resval = some initEnFieldVal(
@@ -908,7 +913,7 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
     stringif: string
   ]]
 
-  let implName = nt.head & "_Impl"
+  let implName = nt.head & "Cxx"
   block:
     # Generate wrapper for default implementation of the enum
     var implEn = newPEnumDecl(name = implName, iinfo = currIInfo())
@@ -916,6 +921,11 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
     implEn.pragma.add newPIdentColonString(
       (if conf.isImportcpp: "importcpp" else: "importc"),
       namespace
+    )
+
+    implEn.pragma.add nnkExprColonExpr.newPTree(
+      newPIdent("header"),
+      conf.makeHeader(declEn.cursor, conf).toNNode()
     )
 
     implEn.exported = true
@@ -954,8 +964,8 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
             flds.add (key, prev)
 
         else:
-          inc prev
           flds.add (key, prev)
+          inc prev
 
 
       # Sort fields based on value
@@ -986,9 +996,10 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
     # Determine common prefix for C++ enum (if any)
     let pref = declEn.flds.mapIt(it.fldName).commonPrefix()
 
+    debug nt.head
     # Get name of the enum type itsel by combining first letters of
     # `PascalCase` or `snake_case` name.
-    let enumPref = declEn.name.head.
+    let enumPref = nt.head.
       splitCamel().mapIt(it[0].toLowerAscii()).join("")
 
     var en = newPEnumDecl(name = nt.head, iinfo = currIInfo())
@@ -996,14 +1007,25 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
     proc renameField(fld: string): string {.closure.} =
       # Drop common prefix for enum declaration and add one generated from
       # enum name
-      fld.dropPrefix(pref).dropPrefix("_").addPrefix(enumPref)
+      fld.
+        dropPrefix(pref).
+        dropPrefix("_").
+        toSnakeCamelCase().
+        capitalizeAscii().
+        addPrefix(enumPref)
 
     # Metadata associated with proxy enum
     var arr = nnkBracket.newPTree()
+    var strCase = nnkCaseStmt.newPtree(newPIdent "en")
 
     for name, wrap in vals:
       # Add fields to nim enum without values
       en.addField(name.renameField())
+
+      strCase.add nnkOfBranch.newPTree(
+        newPIdent(name.cEnumName()),
+        nnkAsgn.newPTree(newPIdent("result"), newPLit(wrap.stringif))
+      )
 
       arr.add pquote do:
         (
@@ -1016,11 +1038,14 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
     let
       enName = newPIdent(en.name)
       arrName = newPIdent("arr" & en.name & "mapping")
+      convName = newPident("to" & implName)
+      implName = newPIdent(implName)
+
 
     let helpers = pquote do:
       const `arrName`: array[`enName`, tuple[
         name: string,
-        cEnum: `newPIdent(implName)`,
+        cEnum: `implName`,
         cName: string,
         value: int
       ]] = `arr`
@@ -1035,8 +1060,11 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
           result = bitor(result, `arrName`[val].value)
 
       # Return namespaced name of the original enum
-      proc `$`*(en: `enName`): string {.inline.} =
-        `arrName`[en].cName
+      proc `$`*(en: `implName`): string {.inline.} =
+        `strCase`
+
+      converter `convName`*(en: `enName`): `implName` {.inline.} =
+        `arrName`[en].cEnum
 
 
 
