@@ -33,3 +33,11 @@
   provide additional documentation for such parameters (via ~@arg{}~
   annotation).
 - [ ] ~static~ fields
+- [ ] Convert distinct types (or enums) for 'special integers' like
+  sourcetrail ids, and create overloads that use them. Mark original procs
+  as ~deprecated~. Implement overloads as ~{.inline.}~ with ~{.push
+  warning[Deprecated]:off.}~ in body. Functions that /return/ 'special
+  integer' mmust be wrapped as ~funcNameRaw~. Result will be converted to
+  corresponding enum/distincty type
+- [ ] Collect macro constant definitions into enums and use them for
+  overloads from previous step.

@@ -12,5 +12,5 @@ srcDir        = "src"
 
 requires "nim >= 1.2.6"
 requires "hnimast", "hmisc >= 0.4.0", "hpprint"
-requires "https://github.com/haxscramper/nimtraits"
-requires "https://github.com/disruptek/gram"
+requires "nimtraits"
+# requires "https://github.com/disruptek/gram"
