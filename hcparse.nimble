@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.1.1"
+version       = "0.1.2"
 author        = "haxscramper"
 description   = "High-level nim wrapper for C/C++ parsing"
 license       = "Apache-2.0"
