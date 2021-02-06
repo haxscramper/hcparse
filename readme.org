@@ -52,9 +52,41 @@ of creating callback functions itself and passing user data to
 callback via ~pointer~ type. It allows to capture external variables
 by reference.
 
+* As a C++ code wrapper tool
 
-* Example
+This part of the readme is subject to change, and only provides high-level
+overview of the intended workflow.
 
+C/C++ library is wrapped as single nimble package with following structure
+
+#+begin_src text
+  <project>/
+    <project.nimble>
+    src/
+      <submodule 1> # submodules
+      ...
+      <submodule n>
+
+      <project.nim> # Main project file
+      <project>/
+        make_wrap.nim # Wrapper generator script
+        make_build.nim # Build script
+
+        <wrapped-file 1.nim> # generated wrapper files
+        ...
+        <wrapped-file n.nim>
+#+end_src
+
+~<project.nimble>~ contains optional ~after install~ task that performs
+build of the necessary C/C++ submodules. In it's simplest form task looks
+like this:
+
+#+begin_src nim
+after install:
+  exec("nim c -r <project>/src/build.nim")
+#+end_src
+
+* As a library for working with C++ code
 
 #+begin_src nim :exports both
   {.define(plainStdout).}
@@ -113,7 +145,7 @@ TranslationUnit
 `ClassDecl MyClass`:
     +-> type: MyClass
     +-> CXXAccessSpecifier:
-    |   +-> type: 
+    |   +-> type:
     |   +-> public :
     +-> FieldDecl:
     |   +-> type: int
@@ -130,7 +162,7 @@ TranslationUnit
 `FunctionDecl main`:
     +-> type: int ()
     +-> `CompoundStmt `:
-        +-> type: 
+        +-> type:
         +-> `BinaryOperator `:
             +-> type: int
             +-> IntegerLiteral:
@@ -139,18 +171,9 @@ TranslationUnit
             +-> IntegerLiteral:
                 +-> type: int
                 +-> 2
- This is a main function documenation comment 
+ This is a main function documenation comment
 found functions: @["main"]
 #+end_example
-
-
-This library is not meant to be used as standalone tool for wrapping
-C++ code, but instead provides high-level primitives for building own
-wrapper tools. Default implementation of wrapper logic is currently
-WIP; see [[https://haxscramper.github.io/hcparse-doc/wrap-examples.html][automatically generated examples (part of the unit test)]],
-[[https://haxscramper.github.io/hcparse-doc/src/hcparse/libclang.html#splitDeclarations%2CCXTranslationUnit][splitDeclarations]] procedure and possible example of use in
-[[file:tests/tWrapGen.nim]].
-
 
 * Contribution & development
 
@@ -165,7 +188,7 @@ Must-have todo things
 
 Future plans/goals
 
-- [ ] Provide convinient and stable API for interacting with libclang.
+- [ ] Provide convenient and stable API for interacting with libclang.
   C API for clang is stable so it is safe to spend more time improving
   user experience with the library without worrying about possible API
   breakage.
