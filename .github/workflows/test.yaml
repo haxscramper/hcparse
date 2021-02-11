@@ -10,5 +10,5 @@ jobs:
           path: '../nim'
           version: 'version-1-4'
 
-      - name: Compile binary
-        run: "nimble test -y"
+      - run: sudo apt-get install libclang-dev
+      - run: "nimble test -y -d:nimDebugDlOpen"
