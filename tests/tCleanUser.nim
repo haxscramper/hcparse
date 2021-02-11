@@ -13,7 +13,7 @@ proc prettyPrintConverter(
     pptMap(
       ("e", "e"),
       {
-        "name": pptConst(val.varname, initPrintStyling(fg = fgGreen)),
+        "name": pptConst($val.idents[0], initPrintStyling(fg = fgGreen)),
         "kind": pptConst($val.kind, initPrintStyling(fg = fgRed)),
         "type": pptConst($val.vtype, initPrintStyling(fg = fgYellow))
       }
