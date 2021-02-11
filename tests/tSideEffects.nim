@@ -22,15 +22,12 @@ suite "Show function body":
 
     /** This is a main function documenation comment */
     int main() {
-      1 + 2;
-      // std::cout << "Hello world\n";
+      std::cout << "Hello world\n";
     }
     """
 
-
     let
-      trIndex = createIndex()
-      unit = parseTranslationUnit(trIndex, outfile)
+      unit = parseFile(outfile, opts = {})
       topCursor = unit.getTranslationUnitCursor()
 
     echo unit.isNil
@@ -45,7 +42,6 @@ suite "Show function body":
         # parent node for cursor.
         echo cursor.treeRepr(unit)
         if cursor.cxKind == ckFunctionDecl:
-          echo cursor.rawComment()
           functionNames.add $cursor
 
         return cvrContinue

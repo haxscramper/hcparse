@@ -37,9 +37,13 @@ proc parseTranslationUnit*(
   for opt in trOptions:
     flags = bitor(flags, int(opt))
 
+  # echo cmdline
+
   block:
     let argc = cmdline.len
     let cmdlineC = allocCSTringArray(cmdline)
+
+    echo cmdline
 
     result = parseTranslationUnit(
       trIndex, filename.cstring, cmdlineC, cint(argc), nil, 0, cuint(flags))
@@ -109,13 +113,22 @@ proc parseTranslationUnit*(
   )
 
 
-
 proc getFlags*(config: ParseConfig, file: AbsFile): seq[string] =
   ## Get list of command-line flags for partigular `file`. This includes
   ## both global flags, and file-specific ones
   result.add config.includepaths.toIncludes()
   result.add config.globalFlags
   result.add config.fileFlags.getOrDefault(file)
+
+proc parseFile*(
+    file: AbsFile,
+    config: ParseConfig = baseCppParseConfig,
+    opts: set[CXTranslationUnitFlags] = {
+      tufDetailedPreprocessingRecord, tufSkipFunctionBodies}
+  ): CXTranslationUnit =
+  let flags = config.getFlags(file)
+  var index = createIndex()
+  result = parseTranslationUnit(index, file, flags, opts)
 
 proc parseFile*(
     file: AbsFile,
