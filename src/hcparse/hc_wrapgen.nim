@@ -1181,14 +1181,19 @@ proc writeWrapped*(
     compile: seq[FsFile],
     wrapConf: WrapConfig
   ) =
-  ## Write generated wrappers to single file
-  ##
-  ## - @arg{res} :: Generated wrappers - just pass results of
-  ##  `wrapSingleFile`
-  ## - @arg{outFile} :: target file to write generated nim code to
-  ## - @arg{codegens} :: directory for saving codegen files
-  ## - @arg{compile} :: Additional list of files to add as `{.compile.}`
-  ## - @arg{wrapConf} :: Wrap configuration state object
+
+  ##[
+
+Write generated wrappers to single file
+
+- @arg{res} :: Generated wrappers - just pass results of
+ `wrapSingleFile`
+- @arg{outFile} :: target file to write generated nim code to
+- @arg{codegens} :: directory for saving codegen files
+- @arg{compile} :: Additional list of files to add as `{.compile.}`
+- @arg{wrapConf} :: Wrap configuration state object
+
+]##
 
   var filenames: HashSet[string]
   withNewStreamFile(outFile):

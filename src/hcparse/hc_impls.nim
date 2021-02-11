@@ -69,11 +69,13 @@ proc fixTypeName*(
       fixTypeName(ntype.rtype.get().getIt(), conf)
 
     for idx, arg in mpairs(ntype.arguments):
-      arg.varname =
+      arg.idents[0] =
         if
-          arg.varname.len == 0: "a" & $idx
+          getStrVal(arg.idents[0]).len == 0:
+            newPIdent("a" & $idx)
+
         else:
-          fixIdentName(arg.varname)
+          newPIdent(fixIdentName(getStrVal(arg.idents[0])))
 
       conf.fixtypename(arg.vtype, conf, idx)
 

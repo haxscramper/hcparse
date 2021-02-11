@@ -74,12 +74,12 @@ proc enumOverloads*(
       var subcall = nnkCall.newPTree(newPIdent reproc.name)
 
       for idx, arg in mpairs(pr.signature.arguments):
-        let argname = newPIdent(arg.varname)
+        let argname = arg.idents[0]
         let arrname = newPIdent("arr" & arg.vtype.head & "mapping")
 
         if idx in enArgs:
           arg.vtype.head &= "_Impl"
-          let argImpl = newPIdent(arg.varname & "_main")
+          let argImpl = arg.idents[0] & "_main"
 
           impl = pquote do:
             let `argImpl` = `arrname`[`argname`].cEnum

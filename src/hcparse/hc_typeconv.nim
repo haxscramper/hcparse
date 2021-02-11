@@ -61,11 +61,11 @@ proc dropPOD*(cxtype: CXType, conf: WrapConfig): string =
       ""
 
 proc toPIdentDefs*(cursor: CXCursor, conf: WrapConfig): PIdentDefs =
-  result.varname = $cursor
-  if result.varname.len == 0:
-    result.varname = "arg" & $cursor.cxType().dropPOD(conf)
+  var varname = $cursor
+  if varname.len == 0:
+    varname = "arg" & $cursor.cxType().dropPOD(conf)
 
-  result.varname = result.varname.fixIdentName()
+  result.idents.add newPIdent(varname.fixIdentName())
 
   let (ctype, mutable) = cursor.cxType().toNType(conf)
   result.vtype = ctype
@@ -324,7 +324,9 @@ func toNType*(ns: CNamespace): NType[PNode] =
 func inNamespace*(cd: CDecl, ns: CNamespace): NType[PNode] =
   var nameBuf: seq[string]
 
-  for n in ns & @[ cd.name ]:
+  result = NType[PNode](kind: ntkIdent)
+
+  for n in items(ns & @[ cd.name ]):
     result.add n.genParams
     nameBuf.add n.head
 

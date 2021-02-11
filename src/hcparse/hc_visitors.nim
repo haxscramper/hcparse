@@ -18,11 +18,12 @@ proc visitMainFile*[T](
   ## Call visitor in each subnode if it is in main file
   var mainParent = cursor
   cursor.visitChildren do:
-    makeVisitor [callback, mainParent, getDepResolutionKind]:
-      if getDepResolutionKind(cursor) == drkWrapDirectly:
+    makeVisitor [callback, mainParent]:
+      if isFromMainFile(cursor):
+      # if getDepResolutionKind(cursor) == drkWrapDirectly:
         return callback.impl(cursor, mainParent, addr callback.data)
       else:
-        debug cursor
+        # debug cursor
         return cvrRecurse
 
 #===========  Splitting translation unit into logical chunks  ============#
