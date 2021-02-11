@@ -10,10 +10,11 @@ suite "Show function body":
     #include <iostream>
 
     /// Documentation comments for class
+    /// Multiline comment
     class MyClass
     {
     public:
-      int field;
+      int field; ///< Field documentation
       virtual void method() const = 0;
       static const int static_field;
       static int static_method();
@@ -44,7 +45,7 @@ suite "Show function body":
         # parent node for cursor.
         echo cursor.treeRepr(unit)
         if cursor.cxKind == ckFunctionDecl:
-          echo cursor.comment().toNimDoc()
+          echo cursor.rawComment()
           functionNames.add $cursor
 
         return cvrContinue

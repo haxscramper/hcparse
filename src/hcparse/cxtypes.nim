@@ -307,6 +307,9 @@ proc cxType*(cursor: CXCursor): CXType =
 proc comment*(cursor: CXCursor): CXComment =
   cursor.getParsedComment()
 
+proc rawComment*(cursor: CXCursor): string =
+  $cursor.getRawCommentText()
+
 #=========================  Accessing subnodes  ==========================#
 
 proc children*(cursor: CXCursor): seq[CXCursor] =
@@ -672,15 +675,26 @@ proc lispRepr*(cxtype: CXType): string =
   cxtype.objTreeRepr().lispRepr()
 
 
+proc dedentComment*(str: string): string =
+  str.split('\n').mapIt(it.dedent()).join("\n")
+
 proc objTreeRepr*(
-  cursor: CXCursor, tu: CXTranslationUnit,
-  showtype: bool = true): ObjTree =
+    cursor: CXCursor, tu: CXTranslationUnit,
+    showtype: bool = true,
+    showcomment: bool = true
+  ): ObjTree =
   ## Generate ObjTree representation of cursor
   const colorize = not defined(plainStdout)
   let ctype = pptConst(
     "type: " & $cursor.cxType,
     initPrintStyling(fg = fgBlue,
                      style = {styleItalic, styleDim}))
+
+
+  var commentText = cursor.rawComment()
+  let showComment = showcomment and commentText.len > 0
+  let comment = pptConst(
+    commentText.dedentComment(), initStyle(styleItalic, fgCyan))
 
   if cursor.len  == 0:
     let val = pptconst(
@@ -702,6 +716,7 @@ proc objTreeRepr*(
     pptObj(
       ($cursor.cxkind).toMagenta(colorize) & " " & $cursor,
       showtype.tern(@[ctype], @[]) &
+      showcomment.tern(@[comment], @[]) &
         toSeq(cursor.children).mapIt(it.objTreeRepr(tu, showtype))
     )
 
