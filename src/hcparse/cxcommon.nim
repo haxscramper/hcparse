@@ -22,6 +22,8 @@ proc fixIdentName*(str: string): string =
     of "is": "cxIs"
     of "in": "cxIn"
     of "include": "cxInclude"
+    of "proc": "cxProc"
+    of "method": "cxMethod"
     else: result
 
 func toPascalCase*(str: string): string =

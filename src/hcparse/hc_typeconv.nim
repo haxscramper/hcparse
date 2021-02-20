@@ -134,17 +134,22 @@ proc requiredGenericParams*(cursor: CXCursor): seq[CXCursor] =
       else:
         result.add subn # WARNING blow up on `a<b>`
 
+proc toCName*(cursor: CXCursor): CName
+proc toScopedIdent*(cursor: CXCursor): CScopedIdent =
+  for elem in cursor:
+    result.add toCName(elem)
+
 proc toCName*(cursor: CXCursor): CName =
   result = CName(cursor: cursor)
   for genParam in requiredGenericParams(cursor):
-    result.genParams.add toCName(genParam)
+    result.genParams.add toScopedIdent(genParam)
 
 proc toFullScopedIdent*(cxtype: CXType): CScopedIdent =
   for ns in getTypeNamespaces(cxtype):
     result.add CName(
       cursor: ns,
       genParams: requiredGenericParams(
-        ns.cxType().getTypeDeclaration()).mapIt(toCName(it))
+        ns.cxType().getTypeDeclaration()).mapIt(toScopedIdent(it))
     )
 
 proc getTypeName*(cxtype: CXType, conf: WrapConfig): string =

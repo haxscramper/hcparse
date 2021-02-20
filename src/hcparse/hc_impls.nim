@@ -79,6 +79,21 @@ proc fixTypeName*(
 
       conf.fixtypename(arg.vtype, conf, idx)
 
+proc typeNameForScoped*(
+    ident: CScopedIdent, conf: WrapConfig): NType[PNode] =
+
+  var resname: string
+  var genParams: seq[NType[PNode]]
+  for name in ident:
+    if $name.cursor notin conf.collapsibleNamespaces:
+      resname &= $name.cursor
+      for genParam in name.genParams:
+        genParams.add conf.typeNameForScoped(genParam, conf)
+
+  result = newNType(resname, genParams)
+  conf.fixTypeName(result, conf, 0)
+
+
 proc getBuiltinHeaders*(): seq[AbsDir] =
   ## According to clang `documentation <https://clang.llvm.org/docs/LibTooling.html#builtin-includes>`_
   ## libclang is needs additional precompiled headers paths in
@@ -125,6 +140,10 @@ let baseWrapConf* = WrapConfig(
           mapIt(it.toLowerAscii()).join("_").
           fixFileName()
       ]
+  ),
+  typeNameForScoped: (
+    proc(ident: CScopedIdent, conf: WrapConfig): NType[PNode] {.closure} =
+      typeNameForScoped(ident, conf)
   ),
   fixTypeName: (
     proc(ntype: var NType[PNode],

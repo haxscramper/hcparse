@@ -69,7 +69,7 @@ type
     ## parameters for given name. `nimType` is a resulting nim type created
     ## from `cursor`.
     cursor*: CXCursor ## Name declaration cursor
-    genParams*: seq[CName]
+    genParams*: seq[CScopedIdent]
 
   CScopedIdent* = seq[CName] ## Full scoped C/C++ identifier like
                              ## `std::vector<int>::iterator`
@@ -451,7 +451,7 @@ proc lastName*(cd: CDecl): string =
   ## Return *last* name for declaration.
   ##
   ## `std::vector<int> -> vector`, `int main() -> main` etc.
-  $cd.ident[^1]
+  $cd.ident[^1].cursor
 
 #==========================  Operator handling  ==========================#
 

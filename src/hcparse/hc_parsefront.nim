@@ -43,7 +43,7 @@ proc parseTranslationUnit*(
     let argc = cmdline.len
     let cmdlineC = allocCSTringArray(cmdline)
 
-    echo cmdline
+    # echo cmdline
 
     result = parseTranslationUnit(
       trIndex, filename.cstring, cmdlineC, cint(argc), nil, 0, cuint(flags))
