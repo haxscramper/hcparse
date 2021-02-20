@@ -60,33 +60,42 @@ type
     fromOffset*: int
 
 
+  CName* = object
+    ## Single element of scoped C++ identifier like `std` or `vector` in
+    ## `std::vector`.
+    ##
+    ## `cursor` points to original AST node from which element was
+    ## extracted, `genParams` is a (possibly empty) list of generic
+    ## parameters for given name. `nimType` is a resulting nim type created
+    ## from `cursor`.
+    cursor*: CXCursor ## Name declaration cursor
+    genParams*: seq[CName]
 
-  CNamespace* = seq[NType[PNode]]
+  CScopedIdent* = seq[CName] ## Full scoped C/C++ identifier like
+                             ## `std::vector<int>::iterator`
   CDecl* = object
     ## Higher-level wrapper on top of CXCursor. Mostly used to
     ## provide more intuitive API for working with things to be
     ## wrapped.
-    name*: NType[PNode]
-    genConstraints*: seq[CXCursor]
-
-    namespace*: CNamespace
-    cursor* # {.requiresinit.} # FIXME
-    : CXCursor
+    ident*: CScopedIdent
+    cursor*: CXCursor
     case kind*: CDeclKind
       of cdkField:
         fldAccs*: CX_AccessSpecifier
+
       of cdkMethod:
         metAccs*: CX_AccessSpecifier
         metArgs*: seq[CArg]
+
       of cdkFunction:
         funArgs*: seq[CArg]
+
       of cdkClass, cdkStruct:
         members*: seq[CDecl]
+
       of cdkEnum:
-        flds*: seq[tuple[
-          fldname: string,
-          value: Option[CXCursor]
-        ]]
+        flds*: seq[tuple[fldname: string, value: Option[CXCursor]]]
+
       else:
         nil
 
@@ -156,26 +165,35 @@ type
 
   WrapConfig* = ref object
     ## Configuration for wrapping. Mostly deals with type renaming
+
     header*: AbsFile ## Current main translation file (header)
+
     unit*: CXTranslationUnit
+
     makeHeader*: proc(cursor: CXCursor, conf: WrapConfig): NimHeaderSpec ## |
     ## Generate identifier for `{.header: ... .}`
 
+    typeNameForScoped*: proc(ident: CScopedIdent, conf: WrapConfig): NType[PNode]
+    ## Generate type name for a scoped identifier - type or function
+    ## declaration. The only important things are: `head` name and list of
+    ## generic parameters, so `ntkIdent` is the optimal return kind.
+
     fixTypeName*: proc(ntype: var NType[PNode], conf: WrapConfig, idx: int)
-    ## Change type name for `ntype`. Used to convert things like
-    ## `boost::wave::macro_handling_exception::bad_include_file` into
-    ## human-readable names.
+    ## Change type name for `ntype`.
     ##
     ## First argument is a type to be fixed, second one is parent
     ## configuration type. Third argument is mostly used for internal
     ## purposes - index of the generic argument. For cases like `[__T,
     ## _T]`, where both types should be mapped to `T` you can make `T` and
     ## `T1` respectively, using value provided by `idx`
+
     getImport*: proc(dep: AbsFile, conf: WrapConfig): seq[string] ## Generate
     ## import statement for header file dependency
+
     ignoreCursor*: proc(curs: CXCursor, conf: WrapConfig): bool ## User-defined
     ## predicate for determining whether or not cursor should be
     ## considered a part of api. Things like `internal` namespaces.
+
     collapsibleNamespaces*: seq[string]
     ignoreFile*: proc(file: AbsFile): bool
     isInternal*: proc(
@@ -184,6 +202,7 @@ type
     ## Note that this decision is not tied to particular file *from
     ## which* `dep` has been imported, but instead works the same way
     ## for all headers that depend on `dep`
+
     isTypeInternal*: proc(cxt: CXType, conf: WrapConfig): bool
     depResolver*: proc(cursor, referencedBy: CXCursor): DepResolutionKind
     isInLibrary*: proc(dep: AbsFile): bool ## Determine if `dep` file is in
@@ -320,15 +339,12 @@ func `==`*(a, b: WrappedEntry): bool =
   # (a.wrapped == b.wrapped)
 
 
-func newWrappedEntry*(
-    wrapped: PNimDecl, original: CDecl, source: CXCursor
-  ): WrappedEntry =
-
+func newWrappedEntry*(wrapped: PNimDecl, original: CDecl): WrappedEntry =
   WrappedEntry(
     kind: wekNimDecl,
     wrapped: wrapped,
     original: original,
-    cursor: source
+    cursor: original.cursor
   )
 
 
@@ -431,12 +447,20 @@ proc markSeen*(cache: var WrapCache, cursor: CXCursor) =
 proc seenCursor*(cache: WrapCache, cursor: CXCursor): bool =
   cursor.hashCursor() in cache.visited
 
+proc lastName*(cd: CDecl): string =
+  ## Return *last* name for declaration.
+  ##
+  ## `std::vector<int> -> vector`, `int main() -> main` etc.
+  $cd.ident[^1]
+
 #==========================  Operator handling  ==========================#
+
+
 
 func isOperator*(cd: CDecl): bool =
   cd.kind in {cdkMethod, cdkFunction} and
-  cd.name.head.startsWith("operator") and
-  (not cd.name.head.validIdentifier())
+  cd.lastName().startsWith("operator") and
+  (not cd.lastName().validIdentifier())
 
 proc isOperator*(cx: CXCursor): bool =
   ($cx).startsWith("operator") and
@@ -445,7 +469,7 @@ proc isOperator*(cx: CXCursor): bool =
 
 proc classifyOperator*(cd: CDecl): CXOperatorKind =
   assert cd.isOperator()
-  let name = cd.name.head.dropPrefix("operator")
+  let name = cd.lastName().dropPrefix("operator")
   case name:
     of "+=", "=", "-=", "*=",
        "<<=", ">>=", "&=", "|=", "/=", "%=", "^="
@@ -502,14 +526,16 @@ func getNimName*(cd: CDecl): string =
   case cd.kind:
     of cdkMethod, cdkFunction:
       if cd.isOperator():
-        if cd.name.head == "operator=":
+        if cd.lastName() == "operator=":
           "setFrom" # REVIEW change name to something different if possible
         else:
-          cd.name.head.dropPrefix("operator")
+          cd.lastName().dropPrefix("operator")
+
       else:
-        cd.name.head
+        cd.lastName()
+
     else:
-      cd.name.head
+      cd.lastName()
 
 proc initEnFieldVal*(v: BiggestInt): EnFieldVal =
   EnFieldVal(isRefOther: false, value: v)

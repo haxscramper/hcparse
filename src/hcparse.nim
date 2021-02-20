@@ -4,8 +4,8 @@ import hcparse/[
   cxcommon,
   cxvisitors,
   cxtypes,
-  hc_types,
   hc_visitors,
+  hc_types,
   hc_impls
 ]
 

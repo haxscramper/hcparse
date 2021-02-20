@@ -93,7 +93,7 @@ proc enumOverloads*(
         `impl`
         `subcall`
 
-      result.add newWrappedEntry(toNimDecl(reproc), we.original, we.cursor)
+      result.add newWrappedEntry(toNimDecl(reproc), we.original)
 
 import post/closure_override
 

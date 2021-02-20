@@ -1,4 +1,4 @@
-import hc_types, cxtypes, cxvisitors
+import hc_types, cxtypes, cxvisitors, hc_typeconv
 
 import hnimast
 
@@ -67,36 +67,40 @@ proc argsSignature*(
 
   argsSignature(cursor.getArguments(), types, names, wrap)
 
+proc visitMethod*(
+    cursor: CXCursor, parent: CScopedIdent, accs: CXAccessSpecifier): CDecl =
 
-proc visitMethod*(cursor: CXCursor, accs: CX_AccessSpecifier): CDecl =
-  result = CDecl(kind: cdkMethod, cursor: cursor, name: newPType $cursor)
+  result = CDecl(kind: cdkMethod, cursor: cursor, ident: parent & toCName(cursor))
   result.accs = accs
   result.args = cursor.getArguments()
 
 
-proc visitField*(cursor: CXCursor, accs: CX_AccessSpecifier): CDecl =
-  result = CDecl(kind: cdkField, cursor: cursor, name: newPType $cursor)
+proc visitField*(
+    cursor: CXCursor, parent: CSCopedIdent, accs: CXAccessSpecifier): CDecl =
+
+  result = CDecl(kind: cdkField, cursor: cursor, ident: parent & toCName(cursor))
   result.accs = accs
 
 var undefCnt: int = 0
 
 proc visitAlias*(
-  cursor: CXCursor, parent: CNamespace, conf: WrapConfig): CDecl =
-  result = CDecl(kind: cdkAlias, cursor: cursor, namespace: parent)
-  result.name = newPType $cursor
+  cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): CDecl =
+  result = CDecl(kind: cdkAlias, cursor: cursor, ident: parent & toCName(cursor))
 
 proc visitFunction*(
-  cursor: CXCursor, parent: CNamespace, conf: WrapConfig): CDecl =
-  result = CDecl(kind: cdkFunction, cursor: cursor, namespace: parent)
-  result.name = newPType $cursor
+  cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): CDecl =
+  result = CDecl(kind: cdkFunction, cursor: cursor,
+                 ident: parent & toCName(cursor))
+
   result.args = cursor.getArguments()
 
   for subn in cursor:
     case subn.cxKind:
-      of ckTemplateTypeParameter:
-        result.name.add newPType($subn)
-      of ckNonTypeTemplateParameter, ckTemplateRef:
-        result.genConstraints.add subn
+      of ckTemplateTypeParameter, ckNonTypeTemplateParameter,
+         ckTemplateRef
+           :
+        discard
+
       of ckParmDecl, ckTypeRef, ckNamespaceRef,
          ckFirstExpr, ckCompoundStmt, ckMemberRef,
          ckFirstAttr, ckVisibilityAttr
@@ -110,10 +114,12 @@ proc visitFunction*(
 
 
 proc visitEnum*(
-  cursor: CXcursor, parent: CNamespace, conf: WrapConfig): CDecl =
-  result = CDecl(kind: cdkEnum, cursor: cursor,
-                 namespace: parent,
-                 name: newPType(($cursor).dropPrefix("enum ")))
+  cursor: CXcursor, parent: CScopedIdent, conf: WrapConfig): CDecl =
+  result = CDecl(
+    kind: cdkEnum,
+    cursor: cursor,
+    ident: parent & toCName(cursor)
+  )
 
   for elem in cursor:
     result.flds.add ($elem, some(elem[0]))
@@ -121,23 +127,8 @@ proc visitEnum*(
   # info "Found enum", result.name
 
 
-proc requiredGenericParams*(cursor: CXCursor): seq[NType[PNode]] =
-  ## Get list of required generic parameters from cursor pointing to
-  ## class or struct declaration
-  for subn in cursor:
-    if subn.cxKind in {ckTemplateTemplateParameter,
-                        ckTemplateTypeParameter}:
-      if subn.len > 0:
-        # WARNING Just drop all template parameters that are not
-        # simply `T`.
-        discard
-      else:
-        result.add newPType $subn # WARNING blow up on `a<b>`
-
-
-
 proc visitClass*(
-  cursor: CXCursor, parent: CNamespace, conf: WrapConfig): CDecl =
+  cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): CDecl =
   ## Convert class under cursor to `CDecl`
   cursor.expectKind({
     ckClassDecl, ckClassTemplate, ckClassTemplatePartialSpecialization,
@@ -150,9 +141,8 @@ proc visitClass*(
     else:
       $cursor
 
-  result = CDecl(kind: cdkClass, cursor: cursor, name: newPType(name))
-  result.namespace = parent
-  result.name.add cursor.requiredGenericParams()
+  result = CDecl(
+    kind: cdkClass, cursor: cursor, ident: parent & toCName(cursor))
 
   identLog()
   defer: dedentLog()
@@ -172,52 +162,49 @@ proc visitClass*(
 
     if currentAccs == asPublic:
       case subn.cxKind:
-        of ckMethod, ckConversionFunction:
-          result.members.add visitMethod(subn, currentAccs)
-        of ckConstructor:
-          var res = visitMethod(subn, currentAccs)
-          res.name.head = result.name.head
-          result.members.add res
+        of ckMethod, ckConversionFunction, ckConstructor, ckDestructor:
+          result.members.add visitMethod(subn, result.ident, currentAccs)
+
         of ckAccessSpecifier:
           currentAccs = subn.getAccessSpecifier()
+
         of ckFieldDecl,
            ckVarDecl # WARNING static fields might need to be wrapped differently
              :
 
           if not conf.ignoreCursor(subn, conf):
             # debug subn.cxType().getTypeDeclaration()
-            result.members.add visitField(subn, currentAccs)
+            result.members.add visitField(subn, result.ident, currentAccs)
 
         of ckTemplateTypeParameter, ckFriendDecl,
            ckStaticAssert, ckTemplateTemplateParameter:
           discard
-        of ckDestructor:
-          # QUESTION WARNING I think using `destroy=` hook from nim side is
-          # unnecessary, but still need to verify this later.
-          var res = visitMethod(subn, currentAccs)
-          res.name.head = result.name.head
-          result.members.add res
+
         of ckFunctionTemplate:
-          result.members.add visitFunction(
-            subn, parent & @[ result.name ], conf)
+          result.members.add visitFunction(subn, result.ident, conf)
+
         of ckTypeAliasTemplateDecl, ckTypeAliasDecl,
            ckTypedefDecl, ckUsingDeclaration:
+
           if not conf.ignoreCursor(subn, conf):
-            result.members.add visitAlias(
-              subn, parent & @[result.name], conf)
+            result.members.add visitAlias(subn, result.ident, conf)
+
         of ckStructDecl, ckClassDecl, ckUnionDecl, ckEnumDecl,
            ckClassTemplate
              :
           # NOTE nested structs will be handled during object wrapping and
           # moved into separate type declarations
           discard
+
         of ckBaseSpecifier:
           # Base class specifier is ignored. All additional wrapping
           # operations should happend afterwards.
           discard
+
         of ckVisibilityAttr:
           # Visibility attributes are ignored for now
           discard
+
         else:
           inc undefCnt
           if undefCnt > 20:
@@ -230,30 +217,28 @@ proc visitClass*(
 
 
 proc visitCursor*(
-  cursor: CXCursor, parent: CNamespace, conf: WrapConfig): tuple[
+  cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): tuple[
   decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]]
 
 proc visitNamespace*(
-  cursor: CXCursor, parent: CNamespace, conf: WrapConfig): seq[CDecl] =
+  cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): seq[CDecl] =
   ## Convert all elements in namespace into sequence of `CDecl`
   ## elements.
 
-  let namespace =
-    if not (cursor.isInlineNamespace() == 1):
-      @[ newPType($cursor) ]
-    else:
-      @[]
+  var parent = parent
+  if not (cursor.isInlineNamespace() == 1):
+    parent &= toCName(cursor)
 
   if not conf.ignoreCursor(cursor, conf):
     for subn in cursor:
-      result.add visitCursor(subn, parent & namespace, conf).decls
+      result.add visitCursor(subn, parent, conf).decls
 
 proc visitMacrodef*(
-  cursor: CXCursor, parent: CNamespace, conf: WrapConfig): CDecl =
+  cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): CDecl =
   CDecl(cursor: cursor, kind: cdkMacro)
 
 proc visitCursor*(
-  cursor: CXCursor, parent: CNamespace, conf: WrapConfig): tuple[
+  cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): tuple[
   decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]] =
 
   # debug cursor.cxKind()

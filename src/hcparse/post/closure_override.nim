@@ -80,8 +80,7 @@ proc genConstructors(
 
       pr.signature.arguments = nargs
 
-      res.wrapped.add newWrappedEntry(
-        toNimDecl(pr), entry.original, entry.cursor)
+      res.wrapped.add newWrappedEntry(toNimDecl(pr), entry.original)
 
     block:
       let
@@ -103,7 +102,7 @@ proc genConstructors(
 
       # NOTE I have no fucking idea about `entry.original`
       res.wrapped.add newWrappedEntry(
-        toNimDecl(pr), entry.original, entry.cursor)
+        toNimDecl(pr), entry.original)
 
   var hasConstructors: bool = false
   for constructor in items(entry.cursor, {ckConstructor}):
@@ -130,7 +129,7 @@ proc genObjects(
     wrap.addField("rawImpl", newPType("ptr", @[$entry.cursor & "NimRaw"]))
     wrap.addField("userData", newPType("T"))
 
-    result.add newWrappedEntry(toNimDecl(wrap), entry.original, entry.cursor)
+    result.add newWrappedEntry(toNimDecl(wrap), entry.original)
 
 
 
@@ -176,9 +175,8 @@ proc genObjects(
     )
 
 
-    result.add newWrappedEntry(
-      toNimDecl(pr), entry.original, entry.cursor)
- 
+    result.add newWrappedEntry(toNimDecl(pr), entry.original)
+
 
 
 proc callbackOverride*(
@@ -227,9 +225,7 @@ proc callbackOverride*(
             obj.addField($meth & "Proc", newPType("pointer"))
             obj.addField($meth & "Env", newPType("pointer"))
 
-          result.add newWrappedEntry(toNimDecl(obj), entry.original, entry.cursor)
-
-
+          result.add newWrappedEntry(toNimDecl(obj), entry.original)
 
         result.add genObjects(entry, conf, codegen)
         let (wrapped, constructors) = genConstructors(entry, conf)

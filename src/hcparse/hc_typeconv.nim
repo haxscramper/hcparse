@@ -105,6 +105,7 @@ proc getSemanticNamespaces*(
 
 
 
+
 proc getTypeNamespaces*(
     cxtype: CXType, filterInline: bool = true, withType: bool = true
   ): seq[CXCursor] =
@@ -116,6 +117,35 @@ proc getTypeNamespaces*(
 
   return getSemanticNamespaces(
     parent, filterInline =  filterInline, withType = withType)
+
+proc requiredGenericParams*(cursor: CXCursor): seq[CXCursor] =
+  ## Get list of required generic parameters from cursor pointing to
+  ## class or struct declaration
+  for subn in cursor:
+    if subn.cxKind in {
+      ckTemplateTemplateParameter,
+      ckTemplateTypeParameter
+    }:
+      if subn.len > 0:
+        # WARNING Just drop all template parameters that are not
+        # simply `T`.
+        discard
+
+      else:
+        result.add subn # WARNING blow up on `a<b>`
+
+proc toCName*(cursor: CXCursor): CName =
+  result = CName(cursor: cursor)
+  for genParam in requiredGenericParams(cursor):
+    result.genParams.add toCName(genParam)
+
+proc toFullScopedIdent*(cxtype: CXType): CScopedIdent =
+  for ns in getTypeNamespaces(cxtype):
+    result.add CName(
+      cursor: ns,
+      genParams: requiredGenericParams(
+        ns.cxType().getTypeDeclaration()).mapIt(toCName(it))
+    )
 
 proc getTypeName*(cxtype: CXType, conf: WrapConfig): string =
   let curs = cxtype.getTypeDeclaration()
@@ -296,44 +326,45 @@ func hasUnexposed*(nt: NType[PNode]): bool =
     else:
       false
 
-func toCppImport*(ns: CNamespace): string =
+func toCppNamespace*(ns: CScopedIdent, withGenerics: bool = true): string =
+  ## Generate `importcpp` pattern for scoped identifier
   var buf: seq[string]
   var genIdx: int = 0
   for part in ns:
-    if part.genParams.len > 0:
+    if withGenerics and part.genParams.len > 0:
       var genTypes: seq[string]
       for param in part.genParams:
         genTypes.add "'" & $genIdx
         inc genIdx
 
-      buf.add part.head & "<" & genTypes.join(", ") & ">"
+      buf.add $part.cursor & "<" & genTypes.join(", ") & ">"
     else:
-      buf.add part.head
+      buf.add $part.cursor
 
   result = buf.join("::")
 
-func toNType*(ns: CNamespace): NType[PNode] =
-  var nameBuf: seq[string]
-  for part in ns:
-    result.add part.genParams
-    nameBuf.add part.head
+# func toNType*(ns: CScopedIdent): NType[PNode] =
+#   var nameBuf: seq[string]
+#   for part in ns:
+#     result.add part.genParams
+#     nameBuf.add part.head
 
-  result.head = nameBuf.join("::")
+#   result.head = nameBuf.join("::")
 
 
-func inNamespace*(cd: CDecl, ns: CNamespace): NType[PNode] =
-  var nameBuf: seq[string]
+# func inNamespace*(cd: CDecl, ns: CNamespace): NType[PNode] =
+#   var nameBuf: seq[string]
 
-  result = NType[PNode](kind: ntkIdent)
+#   result = NType[PNode](kind: ntkIdent)
 
-  for n in items(ns & @[ cd.name ]):
-    result.add n.genParams
-    nameBuf.add n.head
+#   for n in items(ns & @[ cd.name ]):
+#     result.add n.genParams
+#     nameBuf.add n.head
 
-  result.head = nameBuf.join("::")
+#   result.head = nameBuf.join("::")
 
-func inNamespace*(cd: CDecl, ns: CDecl): NType[PNode] =
-  cd.inNamespace(ns.namespace & @[ ns.name ])
+# func inNamespace*(cd: CDecl, ns: CDecl): NType[PNode] =
+#   cd.inNamespace(ns.namespace & @[ ns.name ])
 
 func pubFields*(cd: CDecl): seq[CDecl] =
   assert cd.kind in {cdkClass, cdkStruct}
@@ -341,8 +372,8 @@ func pubFields*(cd: CDecl): seq[CDecl] =
     if (member.kind == cdkField) and (member.accs == asPublic):
       result.add member
 
-func namespaceName*(cd: CDecl): string =
-  (cd.namespace & @[cd.name]).toCppImport()
+# func namespaceName*(cd: CDecl): string =
+#   (cd.namespace & @[cd.name]).toCppImport()
 
 proc isEnum*(cxtype: CXType): bool =
   case cxtype.cxKind():
