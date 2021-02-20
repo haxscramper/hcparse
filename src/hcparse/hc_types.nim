@@ -525,6 +525,7 @@ proc classifyOperator*(cd: CDecl): CXOperatorKind =
     of " delete", " delete[]":
       cxoDeleteOp
 
+
     else:
       if cd.cursor.cxKind() == ckConversionFunction:
         cxoConvertOp
