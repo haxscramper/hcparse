@@ -121,6 +121,9 @@ proc wrapOperator*(
 
   else:
     case kind:
+      of cxoNewOp, cxoDeleteOp:
+        discard
+
       of cxoAsgnOp:
         it.icpp = &"(# {it.name} #)"
 
@@ -158,7 +161,10 @@ proc wrapOperator*(
         it.icpp = &"(*#)"
 
       of cxoPrefixOp:
-        it.icpp = &"({it.name}#)"
+        it.icpp = &"({it.name}#)" # FIXME use scoped ident
+
+      of cxoPostfixOp:
+        it.icpp = &"(#{it.name})" # FIXME use scoped ident
 
       of cxoCommaOp:
         it.name = "commaOp"
@@ -225,11 +231,18 @@ proc wrapProcedure*(
 
   result.canAdd = true
 
+  debug pr.cursor.getSpellingLocation()
   if pr.isOperator():
-    let (decl, adt) = pr.wrapOperator(conf)
-    it = decl
-    it.iinfo = currIInfo()
-    addThis = adt
+    # HACK temporary workaround for `new` and `delete` operator handing
+    if classifyOperator(pr) notin {cxoNewOp, cxoDeleteOp}:
+      let (decl, adt) = pr.wrapOperator(conf)
+      it = decl
+      it.iinfo = currIInfo()
+      addThis = adt
+
+    else:
+      addThis = false
+      result.canAdd = false
 
   else:
     it.name = pr.getNimName()

@@ -40,6 +40,7 @@ type
   CXOperatorKind* = enum
     ## Classification for operators
     cxoPrefixOp ## Prefix operator `@a`
+    cxoPostfixOp ## Postfix operator `a@`
     cxoInfixOP ## Infix operator `a @ b`
     cxoAsgnOp ## Assign operator `a = b`
     cxoArrayOp ## Array access operator `a[b]`
@@ -49,6 +50,8 @@ type
     cxoCommaOp ## Comma operator
     cxoConvertOp ## User-defined conversion operator
     cxoUserLitOp ## User-defined literal operators
+    cxoNewOp ## `new` operator
+    cxoDeleteOp ## `delete` operator
 
   IncludeDep* = object
     # TODO use it as edge value
@@ -173,7 +176,8 @@ type
     makeHeader*: proc(cursor: CXCursor, conf: WrapConfig): NimHeaderSpec ## |
     ## Generate identifier for `{.header: ... .}`
 
-    typeNameForScoped*: proc(ident: CScopedIdent, conf: WrapConfig): NType[PNode]
+    typeNameForScoped*: proc(
+      ident: CScopedIdent, conf: WrapConfig): NType[PNode]
     ## Generate type name for a scoped identifier - type or function
     ## declaration. The only important things are: `head` name and list of
     ## generic parameters, so `ntkIdent` is the optimal return kind.
@@ -196,6 +200,8 @@ type
 
     collapsibleNamespaces*: seq[string]
     ignoreFile*: proc(file: AbsFile): bool
+    baseDir*: AbsDir ## Root directory for C++ sources being wrapped. Used
+                     ## for debug comments in generated sources
     isInternal*: proc(
       dep: AbsFile, conf: WrapConfig, index: FileIndex): bool ## Determine
     ## if particular dependency (`dep` file) should be re-exported.
@@ -479,7 +485,14 @@ proc classifyOperator*(cd: CDecl): CXOperatorKind =
     of "[]":
       cxoArrayOp
 
-    of "-", "+", "/",
+    of "-", "+":
+      if cd.args.len == 1:
+        cxoPrefixOp
+
+      else:
+        cxoInfixOp
+
+    of "/",
        "++", "--", # NOTE this is an operator implementation, so we are
                   # not (i hope) dropping information about
                   # prefi/postfix calls
@@ -505,6 +518,12 @@ proc classifyOperator*(cd: CDecl): CXOperatorKind =
 
     of ",":
       cxoCommaOp
+
+    of " new", " new[]":
+      cxoNewOp
+
+    of " delete", " delete[]":
+      cxoDeleteOp
 
     else:
       if cd.cursor.cxKind() == ckConversionFunction:

@@ -508,6 +508,8 @@ proc wrapSingleFile*(
   ## (instantiation info in codegen callback, comments etc.) and list of
   ## C++ codegen files.
 
+  if wrapConf.baseDir.len == 0:
+    raiseArgumentError(".baseDir is not set for wrapper configuration")
 
   var
     cache: WrapCache
@@ -534,8 +536,10 @@ proc wrapSingleFile*(
     )
 
     if node.getCursor().getSpellingLocation().getSome(loc):
+      debug loc.file
+      let file = withoutPrefix(AbsFile(loc.file), wrapConf.baseDir)
       decl.addCodeComment(
-        &"Declared in {loc.file}:{loc.line}")
+        &"Declared in {file}:{loc.line}")
 
 
 

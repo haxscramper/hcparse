@@ -203,6 +203,8 @@ proc toNType*(
   ##   - `void*` -> `pointer`
   ## - For C types with elaborated specifier (e.g. `enum E` instead of
   ##   simply `E`) specifiers are simply dropped.
+  ##
+  ## - TODO :: `const&&` parameters /could/ be mapped to `sink` annotations
   var mutable: bool = false
   let restype = case cxtype.cxKind:
     of tkBool:       newPType("bool")
@@ -237,17 +239,23 @@ proc toNType*(
       case cxtype[].cxkind:
         of tkChar_S:
           newPType("cstring")
+
         of tkPointer:
           if cxtype[][].cxKind() == tkChar_S:
             newPType("cstringArray")
+
           else:
             newNType("ptr", [toNType(cxtype[], conf).ntype])
+
         of tkVoid:
           newPType("pointer")
+
         of tkFunctionProto:
           toNType(cxtype[], conf).ntype
+
         else:
           newNType("ptr", [toNType(cxtype[], conf).ntype])
+
     of tkConstantArray:
       newNType(
         "array",
@@ -256,24 +264,29 @@ proc toNType*(
           toNType(cxtype.getElementType(), conf).ntype
         ]
       )
+
     of tkFunctionProto:
       newProcNType[PNode](
         rtype = cxtype.getResultType().toNType(conf).ntype,
         args = cxtype.argTypes.mapIt(toNType(it, conf).ntype),
         pragma = newPPragma("cdecl")
       )
+
     of tkLValueReference:
       result.mutable = cxType.isMutableRef()
       toNType(cxType[], conf).ntype
+
     of tkRValueReference: # WARNING I'm not 100% sure this is correct
                           # way to map rvalue references to nim type
                           # system.
       result.mutable = cxType.isMutableRef()
       toNType(cxType[], conf).ntype
+
     of tkUnexposed:
       let strval = ($cxType).dropPrefix("const ") # WARNING
       if strval.validCxxIdentifier():
         newPtype(strval)
+
       else:
         # pprintStackTrace()
         let decl = cxtype.getTypeDeclaration()
@@ -306,10 +319,13 @@ proc toNType*(
 
 
         res
+
     of tkDependent: newPType("DEPENDENT")
+
     of tkMemberPointer:
       # WARNING Member pointer
       newPType("!!!")
+
     else:
       err "CANT CONVERT: ".toRed({styleItalic}),
         cxtype.kind, " ", ($cxtype).toGreen(), " ",
@@ -348,37 +364,11 @@ func toCppNamespace*(ns: CScopedIdent, withGenerics: bool = true): string =
 
   result = buf.join("::")
 
-# func toNType*(ns: CScopedIdent): NType[PNode] =
-#   var nameBuf: seq[string]
-#   for part in ns:
-#     result.add part.genParams
-#     nameBuf.add part.head
-
-#   result.head = nameBuf.join("::")
-
-
-# func inNamespace*(cd: CDecl, ns: CNamespace): NType[PNode] =
-#   var nameBuf: seq[string]
-
-#   result = NType[PNode](kind: ntkIdent)
-
-#   for n in items(ns & @[ cd.name ]):
-#     result.add n.genParams
-#     nameBuf.add n.head
-
-#   result.head = nameBuf.join("::")
-
-# func inNamespace*(cd: CDecl, ns: CDecl): NType[PNode] =
-#   cd.inNamespace(ns.namespace & @[ ns.name ])
-
 func pubFields*(cd: CDecl): seq[CDecl] =
   assert cd.kind in {cdkClass, cdkStruct}
   for member in cd.members:
     if (member.kind == cdkField) and (member.accs == asPublic):
       result.add member
-
-# func namespaceName*(cd: CDecl): string =
-#   (cd.namespace & @[cd.name]).toCppImport()
 
 proc isEnum*(cxtype: CXType): bool =
   case cxtype.cxKind():
@@ -391,7 +381,6 @@ proc isEnum*(cxtype: CXType): bool =
 
       else:
         return false
-      # debug cxtype.lispRepr()
 
     else:
       return false
