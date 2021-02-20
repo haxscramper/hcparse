@@ -261,6 +261,7 @@ proc wrapProcedure*(
 
       it.header = conf.makeHeader(pr.cursor, conf)
 
+
   if addThis:
     assert parent.isSome()
     it.args.add initCArg(
@@ -305,9 +306,21 @@ proc wrapProcedure*(
     setDefaultForArg(newArg, arg.cursor, conf)
     it.args.add newArg
 
+  if $it.cursor == "operator=":
+    # FIXME check if first argument and parent declaration types are
+    # identical. Right now it does not work because
+    # `b3Matrix3x3` != `const b3Matrix3x3 &`
+    if parentDecl.get().cursor.cxType() == pr.args[0].cursor.cxType():
+      # By default `operator=` is converted to regular `setFrom` proc to
+      # correctly handle multiple overloads (in C++ `operator=` can have
+      # different types on RHS and LHS, but this is not the case in nim).
+      # *if* assignmed is indeed done from two identical types, then it can
+      # be wrapped as actual `=` proc.
+      it.name = "="
+      it.kind = pkOperator
 
   if pr.isOperator and pr.classifyOperator() == cxoAsgnOp:
-    # Force override return type for assignment operators
+    # HACK Force override return type for assignment operators
     it.retType = newPType("void")
 
   elif pr.cursor.kind in {ckConstructor, ckConversionFunction}:
@@ -632,7 +645,8 @@ proc isAggregateInitable*(cd: CDecl, initArgs: var seq[CArg], conf: WrapConfig):
     ckUnionDecl,
     ckMethod,
     ckFunctionTemplate,
-    ckDestructor
+    ckDestructor,
+    ckAlignedAttr
     # ckBaseClassSpecifier
   }
 
@@ -658,6 +672,9 @@ proc isAggregateInitable*(cd: CDecl, initArgs: var seq[CArg], conf: WrapConfig):
 
       of tkInvalid:
         return false
+
+      of tkConstantArray:
+        return aux(cursor[0])
 
       else:
         debug cursor.cxType().cxKind()

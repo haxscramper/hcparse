@@ -276,8 +276,8 @@ proc `$`*(cursor: CXCursor): string =
 
 proc `$`*(cxkind: CXCursorKind): string =
   case cxkind:
-    of ckBaseSpecifier:
-      "BaseSpecifier"
+    of ckBaseSpecifier: "ckBaseSpecifier"
+    of ckAlignedAttr: "ckAlignedAttr"
 
     else:
       $getCursorKindSpelling(cxkind)
