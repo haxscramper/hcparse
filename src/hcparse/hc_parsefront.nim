@@ -482,7 +482,7 @@ proc postprocessWrapped*(
 proc wrapSingleFile*(
     file: FsFile,
     errorReparseVerbose: bool = false,
-    wrapConf: WrapConfig = baseWrapConf,
+    wrapConf: WrapConfig = baseCppWrapConf,
     parseConf: ParseConfig = baseCppParseConfig,
     postprocess: seq[Postprocess] = defaultPostprocessSteps,
   ): tuple[decls: seq[NimDecl[PNode]], codegen: seq[CxxCodegen]] =

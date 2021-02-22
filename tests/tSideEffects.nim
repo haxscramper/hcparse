@@ -9,12 +9,25 @@ suite "Show function body":
     outfile.writeFile """
     #include <iostream>
 
+    /**
+     * Status level.  This refers to both internal status (i.e., whilst
+     * running, when warnings/errors are reported) and an indicator of a
+     * threshold of when to halt (when said internal state exceeds the
+     * threshold).
+     */
+    enum	mandoclevel {
+      MANDOCLEVEL_OK = 0,
+      MANDOCLEVEL_STYLE, ///< style suggestions
+      MANDOCLEVEL_WARNING, ///< warnings: syntax, whitespace, etc.
+    };
+
+
     /// Documentation comments for class
     /// Multiline comment
     class MyClass
     {
     public:
-      int field; ///< Field documentation
+      int field; //! Field documentation
       virtual void method() const = 0;
       static const int static_field;
       static int static_method();

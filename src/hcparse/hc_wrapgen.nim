@@ -270,7 +270,7 @@ proc wrapProcedure*(
         it.icpp = &"({toCppNamespace(pr.ident)}(@))"
 
       else:
-        it.icpp = &"({it.name})"
+        it.icpp = &"{it.name}"
 
       it.header = conf.makeHeader(pr.cursor, conf)
 

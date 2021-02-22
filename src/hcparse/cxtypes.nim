@@ -696,12 +696,16 @@ proc objTreeRepr*(
   let comment = pptConst(
     commentText.dedentComment(), initStyle(styleItalic, fgCyan))
 
-  if cursor.len  == 0:
+  if cursor.len == 0:
     let val = pptconst(
       cursor.tokens(tu).mapIt(
         getTokenSpelling(tu, it)
       ).join(" "), initprintstyling(fg = fggreen))
-    var flds = if showtype: @[ctype, val] else: @[val]
+    var flds: seq[ObjTree]
+    if showtype: flds.add ctype
+    if showComment: flds.add comment
+    flds.add val
+    # @[ctype, val] else: @[val]
 
     if cursor.cxKind in {ckMacroExpansion}:
       let cxRange =

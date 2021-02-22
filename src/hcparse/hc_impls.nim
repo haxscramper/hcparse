@@ -26,6 +26,12 @@ proc asGlobalInclude*(cursor: CXCursor, conf: WrapConfig): string =
 
   return $loc.file
 
+proc asIncludeFromDir*(
+  cursor: CXCursor, conf: WrapConfig, dir: AbsDir): string =
+
+  let loc = cursor.getSpellingLocation().get()
+  return loc.file.getStr().dropPrefix(dir.getStr()).dropPrefix("/")
+
 proc fixTypeName*(str: string, idx: int, conf: WrapConfig): string =
   ## Correct C++ type name to be used in nim wrappers. Convert `::` to
   ## joined name, use correct upper/lowercasing (nep1 style).
@@ -114,7 +120,12 @@ let baseCppParseConfig* = ParseConfig(
   globalFlags: @["-xc++", "-std=c++11"]
 )
 
-let baseWrapConf* = WrapConfig(
+let baseCParseConfig = ParseConfig(
+  includePaths: getBuiltinHeaders(),
+  globalFlags: @[]
+)
+
+let baseCppWrapConf* = WrapConfig(
   isImportcpp: true,
   parseConf: baseCppParseConfig,
   isInLIbrary: (
@@ -220,3 +231,6 @@ let baseWrapConf* = WrapConfig(
         #     result = drkWrapDirectly
   )
 )
+
+let baseCWrapConf* = baseCPPWrapConf.withIt do:
+  it.isImportcpp = false
