@@ -319,7 +319,6 @@ proc `==`*(a, b: CName): bool =
 
 proc addDoc*(cache: var WrapCache, id: CSCopedIdent, doc: seq[string]) =
   if doc.len > 0:
-    debug "Added documentation comment for", id
     cache.identComments.mgetOrPut(id, @[]).add(doc)
 
 proc importX*(conf: WrapConfig): string =

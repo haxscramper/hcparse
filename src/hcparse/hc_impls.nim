@@ -237,7 +237,6 @@ let baseCppWrapConf* = WrapConfig(
   docCommentFor: (
     proc(id: CSCopedIdent, cursor: CXCursor, cache: var WrapCache): string =
       if id in cache.identComments:
-        info "Have documentation for", id
         return cache.identComments[id].join("\n").formatComment()
   )
 )

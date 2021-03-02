@@ -950,7 +950,8 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[Wrapp
   var vals: OrderedTable[string, tuple[
     resName: string,
     resVal: BiggestInt,
-    stringif: string
+    stringif: string,
+    cursor: CXCursor
   ]]
 
   let implName = nt.head & tern(conf.isImportCpp, "Cxx", "C")
@@ -1038,7 +1039,8 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[Wrapp
           vals[$name] = (
             resName: ($name).cEnumName(),
             resVal: val,
-            stringif: toCppNamespace(declEn.ident) & "::" & $name
+            stringif: toCppNamespace(declEn.ident) & "::" & $name,
+            cursor: name
           )
 
 
@@ -1054,6 +1056,7 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[Wrapp
     let enumPref = conf.prefixForEnum(declEn.ident, conf, cache)
 
     var en = newPEnumDecl(name = nt.head, iinfo = currIInfo())
+    en.addDocComment conf.docCommentFor(declEn.ident, declEn.cursor, cache)
 
     proc renameField(fld: string): string {.closure.} =
       # Drop common prefix for enum declaration and add one generated from
@@ -1071,8 +1074,10 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[Wrapp
 
     for name, wrap in vals:
       # Add fields to nim enum without values
-      en.addField(name.renameField())
+      let comment = conf.docCommentFor(
+        declEn.ident & toCName(name), wrap.cursor, cache)
 
+      en.addField(name.renameField(), docComment = comment)
       strCase.add nnkOfBranch.newPTree(
         newPIdent(name.cEnumName()),
         nnkAsgn.newPTree(newPIdent("result"), newPLit(wrap.stringif))
