@@ -1,5 +1,6 @@
 import std/[unittest, decls, options]
 import hmisc/other/[oswrap]
+import hmisc/helpers
 import hcparse
 
 
@@ -109,7 +110,7 @@ class Foo
       unit = parseFile(outfile, opts = {})
       topCursor = unit.getTranslationUnitCursor()
 
-
+    echo topCursor.treeRepr(unit)
 
     # for tok in topCursor.tokenStrings(unit):
     #   echo $tok

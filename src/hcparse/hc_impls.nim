@@ -1,9 +1,9 @@
 ## Default implementation for user-definable callbacks
-import hc_types, cxcommon, hnimast, cxtypes,
-       std/[sequtils, strutils, strformat]
+import hc_types, cxcommon, hnimast, cxtypes, hc_docwrap,
+       std/[sequtils, strutils, strformat, tables]
 
 import hmisc/helpers
-import hmisc/other/oswrap
+import hmisc/other/[oswrap, colorlogger]
 import std/[sets]
 
 import hc_depresolve
@@ -113,8 +113,6 @@ proc getBuiltinHeaders*(): seq[AbsDir] =
   @[
     toAbsDir &"/usr/lib/clang/{version}/include"
   ]
-
-
 
 let baseCppParseConfig* = ParseConfig(
   includepaths: getBuiltinHeaders(),
@@ -235,6 +233,13 @@ let baseCppWrapConf* = WrapConfig(
         #   let (dir, file, ext) = loc.file.splitFile()
         #   if "string" in file:
         #     result = drkWrapDirectly
+  ),
+  docCommentFor: (
+    proc(id: CSCopedIdent, cursor: CXCursor, cache: var WrapCache): string =
+      info "Requested documentation for", id
+      if id in cache.identComments:
+        debug "Found comments"
+        return cache.identComments[id].join("\n").formatComment()
   )
 )
 

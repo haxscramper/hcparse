@@ -105,7 +105,7 @@ proc wrapOperator*(
     conf: WrapConfig
   ): tuple[decl: GenProc, addThis: bool] =
 
-  var it = initGenProc(oper.cursor, currIInfo())
+  var it = initGenProc(oper.cursor, currIInfo(), oper.ident)
 
   it.name = oper.getNimName()
   # it.genParams = genParams # FIXME: was it necessary to have generic
@@ -221,7 +221,9 @@ proc wrapProcedure*(
 
 
 
-  var it = initGenProc(pr.cursor, currIInfo())
+  var it = initGenProc(pr.cursor, currIInfo(), pr.ident)
+  # WARNING `pr.ident` might contain incorrect full name
+
   var addThis = (
     pr.kind == cdkMethod and
     pr.cursor.cxKind notin {
@@ -285,7 +287,7 @@ proc wrapProcedure*(
   for arg in pr.args:
     var (vtype, mutable) = arg.cursor.cxType().toNType(conf)
     if arg.cursor.cxType().isEnum():
-      vtype.head &= "Cxx"
+      vtype.head &= conf.isImportCpp.tern("Cxx", "C")
 
     if vtype.kind in {ntkIdent, ntkGenericSpec}:
       if vtype.head == "UNEXPOSED":
@@ -485,7 +487,7 @@ proc wrapTypeFromNamespace(
 
   result.annotation = some(newPPragma(
     newExprColonExpr(
-      newPIdent (if conf.isImportcpp: "importcpp" else: "importc"),
+      newPIdent(conf.importX()),
       ident.toCppNamespace().newRStrLit()
     ),
     newExprColonExpr(
@@ -590,7 +592,7 @@ proc getParentFields*(
           args = { "self" : obj.name },
           iinfo = currIInfo(),
           pragma = newPPragma(newExprColonExpr(
-            newPIdent "importcpp", newRStrLit(&"(#.{fldName})")))
+            newPIdent(wrapConf.importX()), newRStrLit(&"(#.{fldName})")))
         )
 
         result[^1].genParams.add(obj.name.genParams)
@@ -605,7 +607,7 @@ proc getParentFields*(
             iinfo = currIInfo(),
             args = { "self" : obj.name, "val" : fldType },
             pragma = newPPragma(newExprColonExpr(
-              newPIdent "importcpp", newRStrLit(&"(#.{fldName} = @)")))
+              newPIdent(wrapConf.importX()), newRStrLit(&"(#.{fldName} = @)")))
           )
 
           result[^1].genParams.add(obj.name.genParams)
@@ -756,7 +758,8 @@ proc wrapObject*(
     if isAggregateInitable(cd, initArgs, conf) and initArgs.len > 0:
       # info obj.name.head, "can be aggregate initialized"
       result.genAfter.add newWrappedEntry(
-        initGenProc(CXCursor(), currIInfo()).withIt do:
+        # WARNING `cd.ident`
+        initGenProc(CXCursor(), currIInfo(), cd.ident).withIt do:
           it.name = "init" & obj.name.head
           it.args = initArgs
           it.header = conf.makeHeader(cd.cursor, conf)
@@ -1183,7 +1186,7 @@ proc getNType*(carg: CArg): NType[PNode] =
   else:
     return carg.ntype
 
-proc toNNode*(gp: GenProc): PProcDecl =
+proc toNNode*(gp: GenProc, wrapConf: WrapConfig): PProcDecl =
   result = newPProcDecl(
     name = gp.name,
     iinfo = gp.iinfo,
@@ -1207,7 +1210,7 @@ proc toNNode*(gp: GenProc): PProcDecl =
   result.signature.pragma = gp.pragma
 
   result.signature.pragma.add(
-    newPIdentColonString("importcpp", gp.icpp))
+    newPIdentColonString(wrapConf.importX(), gp.icpp))
 
   result.signature.pragma.add(
     newExprColonExpr(newPIdent "header", gp.header.toNNode()))

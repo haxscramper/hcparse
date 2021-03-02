@@ -25,6 +25,8 @@ enum	mandocerr {
 	MANDOCERR_OK,
 	MANDOCERR_MDOCDATE, /* Mdocdate found: Dd ... */
 };
+
+void usesEnum(mandocerr en) {}
 """
 
 file.writeFile(str)
@@ -39,12 +41,15 @@ let wrapConf = baseCWrapConf.withDeepIt do:
 suite "Wrap enum":
   # echo parseCppString(str).treeRepr(str)
 
+  let resFile = "/tmp/res.nim"
   wrapWithConfig(
     AbsFile file,
-    AbsFile "/tmp/res.nim",
+    AbsFile resFile,
     wrapConf,
     baseCppParseConfig
   )
 
 
-  echo readFile("/tmp/res.nim").colorizeToStr("nim")
+  # echo readFile(resFile).colorizeToStr("nim")
+  execShell shCmd(nim, c).withIt do:
+    it.arg resFile

@@ -1,5 +1,5 @@
 import gram, cxtypes, cxcommon
-import hmisc/other/oswrap
+import hmisc/other/[oswrap, colorlogger]
 import hnimast, hnimast/pprint
 import std/[tables, sets, strutils, sequtils, hashes, strformat, macros]
 import hmisc/algo/[hseq_mapping, hstring_algo]
@@ -71,7 +71,13 @@ type
     ## extracted, `genParams` is a (possibly empty) list of generic
     ## parameters for given name. `nimType` is a resulting nim type created
     ## from `cursor`.
-    cursor*: CXCursor ## Name declaration cursor
+    case isGenerated*: bool
+      of false:
+        cursor*: CXCursor ## Name declaration cursor
+
+      of true:
+        name*: string
+
     genParams*: seq[CScopedIdent]
 
   CScopedIdent* = seq[CName] ## Full scoped C/C++ identifier like
@@ -219,15 +225,20 @@ type
 
     prefixForEnum*: proc(
       enumId: CScopedIdent, conf: WrapConfig,
-      cache: var WrapCache): string 
+      cache: var WrapCache): string
+
+    docCommentFor*: proc(
+      id: CSCopedIdent, cursor: CXCursor, cache: var WrapCache): string
 
   WrapCache* = object
     hset*: HashSet[Hash]
     visited*: HashSet[cuint]
     enumPrefs*: HashSet[string]
+    identComments*: Table[CScopedIdent, seq[string]]
 
   GenProc* = object
     ## Generated wrapped proc
+    ident* {.requiresinit.}: CSCopedIdent
     iinfo* {.requiresinit.}: LineInfo
     name*: string ## Name of the generated proc on nim side
     icpp*: string ## `importcpp` pattern string
@@ -249,6 +260,7 @@ type
     wekNimPass
 
   WrappedEntry* = object
+    ident*: CScopedIdent
     case kind*: WrappedEntryKind
       of wekMultitype:
         decls*: seq[WrappedEntry]
@@ -284,6 +296,38 @@ type
     code*: string
     header*: string
     filename*: RelFile
+
+proc identName*(cn: CName): string =
+  if cn.isGenerated:
+    cn.name
+
+  else:
+    $cn.cursor
+
+proc `$`*(ident: CSCopedIdent): string =
+  ident.mapIt(identName(it)).join("::")
+
+proc hash*(ident: CScopedIdent): Hash =
+  ## Computes a Hash from `x`.
+  var h: Hash = 0
+  for elem in ident:
+    h = h !& hash(elem.identName())
+  result = !$h
+
+proc `==`*(a, b: CName): bool =
+  a.identName() == b.identName()
+
+proc addDoc*(cache: var WrapCache, id: CSCopedIdent, doc: seq[string]) =
+  if doc.len > 0:
+    debug "Added documentation comment for", id
+    cache.identComments.mgetOrPut(id, @[]).add(doc)
+
+proc importX*(conf: WrapConfig): string =
+  if conf.isImportCpp:
+    "importcpp"
+
+  else:
+    "importc"
 
 proc setPrefixForEnum*(
   wrapConf: var WrapConfig, maps: seq[(string, string)]) =
@@ -374,12 +418,13 @@ func newWrappedEntry*(wrapped: PNimDecl, original: CDecl): WrappedEntry =
     kind: wekNimDecl,
     wrapped: wrapped,
     original: original,
-    cursor: original.cursor
+    cursor: original.cursor,
+    ident: original.ident
   )
 
 
 func newWrappedEntry*(gproc: GenProc): WrappedEntry =
-  WrappedEntry(gproc: gproc, kind: wekProc)
+  WrappedEntry(gproc: gproc, kind: wekProc, ident: gproc.ident)
 
 func newWrappedEntry*(wrapped: seq[WrappedEntry]): WrappedEntry =
   WrappedEntry(decls: wrapped, kind: wekMultitype)
@@ -455,8 +500,9 @@ func initCArg*(
 func initCArg*(name: string, cursor: CXCursor): CArg =
   CArg(isRaw: true, name: name, cursor: cursor)
 
-func initGenProc*(cursor: CXCursor, iinfo: LineInfo): GenProc =
-  GenProc(cursor: cursor, iinfo: iinfo)
+func initGenProc*(
+  cursor: CXCursor, iinfo: LineInfo, ident: CSCopedIdent): GenProc =
+  GenProc(cursor: cursor, iinfo: iinfo, ident: ident)
 
 #==========================  Helper utilities  ===========================#
 proc declHash*(cursor: CXCursor): Hash =

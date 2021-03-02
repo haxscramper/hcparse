@@ -5,12 +5,13 @@ import hnimast
 
 import hmisc/helpers
 import hmisc/algo/hstring_algo
-import hmisc/other/[oswrap, colorlogger]
+import hmisc/other/[oswrap, colorlogger, hshell]
 import hmisc/types/colorstring
 import gram
 
 import cxtypes, cxcommon, hc_types, hc_visitors, hc_typeconv,
-       hc_depresolve, hc_wrapgen, hc_impls, hc_postprocess
+       hc_depresolve, hc_wrapgen, hc_impls, hc_postprocess,
+       hc_docwrap
 
 
 proc parseTranslationUnit*(
@@ -479,6 +480,16 @@ proc postprocessWrapped*(
     result.wrapped.add res
 
 
+proc getExpanded*(file: AbsFile, parseConf: ParseConfig): string =
+  let flags = getFlags(parseConf, file)
+  var cmd = shCmd(clang, -C, -E, -P)
+  for flag in flags:
+    cmd.raw flag
+
+  cmd.arg file
+
+  result = evalShellStdout(cmd)
+
 proc wrapSingleFile*(
     file: FsFile,
     errorReparseVerbose: bool = false,
@@ -515,6 +526,8 @@ proc wrapSingleFile*(
     cache: WrapCache
     index: FileIndex
 
+  fillDocComments(getExpanded(toAbsFile(file), parseConf), cache)
+
   let parsed = parseFile(
     file.toAbsFile(), parseConf, wrapConf,
     reparseOnNil = errorReparseVerbose
@@ -540,6 +553,8 @@ proc wrapSingleFile*(
       let file = withoutPrefix(AbsFile(loc.file), wrapConf.baseDir)
       decl.addCodeComment(
         &"Declared in {file}:{loc.line}")
+
+    decl.addDocComment wrapConf.docCommentFor(node.ident, node.getCursor(), cache)
 
 
 
@@ -568,7 +583,7 @@ proc wrapSingleFile*(
 # {text}
 # """
 
-        var decl = gproc.toNNode().toNimDecl()
+        var decl = gproc.toNNode(wrapConf).toNimDecl()
 
         updateComments(decl, node)
         result.decls.add decl

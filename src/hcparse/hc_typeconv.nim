@@ -140,13 +140,18 @@ proc toScopedIdent*(cursor: CXCursor): CScopedIdent =
     result.add toCName(elem)
 
 proc toCName*(cursor: CXCursor): CName =
-  result = CName(cursor: cursor)
+  result = CName(cursor: cursor, isGenerated: false)
   for genParam in requiredGenericParams(cursor):
     result.genParams.add toScopedIdent(genParam)
+
+proc toCName*(str: string, genp: seq[CScopedIdent] = @[]): CName =
+  result = CName(name: str, isGenerated: true)
+  result.genParams = genp
 
 proc toFullScopedIdent*(cxtype: CXType): CScopedIdent =
   for ns in getTypeNamespaces(cxtype):
     result.add CName(
+      isGenerated: false,
       cursor: ns,
       genParams: requiredGenericParams(
         ns.cxType().getTypeDeclaration()).mapIt(toScopedIdent(it))
