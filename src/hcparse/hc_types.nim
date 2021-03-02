@@ -217,9 +217,14 @@ type
     isImportcpp*: bool
     parseConf*: ParseConfig
 
+    prefixForEnum*: proc(
+      enumId: CScopedIdent, conf: WrapConfig,
+      cache: var WrapCache): string 
+
   WrapCache* = object
-    hset: HashSet[Hash]
-    visited: HashSet[cuint]
+    hset*: HashSet[Hash]
+    visited*: HashSet[cuint]
+    enumPrefs*: HashSet[string]
 
   GenProc* = object
     ## Generated wrapped proc
@@ -280,6 +285,25 @@ type
     header*: string
     filename*: RelFile
 
+proc setPrefixForEnum*(
+  wrapConf: var WrapConfig, maps: seq[(string, string)]) =
+
+  let oldImpl = wrapConf.prefixForEnum
+
+  wrapConf.prefixForEnum =
+    proc(
+      enumId: CScopedIdent, conf: WrapConfig, cache: var WrapCache): string =
+      let name = $enumId[^1].cursor
+      for (full, prefix) in maps:
+        if name == full:
+          result = prefix
+          break
+
+      if result.len == 0:
+        result = oldImpl(enumId, conf, cache)
+
+      else:
+        cache.enumPrefs.incl result
 
 template impl1() {.dirty.} =
   case we.kind:

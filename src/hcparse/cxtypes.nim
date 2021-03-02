@@ -204,6 +204,23 @@ proc str*(tok: CXToken, tu: CXTranslationUnit): string =
 proc cxKind*(cxTok: CXToken): CXTokenKind =
   cxtok.getTokenKind()
 
+proc fromTokens*(toks: seq[CXToken], unit: CXTranslationUnit): string =
+  ## Perform crude conversion of the tokens back to string
+  var prevLine = -1
+  var prevCol = -1
+  for tok in toks:
+    let str = $getTokenSpelling(unit, tok)
+    let loc = getTokenLocation(unit, tok).getExpansionLocation().get()
+    if prevLine < loc.line:
+      prevLine = loc.line
+      result.add "\n"
+      prevCol = -1
+
+    if prevCol < loc.column:
+      result.add " "
+
+    result.add str
+    prevCol = loc.column + str.len
 
 
 

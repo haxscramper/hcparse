@@ -580,3 +580,19 @@ proc wrapSingleFile*(
         var decl = node.wrapped
         updateComments(decl, node)
         result.decls.add decl
+
+proc wrapWithConfig*(
+  infile, outfile: FsFile, wrapConf: WrapConfig, parseConf: ParseConfig) =
+
+  writeWrapped(
+    wrapSingleFile(
+      infile,
+      errorReparseVerbose = false,
+      wrapConf = wrapConf,
+      parseConf = parseConf
+    ),
+    outFile = outfile,
+    codegens = none(FsDir),
+    compile = @[],
+    wrapConf = wrapConf
+  )

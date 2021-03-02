@@ -4,6 +4,7 @@ import hc_types, cxcommon, hnimast, cxtypes,
 
 import hmisc/helpers
 import hmisc/other/oswrap
+import std/[sets]
 
 import hc_depresolve
 
@@ -215,6 +216,11 @@ let baseCppWrapConf* = WrapConfig(
     proc(dep: AbsFile, conf: WrapConfig,
          index: FileIndex): bool {.closure.} =
       isInternalImpl(dep, conf, index)
+  ),
+  prefixForEnum: (
+    proc(enumId: CScopedIdent, conf: WrapConfig, cache: var WrapCache): string =
+      result = ($enumId[^1].cursor).splitCamel().mapIt(it[0].toLowerAscii()).join("")
+      cache.enumPrefs.incl result
   ),
   depResolver: (
     proc(cursor, referencedBy: CXCursor): DepResolutionKind {.closure.} =

@@ -616,7 +616,7 @@ proc getParentFields*(
           result[^1].kind = pkAssgn
 
 
-proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry]
+proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[WrappedEntry]
 
 proc getDefaultAccess*(cursor: CXCursor): CXAccessSpecifier =
   case cursor.cxKind():
@@ -769,7 +769,7 @@ proc wrapObject*(
     case entry.cxKind():
       of ckEnumDecl:
         let visited = visitEnum(entry, cd.ident, conf)
-        result.genBefore.add wrapEnum(visited, conf)
+        result.genBefore.add wrapEnum(visited, conf, cache)
 
       of ckStructDecl, ckClassDecl, ckUnionDecl:
         let visited = visitClass(entry, cd.ident, conf)
@@ -904,16 +904,26 @@ proc getFields*(declEn: CDecl, conf: WrapConfig): tuple[
           else:
             raiseAssert("#[ IMPLEMENT ]#")
 
+      of ckUnexposedExpr:
+        case val[0].kind:
+          of ckIntegerLiteral:
+            resVal = some initEnFieldVal(
+              val.tokenStrings(conf.unit)[0].parseInt())
+
+          else:
+            raiseImplementError(&"Kind {val[0].kind}")
+
       elif $val.kind == "OverloadCandidate": # HACK
         resval = none EnFieldVal
 
       else:
+        err val.treeRepr(conf.unit)
         raiseAssert(
           &"#[ IMPLEMENT for kind {val.kind} {instantiationInfo()} ]#")
 
     result.enfields.add (name: name, value: resval)
 
-proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
+proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[WrappedEntry] =
   ## Generate wrapper for enum declaration
   ##
   ## Generates wrapper for enum declaration, using wrap configuration.
@@ -940,7 +950,7 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
     stringif: string
   ]]
 
-  let implName = nt.head & "Cxx"
+  let implName = nt.head & tern(conf.isImportCpp, "Cxx", "C")
   block:
     # Generate wrapper for default implementation of the enum
     var implEn = newPEnumDecl(name = implName, iinfo = currIInfo())
@@ -980,9 +990,11 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
     # values, and duplicated fields are dropped.
     var flds: seq[(string, BiggestInt)]
 
+    var uniformEnum: bool = true
     block:
       var prev: BiggestInt = 0
       for (key, val) in enfields:
+        let startPrev = prev
         if val.isSome():
           if val.get().isRefOther:
             discard
@@ -994,6 +1006,8 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
           flds.add (key, prev)
           inc prev
 
+        if prev > startPrev + 1:
+          uniformEnum = false
 
       # Sort fields based on value
       flds = flds.sorted(
@@ -1025,8 +1039,7 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig): seq[WrappedEntry] =
     debug nt.head
     # Get name of the enum type itsel by combining first letters of
     # `PascalCase` or `snake_case` name.
-    let enumPref = nt.head.
-      splitCamel().mapIt(it[0].toLowerAscii()).join("")
+    let enumPref = conf.prefixForEnum(declEn.ident, conf, cache)
 
     var en = newPEnumDecl(name = nt.head, iinfo = currIInfo())
 
@@ -1149,7 +1162,7 @@ proc wrapApiUnit*(
         result.add decl.wrapAlias(decl.ident, conf, cache)
 
       of cdkEnum:
-        result.add decl.wrapEnum(conf)
+        result.add decl.wrapEnum(conf, cache)
 
       of cdkFunction:
         for f in decl.wrapFunction(conf, cache):
