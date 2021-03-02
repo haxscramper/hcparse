@@ -855,7 +855,7 @@ proc wrapObject*(
 
 proc getFields*(declEn: CDecl, conf: WrapConfig): tuple[
     namedvals: Table[string, BiggestInt],
-    enfields: seq[tuple[name: string, value: Option[EnFieldVal]]]
+    enfields: seq[tuple[name: CXCursor, value: Option[EnFieldVal]]]
   ] =
 
   for (name, value) in declEn.flds:
@@ -957,6 +957,8 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[Wrapp
   block:
     # Generate wrapper for default implementation of the enum
     var implEn = newPEnumDecl(name = implName, iinfo = currIInfo())
+    implEn.addDocComment conf.docCommentFor(declEn.ident, declEn.cursor, cache)
+
 
     implEn.pragma.add newPIdentColonString(
       (if conf.isImportcpp: "importcpp" else: "importc"),
@@ -980,18 +982,20 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[Wrapp
     for (key, val) in enfields:
       if val.isSome():
         if val.get().isRefOther:
-          repeated.mgetOrPut(val.get().othername, @[ key ]).add key
+          repeated.mgetOrPut(val.get().othername, @[ $key ]).add $key
+
         else:
           let val = val.get().value
           if val notin fldVals:
-            fldVals[val] = key
+            fldVals[val] = $key
+
           else:
-            repeated.mgetOrPut(fldVals[val], @[ key ]).add key
+            repeated.mgetOrPut(fldVals[val], @[ $key ]).add $key
 
 
     # List of field with respective values. Holes are filled with correct
     # values, and duplicated fields are dropped.
-    var flds: seq[(string, BiggestInt)]
+    var flds: seq[(CXCursor, BiggestInt)]
 
     var uniformEnum: bool = true
     block:
@@ -1001,20 +1005,24 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[Wrapp
         if val.isSome():
           if val.get().isRefOther:
             discard
+
           else:
             prev = val.get().value
             flds.add (key, prev)
 
         else:
-          flds.add (key, prev)
+          # NOTE previously `inc prev` was /after/ field addition. Not sure
+          # what other edge case was involved, or this is just plain
+          # off-by-one error.
           inc prev
+          flds.add (key, prev)
 
         if prev > startPrev + 1:
           uniformEnum = false
 
       # Sort fields based on value
       flds = flds.sorted(
-        proc(f1, f2: (string, BiggestInt)): int {.closure.} =
+        proc(f1, f2: (CXCursor, BiggestInt)): int {.closure.} =
           cmp(f1[1], f2[1])
       )
 
@@ -1022,24 +1030,25 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[Wrapp
       # Generate wrapped for C enum. Each field has value assigned to it.
       var prev = BiggestInt(-120948783)
       for (name, val) in flds:
+        let comment = conf.docCommentFor(declEn.ident & toCName(name), name, cache)
         if val != prev:
           prev = val
-          implEn.addField(name.cEnumName(), some newPLit(val))
+          implEn.addField(($name).cEnumName(), some newPLit(val), docComment = comment)
 
-          vals[name] = (
-            resName: name.cEnumName(),
+          vals[$name] = (
+            resName: ($name).cEnumName(),
             resVal: val,
-            stringif: toCppNamespace(declEn.ident) & "::" & name
+            stringif: toCppNamespace(declEn.ident) & "::" & $name
           )
+
 
 
     result.add newWrappedEntry(toNimDecl(implEn), declEn)
 
   block: # Nim proxy proc declaration.
     # Determine common prefix for C++ enum (if any)
-    let pref = declEn.flds.mapIt(it.fldName).commonPrefix()
+    let pref = declEn.flds.mapIt($it.fldName).commonPrefix()
 
-    debug nt.head
     # Get name of the enum type itsel by combining first letters of
     # `PascalCase` or `snake_case` name.
     let enumPref = conf.prefixForEnum(declEn.ident, conf, cache)

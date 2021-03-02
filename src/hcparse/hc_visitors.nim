@@ -122,7 +122,7 @@ proc visitEnum*(
   )
 
   for elem in cursor:
-    result.flds.add ($elem, some(elem[0]))
+    result.flds.add (elem, some(elem[0]))
 
   # info "Found enum", result.name
 

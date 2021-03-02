@@ -43,7 +43,7 @@ proc visit(
           lastCtx = nameCtx & name & getName(fld, instr)
 
         else:
-          cache.addDoc(lastCtx, @[instr[node.slice()]])
+          cache.addDoc(lastCtx, @[instr[fld.slice()]])
 
       lastComment = @[]
 

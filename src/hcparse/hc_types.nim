@@ -103,7 +103,7 @@ type
         members*: seq[CDecl]
 
       of cdkEnum:
-        flds*: seq[tuple[fldname: string, value: Option[CXCursor]]]
+        flds*: seq[tuple[fldname: CXCursor, value: Option[CXCursor]]]
 
       else:
         nil

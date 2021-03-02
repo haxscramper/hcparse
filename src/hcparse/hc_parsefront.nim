@@ -554,7 +554,6 @@ proc wrapSingleFile*(
       decl.addCodeComment(
         &"Declared in {file}:{loc.line}")
 
-    decl.addDocComment wrapConf.docCommentFor(node.ident, node.getCursor(), cache)
 
 
 
