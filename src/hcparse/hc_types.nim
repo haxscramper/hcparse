@@ -338,8 +338,10 @@ proc setPrefixForEnum*(
 
   wrapConf.prefixForEnum =
     proc(
-      enumId: CScopedIdent, conf: WrapConfig, cache: var WrapCache): string =
-      let name = $enumId[^1].cursor
+      enumId: CScopedIdent, conf: WrapConfig,
+      cache: var WrapCache
+    ): string =
+      let name = identName(enumId[^1])
       for (full, prefix) in maps:
         if name == full:
           result = prefix

@@ -9,6 +9,8 @@ import hmisc/algo/[htemplates, hseq_distance]
 import hmisc/helpers
 import hmisc/other/[colorlogger, oswrap]
 import hmisc/types/colorstring
+import htsparse/cpp/cpp
+import fusion/matching except addPrefix
 
 import hc_visitors, hc_types
 
@@ -1207,15 +1209,107 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[Wrapp
 
 
 
-proc wrapMacros*(declMacros: seq[CDecl], conf: WrapConfig): seq[WrappedEntry] =
-  info "Wrapping macros"
-  for decl in declMacros:
-    debug decl.cursor
-    logIndented:
-      for (tok, kind) in decl.cursor.tokenKinds(conf.unit):
-        debug tok.toGreen(), kind
 
-      debug decl.cursor.tokenStrings(conf.unit).join(", ", ("<\e[31m", "\e[39m>"))
+proc evalTokensInt(strs: seq[string]): Option[int64] =
+  let str = strs.join(" ")
+
+  proc aux(node: CppNode): Option[int64] =
+    case node.kind:
+      of cppNumberLiteral:
+        try:
+          return some parseBiggestInt(str[node.slice()])
+
+        except ValueError as e:
+          err e.msg
+
+      of cppBinaryExpression:
+        if (Some(@lhs), Some(@rhs)) ?= (aux(node[0]), aux(node[1])):
+          var invert = (node[0].slice().b + 2) .. (node[1].slice().a - 2)
+          let op = strip(str[invert])
+          result = case op:
+            of "<<": some lhs shl rhs
+            of ">>": some lhs shr rhs
+            of "+": some lhs + rhs
+            of "-": some lhs - rhs
+            of "/": some lhs div rhs
+            of "*": some lhs * rhs
+            else: raiseImplementError(op)
+
+      of cppTranslationUnit, cppSyntaxError, cppExpressionStatement,
+         cppParenthesizedExpression
+           :
+        return aux(node[0])
+
+      of cppStringLiteral:
+        discard
+
+      else:
+        raiseImplementError(node.treeRepr(str))
+
+
+
+  result = aux(parseCppString(str))
+
+func capitalAscii*(str: string): string =
+  toLowerAscii(str).capitalizeAscii()
+
+func capitalAscii*(strs: seq[string]): seq[string] =
+  for str in strs:
+    result.add toLowerAscii(str).capitalizeAscii()
+
+proc wrapMacroEnum*(
+  values: seq[CDecl], conf: WrapConfig, cache: var WrapCache): seq[WrappedEntry] =
+
+  let prefix = split($values[0].cursor, "_")[0]
+  let enumPref = conf.prefixForEnum(@[toCName(prefix)], conf, cache)
+  info "Wrapping", prefix, "as", enumPref, values.len
+  var flds: seq[(string, BiggestInt)]
+  for val in values:
+    let toks = val.cursor.tokenStrings(conf.unit)
+    # FIXME range breaks on `#define func(arg)`
+    let value = evalTokensInt(toks[1 ..^ 1])
+    let name = enumPref & toks[0].splitCamel()[1..^1].capitalAscii().join("") 
+    debug name, toks.join(", ", ("<\e[31m", "\e[39m>")), value
+
+    if value.isSome():
+      flds.add (name, value.get())
+
+  if flds.len > 0:
+    flds = flds.sortedByIt(it[1])
+    var en: PEnumDecl = newPEnumDecl(
+      capitalAscii(enumPref) & capitalAscii(prefix),
+      iinfo = currIInfo()
+    )
+
+    for (name, val) in flds:
+      en.addField(name, some newPLit(val))
+
+    result.add newWrappedEntry(toNimDecl(en), values[0])
+
+
+
+proc wrapMacros*(
+  declMacros: seq[CDecl], conf: WrapConfig, cache: var WrapCache): seq[WrappedEntry] =
+  info "Wrapping macros"
+  var prefix: string
+  var buf: seq[CDecl]
+  logIndented:
+    for decl in declMacros:
+      let pref = split($decl.cursor, "_")[0]
+      if prefix.len == 0 or pref == prefix:
+        buf.add decl
+        prefix = pref
+
+      elif prefix.len > 0 and pref != prefix:
+        debug decl.cursor, pref, prefix
+        prefix = pref
+        if buf.len > 1:
+          result.add wrapMacroEnum(buf, conf, cache)
+          buf = @[]
+
+    if buf.len > 1:
+      result.add wrapMacroEnum(buf, conf, cache)
+
 
 
 proc wrapApiUnit*(
@@ -1266,7 +1360,7 @@ proc wrapApiUnit*(
       else:
         debug decl.kind
 
-  result.add wrapMacros(macrolist, conf)
+  result.add wrapMacros(macrolist, conf, cache)
 
 proc getNType*(carg: CArg): NType[PNode] =
   if carg.isRaw:

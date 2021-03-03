@@ -217,8 +217,15 @@ let baseCppWrapConf* = WrapConfig(
       isInternalImpl(dep, conf, index)
   ),
   prefixForEnum: (
-    proc(enumId: CScopedIdent, conf: WrapConfig, cache: var WrapCache): string =
-      result = ($enumId[^1].cursor).splitCamel().mapIt(it[0].toLowerAscii()).join("")
+    proc(
+      enumId: CScopedIdent, conf: WrapConfig, cache: var WrapCache
+    ): string =
+      result = enumId[^1]
+        .identName()
+        .splitCamel()
+        .mapIt(it[0].toLowerAscii())
+        .join("")
+
       cache.enumPrefs.incl result
   ),
   depResolver: (
