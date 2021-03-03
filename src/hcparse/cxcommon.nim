@@ -11,8 +11,7 @@ func toCamelCase*(str: string): string =
   return buf.join("")
 
 proc fixIdentName*(str: string): string =
-  result = str.toCamelCase()
-  result = case result:
+  case str:
     of "set": "cxSet"
     of "type": "cxType"
     of "range": "cxRange"
@@ -24,7 +23,11 @@ proc fixIdentName*(str: string): string =
     of "include": "cxInclude"
     of "proc": "cxProc"
     of "method": "cxMethod"
-    else: result
+    elif str.normalize() in ["cstringarray"]:
+      str
+
+    else:
+      str.toCamelCase()
 
 func toPascalCase*(str: string): string =
   str.split("_").

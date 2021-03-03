@@ -549,7 +549,6 @@ proc wrapSingleFile*(
     )
 
     if node.getCursor().getSpellingLocation().getSome(loc):
-      debug loc.file
       let file = withoutPrefix(AbsFile(loc.file), wrapConf.baseDir)
       decl.addCodeComment(
         &"Declared in {file}:{loc.line}")

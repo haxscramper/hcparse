@@ -232,8 +232,6 @@ proc wrapProcedure*(
   )
 
   result.canAdd = true
-
-  debug pr.cursor.getSpellingLocation()
   if pr.isOperator():
     # HACK temporary workaround for `new` and `delete` operator handing
     if classifyOperator(pr) notin {cxoNewOp, cxoDeleteOp}:
@@ -515,9 +513,20 @@ proc wrapAlias*(
   # Create new identifier for aliased type
   var newAlias = conf.typeNameForScoped(al.ident, conf)
   # Identifier for old aliased type
-  var baseType = conf.typeNameForScoped(aliasof.toFullScopedIdent(), conf)
-  # WARNING mismatched generic parameters between lhs and rhs parts of
-  # alias might result in broken wrappers.
+  var baseType: NType[PNode]
+  if getTypeDeclaration(aliasof).cxKind() == ckNodeclFound:
+    let name = fromCxxTypeName($aliasof)
+    if name.len > 0:
+      baseType = newPType(name)
+
+    else:
+      baseType = newPType($aliasof)
+
+  else:
+    baseType = conf.typeNameForScoped(aliasof.toFullScopedIdent(), conf)
+    # WARNING mismatched generic parameters between lhs and rhs parts of
+    # alias might result in broken wrappers.
+
 
   if false: # TEMP need to find a real-world use-case to correctly handle
             # this, disabled for now.

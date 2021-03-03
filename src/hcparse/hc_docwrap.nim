@@ -1,20 +1,23 @@
 import hc_types, cxcommon, cxtypes, hc_typeconv
-import std/[strformat, tables, hashes, strutils]
+import std/[strformat, tables, hashes, strutils, options]
 import hmisc/other/colorlogger
 import hmisc/algo/hstring_algo
 import hmisc/base_errors
 
 import htsparse/cpp/cpp
 
-proc getName(node: CppNode, text: string): CName =
+proc getName(node: CppNode, text: string): Option[CName] =
   if node.kind in {cppTypeIdentifier, cppIdentifier}:
-    toCName(text[node.slice()])
+    some toCName(text[node.slice()])
 
   elif node.kind in {cppEnumSpecifier, cppEnumerator}:
     getName(node[0], text)
 
+  elif node.kind in {cppEnumeratorList}:
+    none CName
+
   else:
-    raiseImplementError(&"Kind {node.kind}")
+    raiseImplementError(&"Kind {node.kind} {treeRepr(node, text)}")
 
 proc visit(
     node: CppNode,
@@ -34,27 +37,32 @@ proc visit(
 
     of cppEnumSpecifier:
       let name = getName(node, instr)
-      var buf: seq[string]
-      for comment in lastComment:
-        # HACK to recognize only comments that are 'close enough'. All
-        # comments are collected in buffer and then dumped into adjacent
-        # elements. This also indludes file-level comments like GNU license
-        # shit etc.
-        if comment.b >= node.slice().a - 20:
-          buf.add instr[comment]
+      if name.isNone():
+        warn "Cannot get name for enumeration"
 
-        cache.addDoc(nameCtx & name, buf)
+      else:
+        let name = name.get()
+        var buf: seq[string]
+        for comment in lastComment:
+          # HACK to recognize only comments that are 'close enough'. All
+          # comments are collected in buffer and then dumped into adjacent
+          # elements. This also indludes file-level comments like GNU license
+          # shit etc.
+          if comment.b >= node.slice().a - 20:
+            buf.add instr[comment]
 
-      lastComment = @[]
+          cache.addDoc(nameCtx & name, buf)
 
-      var lastCtx: CScopedIdent
+        lastComment = @[]
 
-      for fld in node[1]:
-        if fld.kind == cppEnumerator:
-          lastCtx = nameCtx & name & getName(fld, instr)
+        var lastCtx: CScopedIdent
 
-        else:
-          cache.addDoc(lastCtx, @[instr[fld.slice()]])
+        for fld in node[1]:
+          if fld.kind == cppEnumerator:
+            lastCtx = nameCtx & name & getName(fld, instr).get()
+
+          else:
+            cache.addDoc(lastCtx, @[instr[fld.slice()]])
 
       lastComment = @[]
 
@@ -84,9 +92,8 @@ proc formatComment*(str: string): string =
 
 
 proc fillDocComments*(file: string, cache: var WrapCache) =
-  info "Filling documentation comments"
   let tree = parseCppString(file)
-  echo treeRepr(tree, file)
+  # echo treeRepr(tree, file)
   var lastComment: seq[Slice[int]]
   logIndented:
     visit(tree, cache, lastComment, file, @[])

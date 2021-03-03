@@ -39,11 +39,11 @@ proc fixTypeName*(str: string, idx: int, conf: WrapConfig): string =
   if str.len == 0:
     return "T" & $idx
 
-  elif str in @[
+  elif str.normalize() in @[
     "bool", "cint", "cuint", "ptr", "void", "char",
     "cuchar", "cstring", "cchar", "uint32", "uint16",
     "culong", "clong", "cshort", "cushort", "array",
-    "ushort", "cfloat"
+    "ushort", "cfloat", "cstringarray"
   ]:
     return str
   else:
@@ -85,6 +85,7 @@ proc fixTypeName*(
           newPIdent(fixIdentName(getStrVal(arg.idents[0])))
 
       conf.fixtypename(arg.vtype, conf, idx)
+
 
 proc typeNameForScoped*(
     ident: CScopedIdent, conf: WrapConfig): NType[PNode] =

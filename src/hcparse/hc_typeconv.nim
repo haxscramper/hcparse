@@ -115,8 +115,8 @@ proc getTypeNamespaces*(
 
   var parent = cxtype.getTypeDeclaration()
 
-  return getSemanticNamespaces(
-    parent, filterInline =  filterInline, withType = withType)
+  result = getSemanticNamespaces(
+    parent, filterInline = filterInline, withType = withType)
 
 proc requiredGenericParams*(cursor: CXCursor): seq[CXCursor] =
   ## Get list of required generic parameters from cursor pointing to
@@ -188,6 +188,13 @@ proc isMutableRef*(cxtype: CXType): bool =
         discard
     else:
       raiseAssert(&"#[ IMPLEMENT Is {cxtype.cxKind} a mutable ref? ]#")
+
+proc fromCxxTypeName*(name: string): string =
+  case name:
+    of "long": "clong"
+    of "int": "cint"
+    of "unsigned long": "culong"
+    else: ""
 
 proc toNType*(
   cxtype: CXType,
