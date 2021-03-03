@@ -863,12 +863,19 @@ proc wrapObject*(
 
   result.obj = newWrappedEntry(toNimDecl(obj), cd)
 
+type EnumFieldResult = tuple[
+  namedvals: Table[string, BiggestInt],
+  enfields: seq[tuple[name: CXCursor, value: Option[EnFieldVal]]]
+]
 
-proc getFields*(declEn: CDecl, conf: WrapConfig): tuple[
-    namedvals: Table[string, BiggestInt],
-    enfields: seq[tuple[name: CXCursor, value: Option[EnFieldVal]]]
-  ] =
+type EnumWrapVals = OrderedTable[string, tuple[
+  resName: string,
+  resVal: BiggestInt,
+  stringif: string,
+  cursor: CXCursor
+]]
 
+proc getFields*(declEn: CDecl, conf: WrapConfig): EnumFieldResult =
   for (name, value) in declEn.flds:
     let val = value.get()
     var resval: Option[EnFieldVal]
@@ -937,6 +944,237 @@ proc getFields*(declEn: CDecl, conf: WrapConfig): tuple[
 
     result.enfields.add (name: name, value: resval)
 
+proc cEnumName(
+    str: string, nt: NType[PNode], cache: var WrapCache): string =
+  # Generate name for C enum. QUESTION: enum names don't need to be
+  # perfectly accurate as they are converted to integers and then casted
+  # - I'm not completely sure if this correct.
+  result = nt.head
+  result[0] = result[0].toLowerAscii()
+  result &= "_" & str
+  result = result.strip(chars = {'_'})
+  var resLen = result.len()
+  while true:
+    result = result.replace("__", "_")
+    if result.len != resLen:
+      resLen = result.len
+
+    else:
+      break
+
+  result = cache.nameCache.getName(result)
+
+proc renameField(
+    fld: string, pref, enumPref: string, cache: var WrapCache): string =
+  # Drop common prefix for enum declaration and add one generated from
+  # enum name
+  cache.nameCache.newName(
+    fld.
+      dropPrefix(pref).
+      dropPrefix("_").
+      toSnakeCamelCase().
+      capitalizeAscii().
+      addPrefix(enumPref)
+  )
+
+proc sortFields(enFields: EnumFieldResult): seq[(CXCursor, BiggestInt)] =
+  let (namedvals, enfields) = enFields
+  var fldVals: Table[BiggestInt, string]
+  var repeated: Table[string, seq[string]]
+
+  for (key, val) in enfields:
+    if val.isSome():
+      if val.get().isRefOther:
+        repeated.mgetOrPut(val.get().othername, @[ $key ]).add $key
+
+      else:
+        let val = val.get().value
+        if val notin fldVals:
+          fldVals[val] = $key
+
+        else:
+          repeated.mgetOrPut(fldVals[val], @[ $key ]).add $key
+
+
+  # List of field with respective values. Holes are filled with correct
+  # values, and duplicated fields are dropped.
+  var flds: seq[(CXCursor, BiggestInt)]
+
+  var uniformEnum: bool = true
+  block:
+    var prev: BiggestInt = 0
+    for (key, val) in enfields:
+      let startPrev = prev
+      if val.isSome():
+        if val.get().isRefOther:
+          discard
+
+        else:
+          prev = val.get().value
+          flds.add (key, prev)
+
+      else:
+        # NOTE previously `inc prev` was /after/ field addition. Not sure
+        # what other edge case was involved, or this is just plain
+        # off-by-one error.
+        inc prev
+        flds.add (key, prev)
+
+      if prev > startPrev + 1:
+        uniformEnum = false
+
+    # Sort fields based on value
+    flds = flds.sorted(
+      proc(f1, f2: (CXCursor, BiggestInt)): int {.closure.} =
+        cmp(f1[1], f2[1])
+    )
+
+  return flds
+
+
+proc makeCEnum*(
+    declEn: CDecl,
+    nt: NType[PNode],
+    implName: string,
+    flds: seq[(CXCursor, BiggestInt)],
+    vals: var EnumWrapVals,
+    conf: WrapConfig,
+    cache: var WrapCache
+  ): PEnumDecl =
+  # Generate wrapper for default implementation of the enum
+  var implEn = newPEnumDecl(name = implName, iinfo = currIInfo())
+  implEn.addDocComment conf.docCommentFor(declEn.ident, declEn.cursor, cache)
+
+
+  implEn.pragma.add newPIdentColonString(
+    (if conf.isImportcpp: "importcpp" else: "importc"),
+    toCppNamespace(declEn.ident)
+  )
+
+  implEn.pragma.add nnkExprColonExpr.newPTree(
+    newPIdent("header"),
+    conf.makeHeader(declEn.cursor, conf).toNNode()
+  )
+
+  implEn.exported = true
+
+  block:
+    # Generate wrapped for C enum. Each field has value assigned to it.
+    var prev = BiggestInt(-120948783)
+    for (name, val) in flds:
+      let comment = conf.docCommentFor(declEn.ident & toCName(name), name, cache)
+      if val != prev:
+        prev = val
+        implEn.addField(cEnumName($name, nt, cache),
+                        some newPLit(val), docComment = comment)
+
+        vals[$name] = (
+          resName: cEnumName($name, nt, cache),
+          resVal: val,
+          stringif: toCppNamespace(declEn.ident) & "::" & $name,
+          cursor: name
+        )
+
+  return implEn
+
+proc makeNimEnum(
+    declEn: CDecl,
+    nt: NType[PNode],
+    implName: string,
+    vals: EnumWrapVals,
+    conf: WrapConfig,
+    cache: var WrapCache
+  ): PEnumDecl  =
+
+  var en: PEnumDecl
+
+  # Nim proxy proc declaration.
+  # Determine common prefix for C++ enum (if any)
+  let pref = declEn.flds.mapIt($it.fldName).commonPrefix()
+
+  # Get name of the enum type itsel by combining first letters of
+  # `PascalCase` or `snake_case` name.
+  let enumPref = conf.prefixForEnum(declEn.ident, conf, cache)
+
+  en = newPEnumDecl(name = nt.head, iinfo = currIInfo())
+  en.addDocComment conf.docCommentFor(declEn.ident, declEn.cursor, cache)
+
+
+  for name, wrap in vals:
+    # Add fields to nim enum without values
+    let comment = conf.docCommentFor(
+      declEn.ident & toCName(name), wrap.cursor, cache)
+
+    en.addField(name.renameField(pref, enumPref, cache), docComment = comment)
+
+  en.exported = true
+
+
+  return en
+
+
+proc makeEnumConverters(
+    en: PEnumDecl,
+    nt: NType[PNode],
+    implName: string,
+    vals: EnumWrapVals,
+    conf: WrapConfig,
+    cache: var WrapCache
+  ): WrappedEntry =
+  # Metadata associated with proxy enum
+  var arr = nnkBracket.newPTree()
+  var strCase = nnkCaseStmt.newPtree(newPIdent "en")
+
+  for name, wrap in vals:
+    strCase.add nnkOfBranch.newPTree(
+      newPIdent(cEnumName($name, nt, cache)),
+      nnkAsgn.newPTree(newPIdent("result"), newPLit(wrap.stringif))
+    )
+
+    let cName = cEnumName($name, nt, cache)
+    arr.add pquote do:
+      (
+        name: `newPLit(name)`, # Name of the original enum
+        cEnum: `newPIdent(cName)`, # Original enum value
+        cName: `newPLit(wrap.stringif)`, # Namespaced C++ enum name
+        value: `newPLit(wrap.resVal)` # Integer value for field
+      )
+
+  let
+    enName = newPIdent(en.name)
+    arrName = newPIdent("arr" & en.name & "mapping")
+    convName = newPident("to" & implName)
+    implName = newPIdent(implName)
+
+
+  let helpers = pquote do:
+    const `arrName`: array[`enName`, tuple[
+      name: string,
+      cEnum: `implName`,
+      cName: string,
+      value: int
+    ]] = `arr`
+
+    # Convert proxy enum to integer value
+    proc toInt*(en: `enName`): int {.inline.} =
+      `arrName`[en].value
+
+    # Convert set of enums to bitmasked integer
+    proc toInt*(en: set[`enName`]): int {.inline.} =
+      for val in en:
+        result = bitor(result, `arrName`[val].value)
+
+    # Return namespaced name of the original enum
+    proc `$`*(en: `implName`): string {.inline.} =
+      `strCase`
+
+    converter `convName`*(en: `enName`): `implName` {.inline.} =
+      `arrName`[en].cEnum
+
+  return newWrappedEntry(toNimDecl(helpers), true)
+
+
+
 proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[WrappedEntry] =
   ## Generate wrapper for enum declaration
   ##
@@ -953,214 +1191,23 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[Wrapp
   var nt = conf.typeNameForScoped(declEn.ident, conf)
   var ennames: seq[string]
 
-  proc cEnumName(str: string, cache: var WrapCache): string {.closure.} =
-    # Generate name for C enum. QUESTION: enum names don't need to be
-    # perfectly accurate as they are converted to integers and then casted
-    # - I'm not completely sure if this correct.
-    result = nt.head
-    result[0] = result[0].toLowerAscii()
-    result &= "_" & str
-    result = result.strip(chars = {'_'})
-    var resLen = result.len()
-    while true:
-      result = result.replace("__", "_")
-      if result.len != resLen:
-        resLen = result.len
+  var vals: EnumWrapVals
+  # Get list of all enum fields with values, construct table of values
+  # without filtering, and then apply cleanups
+  var flds = getFields(declEn, conf).sortFields()
+  let implName: string = nt.head & tern(conf.isImportCpp, "Cxx", "C")
 
-      else:
-        break
-
-    result = cache.nameCache.getName(result)
+  result.add newWrappedEntry(toNimDecl(
+    makeCEnum(declEn, nt, implName, flds, vals, conf, cache)), declEn)
 
 
-  var vals: OrderedTable[string, tuple[
-    resName: string,
-    resVal: BiggestInt,
-    stringif: string,
-    cursor: CXCursor
-  ]]
-
-  let implName = nt.head & tern(conf.isImportCpp, "Cxx", "C")
-  block:
-    # Generate wrapper for default implementation of the enum
-    var implEn = newPEnumDecl(name = implName, iinfo = currIInfo())
-    implEn.addDocComment conf.docCommentFor(declEn.ident, declEn.cursor, cache)
+  let en = makeNimEnum(declEn, nt, implName, vals, conf, cache)
+  result.add newWrappedEntry(toNimDecl(en), declEn)
+  result.add makeEnumConverters(en, nt, implName, vals, conf, cache)
 
 
-    implEn.pragma.add newPIdentColonString(
-      (if conf.isImportcpp: "importcpp" else: "importc"),
-      toCppNamespace(declEn.ident)
-    )
-
-    implEn.pragma.add nnkExprColonExpr.newPTree(
-      newPIdent("header"),
-      conf.makeHeader(declEn.cursor, conf).toNNode()
-    )
-
-    implEn.exported = true
-
-
-    # Get list of all enum fields with values, construct table of values
-    # without filtering.
-    let (namedvals, enfields) = getFields(declEn, conf)
-    var fldVals: Table[BiggestInt, string]
-    var repeated: Table[string, seq[string]]
-
-    for (key, val) in enfields:
-      if val.isSome():
-        if val.get().isRefOther:
-          repeated.mgetOrPut(val.get().othername, @[ $key ]).add $key
-
-        else:
-          let val = val.get().value
-          if val notin fldVals:
-            fldVals[val] = $key
-
-          else:
-            repeated.mgetOrPut(fldVals[val], @[ $key ]).add $key
-
-
-    # List of field with respective values. Holes are filled with correct
-    # values, and duplicated fields are dropped.
-    var flds: seq[(CXCursor, BiggestInt)]
-
-    var uniformEnum: bool = true
-    block:
-      var prev: BiggestInt = 0
-      for (key, val) in enfields:
-        let startPrev = prev
-        if val.isSome():
-          if val.get().isRefOther:
-            discard
-
-          else:
-            prev = val.get().value
-            flds.add (key, prev)
-
-        else:
-          # NOTE previously `inc prev` was /after/ field addition. Not sure
-          # what other edge case was involved, or this is just plain
-          # off-by-one error.
-          inc prev
-          flds.add (key, prev)
-
-        if prev > startPrev + 1:
-          uniformEnum = false
-
-      # Sort fields based on value
-      flds = flds.sorted(
-        proc(f1, f2: (CXCursor, BiggestInt)): int {.closure.} =
-          cmp(f1[1], f2[1])
-      )
-
-    block:
-      # Generate wrapped for C enum. Each field has value assigned to it.
-      var prev = BiggestInt(-120948783)
-      for (name, val) in flds:
-        let comment = conf.docCommentFor(declEn.ident & toCName(name), name, cache)
-        if val != prev:
-          prev = val
-          implEn.addField(($name).cEnumName(cache), some newPLit(val), docComment = comment)
-
-          vals[$name] = (
-            resName: ($name).cEnumName(cache),
-            resVal: val,
-            stringif: toCppNamespace(declEn.ident) & "::" & $name,
-            cursor: name
-          )
-
-
-
-    result.add newWrappedEntry(toNimDecl(implEn), declEn)
-
-  block: # Nim proxy proc declaration.
-    # Determine common prefix for C++ enum (if any)
-    let pref = declEn.flds.mapIt($it.fldName).commonPrefix()
-
-    # Get name of the enum type itsel by combining first letters of
-    # `PascalCase` or `snake_case` name.
-    let enumPref = conf.prefixForEnum(declEn.ident, conf, cache)
-
-    var en = newPEnumDecl(name = nt.head, iinfo = currIInfo())
-    en.addDocComment conf.docCommentFor(declEn.ident, declEn.cursor, cache)
-
-    proc renameField(fld: string, cache: var WrapCache): string {.closure.} =
-      # Drop common prefix for enum declaration and add one generated from
-      # enum name
-      cache.nameCache.newName(
-        fld.
-          dropPrefix(pref).
-          dropPrefix("_").
-          toSnakeCamelCase().
-          capitalizeAscii().
-          addPrefix(enumPref)
-      )
-
-    # Metadata associated with proxy enum
-    var arr = nnkBracket.newPTree()
-    var strCase = nnkCaseStmt.newPtree(newPIdent "en")
-
-    for name, wrap in vals:
-      # Add fields to nim enum without values
-      let comment = conf.docCommentFor(
-        declEn.ident & toCName(name), wrap.cursor, cache)
-
-      en.addField(name.renameField(cache), docComment = comment)
-      strCase.add nnkOfBranch.newPTree(
-        newPIdent(name.cEnumName(cache)),
-        nnkAsgn.newPTree(newPIdent("result"), newPLit(wrap.stringif))
-      )
-
-      arr.add pquote do:
-        (
-          name: `newPLit(name)`, # Name of the original enum
-          cEnum: `newPIdent(name.cEnumName(cache))`, # Original enum value
-          cName: `newPLit(wrap.stringif)`, # Namespaced C++ enum name
-          value: `newPLit(wrap.resVal)` # Integer value for field
-        )
-
-    let
-      enName = newPIdent(en.name)
-      arrName = newPIdent("arr" & en.name & "mapping")
-      convName = newPident("to" & implName)
-      implName = newPIdent(implName)
-
-
-    let helpers = pquote do:
-      const `arrName`: array[`enName`, tuple[
-        name: string,
-        cEnum: `implName`,
-        cName: string,
-        value: int
-      ]] = `arr`
-
-      # Convert proxy enum to integer value
-      proc toInt*(en: `enName`): int {.inline.} =
-        `arrName`[en].value
-
-      # Convert set of enums to bitmasked integer
-      proc toInt*(en: set[`enName`]): int {.inline.} =
-        for val in en:
-          result = bitor(result, `arrName`[val].value)
-
-      # Return namespaced name of the original enum
-      proc `$`*(en: `implName`): string {.inline.} =
-        `strCase`
-
-      converter `convName`*(en: `enName`): `implName` {.inline.} =
-        `arrName`[en].cEnum
-
-
-
-    result.add newWrappedEntry(toNimDecl(helpers), true)
-
-    en.exported = true
-
-    result.add newWrappedEntry(toNimDecl(en), declEn)
 
 proc wrapMacros*(declMacros: seq[CDecl], conf: WrapConfig): seq[WrappedEntry] =
-  return
-
   info "Wrapping macros"
   for decl in declMacros:
     debug decl.cursor
@@ -1168,7 +1215,7 @@ proc wrapMacros*(declMacros: seq[CDecl], conf: WrapConfig): seq[WrappedEntry] =
       for (tok, kind) in decl.cursor.tokenKinds(conf.unit):
         debug tok.toGreen(), kind
 
-      # debug decl.cursor.tokenStrings(conf.unit).join(", ", ("<\e[31m", "\e[39m>"))
+      debug decl.cursor.tokenStrings(conf.unit).join(", ", ("<\e[31m", "\e[39m>"))
 
 
 proc wrapApiUnit*(
