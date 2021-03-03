@@ -270,12 +270,13 @@ proc toNType*(
 
     of tkConstantArray:
       newNType(
-        "array",
-        @[
-          newPType($cxtype.getNumElements()),
-          toNType(cxtype.getElementType(), conf).ntype
-        ]
-      )
+        "ptr", [newNType(
+          "array", @[
+            newPType($cxtype.getNumElements()),
+            toNType(cxtype.getElementType(), conf).ntype])])
+
+    of tkIncompleteArray:
+      newNType("ptr", [toNType(cxtype.getElementType(), conf).ntype])
 
     of tkFunctionProto:
       newProcNType[PNode](

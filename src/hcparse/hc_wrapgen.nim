@@ -5,7 +5,7 @@ import hc_types, cxtypes, cxcommon, libclang_wrap, hc_typeconv
 
 import hnimast, hnimast/pprint
 import hmisc/macros/iflet
-import hmisc/algo/htemplates
+import hmisc/algo/[htemplates, hseq_distance]
 import hmisc/helpers
 import hmisc/other/[colorlogger, oswrap]
 import hmisc/types/colorstring
@@ -679,7 +679,7 @@ proc isAggregateInitable*(cd: CDecl, initArgs: var seq[CArg], conf: WrapConfig):
     ## aggregate initalization.
     # debug cursor.treeRepr(conf.unit)
     case cursor.cxType().cxKind():
-      of tkPodKinds:
+      of tkPodKinds, tkPointer:
         return true
 
       of tkTypeRef, tkElaborated:
@@ -715,7 +715,9 @@ proc isAggregateInitable*(cd: CDecl, initArgs: var seq[CArg], conf: WrapConfig):
       of ckFieldDecl:
         # debug entry.treeRepr()
         if aux(entry):
-          var arg = initCArg($entry, entry.cxType().toNType(conf).ntype, false)
+          var arg = initCArg(
+            fixIdentName($entry), entry.cxType().toNType(conf).ntype, false)
+
           setDefaultForArg(arg, entry, conf)
           initArgs.add arg
 
@@ -772,7 +774,7 @@ proc wrapObject*(
           it.name = "init" & obj.name.head
           it.args = initArgs
           it.header = conf.makeHeader(cd.cursor, conf)
-          it.icpp = &"{toCppNamespace(cd.ident)}({{@}}) /* aggregate init */"
+          it.icpp = &"{toCppNamespace(cd.ident)}({{@}})"
           it.retType = obj.name
           it.genParams = obj.name.genParams
       )
@@ -951,10 +953,25 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[Wrapp
   var nt = conf.typeNameForScoped(declEn.ident, conf)
   var ennames: seq[string]
 
-  proc cEnumName(str: string): string {.closure.} =
+  proc cEnumName(str: string, cache: var WrapCache): string {.closure.} =
+    # Generate name for C enum. QUESTION: enum names don't need to be
+    # perfectly accurate as they are converted to integers and then casted
+    # - I'm not completely sure if this correct.
     result = nt.head
     result[0] = result[0].toLowerAscii()
     result &= "_" & str
+    result = result.strip(chars = {'_'})
+    var resLen = result.len()
+    while true:
+      result = result.replace("__", "_")
+      if result.len != resLen:
+        resLen = result.len
+
+      else:
+        break
+
+    result = cache.nameCache.getName(result)
+
 
   var vals: OrderedTable[string, tuple[
     resName: string,
@@ -1043,10 +1060,10 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[Wrapp
         let comment = conf.docCommentFor(declEn.ident & toCName(name), name, cache)
         if val != prev:
           prev = val
-          implEn.addField(($name).cEnumName(), some newPLit(val), docComment = comment)
+          implEn.addField(($name).cEnumName(cache), some newPLit(val), docComment = comment)
 
           vals[$name] = (
-            resName: ($name).cEnumName(),
+            resName: ($name).cEnumName(cache),
             resVal: val,
             stringif: toCppNamespace(declEn.ident) & "::" & $name,
             cursor: name
@@ -1067,15 +1084,17 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[Wrapp
     var en = newPEnumDecl(name = nt.head, iinfo = currIInfo())
     en.addDocComment conf.docCommentFor(declEn.ident, declEn.cursor, cache)
 
-    proc renameField(fld: string): string {.closure.} =
+    proc renameField(fld: string, cache: var WrapCache): string {.closure.} =
       # Drop common prefix for enum declaration and add one generated from
       # enum name
-      fld.
-        dropPrefix(pref).
-        dropPrefix("_").
-        toSnakeCamelCase().
-        capitalizeAscii().
-        addPrefix(enumPref)
+      cache.nameCache.newName(
+        fld.
+          dropPrefix(pref).
+          dropPrefix("_").
+          toSnakeCamelCase().
+          capitalizeAscii().
+          addPrefix(enumPref)
+      )
 
     # Metadata associated with proxy enum
     var arr = nnkBracket.newPTree()
@@ -1086,16 +1105,16 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[Wrapp
       let comment = conf.docCommentFor(
         declEn.ident & toCName(name), wrap.cursor, cache)
 
-      en.addField(name.renameField(), docComment = comment)
+      en.addField(name.renameField(cache), docComment = comment)
       strCase.add nnkOfBranch.newPTree(
-        newPIdent(name.cEnumName()),
+        newPIdent(name.cEnumName(cache)),
         nnkAsgn.newPTree(newPIdent("result"), newPLit(wrap.stringif))
       )
 
       arr.add pquote do:
         (
           name: `newPLit(name)`, # Name of the original enum
-          cEnum: `newPIdent(name.cEnumName())`, # Original enum value
+          cEnum: `newPIdent(name.cEnumName(cache))`, # Original enum value
           cName: `newPLit(wrap.stringif)`, # Namespaced C++ enum name
           value: `newPLit(wrap.resVal)` # Integer value for field
         )

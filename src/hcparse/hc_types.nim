@@ -2,7 +2,7 @@ import gram, cxtypes, cxcommon
 import hmisc/other/[oswrap, colorlogger]
 import hnimast, hnimast/pprint
 import std/[tables, sets, strutils, sequtils, hashes, strformat, macros]
-import hmisc/algo/[hseq_mapping, hstring_algo]
+import hmisc/algo/[hseq_mapping, hstring_algo, hseq_distance]
 
 const HeaderGraphFlags* = toInt({
   Directed, ValueIndex, UniqueEdges, UniqueNodes})
@@ -230,11 +230,14 @@ type
     docCommentFor*: proc(
       id: CSCopedIdent, cursor: CXCursor, cache: var WrapCache): string
 
+    userCode*: proc(source: AbsFile): PNode
+
   WrapCache* = object
     hset*: HashSet[Hash]
     visited*: HashSet[cuint]
     enumPrefs*: HashSet[string]
     identComments*: Table[CScopedIdent, seq[string]]
+    nameCache*: StringNameCache
 
   GenProc* = object
     ## Generated wrapped proc

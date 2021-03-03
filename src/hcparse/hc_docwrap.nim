@@ -48,7 +48,7 @@ proc visit(
           # comments are collected in buffer and then dumped into adjacent
           # elements. This also indludes file-level comments like GNU license
           # shit etc.
-          if comment.b >= node.slice().a - 20:
+          if comment.b >= node.slice().a - 1:
             buf.add instr[comment]
 
           cache.addDoc(nameCtx & name, buf)

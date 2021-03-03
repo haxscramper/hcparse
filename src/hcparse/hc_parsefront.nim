@@ -296,6 +296,10 @@ proc wrapFile*(
     )
   )
 
+  if not isNil(conf.userCode):
+    tmpRes.add newWrappedEntry(toNimDecl(
+      conf.userCode(parsed.filename)))
+
   for node in parsed.explicitDeps.mapIt(
       conf.getImport(it, conf)).
       deduplicate().
