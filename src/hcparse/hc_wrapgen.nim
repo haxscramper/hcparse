@@ -245,7 +245,7 @@ proc wrapProcedure*(
       result.canAdd = false
 
   else:
-    it.name = pr.getNimName()
+    it.name = pr.getNimName().fixIdentName()
 
     # FIXME
     # iflet (par = parent):
