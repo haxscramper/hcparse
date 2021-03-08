@@ -33,6 +33,12 @@ proc asIncludeFromDir*(
   let loc = cursor.getSpellingLocation().get()
   return loc.file.getStr().dropPrefix(dir.getStr()).dropPrefix("/")
 
+proc isFromDir*(cursor: CXCursor, dir: AbsDir): bool =
+  cursor.getSpellingLocation().get().file in dir
+
+proc isFromFile*(cursor: CXCursor, file: AbsFile): bool =
+  cursor.getSpellingLocation().get().file == file
+
 proc fixTypeName*(str: string, idx: int, conf: WrapConfig): string =
   ## Correct C++ type name to be used in nim wrappers. Convert `::` to
   ## joined name, use correct upper/lowercasing (nep1 style).

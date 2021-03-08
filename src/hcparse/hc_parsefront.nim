@@ -289,10 +289,26 @@ proc wrapFile*(
 
   # info "Wrapping", parsed.filename
   var tmpRes: seq[WrappedEntry]
+  # let pushShit = nnkStmtList.newPTree(
+  #   nnkPragma.newPTree(
+  #     newPIdent("push"),
+  #     nnkExprColonExpr.newPTree(
+  #       nnkBracketExpr.newPTree(
+  #         newPIdent("warning"),
+  #         newPIdent("UnusedImport")
+  #       ),
+  #       newPIdent("off")
+  #     )
+  #   )
+  # )
+
   tmpRes.add newWrappedEntry(
     toNimDecl(
       pquote do:
+        # `pushShit`
+        {.push warning[UnusedImport]:off.}
         import bitops, hcparse/wraphelp
+        {.pop.}
     )
   )
 

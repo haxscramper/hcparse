@@ -32,7 +32,7 @@ proc visit(
       for stmt in node:
         visit(stmt, cache, lastComment, instr, nameCtx)
 
-    of cppComment2:
+    of cppComment:
       lastComment.add node.slice()
 
     of cppEnumSpecifier:

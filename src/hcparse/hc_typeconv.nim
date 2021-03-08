@@ -157,6 +157,12 @@ proc toFullScopedIdent*(cxtype: CXType): CScopedIdent =
         ns.cxType().getTypeDeclaration()).mapIt(toScopedIdent(it))
     )
 
+# proc isDirectTypeDecl*(cursor: CXCursor): bool =
+#   case cursor.cxKind():
+#     of 
+#   debug cursor.treeRepr()
+#   raiseImplementError("") 
+
 proc getTypeName*(cxtype: CXType, conf: WrapConfig): string =
   let curs = cxtype.getTypeDeclaration()
   case curs.cxKind:

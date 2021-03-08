@@ -220,17 +220,31 @@ type
     isInLibrary*: proc(dep: AbsFile): bool ## Determine if `dep` file is in
     ## the library.
 
-    isImportcpp*: bool
+    isImportcpp*: bool ## Is wrapped code a C++ or C?
     parseConf*: ParseConfig
 
     prefixForEnum*: proc(
       enumId: CScopedIdent, conf: WrapConfig,
-      cache: var WrapCache): string
+      cache: var WrapCache): string ## Return prefix for enum referred to
+    ## by `enumId`. This is used to override autogenrated prefix for
+    ## particular enum.
 
     docCommentFor*: proc(
-      id: CSCopedIdent, cursor: CXCursor, cache: var WrapCache): string
+      id: CSCopedIdent, cursor: CXCursor, cache: var WrapCache): string ## |
+    ## Return documentation comment string for entry pointed to by
+    ## `cursor`. `id` is a fully qualified/namespaced path for definition
+    ## (like `std::vector`)
 
-    userCode*: proc(source: AbsFile): PNode
+    userCode*: proc(source: AbsFile): PNode ## Add arbitarry user-defined
+    ## code at the start of generated wrapper for `source` file.
+
+    newProcCb*: proc(
+      genProc: var GenProc, conf: WrapConfig, cache: var WrapCache
+    ): seq[WrappedEntry] ## Callback invoked after each new procedure is
+    ## generated. Is allowed (and expected to) mutate passed proc, and
+    ## generate additional helper wrappers either via return value (added
+    ## immediately after proc declaration), or by mutating some external
+    ## list of variables.
 
   WrapCache* = object
     hset*: HashSet[Hash]
@@ -255,6 +269,24 @@ type
     kind*: ProcKind ## Kind of generated nim proc
     cursor* {.requiresinit.}: CXCursor ## Original cursor for proc declaration
     docs*: seq[string]
+
+  GenEnumValue* = object
+    baseName*: string ## Original name of the enum value
+    resCName*: string ## Enum field value for 'raw' C wrapper proc
+    resNimName*: string ## Enum field name for 'proxy' nim proc
+    resVal*: BiggestInt ## Value of the enum field - from source code or
+                        ## generated when filling hole values.
+    stringif*: string ## 'stringified' version of fully qualified field
+                      ## name (`enumName::fieldname`)
+    cursor*: CXCursor ## Cursor to field
+    docComment*: string
+
+  GenEnum* = object
+    rawName*: string
+    nimName*: string
+    values*: seq[GenEnumValue]
+    declEn*: CDecl
+    docComment*: string
 
   WrappedEntryKind* = enum
     wekMultitype
@@ -299,6 +331,13 @@ type
     code*: string
     header*: string
     filename*: RelFile
+
+proc newProcVisit*(
+    genProc: var GenProc, conf: WrapConfig, cache: var WrapCache
+  ): seq[WrappedEntry] =
+
+  if not isNil(conf.newProcCb):
+    return conf.newProcCb(genProc, conf, cache)
 
 proc identName*(cn: CName): string =
   if cn.isGenerated:
@@ -367,6 +406,10 @@ proc initHeaderSpec*(file: AbsFile): NimHeaderSpec =
 
 proc initHeaderSpec*(global: string): NimHeaderSpec =
   NimHeaderSpec(kind: nhskGlobal, global: global)
+
+proc initHeaderSpec*(pnode: PNode): NimHeaderSpec =
+  NimHeaderSpec(kind: nhskPNode, pnode: pnode)
+
 
 
 func hasCursor*(we: WrappedEntry): bool =
