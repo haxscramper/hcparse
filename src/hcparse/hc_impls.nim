@@ -6,7 +6,66 @@ import hmisc/helpers
 import hmisc/other/[oswrap, colorlogger]
 import std/[sets]
 
-import hc_depresolve
+import hc_depresolve, hc_typeconv
+
+type
+  CErrorCodeKind = enum
+    eckBadInteger
+    eckErrorEnum
+
+
+  CErrorCode = object
+    message*: string
+    case kind*: CErrorCodeKind
+      of eckErrorEnum:
+        enumIdent*: CScopedIdent
+
+      of eckBadInteger:
+        validRange*: Slice[cint]
+
+func negativeError*(message: string): CErrorCode =
+  CErrorCode(kind: eckBadInteger, validRange: (cint(0) .. high(cint)))
+
+func errorEnum*(path: CScopedIdent): CErrorCode =
+  CErrorCode(kind: eckErrorEnum, enumIdent: path)
+
+
+proc errorCodesToException*(
+    genProc: var GenProc, conf: WrapConfig, cache: var WrapCache,
+    errorMap: seq[(CSCopedIdent, CErrorCode)]
+  ): seq[WrappedEntry] =
+
+  for (ident, code) in errorMap:
+    if sameNoGeneric(genProc.ident, ident):
+      var gen2 = genProc
+      genProc.name &= "Raw"
+      gen2.noPragmas = true
+
+      var call = newPCall(genProc.name)
+      for arg in genProc.args:
+        call.add newPIdent(arg.name)
+
+      let validRange = nnkInfix.newPTree(
+        newPIdent(".."),
+        newPCall("cint", newPLit(code.validRange.a)),
+        newPCall("cint", newPLit(code.validRange.b))
+      )
+
+      case code.kind:
+        of eckBadInteger:
+          gen2.impl = some pquote do:
+            result = `call`
+            if result notin `validRange`:
+              raise newException(
+                ValueError, "Result value not in valid range #FIXME")
+
+        else:
+          raiseImplementError("")
+
+      return @[newWrappedEntry(gen2)]
+
+
+
 
 
 proc contains*(dir: AbsDir, file: AbsFile): bool =

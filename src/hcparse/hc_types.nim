@@ -252,6 +252,7 @@ type
     enumPrefs*: HashSet[string]
     identComments*: Table[CScopedIdent, seq[string]]
     nameCache*: StringNameCache
+    genEnums*: seq[GenEnum]
 
   GenProc* = object
     ## Generated wrapped proc
@@ -269,6 +270,8 @@ type
     kind*: ProcKind ## Kind of generated nim proc
     cursor* {.requiresinit.}: CXCursor ## Original cursor for proc declaration
     docs*: seq[string]
+    impl*: Option[PNode]
+    noPragmas*: bool
 
   GenEnumValue* = object
     baseName*: string ## Original name of the enum value
@@ -340,6 +343,7 @@ proc newProcVisit*(
     return conf.newProcCb(genProc, conf, cache)
 
 proc identName*(cn: CName): string =
+  # REFACTOR rename to `getName`
   if cn.isGenerated:
     cn.name
 

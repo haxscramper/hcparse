@@ -1159,6 +1159,8 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[Wrapp
   let gen = makeGenEnum(
     declEn, getFields(declEn, conf).sortFields(), conf, cache)
 
+  cache.genEnums.add gen
+
   block:
     var rawEnum = newPEnumDecl(gen.rawName, iinfo = currIInfo())
     rawEnum.addDocComment gen.docComment
@@ -1412,11 +1414,15 @@ proc toNNode*(gp: GenProc, wrapConf: WrapConfig): PProcDecl =
 
   result.signature.pragma = gp.pragma
 
-  result.signature.pragma.add(
-    newPIdentColonString(wrapConf.importX(), gp.icpp))
+  if not gp.noPragmas:
+    result.signature.pragma.add(
+      newPIdentColonString(wrapConf.importX(), gp.icpp))
 
-  result.signature.pragma.add(
-    newExprColonExpr(newPIdent "header", gp.header.toNNode()))
+    result.signature.pragma.add(
+      newExprColonExpr(newPIdent "header", gp.header.toNNode()))
+
+  if gp.impl.isSome():
+    result.impl = gp.impl.get()
 
 
 proc writeWrapped*(

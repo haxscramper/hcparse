@@ -148,6 +148,21 @@ proc toCName*(str: string, genp: seq[CScopedIdent] = @[]): CName =
   result = CName(name: str, isGenerated: true)
   result.genParams = genp
 
+proc toScopedIdent*(name: seq[string]): CScopedIdent =
+  for elem in name:
+    result.add toCName(elem)
+
+
+proc toScopedIdent*(name: string): CScopedIdent =
+  result.add toCName(name)
+
+proc sameNoGeneric*(ident1, ident2: CScopedIdent): bool =
+  result = ident1.len == ident2.len
+  if result:
+    for (a, b) in zip(ident1, ident2):
+      if a.identName() != b.identName():
+        return false
+
 proc toFullScopedIdent*(cxtype: CXType): CScopedIdent =
   for ns in getTypeNamespaces(cxtype):
     result.add CName(
