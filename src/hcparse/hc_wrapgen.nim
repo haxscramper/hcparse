@@ -787,6 +787,8 @@ proc wrapObject*(
           it.genParams = obj.name.genParams
       )
 
+
+
   for entry in cd.cursor:
     case entry.cxKind():
       of ckEnumDecl:
@@ -838,6 +840,9 @@ proc wrapObject*(
 
     else:
       resFld.fldType = fld.cursor.cxType().toNType(conf).ntype
+
+      if fld.cursor.cxType().isEnum():
+        resFld.fldType.head &= conf.isImportCpp.tern("Cxx", "C")
 
 
     obj.flds.add resFld
@@ -1022,8 +1027,11 @@ proc sortFields(enFields: EnumFieldResult): seq[(CXCursor, BiggestInt)] =
         # NOTE previously `inc prev` was /after/ field addition. Not sure
         # what other edge case was involved, or this is just plain
         # off-by-one error.
-        inc prev
+
+        # NOTE I swapped this again, but forgot what caused first note, so
+        # I would need to return to this again.
         flds.add (key, prev)
+        inc prev
 
       if prev > startPrev + 1:
         uniformEnum = false
@@ -1089,8 +1097,14 @@ proc makeEnumConverters(
   # Metadata associated with proxy enum
   var arr = nnkBracket.newPTree()
   var strCase = nnkCaseStmt.newPtree(newPIdent "en")
+  var convertImpl = nnkCaseStmt.newPTree(newPIdent "en")
 
   for value in gen.values:
+    convertImpl.add nnkOfBranch.newPTree(
+      newPIdent(value.resCName),
+      newPIdent(value.resNimName)
+    )
+
     strCase.add nnkOfBranch.newPTree(
       newPIdent(value.resCName),
       nnkAsgn.newPTree(newPIdent("result"), newPLit(value.stringif))
@@ -1107,7 +1121,8 @@ proc makeEnumConverters(
   let
     enName = newPIdent(gen.nimName)
     arrName = newPIdent("arr" & gen.nimName & "mapping")
-    convName = newPident("to" & gen.rawName)
+    reverseConvName = newPident("to" & gen.rawName)
+    convName = newPIdent("to" & gen.nimname)
     implName = newPIdent(gen.rawName)
 
 
@@ -1132,7 +1147,10 @@ proc makeEnumConverters(
       ## Return namespaced name of the original enum
       `strCase`
 
-    converter `convName`*(en: `enName`): `implName` {.inline.} =
+    func `convName`*(en: `implName`): `enName` {.inline.} =
+      `convertImpl`
+
+    converter `reverseConvName`*(en: `enName`): `implName` {.inline.} =
       `arrName`[en].cEnum
 
   return newWrappedEntry(toNimDecl(helpers), true)
@@ -1219,7 +1237,8 @@ proc evalTokensInt(strs: seq[string]): Option[int64] =
           return some parseBiggestInt(str[node.slice()])
 
         except ValueError as e:
-          err e.msg
+          # err e.msg
+          discard
 
       of cppBinaryExpression:
         if (Some(@lhs), Some(@rhs)) ?= (aux(node[0]), aux(node[1])):
@@ -1259,7 +1278,7 @@ func capitalAscii*(strs: seq[string]): seq[string] =
 proc wrapMacroEnum*(
   values: seq[CDecl], conf: WrapConfig, cache: var WrapCache): seq[WrappedEntry] =
 
-  let prefix = split($values[0].cursor, "_")[0]
+  let prefix = commonPrefix(mapIt(values, $it.cursor)).dropSuffix("_")
   let enumPref = conf.prefixForEnum(@[toCName(prefix)], conf, cache)
   info "Wrapping", prefix, "as", enumPref, values.len
   var vals: seq[GenEnumValue]
@@ -1267,7 +1286,7 @@ proc wrapMacroEnum*(
     let toks = val.cursor.tokenStrings(conf.unit)
     # FIXME range breaks on `#define func(arg)`
     let value = evalTokensInt(toks[1 ..^ 1])
-    let name = enumPref & toks[0].splitCamel()[1..^1].capitalAscii().join("") 
+    let name = enumPref & toks[0].splitCamel()[1..^1].capitalAscii().join("")
     debug name, toks.join(", ", ("<\e[31m", "\e[39m>")), value
 
     if value.isSome():
@@ -1313,22 +1332,33 @@ proc wrapMacroEnum*(
 proc wrapMacros*(
   declMacros: seq[CDecl], conf: WrapConfig, cache: var WrapCache): seq[WrappedEntry] =
   info "Wrapping macros"
-  var prefix: string
+  var prefix: seq[string]
   var buf: seq[CDecl]
+  var lastSplit: seq[string]
   logIndented:
     for decl in declMacros:
-      let pref = split($decl.cursor, "_")[0]
+      # This implementation ties to find macro names with common prefixes,
+      # group them together.
+      let split = split($decl.cursor, "_")
+      let pref = commonPrefix(@[lastSplit, split])
+      # If has any common prefix with last split, add it
+      debug $split, $lastSplit, $pref
+      if pref != prefix and lastSplit.len > 0:
+        buf = @[]
+
       if prefix.len == 0 or pref == prefix:
-        buf.add decl
-        prefix = pref
+        if pref.len > 0 # or lastSplit.len == 0
+          :
+          buf.add decl
+          prefix = pref
 
       elif prefix.len > 0 and pref != prefix:
-        debug decl.cursor, pref, prefix
         prefix = pref
         if buf.len > 1:
           result.add wrapMacroEnum(buf, conf, cache)
           buf = @[]
 
+      lastSplit = split
     if buf.len > 1:
       result.add wrapMacroEnum(buf, conf, cache)
 

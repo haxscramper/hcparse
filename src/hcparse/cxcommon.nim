@@ -23,6 +23,7 @@ proc fixIdentName*(str: string): string =
     of "include": "cxInclude"
     of "proc": "cxProc"
     of "method": "cxMethod"
+    of "block": "cxBlock"
     elif str.normalize() in ["cstringarray"]:
       str
 

@@ -135,6 +135,11 @@ proc visitClass*(
     ckStructDecl, ckUnionDecl
   })
 
+
+  # info "Found struct decl"
+  # debug cursor.treeRepr()
+
+
   let name =
     if cursor.cxKind == ckStructDecl and len($cursor) == 0:
       $cursor.cxType()
