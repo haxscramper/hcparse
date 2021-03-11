@@ -540,7 +540,11 @@ proc wrapSingleFile*(
   ## C++ codegen files.
 
   if wrapConf.baseDir.len == 0:
-    raiseArgumentError(".baseDir is not set for wrapper configuration")
+    raiseArgumentError(
+      "Base director is not set for wrapper configuration. " &
+        "Set configuration .baseDir to the root directory of C(++) " &
+        "source files"
+    )
 
   var
     cache: WrapCache
@@ -561,13 +565,7 @@ proc wrapSingleFile*(
   let wrapped = parsed.wrapFile(wrapConf, cache, index)
 
   proc updateComments(decl: var PNimDecl, node: WrappedEntry) =
-    decl.addCodeComment(
-      "Wrapper for `" &
-      (
-        node.getCursor().getSemanticNamespaces(filterInline = false)).join("::") &
-      "`\n"
-    )
-
+    decl.addCodeComment("Wrapper for `" & toCppNamespace(node.ident) & "`\n")
     if node.getCursor().getSpellingLocation().getSome(loc):
       let file = withoutPrefix(AbsFile(loc.file), wrapConf.baseDir)
       decl.addCodeComment(

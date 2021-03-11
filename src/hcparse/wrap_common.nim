@@ -1,8 +1,8 @@
 import libclang
 export libclang
 
-import std/[options, strutils]
-export options, strutils
+import std/[options, strutils, sugar]
+export options, strutils, sugar
 
 import hmisc/other/[oswrap, hshell, colorlogger]
 export oswrap, hshell, colorlogger

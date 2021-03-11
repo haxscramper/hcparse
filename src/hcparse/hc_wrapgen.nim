@@ -525,13 +525,32 @@ proc wrapAlias*(
       baseType = newPType(name)
 
     else:
-      baseType = newPType($aliasof)
+      baseType = toNType(aliasof, conf).ntype # newPType($aliasof)
 
   else:
     baseType = conf.typeNameForScoped(aliasof.toFullScopedIdent(), conf)
     # WARNING mismatched generic parameters between lhs and rhs parts of
     # alias might result in broken wrappers.
 
+  if baseType.hasComplexParam():
+    #[
+    Type alias is declared in terms of sub-alias for some of the
+    parameter types. For example std::string has following sub-alias declared:
+
+    ```c++
+      template<typename _CharT, typename _Traits, typename _Alloc>
+
+      // ...
+
+      typedef _Traits					traits_type; // Regular alias on the argument
+      typedef typename _Traits::char_type		value_type;
+      // type-name-0-1::char_type.
+    ```
+
+    Nim does not have a way to model type relations like this.
+
+    ]#
+    return @[]
 
   if false: # TEMP need to find a real-world use-case to correctly handle
             # this, disabled for now.
@@ -548,8 +567,12 @@ proc wrapAlias*(
       baseType.genParams = baseType.genParams[
         0 ..< min(required.len(), baseType.genParams.len())]
 
+  fixTypeParams(baseType, newAlias.genParams)
 
   if baseType.hasUnexposed():
+    debug al.cursor.treeRepr()
+    debug aliasof.lispRepr()
+
     raiseImplementError("Found unexposed type")
     # let namespace = parent & @[newPType($al.cursor)]
     # result = @[newWrappedEntry(
@@ -564,7 +587,9 @@ proc wrapAlias*(
       # NOTE ignore `typedef struct` in C
       result = @[newWrappedEntry(
         toNimDecl(newAliasDecl(
-          newAlias, baseType, iinfo = currIInfo())), al
+          newAlias, baseType, iinfo = currIInfo(),
+          isDistinct = conf.isDistinct(al.ident, conf, cache)
+        )), al
       )]
 
     else:

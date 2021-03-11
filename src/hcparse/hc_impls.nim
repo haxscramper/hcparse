@@ -159,7 +159,7 @@ proc typeNameForScoped*(
   var genParams: seq[NType[PNode]]
   for name in ident:
     if $name.cursor notin conf.collapsibleNamespaces:
-      resname &= $name.cursor
+      resname &= capitalizeAscii($name.cursor)
       for genParam in name.genParams:
         genParams.add conf.typeNameForScoped(genParam, conf)
 
@@ -220,6 +220,12 @@ let baseCppWrapConf* = WrapConfig(
   typeNameForScoped: (
     proc(ident: CScopedIdent, conf: WrapConfig): NType[PNode] {.closure} =
       typeNameForScoped(ident, conf)
+  ),
+  isDistinct: (
+    proc(ident: CSCopedIdent, conf: WrapConfig, cache: var WrapCache):
+      bool {.closure.} =
+
+      false
   ),
   fixTypeName: (
     proc(ntype: var NType[PNode],
@@ -314,5 +320,5 @@ let baseCppWrapConf* = WrapConfig(
   )
 )
 
-let baseCWrapConf* = baseCPPWrapConf.withIt do:
+let baseCWrapConf* = baseCPPWrapConf.withDeepIt do:
   it.isImportcpp = false

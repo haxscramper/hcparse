@@ -27,7 +27,7 @@
   :END:
 
 - [X] Create fully qualified namespace access names
-- [ ] Default operators assignment, constructors, move etc.
+- [X] Default operators assignment, constructors, move etc.
 - [ ] For all procs that have special arguments (wrappers for default
   arguments, newly generated args, removed, compressed and so on) should
   provide additional documentation for such parameters (via ~@arg{}~
@@ -41,3 +41,10 @@
   corresponding enum/distincty type
 - [ ] Collect macro constant definitions into enums and use them for
   overloads from previous step.
+
+* TODO Bugs
+  :PROPERTIES:
+  :CREATED:  <2021-03-11 Thu 22:23>
+  :END:
+
+- [ ] ~cxx11~ namespace is not correctly collapsed for wrapping methods.

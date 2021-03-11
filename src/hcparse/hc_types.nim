@@ -246,6 +246,15 @@ type
     ## immediately after proc declaration), or by mutating some external
     ## list of variables.
 
+    isDistinct*: proc(
+      ident: CSCopedIdent, conf: WrapConfig, cache: var WrapCache): bool ## |
+    ## Determine if given `ident` should be wrapped as nim `distinct` type
+    ## or not.
+    ## - WARNING :: Default implementation always returns `false` i.e. all
+    ##   types are wrapped as not typesafe aliases.
+
+
+
   WrapCache* = object
     hset*: HashSet[Hash]
     visited*: HashSet[cuint]

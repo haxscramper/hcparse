@@ -11,3 +11,5 @@ type
   .} = object
 
 proc cxxInitList*[T](args: T) {.importcpp: "{@}", varargs.}
+
+type nullptr_t* = typeof(nil)

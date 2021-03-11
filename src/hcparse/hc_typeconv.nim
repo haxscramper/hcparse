@@ -325,6 +325,11 @@ proc toNType*(
         # pprintStackTrace()
         let decl = cxtype.getTypeDeclaration()
         var res = newPType($decl)
+        let typenameParts = toStrPart(@[
+          "type-parameter", "typename type-parameter",
+          "typename rebind<type-parameter",
+          "typename"
+        ])
         if decl.cxKind in {
           # HACK list of necessary kinds is determined by trial and error,
           # I'm still not really sure what `tkUnexposed` actually
@@ -338,6 +343,17 @@ proc toNType*(
 
           # info decl
           # debug res.toNNode()
+        elif startsWith($cxType, typenameParts):
+
+          let unprefix = dropPrefix($cxType, typenameParts)
+
+          if allIt(unprefix, it in {'0' .. '9', '-'}):
+            res = newPType("TYPE_PARAM " & unprefix)
+
+          else:
+            res = newPType("COMPLEX_PARAM")
+
+
         else:
           # debug decl.cxKind()
           res = newPType("UNEXPOSED")
@@ -371,15 +387,41 @@ proc toNType*(
   conf.fixTypeName(result.ntype, conf, 0)
   result.mutable = mutable
 
-func hasUnexposed*(nt: NType[PNode]): bool =
+func fixTypeParams*(nt: var NType[PNode], params: seq[NType[PNode]]) =
+  func aux(nt: var NType[PNode], idx: var int) =
+    case nt.kind:
+      of ntkIdent, ntkGenericSpec:
+        if startsWith(nt.head, "TYPE_PARAM"):
+          nt.head = params[idx].head
+          inc idx
+
+        for sub in mitems(nt.genParams):
+          aux(sub, idx)
+
+      else:
+        raiseImplementKindError(nt)
+
+
+  var idx: int
+  aux(nt, idx)
+
+func hasSpecial*(nt: NType[PNode], special: seq[string]): bool =
   case nt.kind:
     of ntkIdent, ntkGenericSpec:
-      nt.head in [ "UNEXPOSED", "DEPENDENT" ] or
-      nt.genParams.anyOfIt(it.hasUnexposed())
+      nt.head in special or
+      nt.genParams.anyOfIt(it.hasSpecial(special))
     of ntkProc:
-      nt.arguments.anyOfIt(it.vtype.hasUnexposed())
+      nt.arguments.anyOfIt(it.vtype.hasSpecial(special))
     else:
       false
+
+
+func hasUnexposed*(nt: NType[PNode]): bool =
+  nt.hasSpecial(@[ "UNEXPOSED", "DEPENDENT" ])
+
+
+func hasComplexParam*(nt: NType[PNode]): bool =
+  nt.hasSpecial(@[ "COMPLEX_PARAM" ])
 
 func toCppNamespace*(ns: CScopedIdent, withGenerics: bool = true): string =
   ## Generate `importcpp` pattern for scoped identifier
