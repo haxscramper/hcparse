@@ -359,8 +359,38 @@ proc identName*(cn: CName): string =
   else:
     $cn.cursor
 
+proc toCppNamespace*(
+    ns: CScopedIdent,
+    withGenerics: bool = true,
+    withNames: bool = false
+  ): string =
+
+  ## Generate `importcpp` pattern for scoped identifier
+  var buf: seq[string]
+  var genIdx: int = 0
+  for part in ns:
+    if withGenerics and part.genParams.len > 0:
+      var genTypes: seq[string]
+      for param in part.genParams:
+        if withNames:
+          genTypes.add toCppNamespace(
+            param, withGenerics, withNames)
+
+        else:
+          genTypes.add "'" & $genIdx
+          inc genIdx
+
+      buf.add part.identName() & "<" & genTypes.join(", ") & ">"
+    else:
+      buf.add part.identName()
+
+  result = buf.join("::")
+
+
 proc `$`*(ident: CSCopedIdent): string =
-  ident.mapIt(identName(it)).join("::")
+  toCppNamespace(ident, withNames = true)
+
+proc `$`*(name: CName): string = $(@[name])
 
 proc hash*(ident: CScopedIdent): Hash =
   ## Computes a Hash from `x`.

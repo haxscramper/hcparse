@@ -85,7 +85,9 @@ var undefCnt: int = 0
 
 proc visitAlias*(
   cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): CDecl =
-  result = CDecl(kind: cdkAlias, cursor: cursor, ident: parent & toCName(cursor))
+  result = CDecl(
+    kind: cdkAlias, cursor: cursor, ident: parent & toCName(cursor))
+
 
 proc visitFunction*(
   cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): CDecl =

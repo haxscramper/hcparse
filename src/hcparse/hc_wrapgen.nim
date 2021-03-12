@@ -515,8 +515,11 @@ proc wrapAlias*(
 
   # Get underlying type for alias
   let aliasof = al.cursor.cxType().getCanonicalType()
-  # Create new identifier for aliased type
-  var newAlias = conf.typeNameForScoped(al.ident, conf)
+  logIndented:
+    # Create new identifier for aliased type
+    var newAlias = conf.typeNameForScoped(al.ident, conf)
+  # debug al.ident, " -> ", newAlias
+
   # Identifier for old aliased type
   var baseType: NType[PNode]
   if getTypeDeclaration(aliasof).cxKind() == ckNodeclFound:

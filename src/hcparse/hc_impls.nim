@@ -161,7 +161,8 @@ proc typeNameForScoped*(
     if $name.cursor notin conf.collapsibleNamespaces:
       resname &= capitalizeAscii($name.cursor)
       for genParam in name.genParams:
-        genParams.add conf.typeNameForScoped(genParam, conf)
+        let tmp = conf.typeNameForScoped(genParam, conf)
+        genParams.add tmp
 
   result = newNType(resname, genParams)
   conf.fixTypeName(result, conf, 0)

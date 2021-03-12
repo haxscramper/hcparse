@@ -565,7 +565,8 @@ proc wrapSingleFile*(
   let wrapped = parsed.wrapFile(wrapConf, cache, index)
 
   proc updateComments(decl: var PNimDecl, node: WrappedEntry) =
-    decl.addCodeComment("Wrapper for `" & toCppNamespace(node.ident) & "`\n")
+    decl.addCodeComment("Wrapper for `" & toCppNamespace(
+      node.ident, withNames = true) & "`\n")
     if node.getCursor().getSpellingLocation().getSome(loc):
       let file = withoutPrefix(AbsFile(loc.file), wrapConf.baseDir)
       decl.addCodeComment(

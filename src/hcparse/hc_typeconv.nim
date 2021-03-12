@@ -134,6 +134,15 @@ proc requiredGenericParams*(cursor: CXCursor): seq[CXCursor] =
       else:
         result.add subn # WARNING blow up on `a<b>`
 
+  # if cursor.cxKind() == ckClassTemplate:
+  #   logDefer info, "Required generic for", cursor
+  #   debug cursor.getSpellingLocation()
+  #   debug result.len
+  #   debug result
+  #   debug cursor.cxKind()
+    # debug cursor.treeRepr()
+
+
 proc toCName*(cursor: CXCursor): CName
 proc toScopedIdent*(cursor: CXCursor): CScopedIdent =
   for elem in cursor:
@@ -142,7 +151,12 @@ proc toScopedIdent*(cursor: CXCursor): CScopedIdent =
 proc toCName*(cursor: CXCursor): CName =
   result = CName(cursor: cursor, isGenerated: false)
   for genParam in requiredGenericParams(cursor):
-    result.genParams.add toScopedIdent(genParam)
+    # HACK add `genParam` explicitly. Was added because template type
+    # parameters were ignored otherwise. Not sure if this is a general
+    # enough solution, but it worked for now.
+    let name = @[toCName(genParam)] & toScopedIdent(genParam)
+    result.genParams.add name
+
 
 proc toCName*(str: string, genp: seq[CScopedIdent] = @[]): CName =
   result = CName(name: str, isGenerated: true)
@@ -422,23 +436,6 @@ func hasUnexposed*(nt: NType[PNode]): bool =
 
 func hasComplexParam*(nt: NType[PNode]): bool =
   nt.hasSpecial(@[ "COMPLEX_PARAM" ])
-
-func toCppNamespace*(ns: CScopedIdent, withGenerics: bool = true): string =
-  ## Generate `importcpp` pattern for scoped identifier
-  var buf: seq[string]
-  var genIdx: int = 0
-  for part in ns:
-    if withGenerics and part.genParams.len > 0:
-      var genTypes: seq[string]
-      for param in part.genParams:
-        genTypes.add "'" & $genIdx
-        inc genIdx
-
-      buf.add $part.cursor & "<" & genTypes.join(", ") & ">"
-    else:
-      buf.add $part.cursor
-
-  result = buf.join("::")
 
 func pubFields*(cd: CDecl): seq[CDecl] =
   assert cd.kind in {cdkClass, cdkStruct}
