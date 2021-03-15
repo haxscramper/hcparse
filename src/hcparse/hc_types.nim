@@ -18,6 +18,7 @@ type
   CDeclKind* = enum
     cdkClass
     cdkStruct
+    cdkUnion
     cdkEnum
     cdkFunction
     cdkMethod
@@ -42,7 +43,8 @@ type
     cxoPrefixOp ## Prefix operator `@a`
     cxoPostfixOp ## Postfix operator `a@`
     cxoInfixOP ## Infix operator `a @ b`
-    cxoAsgnOp ## Assign operator `a = b`
+    cxoAsgnOp ## Assign operator `a += b`
+    cxoCopyAsgnOp ## Copy assignment operator `a = b`
     cxoArrayOp ## Array access operator `a[b]`
     cxoArrowOp ## Arrow operator `a->`
     cxoCallOp ## Call operator `a()`
@@ -82,32 +84,81 @@ type
 
   CScopedIdent* = seq[CName] ## Full scoped C/C++ identifier like
                              ## `std::vector<int>::iterator`
-  CDecl* = object
-    ## Higher-level wrapper on top of CXCursor. Mostly used to
-    ## provide more intuitive API for working with things to be
-    ## wrapped.
-    ident*: CScopedIdent
+  ParentDecl* = object
+    derived*: seq[CDecl]
     cursor*: CXCursor
+
+  CDecl* = object
+    ## Higher-level wrapper on top of CXCursor. Mostly used to provide more
+    ## intuitive API for working with things to be wrapped.
+
+    ident*: CScopedIdent ## Fully qualified identifier (except namespaces
+    ## that were explicitly marked as 'collapsible' in wrap configuration)
+
+    cursor*: CXCursor ## Cursor pointing to main declaration entry
+    access*: CXAccessSpecifier ## Access specifier for nested class elements.
+    genericParameters*: seq[CXCursor]
+    genericConstraints*: seq[CXCursor]
+    docComment*: seq[string] ## Documentation comment collected from one or
+    ## more sources (inclusing function documentation comments)
+
+    isCTypedef*: bool ## Declaration was introduced by `typedef struct {} T`,
+    ## or by `struct T {}`? In latter case C wrappers must use `struct T` for
+    ## type wrappers.
+    ##
+    ## Type declarations introduced using `typedef struct {} T, *PtrT` are
+    ## represented by two `CDecl` entries - base enum declaration, and type
+    ## alias for `PtrT = *T`.
+
+    isConst*: bool ## Field or method declared as `const`
+
     case kind*: CDeclKind
       of cdkField:
-        fldAccs*: CX_AccessSpecifier
+        fieldValue*: Option[CXCursor] ## Cursor to field value if
+                                      ## immediately declared
 
-      of cdkMethod:
-        metAccs*: CX_AccessSpecifier
-        metArgs*: seq[CArg]
+      of cdkMethod, cdkFunction:
+        arguments*: seq[CArg] ## Method or function argumets
+        returnType*: Option[CXType] ## Optional return type
+        case isOperator*: bool
+          of true:
+            operatorName*: string ## Name with dropped `operator` prefix
+            operatorKind*: CXOperatorKind ## Operator classification
 
-      of cdkFunction:
-        funArgs*: seq[CArg]
+          of false:
+            discard
 
-      of cdkClass, cdkStruct:
-        members*: seq[CDecl]
+      of cdkClass, cdkStruct, cdkUnion:
+        isDefaultConstructible*: bool ## Type does not have deleted default
+                                      ## constructor
+        isCopyAble*: bool ## Type can be copied (does not have copy
+                          ## constructor deleted)
+        case isAggregateInit*: bool ## Is type subject to aggregate
+                                    ## initalization?
+          of true:
+            initArgs*: seq[CArg] ## Arguments for aggregate initailization
+
+          else:
+            discard
+
+        parentDecls*: seq[ParentDecl]
+
+        members*: seq[CDecl] ## List of public members that were defined in
+        ## this particular object
 
       of cdkEnum:
-        flds*: seq[tuple[fldname: CXCursor, value: Option[CXCursor]]]
+        isClassEnum*: bool ## C++ `class enum`, or old-style `C` enum?
+        enumFields*: seq[tuple[
+          field: CXCursor,
+          value: Option[CXCursor]
+        ]]
 
-      else:
-        nil
+      of cdkAlias:
+        newType*: CXCursor
+        oldType*: CXCursor
 
+      of cdkMacro:
+        discard
 
 
   CApiUnit* = object
@@ -263,6 +314,34 @@ type
     nameCache*: StringNameCache
     genEnums*: seq[GenEnum]
 
+  GenObjectKind = enum
+    gokUnion
+    gokStruct
+    gokClass
+
+  GenField* = object
+    rawName*: string
+    nimName*: string
+    fullName*: CSCopedIdent
+    cursor*: CXCursor
+    value*: Option[PNode]
+    fldType*: NType[PNode]
+    isConst*: bool
+
+  GenObject* = object
+    kind*: GenObjectKind
+    rawName*: string
+    nimName*: string
+    fullName*: CScopedIdent
+    cursor*: CXCursor
+    memberFields*: seq[GenField] ## Direct member fields
+    isAggregateInit*: bool ## Subject to aggregate initalization
+    isIterableOn*: seq[tuple[beginProc, endProc: GenProc]] ## Object has
+    ## `begin()/end()` or any kind of similar procs that can be used to
+    ## generate `items` iterators.
+
+    nestedEntries*: seq[GenEntry]
+
   GenProc* = object
     ## Generated wrapped proc
     ident* {.requiresinit.}: CSCopedIdent
@@ -270,17 +349,20 @@ type
     name*: string ## Name of the generated proc on nim side
     icpp*: string ## `importcpp` pattern string
     private*: bool ## Generated proc should be private?
-    args*: seq[CArg]
-    retType*: NType[PNode]
-    genParams*: seq[NType[PNode]]
-    declType*: ProcDeclType
-    header*: NimHeaderSpec
+    arguments*: seq[CArg] ## Arguments
+    returnType*: NType[PNode]
+    genParams*: seq[NType[PNode]] ## Nim generic parameters
+    declType*: ProcDeclType ## Type of proc declaration (iterator,
+                            ## converter etc.)
+    header*: NimHeaderSpec ## Header specification for `.header:` pragma
     pragma*: PPragma ## Additional pragmas on top of `importcpp`
-    kind*: ProcKind ## Kind of generated nim proc
+    kind*: ProcKind ## Kind of generated nim proc (operator, field setter,
+                    ## regular proc etc.)
     cursor* {.requiresinit.}: CXCursor ## Original cursor for proc declaration
-    docs*: seq[string]
-    impl*: Option[PNode]
-    noPragmas*: bool
+    docs*: seq[string] ## Documentation comments
+    impl*: Option[PNode] ## Optional implementation body
+    noPragmas*: bool ## Do not add default C wrapper pragamas. Used for
+                     ## pure nim enums
 
   GenEnumValue* = object
     baseName*: string ## Original name of the enum value
@@ -291,14 +373,36 @@ type
     stringif*: string ## 'stringified' version of fully qualified field
                       ## name (`enumName::fieldname`)
     cursor*: CXCursor ## Cursor to field
-    docComment*: string
+    docComment*: string ## Documentation comment for enum field
 
   GenEnum* = object
-    rawName*: string
-    nimName*: string
-    values*: seq[GenEnumValue]
-    declEn*: CDecl
-    docComment*: string
+    ## Generated enum
+    rawName*: string ## Original name of the enum
+    nimName*: string ## Converted nim name
+    values*: seq[GenEnumValue] ## Filtered, ordered sequence of values
+    declEn*: CDecl ## Underlying declaration
+    docComment*: string ## Documentation comment
+
+  GenEntryKind* = enum
+    gekEnum
+    gekProc
+    gekObject
+
+  GenEntry* = object
+    ## Toplevel wrapper for different entry kinds.
+    ##
+    ## Does not server any particular purpose other than to allow storing
+    ## differnt `GenX` entries in the same container.
+    case kind*: GenEntryKind
+      of gekEnum:
+        genEnum*: GenEnum
+
+      of gekProc:
+        genProc*: GenProc
+
+      of gekObject:
+        genObject*: GenObject
+
 
   WrappedEntryKind* = enum
     wekMultitype
@@ -525,48 +629,8 @@ func newWrappedEntry*(
 
   WrappedEntry(npass: wrapped, kind: wekNimPass, postTypes: postTypes)
 
-proc accs*(self: CDecl): CX_AccessSpecifier =
-  if contains({cdkField}, self.kind):
-    return self.fldAccs
-  if contains({cdkMethod}, self.kind):
-    return self.metAccs
-  raiseAssert("#[ IMPLEMENT:ERRMSG ]#")
-
-proc `accs=`*(self: var CDecl; it: CX_AccessSpecifier) =
-  var matched: bool = false
-  if contains({cdkField}, self.kind):
-    if true:
-      matched = true
-      self.fldAccs = it
-  if contains({cdkMethod}, self.kind):
-    if true:
-      matched = true
-      self.metAccs = it
-  if not matched:
-    raiseAssert("#[ IMPLEMENT:ERRMSG ]#")
-
-proc args*(self: CDecl): seq[CArg] =
-  if contains({cdkMethod}, self.kind):
-    return self.metArgs
-  if contains({cdkFunction}, self.kind):
-    return self.funArgs
-  raiseAssert("#[ IMPLEMENT:ERRMSG ]#")
-
-proc `args=`*(self: var CDecl; it: seq[CArg]) =
-  var matched: bool = false
-  if contains({cdkMethod}, self.kind):
-    if true:
-      matched = true
-      self.metArgs = it
-  if contains({cdkFunction}, self.kind):
-    if true:
-      matched = true
-      self.funArgs = it
-  if not matched:
-    raiseAssert("#[ IMPLEMENT:ERRMSG ]#")
-
 #======================  Accessing CDecl elements  =======================#
-func arg*(cd: CDecl, idx: int): CArg = cd.args()[idx]
+func arg*(cd: CDecl, idx: int): CArg = cd.arguments[idx]
 func member*(cd: CDecl, idx: int): CDecl = cd.members[idx]
 func methods*(cd: CDecl, kinds: set[CXCursorKind]): seq[CDecl] =
   assert cd.kind in {cdkClass, cdkStruct}
@@ -634,19 +698,22 @@ proc isOperator*(cx: CXCursor): bool =
 
 
 proc classifyOperator*(cd: CDecl): CXOperatorKind =
-  assert cd.isOperator()
+  assert cd.isOperator
   let name = cd.lastName().dropPrefix("operator")
   case name:
-    of "+=", "=", "-=", "*=",
+    of "=":
+      cxoCopyAsgnOp
+
+    of "+=", "-=", "*=",
        "<<=", ">>=", "&=", "|=", "/=", "%=", "^="
-      : # NOTE `=`
+      :
       cxoAsgnOp
 
     of "[]":
       cxoArrayOp
 
     of "-", "+":
-      if cd.args.len == 1:
+      if cd.arguments.len == 1:
         cxoPrefixOp
 
       else:
@@ -662,7 +729,7 @@ proc classifyOperator*(cd: CDecl): CXOperatorKind =
       cxoInfixOp
 
     of "*": # NOTE this heuristics might not be valid in all cases.
-      if cd.args.len == 0:
+      if cd.arguments.len == 0:
         cxoDerefOp
       else:
         cxoInfixOp
@@ -705,7 +772,7 @@ proc classifyOperator*(cd: CDecl): CXOperatorKind =
 func getNimName*(cd: CDecl): string =
   case cd.kind:
     of cdkMethod, cdkFunction:
-      if cd.isOperator():
+      if cd.isOperator:
         if cd.lastName() == "operator=":
           "setFrom" # REVIEW change name to something different if possible
         else:

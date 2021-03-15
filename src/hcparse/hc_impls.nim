@@ -42,7 +42,7 @@ proc errorCodesToException*(
       gen2.noPragmas = true
 
       var call = newPCall(genProc.name)
-      for arg in genProc.args:
+      for arg in genProc.arguments:
         call.add newPIdent(arg.name)
 
       let validRange = nnkInfix.newPTree(

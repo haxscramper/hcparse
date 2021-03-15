@@ -188,9 +188,9 @@ proc toFullScopedIdent*(cxtype: CXType): CScopedIdent =
 
 # proc isDirectTypeDecl*(cursor: CXCursor): bool =
 #   case cursor.cxKind():
-#     of 
+#     of
 #   debug cursor.treeRepr()
-#   raiseImplementError("") 
+#   raiseImplementError("")
 
 proc getTypeName*(cxtype: CXType, conf: WrapConfig): string =
   let curs = cxtype.getTypeDeclaration()
@@ -440,7 +440,7 @@ func hasComplexParam*(nt: NType[PNode]): bool =
 func pubFields*(cd: CDecl): seq[CDecl] =
   assert cd.kind in {cdkClass, cdkStruct}
   for member in cd.members:
-    if (member.kind == cdkField) and (member.accs == asPublic):
+    if (member.kind == cdkField) and (member.access== asPublic):
       result.add member
 
 proc isEnum*(cxtype: CXType): bool =
@@ -457,3 +457,92 @@ proc isEnum*(cxtype: CXType): bool =
 
     else:
       return false
+
+proc toInitCall*(cursor: CXCursor, conf: WrapConfig): PNode =
+  proc aux(cursor: CXCursor, ilist: bool): PNode =
+    case cursor.cxKind():
+      of ckUnexposedExpr:
+        # info $cursor.cxType()
+        if startsWith($cursor.cxType(), "std::initializer_list"):
+          # info "Found init list"
+          result = aux(cursor[0], true)
+
+        else:
+          result = aux(cursor[0], ilist)
+
+      of ckCallExpr:
+        case cursor[0].cxKind():
+          of ckUnexposedExpr, ckCallExpr, ckFunctionalCastExpr:
+            result = aux(cursor[0], ilist)
+
+          of ckIntegerLiteral:
+            result = cursor[0].aux(ilist)
+
+          else:
+            info cursor[0].cxKind()
+            debug "\n" & cursor.treeRepr(conf.unit)
+            raiseAssert("#[ IMPLEMENT ]#")
+
+
+        let str = "init" & $cursor.cxType()
+        if result.kind in nkTokenKinds:
+          result = newPCall(str, result)
+
+        elif result.kind == nkCall and
+             result[0].getStrVal() != str:
+          result = newPCall(str, result)
+
+
+      of ckFunctionalCastExpr:
+        result = aux(cursor[1], ilist)
+
+      of ckInitListExpr:
+        # debug "Creating initList"
+        # debug ilist
+        # raiseAssert("#[ IMPLEMENT ]#")
+        if ilist:
+          result = newPCall("cxxInitList")
+
+        else:
+          result = newPCall("init" & $cursor.cxType())
+
+        for arg in cursor:
+          result.add aux(arg, false)
+
+      of ckIntegerLiteral, ckCharacterLiteral, ckFloatingLiteral:
+        let tokens = cursor.tokenStrings(conf.unit)
+
+        case cursor.cxKind():
+          of ckIntegerLiteral:
+            result = newPCall("cint", newPLit(parseInt(tokens[0])))
+
+          of ckCharacterLiteral:
+            result = newPLit(tokens[0][1])
+
+          of ckFloatingLiteral:
+            result = newPLit(parseFloat(tokens[0]))
+
+          else:
+            discard
+
+      else:
+        err "Implement for kind", cursor.cxKind()
+        debug cursor.tokenStrings(conf.unit)
+        debug cursor.treeRepr(conf.unit)
+        raiseAssert("#[ IMPLEMENT ]#")
+
+  return aux(cursor, false)
+
+
+proc setDefaultForArg*(arg: var CArg, cursor: CXCursor, conf: WrapConfig) =
+  ## Update default value for argument.
+  ## - @arg{arg} :: Non-raw argument to update default for
+  ## - @arg{cursor} :: original cursor for argument declaration
+  ## - @arg{conf} :: Default wrap configuration
+
+  # info cursor.len
+  if cursor.len == 2 and
+     cursor[1].cxKind() in {ckUnexposedExpr, ckInitListExpr}:
+    # debug cursor.treeRepr(conf.unit)
+    arg.default = some(toInitCall(cursor[1], conf))
+    # debug arg.default

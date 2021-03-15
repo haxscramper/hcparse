@@ -1,4 +1,4 @@
-import hc_types, cxtypes, cxvisitors, hc_typeconv
+import ./hc_types, ./cxtypes, ./cxvisitors, ./hc_typeconv, ./cxcommon
 
 import hnimast
 
@@ -70,16 +70,28 @@ proc argsSignature*(
 proc visitMethod*(
     cursor: CXCursor, parent: CScopedIdent, accs: CXAccessSpecifier): CDecl =
 
-  result = CDecl(kind: cdkMethod, cursor: cursor, ident: parent & toCName(cursor))
-  result.accs = accs
-  result.args = cursor.getArguments()
+  result = CDecl(
+    kind: cdkMethod,
+    cursor: cursor,
+    ident: parent & toCName(cursor),
+    access: accs,
+    arguments: cursor.getArguments(),
+    isOperator: isOperator(cursor)
+  )
+
+  # result.access = accs
+  # result.arguments = cursor.getArguments()
+
+  if isOperator(result):
+    result.operatorKind = result.classifyOperator()
+    result.operatorName = result.lastName().dropPrefix("operator")
 
 
 proc visitField*(
     cursor: CXCursor, parent: CSCopedIdent, accs: CXAccessSpecifier): CDecl =
 
   result = CDecl(kind: cdkField, cursor: cursor, ident: parent & toCName(cursor))
-  result.accs = accs
+  result.access = accs
 
 var undefCnt: int = 0
 
@@ -91,10 +103,18 @@ proc visitAlias*(
 
 proc visitFunction*(
   cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): CDecl =
-  result = CDecl(kind: cdkFunction, cursor: cursor,
-                 ident: parent & toCName(cursor))
+  result = CDecl(
+    kind: cdkFunction,
+    cursor: cursor,
+    ident: parent & toCName(cursor),
+    isOperator: cursor.isOperator()
+  )
 
-  result.args = cursor.getArguments()
+  if result.isOperator:
+    result.operatorKind = result.classifyOperator()
+    result.operatorName = result.lastName().dropPrefix("operator")
+
+  result.arguments = cursor.getArguments()
 
   for subn in cursor:
     case subn.cxKind:
@@ -111,8 +131,9 @@ proc visitFunction*(
          # will cause some errors in the future, I don't really know.
         discard
       else:
-        warn "Unknown element", subn.cxKind, cast[int](subn.cxKind),
-                subn, "in\n" & $cursor
+        warn "Unknown element", subn.cxKind, cast[int](subn.cxKind), subn, $cursor
+        debug subn.getSpellingLocation()
+        debug cursor.treeRepr()
 
 
 proc visitEnum*(
@@ -124,44 +145,186 @@ proc visitEnum*(
   )
 
   for elem in cursor:
-    result.flds.add (elem, some(elem[0]))
+    result.enumFields.add (elem, some(elem[0]))
 
   # info "Found enum", result.name
+
+proc getDefaultAccess*(cursor: CXCursor): CXAccessSpecifier =
+  if cursor.cxKind in {ckStructDecl, ckUnionDecl}:
+    asPublic
+  else:
+    asPrivate
+
+
+proc isAggregateInitable*(
+  cd: CXCursor, initArgs: var seq[CArg], conf: WrapConfig): bool =
+  ## Determine if entry pointed to by `cd`'s cursor is subject to aggregate
+  ## initalization. Add all fields for aggregate initalization into
+  ## @arg{initArgs}. NOTE: fields will be added unconditionally, so first
+  ## check return value.
+
+  if cd.cxKind() in {ckUnionDecl, ckEnumDecl}:
+    return false
+
+  elif cd.cxKind() notin {ckClassDecl, ckStructDecl, ckClassTemplate}:
+    assertionFail:
+      "Invalid cursor kind of aggregate initalization check."
+      "Expected type declaration (union/enum/struct/class),"
+      "but found {toRed($cd.cxKind())}"
+
+  # List of entries that immediately mean aggregate initalization is not
+  # supported.
+  const failKinds = {
+    ckConstructor
+  }
+
+  const ignoreKinds = {
+    ckTemplateTypeParameter,
+    ckTypedefDecl,
+    ckStructDecl,
+    ckEnumDecl,
+    ckUnionDecl,
+    ckMethod,
+    ckFunctionTemplate,
+    ckDestructor,
+    ckAlignedAttr
+    # ckBaseClassSpecifier
+  }
+
+  proc aux(cursor: CXCursor): bool =
+    ## Recursively determine if cursor points to type that is subject to
+    ## aggregate initalization.
+    # debug cursor.treeRepr(conf.unit)
+    case cursor.cxType().cxKind():
+      of tkPodKinds, tkPointer:
+        return true
+
+      of tkTypeRef, tkElaborated:
+        for entry in cursor.cxType().getTypeDeclaration():
+          if entry.cxKind() in failKinds or
+             (entry.cxKind() notin ignoreKinds) and
+             (not aux(entry)):
+            return false
+
+        return true
+
+      of tkTypedef:
+        return aux(cursor.cxType().getCanonicalType().getTypeDeclaration())
+
+      of tkInvalid:
+        return false
+
+      of tkConstantArray:
+        return aux(cursor[0])
+
+      else:
+        debug cursor.cxType().cxKind()
+        debug cast[int](cursor.cxType().cxKind())
+        debug cursor.getSpellingLocation()
+        debug cursor.treeRepr(conf.unit)
+        err cursor.cxType()
+        raiseAssert("#[ IMPLEMENT ]#")
+
+  result = true
+  var access = cd.getDefaultAccess()
+  for entry in cd:
+    case entry.cxKind():
+      of ckFieldDecl:
+        # debug entry.treeRepr()
+        if aux(entry):
+          var arg = initCArg(
+            fixIdentName($entry), entry.cxType().toNType(conf).ntype, false)
+
+          setDefaultForArg(arg, entry, conf)
+          initArgs.add arg
+
+      of failKinds:
+        return false
+
+      of ignoreKinds:
+        discard
+
+      of ckAccessSpecifier:
+        access = entry.getAccessSpecifier()
+
+      of ckVarDecl:
+        debug entry.treeRepr(conf.unit)
+        discard
+
+      of ckBaseSpecifier:
+        if aux(entry[0]):
+          discard
+
+        else:
+          return false
+
+      else:
+        debug entry.treeRepr(conf.unit)
+        debug cast[int](entry.cxType().cxKind())
+        debug cast[int](entry.cxKind())
+        debug entry.getSpellingLocation()
+        raiseImplementKindError(entry)
+
+
+proc updateParentFields*(decl: var CDecl, conf: WrapConfig) =
+  for parent in decl.cursor.getClassBaseCursors():
+    var buf = ParentDecl(cursor: parent)
+    var accs = parent.getDefaultAccess()
+    for entry in parent:
+      if accs != asPublic:
+        if entry.cxKind() == ckAccessSpecifier:
+          accs = entry.getAccessSpecifier()
+
+      else:
+        case entry.cxKind():
+          of ckFieldDecl:
+            buf.derived.add visitField(entry, decl.ident, accs)
+
+          of ckMethod:
+            buf.derived.add visitMethod(entry, decl.ident, accs)
+
+          else:
+            raiseImplementKindError(entry)
 
 
 proc visitClass*(
   cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): CDecl =
   ## Convert class under cursor to `CDecl`
-  cursor.expectKind({
-    ckClassDecl, ckClassTemplate, ckClassTemplatePartialSpecialization,
-    ckStructDecl, ckUnionDecl
-  })
-
-
-  # info "Found struct decl"
-  # debug cursor.treeRepr()
-
-
   let name =
     if cursor.cxKind == ckStructDecl and len($cursor) == 0:
       $cursor.cxType()
     else:
       $cursor
 
+  var kind =
+    case cursor.cxKind():
+      of ckClassDecl, ckClassTemplate, ckClassTemplatePartialSpecialization:
+        cdkClass
+
+      of ckUnionDecl:
+        cdkUnion
+
+      of ckStructDecl:
+        cdkStruct
+
+      else:
+        raiseUnexpectedKindError(cursor)
+
+  var initArgs: seq[CArg]
   result = CDecl(
-    kind: cdkClass, cursor: cursor, ident: parent & toCName(cursor))
+    kind: cdkClass,
+    cursor: cursor,
+    ident: parent & toCName(cursor),
+    isAggregateInit: isAggregateInitable(cursor, initArgs, conf)
+  )
 
-  identLog()
-  defer: dedentLog()
+  result.kind = kind
+  if result.isAggregateInit:
+    result.initArgs = initArgs
 
-  var currentAccs =
-    if cursor.cxKind in {ckStructDecl, ckUnionDecl}:
-      asPublic
-    else:
-      asPrivate
+  updateParentFields(result, conf)
 
-
-  # debug cursor.treeRepr()
+  var currentAccs = cursor.getDefaultAccess()
 
   for subn in cursor:
     if subn.cxKind == ckAccessSpecifier:
@@ -196,12 +359,11 @@ proc visitClass*(
           if not conf.ignoreCursor(subn, conf):
             result.members.add visitAlias(subn, result.ident, conf)
 
-        of ckStructDecl, ckClassDecl, ckUnionDecl, ckEnumDecl,
-           ckClassTemplate
-             :
-          # NOTE nested structs will be handled during object wrapping and
-          # moved into separate type declarations
-          discard
+        of ckStructDecl, ckClassDecl, ckUnionDecl, ckClassTemplate:
+           result.members.add visitClass(subn, result.ident, conf)
+
+        of ckEnumDecl:
+           result.members.add visitEnum(subn, result.ident, conf)
 
         of ckBaseSpecifier:
           # Base class specifier is ignored. All additional wrapping
@@ -294,26 +456,32 @@ proc getPublicAPI*(cd: CDecl): seq[CXCursor] =
   ## declaration: return and argument types for functions and methods,
   ## public fields for objects.
   case cd.kind:
-    of cdkClass, cdkStruct:
+    of cdkClass, cdkStruct, cdkUnion:
       for member in cd.members:
         result.add member.getPublicAPI()
+
     of cdkField:
-      if cd.accs == asPublic:
+      if cd.access == asPublic:
         return @[ cd.cursor ]
+
       else:
         return @[]
+
     of cdkFunction, cdkMethod:
       let exportd: bool = (cd.kind == cdkFunction) or
-        (cd.accs() == asPublic)
+        (cd.access == asPublic)
 
       if exportd:
         result.add cd.cursor
-        for arg in cd.args:
+        for arg in cd.arguments:
           result.add arg.cursor
+
     of cdkAlias:
       return @[cd.cursor]
+
     of cdkEnum:
       return @[]
+
     of cdkMacro:
       return @[]
 

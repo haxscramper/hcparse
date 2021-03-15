@@ -14,93 +14,6 @@ import fusion/matching except addPrefix
 
 import hc_visitors, hc_types
 
-proc toInitCall*(cursor: CXCursor, conf: WrapConfig): PNode =
-  proc aux(cursor: CXCursor, ilist: bool): PNode =
-    case cursor.cxKind():
-      of ckUnexposedExpr:
-        # info $cursor.cxType()
-        if startsWith($cursor.cxType(), "std::initializer_list"):
-          # info "Found init list"
-          result = aux(cursor[0], true)
-
-        else:
-          result = aux(cursor[0], ilist)
-
-      of ckCallExpr:
-        case cursor[0].cxKind():
-          of ckUnexposedExpr, ckCallExpr, ckFunctionalCastExpr:
-            result = aux(cursor[0], ilist)
-
-          of ckIntegerLiteral:
-            result = cursor[0].aux(ilist)
-
-          else:
-            info cursor[0].cxKind()
-            debug "\n" & cursor.treeRepr(conf.unit)
-            raiseAssert("#[ IMPLEMENT ]#")
-
-
-        let str = "init" & $cursor.cxType()
-        if result.kind in nkTokenKinds:
-          result = newPCall(str, result)
-
-        elif result.kind == nkCall and
-             result[0].getStrVal() != str:
-          result = newPCall(str, result)
-
-
-      of ckFunctionalCastExpr:
-        result = aux(cursor[1], ilist)
-
-      of ckInitListExpr:
-        # debug "Creating initList"
-        # debug ilist
-        # raiseAssert("#[ IMPLEMENT ]#")
-        if ilist:
-          result = newPCall("cxxInitList")
-
-        else:
-          result = newPCall("init" & $cursor.cxType())
-
-        for arg in cursor:
-          result.add aux(arg, false)
-
-      of ckIntegerLiteral, ckCharacterLiteral, ckFloatingLiteral:
-        let tokens = cursor.tokenStrings(conf.unit)
-
-        case cursor.cxKind():
-          of ckIntegerLiteral:
-            result = newPCall("cint", newPLit(parseInt(tokens[0])))
-
-          of ckCharacterLiteral:
-            result = newPLit(tokens[0][1])
-
-          of ckFloatingLiteral:
-            result = newPLit(parseFloat(tokens[0]))
-
-          else:
-            discard
-
-      else:
-        err "Implement for kind", cursor.cxKind()
-        debug cursor.tokenStrings(conf.unit)
-        debug cursor.treeRepr(conf.unit)
-        raiseAssert("#[ IMPLEMENT ]#")
-
-  return aux(cursor, false)
-
-proc setDefaultForArg*(arg: var CArg, cursor: CXCursor, conf: WrapConfig) =
-  ## Update default value for argument.
-  ## - @arg{arg} :: Non-raw argument to update default for
-  ## - @arg{cursor} :: original cursor for argument declaration
-  ## - @arg{conf} :: Default wrap configuration
-
-  # info cursor.len
-  if cursor.len == 2 and
-     cursor[1].cxKind() in {ckUnexposedExpr, ckInitListExpr}:
-    # debug cursor.treeRepr(conf.unit)
-    arg.default = some(toInitCall(cursor[1], conf))
-    # debug arg.default
 
 proc wrapOperator*(
     oper: CDecl,
@@ -117,80 +30,80 @@ proc wrapOperator*(
   let kind = oper.classifyOperator()
   it.kind = pkOperator
 
-  if kind == cxoAsgnOp and it.name == "setFrom":
-    it.icpp = &"(# = #)"
-    it.kind = pkRegular
+  case oper.operatorKind:
+    of cxoCopyAsgnOp:
+      it.name = "setFrom"
+      it.icpp = &"(# = #)"
+      it.kind = pkRegular
 
-  else:
-    case kind:
-      of cxoNewOp, cxoDeleteOp:
-        discard
+    of cxoNewOp, cxoDeleteOp:
+      discard
 
-      of cxoAsgnOp:
-        it.icpp = &"(# {it.name} #)"
+    of cxoAsgnOp:
+      it.icpp = &"(# {it.name} #)"
 
-      of cxoArrayOp:
-        let rtype = oper.cursor.retType()
-        let (_, mutable) = rtype.toNType(conf)
-        if mutable:
-          it.name = "[]="
-          # WARNING potential source of horrible c++ codegen errors
-          it.icpp = &"#[#]= #"
+    of cxoArrayOp:
+      let rtype = oper.cursor.retType()
+      let (_, mutable) = rtype.toNType(conf)
+      if mutable:
+        it.name = "[]="
+        # WARNING potential source of horrible c++ codegen errors
+        it.icpp = &"#[#]= #"
 
-        else:
-          it.icpp = &"#[#]"
+      else:
+        it.icpp = &"#[#]"
 
-      of cxoInfixOp:
-        it.icpp = &"(toCppImport(oper.ident)(#, #))"
+    of cxoInfixOp:
+      it.icpp = &"(toCppImport(oper.ident)(#, #))"
 
-        if oper.args.len == 1:
-          result.addThis = true
+      if oper.arguments.len == 1:
+        result.addThis = true
 
-      of cxoArrowOp:
-        # WARNING
-        it.icpp = &"(#.operator->(@))"
+    of cxoArrowOp:
+      # WARNING
+      it.icpp = &"(#.operator->(@))"
 
-      of cxoCallOp:
-        # NOTE nim does have experimental support for call
-        # operator, but I think it is better to wrap this one as
-        # separate function `call()`
-        it.name = "call"
-        it.kind = pkRegular
-        it.icpp = &"#(@)"
+    of cxoCallOp:
+      # NOTE nim does have experimental support for call
+      # operator, but I think it is better to wrap this one as
+      # separate function `call()`
+      it.name = "call"
+      it.kind = pkRegular
+      it.icpp = &"#(@)"
 
-      of cxoDerefOp:
-        it.name = "[]"
-        it.icpp = &"(*#)"
+    of cxoDerefOp:
+      it.name = "[]"
+      it.icpp = &"(*#)"
 
-      of cxoPrefixOp:
-        it.icpp = &"({it.name}#)" # FIXME use scoped ident
+    of cxoPrefixOp:
+      it.icpp = &"({it.name}#)" # FIXME use scoped ident
 
-      of cxoPostfixOp:
-        it.icpp = &"(#{it.name})" # FIXME use scoped ident
+    of cxoPostfixOp:
+      it.icpp = &"(#{it.name})" # FIXME use scoped ident
 
-      of cxoCommaOp:
-        it.name = "commaOp"
-        it.icpp = &"commaOp(@)"
-        it.kind = pkRegular
+    of cxoCommaOp:
+      it.name = "commaOp"
+      it.icpp = &"commaOp(@)"
+      it.kind = pkRegular
 
-      of cxoConvertOp:
-        let restype = oper.cursor.retType().toNType(conf).ntype
+    of cxoConvertOp:
+      let restype = oper.cursor.retType().toNType(conf).ntype
 
-        with it:
-          name = "to" & capitalizeAscii(restype.head)
-          icpp = &"@"
-          retType = resType
-          declType = ptkConverter
-          kind = pkRegular
+      with it:
+        name = "to" & capitalizeAscii(restype.head)
+        icpp = &"@"
+        returnType = resType
+        declType = ptkConverter
+        kind = pkRegular
 
-      of cxoUserLitOp:
-        let restype = oper.cursor.retType().toNType(conf).ntype
+    of cxoUserLitOp:
+      let restype = oper.cursor.retType().toNType(conf).ntype
 
-        with it:
-          name = "to" & capitalizeAscii(restype.head)
-          icpp = &"({oper.cursor}(@))"
-          retType = restype
-          kind = pkRegular
+      with it:
+        name = "to" & capitalizeAscii(restype.head)
+        icpp = &"({oper.cursor}(@))"
+        returnType = restype
+        kind = pkRegular
 
   it.header = conf.makeHeader(oper.cursor, conf)
   result.decl = it
@@ -234,7 +147,7 @@ proc wrapProcedure*(
   )
 
   result.canAdd = true
-  if pr.isOperator():
+  if pr.isOperator:
     # HACK temporary workaround for `new` and `delete` operator handing
     if classifyOperator(pr) notin {cxoNewOp, cxoDeleteOp}:
       let (decl, adt) = pr.wrapOperator(conf)
@@ -280,12 +193,12 @@ proc wrapProcedure*(
 
   if addThis:
     assert parent.isSome()
-    it.args.add initCArg(
+    it.arguments.add initCArg(
       "self", parent.get(),
       pr.cursor.isConstMethod.tern(nvdVar, nvdLet)
     )
 
-  for arg in pr.args:
+  for arg in pr.arguments:
     var (vtype, mutable) = arg.cursor.cxType().toNType(conf)
     if arg.cursor.cxType().isEnum():
       vtype.head &= conf.isImportCpp.tern("Cxx", "C")
@@ -320,13 +233,13 @@ proc wrapProcedure*(
 
     var newArg = initCArg(fixIdentName(arg.name), vtype, mutable)
     setDefaultForArg(newArg, arg.cursor, conf)
-    it.args.add newArg
+    it.arguments.add newArg
 
   if $it.cursor == "operator=":
     # FIXME check if first argument and parent declaration types are
     # identical. Right now it does not work because
     # `b3Matrix3x3` != `const b3Matrix3x3 &`
-    if parentDecl.get().cursor.cxType() == pr.args[0].cursor.cxType():
+    if parentDecl.get().cursor.cxType() == pr.arguments[0].cursor.cxType():
       # By default `operator=` is converted to regular `setFrom` proc to
       # correctly handle multiple overloads (in C++ `operator=` can have
       # different types on RHS and LHS, but this is not the case in nim).
@@ -337,11 +250,11 @@ proc wrapProcedure*(
 
   if pr.isOperator and pr.classifyOperator() == cxoAsgnOp:
     # HACK Force override return type for assignment operators
-    it.retType = newPType("void")
+    it.returnType = newPType("void")
 
   elif pr.cursor.kind in {ckConstructor, ckConversionFunction}:
     # Override handling of return types for constructors
-    if not pr.isOperator():
+    if not pr.isOperator:
       # But ignore implicit user-defined conversion functions like
       # `operator T()`
       assert parent.isSome(), "Cannot wrap constructor without parent object"
@@ -349,11 +262,11 @@ proc wrapProcedure*(
       it.iinfo = currIInfo()
       it.header = conf.makeHeader(pr.cursor, conf)
       if asNewConstructor:
-        it.retType = newNType("ptr", @[parent.get()])
+        it.returnType = newNType("ptr", @[parent.get()])
         it.icpp = &"new {toCppNamespace(parentDecl.get().ident)}(@)"
 
       else:
-        it.retType = parent.get()
+        it.returnType = parent.get()
         it.icpp = &"{toCppNamespace(parentDecl.get().ident)}(@)"
 
   else:
@@ -368,7 +281,7 @@ proc wrapProcedure*(
       rtype.genParams = parent.get().genParams
       # WARNING(refactor)
 
-    it.retType = rtype
+    it.returnType = rtype
 
     if rtype.hasUnexposed():
       # WARNING dropping all methods that use `tkUnexposed` type
@@ -385,7 +298,7 @@ proc wrapProcedure*(
     it.name = "destroy" & it.name
 
   elif pr.cursor.cxkind in {ckConstructor, ckConversionFunction}:
-    if not pr.isOperator():
+    if not pr.isOperator:
       it.name = tern(asNewConstructor, "new", "init") &
         it.name.capitalizeAscii()
 
@@ -406,11 +319,11 @@ proc fixNames(
     inc idx
 
   idx = 0
-  for arg in mitems(ppd.args):
+  for arg in mitems(ppd.arguments):
     conf.fixTypeName(arg.ntype, conf, idx)
     inc idx
 
-  conf.fixTypeName(ppd.retType, conf, 0)
+  conf.fixTypeName(ppd.returnType, conf, 0)
 
   ppd.name = ppd.name.fixIdentName()
 
@@ -673,113 +586,6 @@ proc getDefaultAccess*(cursor: CXCursor): CXAccessSpecifier =
     else:
       raiseAssert("Cannot get default visibility for cursor of kind " & $cursor.cxKind())
 
-proc isAggregateInitable*(cd: CDecl, initArgs: var seq[CArg], conf: WrapConfig): bool =
-  ## Determine if entry pointed to by `cd`'s cursor is subject to aggregate
-  ## initalization. Add all fields for aggregate initalization into
-  ## @arg{initArgs}. NOTE: fields will be added unconditionally, so first
-  ## check return value.
-
-  if cd.cursor.cxKind() in {ckUnionDecl, ckEnumDecl}:
-    return false
-
-  elif cd.cursor.cxKind() notin {ckClassDecl, ckStructDecl, ckClassTemplate}:
-    assertionFail:
-      "Invalid cursor kind of aggregate initalization check."
-      "Expected type declaration (union/enum/struct/class),"
-      "but found {toRed($cd.cursor.cxKind())}"
-
-  # List of entries that immediately mean aggregate initalization is not
-  # supported.
-  const failKinds = {
-    ckConstructor
-  }
-
-  const ignoreKinds = {
-    ckTemplateTypeParameter,
-    ckTypedefDecl,
-    ckStructDecl,
-    ckEnumDecl,
-    ckUnionDecl,
-    ckMethod,
-    ckFunctionTemplate,
-    ckDestructor,
-    ckAlignedAttr
-    # ckBaseClassSpecifier
-  }
-
-  proc aux(cursor: CXCursor): bool =
-    ## Recursively determine if cursor points to type that is subject to
-    ## aggregate initalization.
-    # debug cursor.treeRepr(conf.unit)
-    case cursor.cxType().cxKind():
-      of tkPodKinds, tkPointer:
-        return true
-
-      of tkTypeRef, tkElaborated:
-        for entry in cursor.cxType().getTypeDeclaration():
-          if entry.cxKind() in failKinds or
-             (entry.cxKind() notin ignoreKinds) and
-             (not aux(entry)):
-            return false
-
-        return true
-
-      of tkTypedef:
-        return aux(cursor.cxType().getCanonicalType().getTypeDeclaration())
-
-      of tkInvalid:
-        return false
-
-      of tkConstantArray:
-        return aux(cursor[0])
-
-      else:
-        debug cursor.cxType().cxKind()
-        debug cast[int](cursor.cxType().cxKind())
-        debug cursor.getSpellingLocation()
-        debug cursor.treeRepr(conf.unit)
-        err cursor.cxType()
-        raiseAssert("#[ IMPLEMENT ]#")
-
-  result = true
-  var access = cd.cursor.getDefaultAccess()
-  for entry in cd.cursor:
-    case entry.cxKind():
-      of ckFieldDecl:
-        # debug entry.treeRepr()
-        if aux(entry):
-          var arg = initCArg(
-            fixIdentName($entry), entry.cxType().toNType(conf).ntype, false)
-
-          setDefaultForArg(arg, entry, conf)
-          initArgs.add arg
-
-      of failKinds:
-        return false
-
-      of ignoreKinds:
-        discard
-
-      of ckAccessSpecifier:
-        access = entry.getAccessSpecifier()
-
-      of ckVarDecl:
-        debug entry.treeRepr(conf.unit)
-        discard
-
-      of ckBaseSpecifier:
-        if aux(entry[0]):
-          discard
-
-        else:
-          return false
-
-      else:
-        debug entry.treeRepr(conf.unit)
-        debug cast[int](entry.cxType().cxKind())
-        debug cast[int](entry.cxKind())
-        debug entry.getSpellingLocation()
-        raiseAssert(&"#[ IMPLEMENT for kind {entry.kind} ]#")
 
 
 proc wrapObject*(
@@ -800,18 +606,18 @@ proc wrapObject*(
   block:
     var initArgs: seq[CArg]
     if conf.isImportcpp and
-       isAggregateInitable(cd, initArgs, conf) and
-       initArgs.len > 0
+       cd.isAggregateInit and
+       cd.initArgs.len > 0
       :
       # info obj.name.head, "can be aggregate initialized"
       result.genAfter.add newWrappedEntry(
         # WARNING `cd.ident`
         initGenProc(CXCursor(), currIInfo(), cd.ident).withIt do:
           it.name = "init" & obj.name.head
-          it.args = initArgs
+          it.arguments = cd.initArgs
           it.header = conf.makeHeader(cd.cursor, conf)
           it.icpp = &"{toCppNamespace(cd.ident)}({{@}})"
-          it.retType = obj.name
+          it.returnType = obj.name
           it.genParams = obj.name.genParams
       )
 
@@ -914,7 +720,7 @@ type EnumFieldResult = tuple[
 ]
 
 proc getFields*(declEn: CDecl, conf: WrapConfig): EnumFieldResult =
-  for (name, value) in declEn.flds:
+  for (name, value) in declEn.enumFields:
     let val = value.get()
     var resval: Option[EnFieldVal]
     case val.kind:
@@ -1086,7 +892,7 @@ proc makeGenEnum*(
 
   # Nim proxy proc declaration.
   # Determine common prefix for C++ enum (if any)
-  let pref = declEn.flds.mapIt($it.fldName).commonPrefix()
+  let pref = declEn.enumFields.mapIt($it.field).commonPrefix()
 
   # Get name of the enum type itsel by combining first letters of
   # `PascalCase` or `snake_case` name.
@@ -1404,7 +1210,7 @@ proc wrapApiUnit*(
       continue
 
     case decl.kind:
-      of cdkClass:
+      of cdkClass, cdkStruct, cdkUnion:
         identLog()
         let spec = decl.cursor.getSpecializedCursorTemplate()
 
@@ -1437,8 +1243,9 @@ proc wrapApiUnit*(
       of cdkMacro:
         macrolist.add decl
 
-      else:
-        debug decl.kind
+      of cdkMethod, cdkField:
+        discard
+
 
   result.add wrapMacros(macrolist, conf, cache)
 
@@ -1454,13 +1261,13 @@ proc toNNode*(gp: GenProc, wrapConf: WrapConfig): PProcDecl =
     name = gp.name,
     iinfo = gp.iinfo,
     exported = true,
-    rtyp = some(gp.retType),
+    rtyp = some(gp.returnType),
     genParams = gp.genParams,
     declType = gp.declType,
     kind = gp.kind
   )
 
-  for arg in gp.args:
+  for arg in gp.arguments:
     result.signature.arguments.add newNIdentDefs(
       vname = arg.name,
       value = arg.default,
