@@ -116,6 +116,10 @@ type
       of cdkField:
         fieldValue*: Option[CXCursor] ## Cursor to field value if
                                       ## immediately declared
+        anonymousType*: Option[CDecl] ## Anonymous enum/struct declaration
+        ## It is possible to have entries like
+        ## `struct A{enum{first,second}field;};`
+        ## that don't declare any type.
 
       of cdkMethod, cdkFunction:
         arguments*: seq[CArg] ## Method or function argumets
@@ -131,7 +135,7 @@ type
       of cdkClass, cdkStruct, cdkUnion:
         isDefaultConstructible*: bool ## Type does not have deleted default
                                       ## constructor
-        isCopyAble*: bool ## Type can be copied (does not have copy
+        isCopyable*: bool ## Type can be copied (does not have copy
                           ## constructor deleted)
         case isAggregateInit*: bool ## Is type subject to aggregate
                                     ## initalization?
@@ -143,8 +147,10 @@ type
 
         parentDecls*: seq[ParentDecl]
 
-        members*: seq[CDecl] ## List of public members that were defined in
-        ## this particular object
+        nestedTypes*: seq[CDecl] ## Nested struct/union/class/typedef
+                                 ## declarations
+        members*: seq[CDecl] ## List of public fields and methods
+        ## that were defined in the object
 
       of cdkEnum:
         isClassEnum*: bool ## C++ `class enum`, or old-style `C` enum?
@@ -320,21 +326,25 @@ type
     gokClass
 
   GenField* = object
+    cdecl* {.requiresinit.}: CDecl
+    iinfo* {.requiresinit.}: LineInfo
     rawName*: string
     nimName*: string
     fullName*: CSCopedIdent
-    cursor*: CXCursor
-    value*: Option[PNode]
+    value*: Option[PNode] ## /arbitrary expression/ for field initalization
     fldType*: NType[PNode]
-    isConst*: bool
+    isConst*: bool ## Field is const-qualified
+    anonymousType*: Option[GenEntry] ## Wrapper for anonymous type (if any)
 
   GenObject* = object
+    cdecl* {.requiresinit.}: CDecl
+    iinfo* {.requiresinit.}: LineInfo
     kind*: GenObjectKind
     rawName*: string
     nimName*: string
     fullName*: CScopedIdent
-    cursor*: CXCursor
     memberFields*: seq[GenField] ## Direct member fields
+    memberMethods*: seq[GenProc]
     isAggregateInit*: bool ## Subject to aggregate initalization
     isIterableOn*: seq[tuple[beginProc, endProc: GenProc]] ## Object has
     ## `begin()/end()` or any kind of similar procs that can be used to
@@ -346,6 +356,7 @@ type
     ## Generated wrapped proc
     ident* {.requiresinit.}: CSCopedIdent
     iinfo* {.requiresinit.}: LineInfo
+    cdecl* {.requiresinit.}: CDecl
     name*: string ## Name of the generated proc on nim side
     icpp*: string ## `importcpp` pattern string
     private*: bool ## Generated proc should be private?
@@ -358,7 +369,6 @@ type
     pragma*: PPragma ## Additional pragmas on top of `importcpp`
     kind*: ProcKind ## Kind of generated nim proc (operator, field setter,
                     ## regular proc etc.)
-    cursor* {.requiresinit.}: CXCursor ## Original cursor for proc declaration
     docs*: seq[string] ## Documentation comments
     impl*: Option[PNode] ## Optional implementation body
     noPragmas*: bool ## Do not add default C wrapper pragamas. Used for
@@ -377,16 +387,28 @@ type
 
   GenEnum* = object
     ## Generated enum
+    iinfo* {.requiresinit.}: LineInfo
+    cdecl* {.requiresinit.}: CDecl
     rawName*: string ## Original name of the enum
     nimName*: string ## Converted nim name
     values*: seq[GenEnumValue] ## Filtered, ordered sequence of values
     declEn*: CDecl ## Underlying declaration
     docComment*: string ## Documentation comment
 
+  GenAlias* = object
+    cdecl* {.requiresinit.}: CDecl
+    iinfo* {.requiresinit.}: LineInfo
+
+  GenPass* = object
+    iinfo* {.requiresinit.}: LineInfo
+    passEntries*: seq[WrappedEntry]
+
   GenEntryKind* = enum
     gekEnum
     gekProc
     gekObject
+    gekAlias
+    gekPass
 
   GenEntry* = object
     ## Toplevel wrapper for different entry kinds.
@@ -403,6 +425,12 @@ type
       of gekObject:
         genObject*: GenObject
 
+      of gekAlias:
+        genAlias*: GenAlias
+
+      of gekPass:
+        genPass*: GenPass
+
 
   WrappedEntryKind* = enum
     wekMultitype
@@ -411,22 +439,17 @@ type
     wekNimPass
 
   WrappedEntry* = object
+    ## Wrapped entry converted to nim code
     ident*: CScopedIdent
     case kind*: WrappedEntryKind
       of wekMultitype:
-        decls*: seq[WrappedEntry]
+        decls*: seq[WrappedEntry] ## Multiple types for typesection
+                                  ## declaraton
 
-      of wekProc:
-        gproc*: GenProc
-
-      of wekNimDecl:
-        wrapped: PNimDecl
-        original*: CDecl
-        cursor*: CXCursor
-
-      of wekNimPass:
-        npass: PNimDecl
-        postTypes*: bool
+      else:
+        nimDecl*: PNimDecl ## Wrapped nim declaration
+        postTypes*: bool ## Put passthrough code blocks before or after
+                         ## type section?
 
   Postprocess* = object
     impl*: proc(we: var WrappedEntry,
@@ -442,6 +465,7 @@ type
          value*: BiggestInt
 
   CxxCodegen* = object
+    ## Single codegen field entry
     cursor*: CXCursor
     # TODO replace with htsparse AST tree
     code*: string

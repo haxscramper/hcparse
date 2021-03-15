@@ -120,7 +120,7 @@ proc wrapProcedure*(
     cache: var WrapCache,
     parentDecl: Option[CDecl],
     asNewConstructor: bool
-  ): tuple[decl: seq[WrappedEntry], canAdd: bool] =
+  ): tuple[decl: seq[GenEntry], canAdd: bool] =
   ## Generate wrapped entry for procedure, method, operator, or function
   ## declaration
   ##
@@ -306,8 +306,8 @@ proc wrapProcedure*(
     it.pragma.add newPIdent("varargs")
 
   let generated = newProcVisit(it, conf, cache)
-  result.decl.add newWrappedEntry(it)
-  result.decl.add generated
+  result.decl.add it
+  result.decl.add GenPass(iinfo: currIInfo(), passEntries: generated)
 
 
 proc fixNames(
@@ -336,7 +336,7 @@ proc wrapMethods*(
     conf: WrapConfig,
     parent: NType[PNode],
     cache: var WrapCache
-  ): seq[WrappedEntry] =
+  ): tuple[methods: seq[GenProc], extra: seq[GenEntry]] =
 
   ## - @arg{cd} :: Class declaration to wrap methods for
   ## - @arg{parent} :: Nim name of class declaration
@@ -347,29 +347,20 @@ proc wrapMethods*(
   for meth in cd.methods({
     ckMethod, ckDestructor, ckConstructor, ckConversionFunction
   }):
+    var asNew: seq[bool]
     if meth.cursor.cxKind() in {ckConstructor, ckConversionFunction}:
-      block:
-        # Wrap as `new` constructor
-        let (decl, canAdd) = wrapProcedure(
-          meth, conf, some parent, cache, some cd, true)
+      asNew = @[true, false]
 
-        if canAdd:
-          result.add decl
-
-      block:
-        # Wrap as `init` constructor
-        let (decl, canAdd) = wrapProcedure(
-          meth, conf, some parent, cache, some cd, false)
-
-        if canAdd:
-          result.add decl
     else:
+      asNew = @[true]
+
+    for conf in asNew:
       let (decl, canAdd) = wrapProcedure(
-        meth, conf, some parent, cache, some cd, true)
+        meth, conf, some parent, cache, some cd, conf)
 
       if canAdd:
-        result.add decl
-
+        result.methods.add decl[0].genProc
+        result.extra.add decl[1..^1]
 
   for decl in mitems(result):
     fixNames(decl.gproc, conf, parent)
@@ -587,119 +578,103 @@ proc getDefaultAccess*(cursor: CXCursor): CXAccessSpecifier =
       raiseAssert("Cannot get default visibility for cursor of kind " & $cursor.cxKind())
 
 
-
-proc wrapObject*(
-    cd: CDecl, conf: WrapConfig, cache: var WrapCache
-  ): tuple[
-    obj: WrappedEntry, genAfter, genBefore: seq[WrappedEntry]
-  ] =
-
-  let tdecl = cd.cursor.cxType().getTypeDeclaration()
-
+func publicFields*(cd: CDecl): seq[CDecl] =
   assert cd.kind in {cdkClass, cdkStruct}
-  var obj = PObjectDecl(
-    name: conf.typeNameForScoped(cd.ident, conf),
-    exported: true,
-    iinfo: currIInfo()
+  for member in cd.members:
+    if (member.kind == cdkField) and (member.access == asPublic):
+      result.add member
+
+
+proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
+  let tdecl = cd.cursor.cxType().getTypeDeclaration()
+  assert cd.kind in {cdkClass, cdkStruct}
+
+
+  result = GenObject(
+    rawName: $cd.cursor,
+    nimName: conf.typeNameForScoped(cd.ident, conf),
+    iinfo: currIInfo(),
+    cursor: cd.cursor,
+    cdecl: cd
   )
 
-  block:
-    var initArgs: seq[CArg]
-    if conf.isImportcpp and
-       cd.isAggregateInit and
-       cd.initArgs.len > 0
-      :
-      # info obj.name.head, "can be aggregate initialized"
-      result.genAfter.add newWrappedEntry(
-        # WARNING `cd.ident`
-        initGenProc(CXCursor(), currIInfo(), cd.ident).withIt do:
-          it.name = "init" & obj.name.head
-          it.arguments = cd.initArgs
-          it.header = conf.makeHeader(cd.cursor, conf)
-          it.icpp = &"{toCppNamespace(cd.ident)}({{@}})"
-          it.returnType = obj.name
-          it.genParams = obj.name.genParams
-      )
+  if conf.isImportcpp and # QUESTION how to handle aggregate initalization
+                          # for C structures? Just declare `{.emit.}`` proc
+                          # (with or without designated initalizers)
+     cd.isAggregateInit and cd.initArgs.len > 0:
+
+    result.nestedEntries.add initGenProc(
+      CXCursor(), currIInfo(), cd.ident).withIt do:
+
+      it.name = "init" & obj.name.head
+      it.arguments = cd.initArgs
+      it.header = conf.makeHeader(cd.cursor, conf)
+      it.icpp = &"{toCppNamespace(cd.ident)}({{@}})"
+      it.returnType = obj.name
+      it.genParams = obj.name.genParams
 
 
+      # # info obj.name.head, "can be aggregate initialized"
+      # result.genAfter.add newWrappedEntry(
+      #   # WARNING `cd.ident`
+      # )
 
-  for entry in cd.cursor:
-    case entry.cxKind():
-      of ckEnumDecl:
-        let visited = visitEnum(entry, cd.ident, conf)
-        result.genBefore.add wrapEnum(visited, conf, cache)
+  # Add type declaration for nested types
+  for entry in cd.nestedTypes:
+    case entry.kind:
+      of cdkEnum:
+        result.nestedEntries.add wrapEnum(entry, conf, cache)
 
-      of ckStructDecl, ckClassDecl, ckUnionDecl:
-        let visited = visitClass(entry, cd.ident, conf)
-        let (obj, pre, post) = wrapObject(visited, conf, cache)
-        result.genBefore.add pre & @[obj] & post
+      of cdkStruct, cdkClass, cdkUnion:
+        result.nestedEntries.add wrapObject(entry, conf, cache)
 
-      of ckFieldDecl, ckMethod, ckFriendDecl,
-         ckFunctionTemplate, ckAccessSpecifier,
-         ckConstructor, ckDestructor, ckTypedefDecl,
-         ckBaseSpecifier:
-        # Constructors, field access and other implementation parts have
-        # already been added in `visitClass`, now we can ignore them
-        # altogether.
-        discard
+  #     of
 
-      else:
-        warn &"#[ IMPLEMENT for kind {entry.cxkind()} {instantiationInfo()} ]#"
+  # for entry in cd.cursor:
+  #   case entry.cxKind():
+  #     of ckEnumDecl:
+  #       let visited = visitEnum(entry, cd.ident, conf)
+  #       result.genBefore.add wrapEnum(visited, conf, cache)
 
-  # WARNING might die on `<T<T<T<T<T<T>>>>>` things
-  for fld in cd.pubFields:
-    var resFld = PObjectField(
-      isTuple: false,
+  #     of ckStructDecl, ckClassDecl, ckUnionDecl:
+  #       let visited = visitClass(entry, cd.ident, conf)
+  #       let (obj, pre, post) = wrapObject(visited, conf, cache)
+  #       result.genBefore.add pre & @[obj] & post
+
+  #     of ckFieldDecl, ckMethod, ckFriendDecl,
+  #        ckFunctionTemplate, ckAccessSpecifier,
+  #        ckConstructor, ckDestructor, ckTypedefDecl,
+  #        ckBaseSpecifier:
+  #       # Constructors, field access and other implementation parts have
+  #       # already been added in `visitClass`, now we can ignore them
+  #       # altogether.
+  #       discard
+
+  #     else:
+  #       warn &"#[ IMPLEMENT for kind {entry.cxkind()} {instantiationInfo()} ]#"
+
+  # Add getter/setter methods for *all* public fields that are accessible
+  # from this object
+  for fld in cd.pubFields():
+    var res = GenField(
+      # QUESTION `conf.identNameForScoped()?`
       name: fixIdentName(fld.lastName()),
-      exported: true,
-      annotation: some newPPragma(
-        newExprColonExpr(
-          newPIdent("importc"), newRStrLit(fld.lastName()))),
+      rawName: fld.lastName(),
+      iinfo: currIInfo(),
+      cdecl: fld,
+      fldType: fld.cursor.cxType().toNType(conf).ntype,
+      isConst: cdecl.isConst
     )
 
-    if fld.cursor[0].cxKind() in {ckUnionDecl, ckStructDecl}:
-      var nested = visitClass(fld.cursor[0], cd.ident, conf)
+    if fld.cursor.cxType().isEnum():
+      # Proxy enum wrapper generator changes enum names, meaning all C/C++
+      # enum fields should be renamed too.
+      res.fldType.head &= conf.isImportCpp.tern("Cxx", "C")
 
-      # NOTE not sure what was going on here when I first wrote this, might
-      # need more thorough fixup.
+    result.memberFields.add res
 
-      # nested.name.head = resFld.name
-      # nested.name = nested.inNamespace(@[])
-
-      let (obj, pre, post) = wrapObject(nested, conf, cache)
-
-      result.genBefore.add(pre & @[obj] & post)
-
-      resFld.fldType = obj.wrapped.objectDecl.name
-
-    else:
-      resFld.fldType = fld.cursor.cxType().toNType(conf).ntype
-
-      if fld.cursor.cxType().isEnum():
-        resFld.fldType.head &= conf.isImportCpp.tern("Cxx", "C")
-
-
-    obj.flds.add resFld
-
-  var importName = cd.ident.toCppNamespace()
-  if not conf.isImportcpp:
-    importName = "struct " & importName
-
-  obj.annotation = some(newPPragma(
-    newExprColonExpr(
-      newPIdent (if conf.isImportcpp: "importcpp" else: "importc"),
-      importName.newRStrLit()
-    ),
-    newExprColonExpr(
-      newPIdent "header",
-      conf.makeHeader(cd.cursor, conf).toNNode()
-    ),
-  ))
-
-  if cd.cursor.cxKind() == ckUnionDecl:
-    obj.annotation.get().add newPIdent("union")
-
-  result.genAfter.add wrapMethods(cd, conf, obj.name, cache)
+ for meth in cd.methods()
+   result..add wrapMethods(cd, conf, obj.name, cache)
 
   for mem in cd.members:
     case mem.kind:
@@ -709,10 +684,7 @@ proc wrapObject*(
       else:
         discard
 
-  result.genAfter.add getParentFields(cd.cursor, obj, conf).mapIt(
-    newWrappedEntry(toNimDecl(it)))
-
-  result.obj = newWrappedEntry(toNimDecl(obj), cd)
+  return obj
 
 type EnumFieldResult = tuple[
   namedvals: Table[string, BiggestInt],

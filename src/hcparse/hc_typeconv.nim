@@ -437,12 +437,6 @@ func hasUnexposed*(nt: NType[PNode]): bool =
 func hasComplexParam*(nt: NType[PNode]): bool =
   nt.hasSpecial(@[ "COMPLEX_PARAM" ])
 
-func pubFields*(cd: CDecl): seq[CDecl] =
-  assert cd.kind in {cdkClass, cdkStruct}
-  for member in cd.members:
-    if (member.kind == cdkField) and (member.access== asPublic):
-      result.add member
-
 proc isEnum*(cxtype: CXType): bool =
   case cxtype.cxKind():
     of tkEnum:
