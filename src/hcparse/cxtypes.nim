@@ -468,7 +468,7 @@ proc isStatic*(cursor: CXCursor): bool =
   cursor.methodIsStatic() == 1
 
 
-proc `==`*(c1, c2: CXCursor): bool = equalCursors(c1, c2) == 0
+proc `==`*(c1, c2: CXCursor): bool = equalCursors(c1, c2) == 1
 
 
 #========================  Location information  =========================#

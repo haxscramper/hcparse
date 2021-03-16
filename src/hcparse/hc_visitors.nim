@@ -95,11 +95,10 @@ proc visitField*(
 
 var undefCnt: int = 0
 
-proc visitAlias*(
-  cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): CDecl =
-  result = CDecl(
-    kind: cdkAlias, cursor: cursor, ident: parent & toCName(cursor))
-
+# proc visitAlias*(
+#   cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): CDecl =
+#   result = CDecl(
+#     kind: cdkAlias, cursor: cursor, ident: parent & toCName(cursor))
 
 proc visitFunction*(
   cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): CDecl =
@@ -286,6 +285,43 @@ proc updateParentFields*(decl: var CDecl, conf: WrapConfig) =
           else:
             raiseImplementKindError(entry)
 
+proc visitAlias*(lastTypeDecl: var CDecl, subn: CXCursor, conf: WrapConfig):
+  Option[CDecl] =
+
+  if subn[0].cxKind() in {ckEnumDecl, ckStructDecl, ckUnionDecl, ckClassDecl}:
+    # libclang represents grouped typedefs using *multiple* nodes, so
+    # `typedef struct S1 {} S2, *S3` will appear *three times* in the clang
+    # IR. It is not really convenient to work with, as it requires additional
+    # layer of bookeeping to avoud duplication of identifiers.
+    if lastTypeDecl.cursor == subn[0]:
+      # Second encounter of the typedefed struct
+      debug "Found typedef struct", subn
+      lastTypeDecl = CDecl(
+        cursor: subn,
+        kind: cdkAlias,
+        newTypes: @[subn],
+        isNewType: true,
+        aliasNewType: lastTypeDecl
+      )
+
+    elif lastTypeDecl.kind == cdkAlias and
+         lastTypeDecl.isNewType and
+         lastTypeDecl.aliasNewType.cursor == subn[0]:
+      # More trailing typedefs for existing declaration
+      lastTypeDecl.newTypes.add subn
+
+    else:
+      raiseImplementError(
+        "New typedef without previously visited declaration")
+
+  else:
+    raiseImplementError("")
+    # result = some CDecl(
+    # )
+
+
+  # if subn[0] == lastTypeDecl:
+
 
 proc visitClass*(
   cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): CDecl =
@@ -326,11 +362,15 @@ proc visitClass*(
 
   var currentAccs = cursor.getDefaultAccess()
 
+  var lastTypeDecl: CDecl
+
   for subn in cursor:
     if subn.cxKind == ckAccessSpecifier:
       currentAccs = subn.getAccessSpecifier()
 
-    if currentAccs == asPublic:
+    if currentAccs == asPublic and
+       not conf.ignoreCursor(subn, conf):
+
       case subn.cxKind:
         of ckMethod, ckConversionFunction, ckConstructor, ckDestructor:
           result.members.add visitMethod(subn, result.ident, currentAccs)
@@ -338,13 +378,9 @@ proc visitClass*(
         of ckAccessSpecifier:
           currentAccs = subn.getAccessSpecifier()
 
-        of ckFieldDecl,
-           ckVarDecl # WARNING static fields might need to be wrapped differently
-             :
-
-          if not conf.ignoreCursor(subn, conf):
-            # debug subn.cxType().getTypeDeclaration()
-            result.members.add visitField(subn, result.ident, currentAccs)
+        of ckFieldDecl, ckVarDecl:
+           # WARNING static fields might need to be wrapped differently
+          result.members.add visitField(subn, result.ident, currentAccs)
 
         of ckTemplateTypeParameter, ckFriendDecl,
            ckStaticAssert, ckTemplateTemplateParameter:
@@ -356,14 +392,20 @@ proc visitClass*(
         of ckTypeAliasTemplateDecl, ckTypeAliasDecl,
            ckTypedefDecl, ckUsingDeclaration:
 
-          if not conf.ignoreCursor(subn, conf):
-            result.members.add visitAlias(subn, result.ident, conf)
+          let alias = visitAlias(lastTypeDecl, subn, conf)
+          if alias.isSome():
+            result.members.add alias.get()
+          # result.members.add visitAlias(subn, result.ident, conf)
 
         of ckStructDecl, ckClassDecl, ckUnionDecl, ckClassTemplate:
-           result.members.add visitClass(subn, result.ident, conf)
+          if not isNil(lastTypeDecl): result.members.add lastTypeDecl
+
+          lastTypeDecl = visitClass(subn, result.ident, conf)
 
         of ckEnumDecl:
-           result.members.add visitEnum(subn, result.ident, conf)
+          if not isNil(lastTypeDecl): result.members.add lastTypeDecl
+
+          lastTypeDecl = visitEnum(subn, result.ident, conf)
 
         of ckBaseSpecifier:
           # Base class specifier is ignored. All additional wrapping
@@ -386,8 +428,9 @@ proc visitClass*(
 
 
 proc visitCursor*(
-  cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): tuple[
-  decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]]
+    cursor: CXCursor, parent: CScopedIdent,
+    conf: WrapConfig, lastTypeDecl: var CDecl
+  ): tuple[decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]]
 
 proc visitNamespace*(
   cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): seq[CDecl] =
@@ -398,41 +441,46 @@ proc visitNamespace*(
   if not (cursor.isInlineNamespace() == 1):
     parent &= toCName(cursor)
 
+  var lastTypeDecl: CDecl
   if not conf.ignoreCursor(cursor, conf):
     for subn in cursor:
-      result.add visitCursor(subn, parent, conf).decls
+      result.add visitCursor(subn, parent, conf, lastTypeDecl).decls
 
 proc visitMacrodef*(
   cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): CDecl =
   CDecl(cursor: cursor, kind: cdkMacro)
 
-proc visitCursor*(
-  cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): tuple[
-  decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]] =
 
-  # debug cursor.cxKind()
-  # debug $cursor.cxType()
-  # debug cursor.getCursorSemanticParent().cxKind()
-  # debug cursor.getCursorLexicalParent().cxKind()
+
+proc visitCursor*(
+    cursor: CXCursor, parent: CScopedIdent,
+    conf: WrapConfig, lastTypeDecl: var CDecl
+  ): tuple[decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]] =
+
   if not conf.ignoreCursor(cursor, conf):
     case cursor.cxKind:
       of ckNamespace:
         result.decls.add visitNamespace(cursor, parent, conf)
 
-      of ckClassDecl, ckClassTemplate,
+      of ckClassDecl, ckClassTemplate, ckUnionDecl,
          ckClassTemplatePartialSpecialization,
          ckStructDecl:
-        result.decls.add visitClass(cursor, parent, conf)
+        if not isNil(lastTypeDecl): result.decls.add lastTypeDecl
+
+        lastTypeDecl = visitClass(cursor, parent, conf)
 
       of ckFunctionDecl, ckFunctionTemplate:
         result.decls.add visitFunction(cursor, parent, conf)
 
       of ckTypedefDecl, ckTypeAliasDecl:
-        # debug cursor.treeRepr()
-        result.decls.add visitAlias(cursor, parent, conf)
+        let alias = visitAlias(lastTypeDecl, cursor, conf)
+        if alias.isSome():
+          result.decls.add alias.get()
 
       of ckEnumDecl:
-        result.decls.add visitEnum(cursor, parent, conf)
+        if not isNil(lastTypeDecl): result.decls.add lastTypeDecl
+
+        lastTypeDecl = visitEnum(cursor, parent, conf)
 
       of ckInclusionDirective:
         let loc = cursor.getSpellingLocation().get()
@@ -447,6 +495,7 @@ proc visitCursor*(
 
       of ckMacroDefinition:
         result.decls.add visitMacrodef(cursor, parent, conf)
+
       else:
         # warn "Recursing on", cursor, "of kind", cursor.cxKind()
         result.recurse = true
@@ -495,11 +544,13 @@ proc splitDeclarations*(
   assert not tu.isNil
   let tuCursor = tu.getTranslationUnitCursor()
   var res: CApiUnit
+  var lastTypeDecl: CDecl
   tuCursor.visitChildren do:
-    makeVisitor [tu, res, conf, tuCursor]:
+    makeVisitor [tu, res, conf, tuCursor, lastTypeDecl]:
       let resolve = conf.depResolver(cursor, tuCursor)
       if resolve == drkWrapDirectly:
-        let (decls, rec, incls) = visitCursor(cursor, @[], conf)
+        let (decls, rec, incls) = visitCursor(
+          cursor, @[], conf, lastTypeDecl)
         res.includes.add incls
         if rec:
           return cvrRecurse
@@ -513,5 +564,7 @@ proc splitDeclarations*(
 
       else:
         return cvrRecurse
+
+  res.decls.add lastTypeDecl
 
   return res

@@ -290,7 +290,41 @@ proc getExports*(
 proc toNNode*(genEntries: seq[GenEntry], conf: WrapConfig):
   seq[WrappedEntry] =
 
-  discard
+  for node in genEntries:
+    case node.kind:
+      of gekProc:
+        result.add newWrappedEntry(
+          node.genProc.toNNode(conf).toNimDecl(),
+          true,
+          node.genProc.iinfo,
+          node.genProc.cdecl.cursor
+        )
+
+      of gekAlias:
+        result.add newWrappedEntry(
+          node.genAlias.toNNode(conf).toNimDecl(),
+          true,
+          node.genAlias.iinfo,
+          node.genAlias.cdecl.cursor
+        )
+
+      of gekObject:
+        result.add node.genObject.toNNode(conf)
+
+      of gekEnum:
+        let (rawDecl, nimDecl) = node.genEnum.toNNode(conf)
+        for decl in [rawDecl, nimDecl]:
+          result.add newWrappedEntry(
+            decl.toNimDecl(),
+            true,
+            node.genEnum.iinfo,
+            node.genEnum.cdecl.cursor
+          )
+
+      of gekPass:
+        result.add node.genPass.passEntries
+
+
 
 proc wrapFile*(
   parsed: ParsedFile, conf: WrapConfig,
@@ -349,7 +383,8 @@ proc wrapFile*(
   # last type encounter will always be it's definition.
   var res: Table[string, WrappedEntry]
 
-  when false:
+  info "Final wrapper generation"
+  when false: # Finel wrapper generation
     for elem in tmpRes:
       if elem.kind == wekNimDecl:
         case elem.nimDecl.kind:

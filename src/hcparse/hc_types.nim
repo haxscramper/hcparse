@@ -170,8 +170,11 @@ type
                                  ## typedef.
         case isNewType*: bool
           of true:
+            withBaseType*: bool ## no `struct T` declaration is present -
+            ## `typedef` was immediately used to declare type.
+
             aliasNewType*: CDecl ## New type declaration introduced by
-                                 ## C-style `typedef`
+            ## C-style `typedef`
 
           else:
             aliasBaseType*: CXCursor ## Base type used for alias

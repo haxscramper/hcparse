@@ -189,7 +189,7 @@ let baseCppParseConfig* = ParseConfig(
   globalFlags: @["-xc++", "-std=c++11"]
 )
 
-let baseCParseConfig = ParseConfig(
+let baseCParseConfig* = ParseConfig(
   includePaths: getBuiltinHeaders(),
   globalFlags: @[]
 )

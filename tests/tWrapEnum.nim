@@ -12,21 +12,7 @@ import unittest
 
 let file = "/tmp/a.c"
 let str = """
-/*
- * Status level.  This refers to both internal status
- */
-enum class mandoclevel {
-	MANDOCLEVEL_OK = 0,
-	MANDOCLEVEL_STYLE, /* style suggestions */
-	MANDOCLEVEL_WARNING, /* warnings: syntax, whitespace, etc. */
-};
-
-enum	mandocerr {
-	MANDOCERR_OK,
-	MANDOCERR_MDOCDATE, /* Mdocdate found: Dd ... */
-};
-
-void usesEnum(mandocerr en) {}
+typedef struct C {} C1, *C2;
 """
 
 file.writeFile(str)
@@ -46,7 +32,7 @@ suite "Wrap enum":
     AbsFile file,
     AbsFile resFile,
     wrapConf,
-    baseCppParseConfig
+    baseCParseConfig
   )
 
 

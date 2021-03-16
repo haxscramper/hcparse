@@ -10,40 +10,15 @@ suite "Show function body":
 
     let outfile = AbsFile("/tmp/example.cpp")
     outfile.writeFile """
-    #include <iostream>
-
-    /**
-     * Status level.  This refers to both internal status (i.e., whilst
-     * running, when warnings/errors are reported) and an indicator of a
-     * threshold of when to halt (when said internal state exceeds the
-     * threshold).
-     */
-    enum	mandoclevel {
-      MANDOCLEVEL_OK = 0,
-      MANDOCLEVEL_STYLE, ///< style suggestions
-      MANDOCLEVEL_WARNING, ///< warnings: syntax, whitespace, etc.
-    };
-
-
-    /// Documentation comments for class
-    /// Multiline comment
-    class MyClass
-    {
-    public:
-      int field; //! Field documentation
-      virtual void method() const = 0;
-      static const int static_field;
-      static int static_method();
-    };
-
-    /** This is a main function documenation comment */
-    int main() {
-      std::cout << "Hello world\n";
-    }
+    typedef enum E {a} E1, *EPtr;
+    typedef enum {b} E2;
+    enum E3 {c};
+    // struct E2 {};
+    // typedef struct S {enum {q} field;} SName, *SPtr;
     """
 
     let
-      unit = parseFile(outfile, opts = {})
+      unit = parseFile(outfile, baseCParseConfig, opts = {})
       topCursor = unit.getTranslationUnitCursor()
 
     echo unit.isNil

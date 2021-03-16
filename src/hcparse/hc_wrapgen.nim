@@ -338,8 +338,6 @@ proc wrapMethods*(
 
   ## - @arg{cd} :: Class declaration to wrap methods for
   ## - @arg{parent} :: Nim name of class declaration
-  ## - @arg{cname} :: C++ name of class declaration (with unconverted
-  ##   namespaces etc.)
 
   assert cd.kind in {cdkClass, cdkStruct}
   for meth in cd.methods({
@@ -406,6 +404,26 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject
 proc wrapAlias*(
     al: CDecl, parent: CScopedIdent, conf: WrapConfig, cache: var WrapCache):
   seq[GenEntry] =
+
+  if al.isNewType:
+    info "typdef with new type declaration"
+    let wrapBase = al.aliasNewType.wrapObject(conf, cache)
+    result.add GenEntry(kind: gekObject, genObject: wrapBase)
+
+    for newName in al.newTypes:
+      debug "Alternative name", newName
+      var baseType = wrapBase.nimName
+      var newType = newPType($newName)
+      newType.genParams = baseType.genParams
+      result.add GenEntry(
+        kind: gekAlias,
+        genAlias: GenAlias(
+          iinfo: currIInfo(),
+          cdecl: al,
+          baseType: baseType,
+          newAlias: newType
+        )
+      )
 
   when false:
     # NOTE returning multiple values because of
@@ -987,7 +1005,7 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[GenEn
   result.add GenEntry(kind: gekPass, genPass: makeEnumConverters(gen, conf, cache))
   result.add GenEntry(kind: gekEnum, genEnum: gen)
 
-  when false:
+  when false: # enum wrappers
     block:
       var rawEnum = newPEnumDecl(gen.rawName, iinfo = currIInfo())
       rawEnum.addDocComment gen.docComment
@@ -1193,12 +1211,14 @@ proc wrapApiUnit*(
   cache: var WrapCache, index: FileIndex): seq[GenEntry] =
   ## Generate wrapper for api unit.
   var macrolist: seq[CDecl]
+  info "Wrapping API unit"
   for decl in api.decls:
     if cache.canWrap(decl.cursor):
       cache.markWrap(decl.cursor)
     else:
       continue
 
+    debug decl.cursor
     case decl.kind:
       of cdkClass, cdkStruct, cdkUnion:
         identLog()
@@ -1214,7 +1234,8 @@ proc wrapApiUnit*(
         dedentLog()
 
       of cdkAlias:
-        result.add decl.wrapAlias(decl.ident, conf, cache)
+        logIndented:
+          result.add decl.wrapAlias(decl.ident, conf, cache)
 
       of cdkEnum:
         result.add decl.wrapEnum(conf, cache)
@@ -1271,6 +1292,30 @@ proc toNNode*(gp: GenProc, wrapConf: WrapConfig): PProcDecl =
 
   if gp.impl.isSome():
     result.impl = gp.impl.get()
+
+proc toNNode*(gen: GenEnum, conf: WrapConfig): (PEnumDecl, PEnumDecl) =
+  raiseImplementError("")
+
+proc toNNode*(gen: GenObject, conf: WrapConfig): seq[WrappedEntry] =
+  result.add newWrappedEntry(
+    toNimDecl(PObjectDecl(
+      iinfo: gen.iinfo,
+      name: gen.nimName
+    )),
+    true,
+    gen.iinfo,
+    gen.cdecl.cursor
+  )
+
+proc toNNode*(gen: GenAlias, conf: WrapConfig): AliasDecl[PNode] =
+  result = AliasDecl[PNode](
+    iinfo: gen.iinfo,
+    docComment: gen.docComment.join("\n"),
+    isDistinct: gen.isDistinct,
+    isExported: true,
+    oldType: gen.baseType,
+    newType: gen.newAlias
+  )
 
 
 proc writeWrapped*(
