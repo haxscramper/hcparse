@@ -88,7 +88,7 @@ type
     derived*: seq[CDecl]
     cursor*: CXCursor
 
-  CDecl* = object
+  CDecl* = ref object
     ## Higher-level wrapper on top of CXCursor. Mostly used to provide more
     ## intuitive API for working with things to be wrapped.
 
@@ -116,7 +116,7 @@ type
       of cdkField:
         fieldValue*: Option[CXCursor] ## Cursor to field value if
                                       ## immediately declared
-        anonymousType*: Option[CDecl] ## Anonymous enum/struct declaration
+        fieldTypeDecl*: Option[CDecl] ## Anonymous enum/struct declaration
         ## It is possible to have entries like
         ## `struct A{enum{first,second}field;};`
         ## that don't declare any type.
@@ -160,8 +160,22 @@ type
         ]]
 
       of cdkAlias:
-        newType*: CXCursor
-        oldType*: CXCursor
+        ## Type alias declaration (`typedef` or `using`).
+        ##
+        ## To correctly process various C-style abominations like
+        ## `typedef ## struct T {} Name2, *Ptr` it is necessary to:
+        ## - Have multiple `newType` values  - `Name2`
+
+        newTypes*: seq[CXCursor] ## List of new type names introduced by
+                                 ## typedef.
+        case isNewType*: bool
+          of true:
+            aliasNewType*: CDecl ## New type declaration introduced by
+                                 ## C-style `typedef`
+
+          else:
+            aliasBaseType*: CXCursor ## Base type used for alias
+                                     ## declaration
 
       of cdkMacro:
         discard
@@ -320,14 +334,20 @@ type
     nameCache*: StringNameCache
     genEnums*: seq[GenEnum]
 
+  GenBase* {.inheritable.} = object
+    ## Common fields for all `GenX` types. Not used for inheritance, only
+    ## to avoud code duplication.
+    cdecl* {.requiresinit.}: CDecl
+    iinfo* {.requiresinit.}: LineInfo
+    docComment*: seq[string]
+
+
   GenObjectKind = enum
     gokUnion
     gokStruct
     gokClass
 
-  GenField* = object
-    cdecl* {.requiresinit.}: CDecl
-    iinfo* {.requiresinit.}: LineInfo
+  GenField* = object of GenBase
     rawName*: string
     nimName*: string
     fullName*: CSCopedIdent
@@ -336,12 +356,10 @@ type
     isConst*: bool ## Field is const-qualified
     anonymousType*: Option[GenEntry] ## Wrapper for anonymous type (if any)
 
-  GenObject* = object
-    cdecl* {.requiresinit.}: CDecl
-    iinfo* {.requiresinit.}: LineInfo
+  GenObject* = object of GenBase
     kind*: GenObjectKind
     rawName*: string
-    nimName*: string
+    nimName*: NType[PNode]
     fullName*: CScopedIdent
     memberFields*: seq[GenField] ## Direct member fields
     memberMethods*: seq[GenProc]
@@ -352,11 +370,8 @@ type
 
     nestedEntries*: seq[GenEntry]
 
-  GenProc* = object
+  GenProc* = object of GenBase
     ## Generated wrapped proc
-    ident* {.requiresinit.}: CSCopedIdent
-    iinfo* {.requiresinit.}: LineInfo
-    cdecl* {.requiresinit.}: CDecl
     name*: string ## Name of the generated proc on nim side
     icpp*: string ## `importcpp` pattern string
     private*: bool ## Generated proc should be private?
@@ -369,38 +384,46 @@ type
     pragma*: PPragma ## Additional pragmas on top of `importcpp`
     kind*: ProcKind ## Kind of generated nim proc (operator, field setter,
                     ## regular proc etc.)
-    docs*: seq[string] ## Documentation comments
     impl*: Option[PNode] ## Optional implementation body
     noPragmas*: bool ## Do not add default C wrapper pragamas. Used for
                      ## pure nim enums
 
-  GenEnumValue* = object
+  GenEnumValue* = object of GenBase
     baseName*: string ## Original name of the enum value
     resCName*: string ## Enum field value for 'raw' C wrapper proc
     resNimName*: string ## Enum field name for 'proxy' nim proc
     resVal*: BiggestInt ## Value of the enum field - from source code or
                         ## generated when filling hole values.
+    valTokens*: seq[string] ## Original tokens for enum value declaration
+                            ## (if any).
     stringif*: string ## 'stringified' version of fully qualified field
                       ## name (`enumName::fieldname`)
-    cursor*: CXCursor ## Cursor to field
-    docComment*: string ## Documentation comment for enum field
 
-  GenEnum* = object
+  GenEnum* = object of Genbase
     ## Generated enum
-    iinfo* {.requiresinit.}: LineInfo
-    cdecl* {.requiresinit.}: CDecl
-    rawName*: string ## Original name of the enum
+    case isMacroEnum* {.requiresinit.}: bool
+      of false:
+        rawName*: string ## Original name of the enum. Directly corresponds
+                         ## to underlying enum name
+
+      else:
+        ## Enum generated form seveal macro constant definitions. Does not
+        ## have a based name (because it is not `importc`'ed)
+        proxyName*: string ## Name for the proxy wrapper enum. Does not
+                           ## correspond to any entry in the underlying C
+                           ## code
+
     nimName*: string ## Converted nim name
     values*: seq[GenEnumValue] ## Filtered, ordered sequence of values
-    declEn*: CDecl ## Underlying declaration
-    docComment*: string ## Documentation comment
 
-  GenAlias* = object
-    cdecl* {.requiresinit.}: CDecl
-    iinfo* {.requiresinit.}: LineInfo
+  GenAlias* = object of GenBase
+    isDistinct*: bool
+    newAlias*: NType[PNode]
+    baseType*: NType[PNode]
 
   GenPass* = object
     iinfo* {.requiresinit.}: LineInfo
+    docComment*: seq[string]
     passEntries*: seq[WrappedEntry]
 
   GenEntryKind* = enum
@@ -432,24 +455,31 @@ type
         genPass*: GenPass
 
 
-  WrappedEntryKind* = enum
-    wekMultitype
-    wekProc
-    wekNimDecl
-    wekNimPass
-
   WrappedEntry* = object
-    ## Wrapped entry converted to nim code
-    ident*: CScopedIdent
-    case kind*: WrappedEntryKind
-      of wekMultitype:
-        decls*: seq[WrappedEntry] ## Multiple types for typesection
-                                  ## declaraton
+    decl*: PNimDecl
+    ident*: CSCopedIdent
+    postTypes*: bool
+    cursor* {.requiresinit.}: CXCursor
+    # ## Wrapped entry converted to nim code
+    # ident*: CScopedIdent
+    # codeComment*: string
+    # case isTypeSection*: bool
+    #   of true:
+    #     decls*: seq[WrappedEntry] ## Multiple types for typesection
+    #                               ## declaraton
 
-      else:
-        nimDecl*: PNimDecl ## Wrapped nim declaration
-        postTypes*: bool ## Put passthrough code blocks before or after
-                         ## type section?
+    #   of false:
+    #     nimDecl*: PNimDecl ## Wrapped nim declaration
+    #     postTypes*: bool ## Put passthrough code blocks before or after
+    #                      ## type section?
+
+
+    # case kind*: WrappedEntryKind
+    #   of wekMultitype:
+    #   of wekNimPass:
+
+    #   of wekNimDecl:
+    #     genBase*: GenEntry
 
   Postprocess* = object
     impl*: proc(we: var WrappedEntry,
@@ -563,15 +593,6 @@ proc setPrefixForEnum*(
       else:
         cache.enumPrefs.incl result
 
-template impl1() {.dirty.} =
-  case we.kind:
-    of wekNimDecl: result = we.wrapped
-    of wekNimPass: result = we.npass
-    else: raiseAssert(&"Cannot get wrpped for kind {we.kind}")
-
-proc wrapped*(we: WrappedEntry): PNimDecl {.inline.} = impl1()
-proc mWrapped*(we: var WrappedEntry): var PNimDecl {.inline.} = impl1()
-
 proc initHeaderSpec*(file: AbsFile): NimHeaderSpec =
   NimHeaderSpec(kind: nhskAbsolute, file: file)
 
@@ -583,19 +604,18 @@ proc initHeaderSpec*(pnode: PNode): NimHeaderSpec =
 
 
 
-func hasCursor*(we: WrappedEntry): bool =
-  (we.kind in {wekNimDecl, wekProc})
+func cdecl*(gen: GenEntry): CDecl =
+  case gen.kind:
+    of gekEnum: gen.cdecl
+    of gekProc: gen.cdecl
+    of gekObject: gen.cdecl
+    of gekAlias: gen.cdecl
+    of gekPass: raiseUnexpectedKindError(gen)
 
-func getCursor*(we: WrappedEntry): CXCursor =
-  case we.kind:
-    of wekNimDecl: result = we.cursor
-    of wekProc: result = we.gproc.cursor
-    else: raiseAssert(&"No cursor for kind {we.kind}")
-
-func `$`*(we: WrappedEntry): string = $we.wrapped
+func `$`*(we: WrappedEntry): string = $we.decl
 func `$`*(we: seq[WrappedEntry]): string =
   {.cast(noSideEffect).}:
-    we.mapPairs(rhs.wrapped.toNNode().toPString()).join("\n")
+    we.mapPairs(rhs.decl.toNNode().toPString()).join("\n")
 
 func `==`*(a, b: NimHeaderSpec): bool =
   a.kind == b.kind and ((
@@ -617,41 +637,33 @@ func `==`*(a, b: CArg): bool =
       a.default == b.default
   ))
 
-func `==`*(a, b: WrappedEntry): bool =
-  a.kind == b.kind and
-  ((
-    case a.kind:
-      of wekProc: a.gproc == b.gproc
-      of wekMultitype: a.decls == b.decls
-      of wekNimDecl: hnimast.`==`(a.wrapped, b.wrapped)
-      of wekNimPass: hnimast.`==`(a.wrapped, b.wrapped) and
-                     a.postTypes == b.postTypes
-  ))
-  # hnimast.`==`[Pnode](a.wrapped, b.wrapped)
-  # (a.wrapped == b.wrapped)
+# func `==`*(a, b: WrappedEntry): bool =
+#   a.isTypeSection == b.isTypeSection and
+#   ((
+#     case a.kind:
+#       of wekMultitype: a.decls == b.decls
+#       else:
+#         hnimast.`==`(a.nimDecl, b.nimDecl) and
+#         (a.kind != wekNimPass or a.postTypes == b.postTypes)
+
+#       # of wekProc: a.gproc == b.gproc
+#       # of wekNimDecl:
+#       # of wekNimPass: hnimast.`==`(a.wrapped, b.wrapped) and
+#       #                a.postTypes == b.postTypes
+#   ))
 
 
-func newWrappedEntry*(wrapped: PNimDecl, original: CDecl): WrappedEntry =
-  WrappedEntry(
-    kind: wekNimDecl,
-    wrapped: wrapped,
-    original: original,
-    cursor: original.cursor,
-    ident: original.ident
-  )
-
-
-func newWrappedEntry*(gproc: GenProc): WrappedEntry =
-  WrappedEntry(gproc: gproc, kind: wekProc, ident: gproc.ident)
-
-func newWrappedEntry*(wrapped: seq[WrappedEntry]): WrappedEntry =
-  WrappedEntry(decls: wrapped, kind: wekMultitype)
+# func newWrappedEntry*(wrapped: seq[WrappedEntry]): WrappedEntry =
+#   WrappedEntry(decls: wrapped, kind: wekMultitype)
 
 func newWrappedEntry*(
-    wrapped: PNimDecl, postTypes: bool = false
+    nimDecl: PNimDecl, postTypes: bool, iinfo: LineInfo, cursor: CXCursor
   ): WrappedEntry =
 
-  WrappedEntry(npass: wrapped, kind: wekNimPass, postTypes: postTypes)
+  result = WrappedEntry(
+    postTypes: postTypes, decl: nimDecl, cursor: cursor)
+
+  result.decl.iinfo = iinfo
 
 #======================  Accessing CDecl elements  =======================#
 func arg*(cd: CDecl, idx: int): CArg = cd.arguments[idx]
@@ -678,9 +690,8 @@ func initCArg*(
 func initCArg*(name: string, cursor: CXCursor): CArg =
   CArg(isRaw: true, name: name, cursor: cursor)
 
-func initGenProc*(
-  cursor: CXCursor, iinfo: LineInfo, ident: CSCopedIdent): GenProc =
-  GenProc(cursor: cursor, iinfo: iinfo, ident: ident)
+func initGenProc*(cdecl: CDecl, iinfo: LineInfo): GenProc =
+  GenProc(cdecl: cdecl, iinfo: iinfo)
 
 #==========================  Helper utilities  ===========================#
 proc declHash*(cursor: CXCursor): Hash =

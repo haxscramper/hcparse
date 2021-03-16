@@ -6,7 +6,7 @@ import hmisc/helpers
 import hmisc/other/[oswrap, colorlogger]
 import std/[sets]
 
-import hc_depresolve, hc_typeconv
+import ./hc_depresolve, ./hc_typeconv, ./hc_wrapgen
 
 type
   CErrorCodeKind = enum
@@ -36,7 +36,7 @@ proc errorCodesToException*(
   ): seq[WrappedEntry] =
 
   for (ident, code) in errorMap:
-    if sameNoGeneric(genProc.ident, ident):
+    if sameNoGeneric(genProc.cdecl.ident, ident):
       var gen2 = genProc
       genProc.name &= "Raw"
       gen2.noPragmas = true
@@ -62,7 +62,10 @@ proc errorCodesToException*(
         else:
           raiseImplementError("")
 
-      return @[newWrappedEntry(gen2)]
+      return @[newWrappedEntry(
+        gen2.toNNode(conf).toNimDecl(), false, currIInfo(),
+        genProc.cdecl.cursor
+      )]
 
 
 

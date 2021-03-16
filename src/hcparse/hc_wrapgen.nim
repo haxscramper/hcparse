@@ -20,7 +20,7 @@ proc wrapOperator*(
     conf: WrapConfig
   ): tuple[decl: GenProc, addThis: bool] =
 
-  var it = initGenProc(oper.cursor, currIInfo(), oper.ident)
+  var it = initGenProc(oper, currIInfo())
 
   it.name = oper.getNimName()
   # it.genParams = genParams # FIXME: was it necessary to have generic
@@ -134,10 +134,7 @@ proc wrapProcedure*(
   ## - TODO :: allow creating placement new constructors that generate
   ##   nim `ref` types and allow for nim-managed memory.
 
-
-
-  var it = initGenProc(pr.cursor, currIInfo(), pr.ident)
-  # WARNING `pr.ident` might contain incorrect full name
+  var it = initGenProc(pr, currIInfo())
 
   var addThis = (
     pr.kind == cdkMethod and
@@ -235,7 +232,7 @@ proc wrapProcedure*(
     setDefaultForArg(newArg, arg.cursor, conf)
     it.arguments.add newArg
 
-  if $it.cursor == "operator=":
+  if $it.cdecl.cursor == "operator=":
     # FIXME check if first argument and parent declaration types are
     # identical. Right now it does not work because
     # `b3Matrix3x3` != `const b3Matrix3x3 &`
@@ -306,8 +303,9 @@ proc wrapProcedure*(
     it.pragma.add newPIdent("varargs")
 
   let generated = newProcVisit(it, conf, cache)
-  result.decl.add it
-  result.decl.add GenPass(iinfo: currIInfo(), passEntries: generated)
+  result.decl.add GenEntry(kind: gekProc, genProc: it)
+  result.decl.add GenEntry(kind: gekPass, genPass:
+    GenPass(iinfo: currIInfo(), passEntries: generated))
 
 
 proc fixNames(
@@ -354,28 +352,27 @@ proc wrapMethods*(
     else:
       asNew = @[true]
 
-    for conf in asNew:
+    for useNew in asNew:
       let (decl, canAdd) = wrapProcedure(
-        meth, conf, some parent, cache, some cd, conf)
+        meth, conf, some parent, cache, some cd, useNew)
 
       if canAdd:
         result.methods.add decl[0].genProc
         result.extra.add decl[1..^1]
 
-  for decl in mitems(result):
-    fixNames(decl.gproc, conf, parent)
+  for gproc in mitems(result.methods):
+    fixNames(gproc, conf, parent)
 
-  result = result.deduplicate()
+  # result = result.deduplicate()
 
-proc wrapFunction*(
-    cd: CDecl, conf: WrapConfig, cache: var WrapCache
-  ): seq[WrappedEntry] =
+proc wrapFunction*(cd: CDecl, conf: WrapConfig, cache: var WrapCache):
+  seq[GenEntry] =
 
   var (decl, canAdd) = wrapProcedure(
     cd, conf, none NType[PNode], cache, none CDecl, false)
 
   if canAdd:
-    result.add decl
+    result = decl
 
 
 proc wrapTypeFromNamespace(
@@ -404,121 +401,126 @@ proc wrapTypeFromNamespace(
 
 
 
-proc wrapObject*(
-    cd: CDecl, conf: WrapConfig, cache: var WrapCache
-  ): tuple[
-    obj: WrappedEntry, genAfter, genBefore: seq[WrappedEntry]
-  ]
+proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject
 
 proc wrapAlias*(
-    al: CDecl, parent: CScopedIdent, conf: WrapConfig, cache: var WrapCache,
-  ): seq[WrappedEntry] =
-  # NOTE returning multiple values because of
-  # `typedef struct A {} A, *APtr` shit that can result in multple
-  # declarations.
+    al: CDecl, parent: CScopedIdent, conf: WrapConfig, cache: var WrapCache):
+  seq[GenEntry] =
 
-  # Get underlying type for alias
-  let aliasof = al.cursor.cxType().getCanonicalType()
-  logIndented:
-    # Create new identifier for aliased type
-    var newAlias = conf.typeNameForScoped(al.ident, conf)
-  # debug al.ident, " -> ", newAlias
+  when false:
+    # NOTE returning multiple values because of
+    # `typedef struct A {} A, *APtr` shit that can result in multple
+    # declarations.
 
-  # Identifier for old aliased type
-  var baseType: NType[PNode]
-  if getTypeDeclaration(aliasof).cxKind() == ckNodeclFound:
-    let name = fromCxxTypeName($aliasof)
-    if name.len > 0:
-      baseType = newPType(name)
+    # Get underlying type for alias
+    let aliasof = al.cursor.cxType().getCanonicalType()
+    logIndented:
+      # Create new identifier for aliased type
+      var newAlias = conf.typeNameForScoped(al.ident, conf)
+    # debug al.ident, " -> ", newAlias
 
-    else:
-      baseType = toNType(aliasof, conf).ntype # newPType($aliasof)
+    # Identifier for old aliased type
+    var baseType: NType[PNode]
+    if getTypeDeclaration(aliasof).cxKind() == ckNodeclFound:
+      let name = fromCxxTypeName($aliasof)
+      if name.len > 0:
+        baseType = newPType(name)
 
-  else:
-    baseType = conf.typeNameForScoped(aliasof.toFullScopedIdent(), conf)
-    # WARNING mismatched generic parameters between lhs and rhs parts of
-    # alias might result in broken wrappers.
-
-  if baseType.hasComplexParam():
-    #[
-    Type alias is declared in terms of sub-alias for some of the
-    parameter types. For example std::string has following sub-alias declared:
-
-    ```c++
-      template<typename _CharT, typename _Traits, typename _Alloc>
-
-      // ...
-
-      typedef _Traits					traits_type; // Regular alias on the argument
-      typedef typename _Traits::char_type		value_type;
-      // type-name-0-1::char_type.
-    ```
-
-    Nim does not have a way to model type relations like this.
-
-    ]#
-    return @[]
-
-  if false: # TEMP need to find a real-world use-case to correctly handle
-            # this, disabled for now.
-    if aliasof.getNumTemplateArguments() > 0:
-      let required =
-        aliasof.getTypeDeclaration().
-        getSpecializedCursorTemplate().
-        requiredGenericParams()
-
-      # WARNING HACK - ignore all template parameters that /might/ be
-      # defaulted - i.e. only ones that *must* be specified (not defaulted in
-      # declaration) are included. Better alias handling is necessary, for
-      # now I just drop 'unnecessary' parts.
-      baseType.genParams = baseType.genParams[
-        0 ..< min(required.len(), baseType.genParams.len())]
-
-  fixTypeParams(baseType, newAlias.genParams)
-
-  if baseType.hasUnexposed():
-    debug al.cursor.treeRepr()
-    debug aliasof.lispRepr()
-
-    raiseImplementError("Found unexposed type")
-    # let namespace = parent & @[newPType($al.cursor)]
-    # result = @[newWrappedEntry(
-    #   toNimDecl(
-    #     namespace.wrapTypeFromNamespace(conf, al.cursor)
-    #   ),
-    #   al
-    # )]
-
-  else:
-    if al.cursor[0].cxKind() notin {ckStructDecl}:
-      # NOTE ignore `typedef struct` in C
-      result = @[newWrappedEntry(
-        toNimDecl(newAliasDecl(
-          newAlias, baseType, iinfo = currIInfo(),
-          isDistinct = conf.isDistinct(al.ident, conf, cache)
-        )), al
-      )]
+      else:
+        baseType = toNType(aliasof, conf).ntype # newPType($aliasof)
 
     else:
-      if cache.canWrap(al.cursor[0]):
-        # Multiple trailing typedefs result in several `ckTypedefDecl`
-        # nodes
+      baseType = conf.typeNameForScoped(aliasof.toFullScopedIdent(), conf)
+      # WARNING mismatched generic parameters between lhs and rhs parts of
+      # alias might result in broken wrappers.
 
-        cache.markWrap(al.cursor[0])
-        let nested = visitClass(al.cursor[0], parent, conf)
+    if baseType.hasComplexParam():
+      #[
+      Type alias is declared in terms of sub-alias for some of the
+      parameter types. For example std::string has following sub-alias declared:
 
-        let (obj, pre, post) = wrapObject(nested, conf, cache)
+      ```c++
+        template<typename _CharT, typename _Traits, typename _Alloc>
 
-        result.add pre & @[obj] & post
+        // ...
 
-      if newAlias != baseType:
-        # `typedef struct {} A;` has the same typedef name and type, and
-        # should only be wrapped as type definition and not alias.
-        result.add newWrappedEntry(
-          toNimDecl(newAliasDecl(
-            newAlias, baseType, iinfo = currIInfo(), isDistinct = false,
-          )), al
-        )
+        typedef _Traits					traits_type; // Regular alias on the argument
+        typedef typename _Traits::char_type		value_type;
+        // type-name-0-1::char_type.
+      ```
+
+      Nim does not have a way to model type relations like this.
+
+      ]#
+      return @[]
+
+    if false: # TEMP need to find a real-world use-case to correctly handle
+              # this, disabled for now.
+      if aliasof.getNumTemplateArguments() > 0:
+        let required =
+          aliasof.getTypeDeclaration().
+          getSpecializedCursorTemplate().
+          requiredGenericParams()
+
+        # WARNING HACK - ignore all template parameters that /might/ be
+        # defaulted - i.e. only ones that *must* be specified (not defaulted in
+        # declaration) are included. Better alias handling is necessary, for
+        # now I just drop 'unnecessary' parts.
+        baseType.genParams = baseType.genParams[
+          0 ..< min(required.len(), baseType.genParams.len())]
+
+    fixTypeParams(baseType, newAlias.genParams)
+
+    if baseType.hasUnexposed():
+      debug al.cursor.treeRepr()
+      debug aliasof.lispRepr()
+
+      raiseImplementError("Found unexposed type")
+      # let namespace = parent & @[newPType($al.cursor)]
+      # result = @[newWrappedEntry(
+      #   toNimDecl(
+      #     namespace.wrapTypeFromNamespace(conf, al.cursor)
+      #   ),
+      #   al
+      # )]
+
+    else:
+      if al.cursor[0].cxKind() notin {ckStructDecl}:
+        # NOTE ignore `typedef struct` in C
+        result = @[GenEntry(kind: gekAlias, genAlias: GenAlias(
+          iinfo: currIINfo(),
+          isDistinct: conf.isDistinct(al.ident, conf, cache),
+          newAlias: newAlias,
+          baseType: baseType,
+          cdecl: al
+        ))]
+        # result = @[newWrappedEntry(
+        #   toNimDecl(newAliasDecl(
+        #     newAlias, baseType, iinfo = currIInfo(),
+        #     isDistinct =
+        #   )), al
+        # )]
+
+      else:
+        if cache.canWrap(al.cursor[0]):
+          # Multiple trailing typedefs result in several `ckTypedefDecl`
+          # nodes
+
+          cache.markWrap(al.cursor[0])
+          let nested = visitClass(al.cursor[0], parent, conf)
+
+          let (obj, pre, post) = wrapObject(nested, conf, cache)
+
+          result.add pre & @[obj] & post
+
+        if newAlias != baseType:
+          # `typedef struct {} A;` has the same typedef name and type, and
+          # should only be wrapped as type definition and not alias.
+          result.add newWrappedEntry(
+            toNimDecl(newAliasDecl(
+              newAlias, baseType, iinfo = currIInfo(), isDistinct = false,
+            )), al
+          )
 
 proc getParentFields*(
     inCursor: CXCursor, obj: PObjectDecl, wrapConf: WrapConfig
@@ -564,7 +566,7 @@ proc getParentFields*(
           result[^1].kind = pkAssgn
 
 
-proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[WrappedEntry]
+proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[GenEntry]
 
 proc getDefaultAccess*(cursor: CXCursor): CXAccessSpecifier =
   case cursor.cxKind():
@@ -592,9 +594,8 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
 
   result = GenObject(
     rawName: $cd.cursor,
-    nimName: conf.typeNameForScoped(cd.ident, conf),
     iinfo: currIInfo(),
-    cursor: cd.cursor,
+    nimName: conf.typeNameForScoped(cd.ident, conf),
     cdecl: cd
   )
 
@@ -603,17 +604,15 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
                           # (with or without designated initalizers)
      cd.isAggregateInit and cd.initArgs.len > 0:
 
-    result.nestedEntries.add initGenProc(
-      CXCursor(), currIInfo(), cd.ident).withIt do:
-
-      it.name = "init" & obj.name.head
+    let pr = initGenProc(cd, currIInfo()).withIt do:
+      it.name = "init" & result.nimName.head
       it.arguments = cd.initArgs
       it.header = conf.makeHeader(cd.cursor, conf)
       it.icpp = &"{toCppNamespace(cd.ident)}({{@}})"
-      it.returnType = obj.name
-      it.genParams = obj.name.genParams
+      it.returnType = result.nimName
+      it.genParams = result.nimName.genParams
 
-
+    result.nestedEntries.add GenEntry(kind: gekProc, genProc: pr)
       # # info obj.name.head, "can be aggregate initialized"
       # result.genAfter.add newWrappedEntry(
       #   # WARNING `cd.ident`
@@ -626,8 +625,12 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
         result.nestedEntries.add wrapEnum(entry, conf, cache)
 
       of cdkStruct, cdkClass, cdkUnion:
-        result.nestedEntries.add wrapObject(entry, conf, cache)
+        result.nestedEntries.add GenEntry(
+          kind: gekObject, genObject: wrapObject(entry, conf, cache))
 
+
+      else:
+        discard
   #     of
 
   # for entry in cd.cursor:
@@ -655,15 +658,15 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
 
   # Add getter/setter methods for *all* public fields that are accessible
   # from this object
-  for fld in cd.pubFields():
+  for fld in cd.publicFields():
     var res = GenField(
       # QUESTION `conf.identNameForScoped()?`
-      name: fixIdentName(fld.lastName()),
+      nimName: fixIdentName(fld.lastName()),
       rawName: fld.lastName(),
       iinfo: currIInfo(),
       cdecl: fld,
       fldType: fld.cursor.cxType().toNType(conf).ntype,
-      isConst: cdecl.isConst
+      isConst: fld.isConst
     )
 
     if fld.cursor.cxType().isEnum():
@@ -673,18 +676,9 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
 
     result.memberFields.add res
 
- for meth in cd.methods()
-   result..add wrapMethods(cd, conf, obj.name, cache)
-
-  for mem in cd.members:
-    case mem.kind:
-      of cdkAlias:
-        result.genBefore.add mem.wrapAlias(cd.ident, conf, cache)
-
-      else:
-        discard
-
-  return obj
+  let (procs, extra) = wrapMethods(cd, conf, result.nimName, cache)
+  result.memberMethods.add procs
+  result.nestedEntries.add extra
 
 type EnumFieldResult = tuple[
   namedvals: Table[string, BiggestInt],
@@ -857,9 +851,12 @@ proc makeGenEnum*(
 
   var nt = conf.typeNameForScoped(declEn.ident, conf)
   result = GenEnum(
+    isMacroEnum: false,
+    cdecl: declEn,
+    iinfo: currIInfo(),
     rawName: nt.head & tern(conf.isImportCpp, "Cxx", "C"),
     nimName: nt.head,
-    docComment: conf.docCommentFor(declEn.ident, declEn.cursor, cache)
+    docComment: @[conf.docCommentFor(declEn.ident, declEn.cursor, cache)]
   )
 
   # Nim proxy proc declaration.
@@ -876,11 +873,12 @@ proc makeGenEnum*(
     if val != prev:
       prev = val
       result.values.add GenEnumValue(
+        cdecl: CDecl(cursor: name),
+        iinfo: currIInfo(),
         baseName: $name,
         resCName: cEnumName($name, nt, cache),
         resNimName: renameField($name, pref, enumPref, cache),
         resVal: val,
-        cursor: name,
         stringif: toCppNamespace(declEn.ident) & "::" & $name
       )
       # implEn.addField(cEnumName($name, nt, cache),
@@ -895,11 +893,9 @@ proc makeGenEnum*(
 
 
 
-proc makeEnumConverters(
-    gen: GenEnum,
-    conf: WrapConfig,
-    cache: var WrapCache
-  ): WrappedEntry =
+proc makeEnumConverters(gen: GenEnum, conf: WrapConfig, cache: var WrapCache):
+  GenPass =
+
   # Metadata associated with proxy enum
   var arr = nnkBracket.newPTree()
   var strCase = nnkCaseStmt.newPtree(newPIdent "en")
@@ -959,11 +955,15 @@ proc makeEnumConverters(
     converter `reverseConvName`*(en: `enName`): `implName` {.inline.} =
       `arrName`[en].cEnum
 
-  return newWrappedEntry(toNimDecl(helpers), true)
+  return GenPass(
+    iinfo: currIInfo(),
+    passEntries: @[newWrappedEntry(
+      toNimDecl(helpers), true, currIInfo(), gen.cdecl.cursor)]
+  )
 
 
 
-proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[WrappedEntry] =
+proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[GenEntry] =
   ## Generate wrapper for enum declaration
   ##
   ## Generates wrapper for enum declaration, using wrap configuration.
@@ -984,51 +984,53 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[Wrapp
     declEn, getFields(declEn, conf).sortFields(), conf, cache)
 
   cache.genEnums.add gen
+  result.add GenEntry(kind: gekPass, genPass: makeEnumConverters(gen, conf, cache))
+  result.add GenEntry(kind: gekEnum, genEnum: gen)
 
-  block:
-    var rawEnum = newPEnumDecl(gen.rawName, iinfo = currIInfo())
-    rawEnum.addDocComment gen.docComment
-    rawEnum.exported = true
+  when false:
+    block:
+      var rawEnum = newPEnumDecl(gen.rawName, iinfo = currIInfo())
+      rawEnum.addDocComment gen.docComment
+      rawEnum.exported = true
 
-    let importName =
-      if not conf.isImportcpp:
-        "enum " & toCppNamespace(declEn.ident)
+      let importName =
+        if not conf.isImportcpp:
+          "enum " & toCppNamespace(declEn.ident)
 
-      else:
-        toCppNamespace(declEn.ident)
+        else:
+          toCppNamespace(declEn.ident)
 
 
-    rawEnum.pragma.add newPIdentColonString(
-      (if conf.isImportcpp: "importcpp" else: "importc"),
-      importName
-    )
-
-    rawEnum.pragma.add nnkExprColonExpr.newPTree(
-      newPIdent("header"),
-      conf.makeHeader(declEn.cursor, conf).toNNode()
-    )
-
-    rawEnum.exported = true
-
-    for value in gen.values:
-      rawEnum.addField(
-        value.resCName, some newPLit(value.resVal),
-        docComment = value.docComment
+      rawEnum.pragma.add newPIdentColonString(
+        (if conf.isImportcpp: "importcpp" else: "importc"),
+        importName
       )
 
+      rawEnum.pragma.add nnkExprColonExpr.newPTree(
+        newPIdent("header"),
+        conf.makeHeader(declEn.cursor, conf).toNNode()
+      )
 
-    result.add newWrappedEntry(toNimDecl(rawEnum), declEn)
+      rawEnum.exported = true
 
-  block:
-    var nimEnum = newPEnumDecl(gen.nimName, iinfo = currIInfo())
-    nimEnum.addDocComment gen.docComment
-    nimEnum.exported = true
-    for value in gen.values:
-      nimEnum.addField(value.resNimName, docComment = value.docComment)
+      for value in gen.values:
+        rawEnum.addField(
+          value.resCName, some newPLit(value.resVal),
+          docComment = value.docComment
+        )
 
-    result.add newWrappedEntry(toNimDecl(nimEnum), declEn)
 
-  result.add makeEnumConverters(gen, conf, cache)
+      result.add newWrappedEntry(toNimDecl(rawEnum), declEn)
+
+    block:
+      var nimEnum = newPEnumDecl(gen.nimName, iinfo = currIInfo())
+      nimEnum.addDocComment gen.docComment
+      nimEnum.exported = true
+      for value in gen.values:
+        nimEnum.addField(value.resNimName, docComment = value.docComment)
+
+      result.add newWrappedEntry(toNimDecl(nimEnum), declEn)
+
 
 
 
@@ -1082,12 +1084,12 @@ func capitalAscii*(strs: seq[string]): seq[string] =
     result.add toLowerAscii(str).capitalizeAscii()
 
 proc wrapMacroEnum*(
-  values: seq[CDecl], conf: WrapConfig, cache: var WrapCache): seq[WrappedEntry] =
+  values: seq[CDecl], conf: WrapConfig, cache: var WrapCache): seq[GenEntry] =
 
   let prefix = commonPrefix(mapIt(values, $it.cursor)).dropSuffix("_")
   let enumPref = conf.prefixForEnum(@[toCName(prefix)], conf, cache)
   info "Wrapping", prefix, "as", enumPref, values.len
-  var vals: seq[GenEnumValue]
+  var enumFields: seq[GenEnumValue]
   for val in values:
     let toks = val.cursor.tokenStrings(conf.unit)
     # FIXME range breaks on `#define func(arg)`
@@ -1096,30 +1098,41 @@ proc wrapMacroEnum*(
     debug name, toks.join(", ", ("<\e[31m", "\e[39m>")), value
 
     if value.isSome():
-      vals.add GenEnumValue(
+      enumFields.add GenEnumValue(
+        cdecl: val,
+        iinfo: currIInfo(),
         resNimName: name,
         resVal: value.get(),
-        stringif: toks[0],
-        cursor: val.cursor
+        stringif: toks[0]
       )
 
-  if vals.len > 0:
-    vals = vals.sortedByIt(it.resVal)
-    var en: PEnumDecl = newPEnumDecl(
-      capitalAscii(enumPref) & capitalAscii(prefix),
-      iinfo = currIInfo()
+  if enumFields.len > 0:
+    let nimName = capitalAscii(enumPref) & capitalAscii(prefix)
+    var en = GenEnum(
+      isMacroEnum: true,
+      nimName: nimName,
+      proxyName: nimName & conf.isImportcpp.tern("Cxx", "C"),
+      iinfo: currIINfo(),
+      cdecl: nil,
+      values: enumFields.sortedByIt(it.resVal)
     )
 
-    var cEnum: PEnumDecl = newPEnumDecl(en.name & "C", iinfo = currIInfo())
+    # vals = vals
+    # var en: PEnumDecl = newPEnumDecl(
+    #   ,
+    #   iinfo = currIInfo()
+    # )
 
-    for value in vals:
-      # cEnum.addField(name & "C", )
-      en.addField(value.resNimName, some newPLit(value.resVal))
+    # var cEnum: PEnumDecl = newPEnumDecl(, iinfo = currIInfo())
 
-    result.add newWrappedEntry(toNimDecl(en), values[0])
+    # for value in vals:
+    #   # cEnum.addField(name & "C", )
+    #   en.addField(value.resNimName, some newPLit(value.resVal))
 
-    let
-      enName = newPIdent(en.name)
+    # result.add newWrappedEntry(toNimDecl(en), values[0])
+
+    result.add GenEntry(kind: gekEnum, genEnum: en)
+    let enName = newPIdent(en.nimName)
 
     var helpers = pquote do:
       proc toCInt*(en: `enName`): cint {.inline.} =
@@ -1131,12 +1144,17 @@ proc wrapMacroEnum*(
         for val in en:
           result = bitor(result, val.cint)
 
-    result.add newWrappedEntry(toNimDecl(helpers), true)
+    result.add GenEntry(
+      kind: gekPass,
+      genPass: GenPass(
+        iinfo: currIInfo(),
+        passEntries: @[
+          newWrappedEntry(toNimDecl(helpers), true, currIInfo(), CXCursor())]))
 
 
 
 proc wrapMacros*(
-  declMacros: seq[CDecl], conf: WrapConfig, cache: var WrapCache): seq[WrappedEntry] =
+  declMacros: seq[CDecl], conf: WrapConfig, cache: var WrapCache): seq[GenEntry] =
   info "Wrapping macros"
   var prefix: seq[string]
   var buf: seq[CDecl]
@@ -1172,7 +1190,7 @@ proc wrapMacros*(
 
 proc wrapApiUnit*(
   api: CApiUnit, conf: WrapConfig,
-  cache: var WrapCache, index: FileIndex): seq[WrappedEntry] =
+  cache: var WrapCache, index: FileIndex): seq[GenEntry] =
   ## Generate wrapper for api unit.
   var macrolist: seq[CDecl]
   for decl in api.decls:
@@ -1190,15 +1208,8 @@ proc wrapApiUnit*(
           discard
 
         else:
-          let (obj, procs, other) = decl.wrapObject(conf, cache)
-
-          result.add obj
-
-          for it in other:
-            result.add it
-
-          for pr in procs:
-            result.add pr
+          result.add GenEntry(
+            kind: gekObject, genObject: decl.wrapObject(conf, cache))
 
         dedentLog()
 
@@ -1247,7 +1258,7 @@ proc toNNode*(gp: GenProc, wrapConf: WrapConfig): PProcDecl =
       kind = arg.varkind
     )
 
-  result.docComment = gp.docs.join("\n")
+  result.docComment = gp.docComment.join("\n")
 
   result.signature.pragma = gp.pragma
 

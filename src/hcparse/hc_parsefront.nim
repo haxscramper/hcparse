@@ -9,9 +9,16 @@ import hmisc/other/[oswrap, colorlogger, hshell]
 import hmisc/types/colorstring
 import gram
 
-import cxtypes, cxcommon, hc_types, hc_visitors, hc_typeconv,
-       hc_depresolve, hc_wrapgen, hc_impls, hc_postprocess,
-       hc_docwrap
+import
+  ./cxtypes,
+  ./cxcommon,
+  ./hc_types,
+  ./hc_visitors,
+  ./hc_typeconv,
+  ./hc_depresolve,
+  ./hc_wrapgen,
+  ./hc_impls,
+  ./hc_docwrap
 
 
 proc parseTranslationUnit*(
@@ -280,6 +287,11 @@ proc getExports*(
     if conf.isInternal(dep, conf, index):
       result.add dep
 
+proc toNNode*(genEntries: seq[GenEntry], conf: WrapConfig):
+  seq[WrappedEntry] =
+
+  discard
+
 proc wrapFile*(
   parsed: ParsedFile, conf: WrapConfig,
   cache: var WrapCache, index: FileIndex): seq[WrappedEntry] =
@@ -309,20 +321,26 @@ proc wrapFile*(
         {.push warning[UnusedImport]:off.}
         import bitops, hcparse/wraphelp
         {.pop.}
-    )
+    ),
+    false,
+    currIInfo(),
+    CXCursor()
   )
 
   if not isNil(conf.userCode):
-    tmpRes.add newWrappedEntry(toNimDecl(
-      conf.userCode(parsed.filename)))
+    tmpRes.add newWrappedEntry(
+      toNimDecl(conf.userCode(parsed.filename)),
+      false, currIInfo(), CXCursor()
+    )
 
   for node in parsed.explicitDeps.mapIt(
       conf.getImport(it, conf)).
       deduplicate().
       mapIt(it.makeImport()):
-    tmpRes.add node.toNimDecl().newWrappedEntry()
+    tmpRes.add node.toNimDecl().newWrappedEntry(
+      false, currIINfo(), CXCursor())
 
-  tmpRes.add parsed.api.wrapApiUnit(conf, cache, index)
+  tmpRes.add parsed.api.wrapApiUnit(conf, cache, index).toNNode(conf)
 
   # Coollect all types into single wrapped entry type block. All duplicate
   # types (caused by forward declarations which is not really possible to
@@ -331,59 +349,60 @@ proc wrapFile*(
   # last type encounter will always be it's definition.
   var res: Table[string, WrappedEntry]
 
-  for elem in tmpRes:
-    if elem.kind == wekNimDecl:
-      case elem.wrapped.kind:
-        # Filter out all type declarations.
-        of nekObjectDecl:
-          let name = elem.wrapped.objectdecl.name.head
-          res[name] = elem
+  when false:
+    for elem in tmpRes:
+      if elem.kind == wekNimDecl:
+        case elem.nimDecl.kind:
+          # Filter out all type declarations.
+          of nekObjectDecl:
+            let name = elem.nimDecl.objectdecl.name.head
+            res[name] = elem
 
-        of nekEnumDecl:
-          let name = elem.wrapped.enumdecl.name
-          res[name] = elem
+          of nekEnumDecl:
+            let name = elem.nimDecl.enumdecl.name
+            res[name] = elem
 
-        of nekAliasDecl:
-          let name = elem.wrapped.aliasdecl.newType.head
-          if name in res:
-            warn "Override type alias for ", name
+          of nekAliasDecl:
+            let name = elem.nimDecl.aliasdecl.newType.head
+            if name in res:
+              warn "Override type alias for ", name
 
-          res[name] = elem
+            res[name] = elem
 
-        of nekPasstroughCode:
-          raiseAssert("Passthrough code blocks should use `wekNimPass`")
+          of nekPasstroughCode:
+            raiseAssert("Passthrough code blocks should use `wekNimPass`")
 
-        of nekProcDecl, nekMultitype:
-          discard
+          of nekProcDecl, nekMultitype:
+            discard
 
-    elif elem.kind == wekNimPass and
-         not elem.postTypes:
-      # Immediately append non-`postTypes` declarations
-      result.add elem
+      elif elem.kind == wekNimPass and
+           not elem.postTypes:
+        # Immediately append non-`postTypes` declarations
+        result.add elem
 
 
-  block:
-    let elems = collect(newSeq):
-      for k, v in res:
-        v
+    block:
+      let elems = collect(newSeq):
+        for k, v in res:
+          v
 
-    result.add(newWrappedEntry(elems))
+      result.add(newWrappedEntry(elems))
 
-  for elem in tmpRes:
-    if elem.kind == wekProc or
-      (elem.kind == wekProc and elem.wrapped.kind notin {
-      nekObjectDecl, nekAliasDecl, nekPasstroughCode, nekEnumDecl
-    }):
+    for elem in tmpRes:
+      if elem.kind == wekProc or
+        (elem.kind == wekProc and elem.nimDecl.kind notin {
+        nekObjectDecl, nekAliasDecl, nekPasstroughCode, nekEnumDecl
+      }):
 
-      result.add elem
+        result.add elem
 
-    elif
-      elem.kind == wekNimPass or (
-      elem.kind == wekNimDecl and
-      elem.wrapped.kind == nekPasstroughCode
-      ) and elem.postTypes:
+      elif
+        elem.kind == wekNimPass or (
+        elem.kind == wekNimDecl and
+        elem.nimDecl.kind == nekPasstroughCode
+        ) and elem.postTypes:
 
-      result.add elem
+        result.add elem
 
 
 
@@ -483,23 +502,6 @@ proc wrapAll*(
 
   result.index = parsed
 
-proc postprocessWrapped*(
-    entries: seq[WrappedEntry],
-    wrapConf: WrapConfig,
-    postprocess: seq[Postprocess] = defaultPostprocessSteps,
-  ): tuple[wrapped: seq[WrappedEntry], codegen: seq[CxxCodegen]] =
-
-  for we in entries:
-    var we = we
-    var res: seq[WrappedEntry]
-
-    for step in postprocess:
-      res.add step.impl(we, wrapConf, result.codegen)
-
-    result.wrapped.add we
-    result.wrapped.add res
-
-
 proc getExpanded*(file: AbsFile, parseConf: ParseConfig): string =
   let flags = getFlags(parseConf, file)
   var cmd = shCmd(clang, -C, -E, -P)
@@ -515,7 +517,6 @@ proc wrapSingleFile*(
     errorReparseVerbose: bool = false,
     wrapConf: WrapConfig = baseCppWrapConf,
     parseConf: ParseConfig = baseCppParseConfig,
-    postprocess: seq[Postprocess] = defaultPostprocessSteps,
   ): tuple[decls: seq[NimDecl[PNode]], codegen: seq[CxxCodegen]] =
   ## Generate wrapper for a single file.
   ##
@@ -523,17 +524,17 @@ proc wrapSingleFile*(
   ##  generated delarations, before they are converter to sequence of
   ##  `NimDecl`
   ##
-  ##`wrapConf` provide user-defined implementation heuristics for necessary
-  ## edge cases (see `WrapConfig` type documentation). `postprocess` is a
-  ## sequence of postprocessing actions that will be run on generated
-  ## `WrappedEntry` structures and then added to final declaration. Default
-  ## implementation of postprocessing includes automatic enum overload
-  ## derivation, nim-like infix operators (`<<` and `>>` converter to `shl`
-  ## and `shr` respectively) and final fixup for all identifiers. Order of
-  ## postprocessint steps is important, as every original wrapped entry is
-  ## passed to each postprocess in sequential order (if you have three
-  ## steps, `class C{};` wrapper will be passed to each of them, before
-  ## being added to final result).
+  ## `wrapConf` provide user-defined implementation heuristics for
+  ## necessary edge cases (see `WrapConfig` type documentation).
+  ## `postprocess` is a sequence of postprocessing actions that will be run
+  ## on generated `WrappedEntry` structures and then added to final
+  ## declaration. Default implementation of postprocessing includes
+  ## automatic enum overload derivation, nim-like infix operators (`<<` and
+  ## `>>` converter to `shl` and `shr` respectively) and final fixup for
+  ## all identifiers. Order of postprocessint steps is important, as every
+  ## original wrapped entry is passed to each postprocess in sequential
+  ## order (if you have three steps, `class C{};` wrapper will be passed to
+  ## each of them, before being added to final result).
   ##
   ## Returns list of nim declarations with associated metadata
   ## (instantiation info in codegen callback, comments etc.) and list of
@@ -567,51 +568,51 @@ proc wrapSingleFile*(
   proc updateComments(decl: var PNimDecl, node: WrappedEntry) =
     decl.addCodeComment("Wrapper for `" & toCppNamespace(
       node.ident, withNames = true) & "`\n")
-    if node.getCursor().getSpellingLocation().getSome(loc):
+    if node.cursor.getSpellingLocation().getSome(loc):
       let file = withoutPrefix(AbsFile(loc.file), wrapConf.baseDir)
       decl.addCodeComment(
         &"Declared in {file}:{loc.line}")
 
+  # let (wrapResults, codegen) = wrapped.postprocessWrapped(wrapConf, postprocess)
+  # result.codegen = codegen
 
+  for node in wrapped:
+    var node = node
+    updateComments(node.decl, node)
+    result.decls.add node.decl
+     # node.decl
+#     case node.kind:
+#       of wekMultitype:
+#         var resdecl: seq[PNimTypeDecl]
+#         for t in node.decls:
+#           assert t.kind != wekMultitype
+#           var decl = t.wrapped
 
+#           updateComments(decl, t)
+#           resdecl.add toNimTypeDecl(decl)
 
+#         result.decls.add toNimDecl(resdecl)
 
-  let (wrapResults, codegen) = wrapped.postprocessWrapped(wrapConf, postprocess)
-  result.codegen = codegen
+#       of wekProc:
+#         var gproc = node.gproc
+# #         let text = split($gproc.cursor.getRawCommentText(), "\n").mapIt("    " & it).join("\n")
+# #         gproc.docs.add &"""
+# # .. code-block::
+# # {text}
+# # """
 
-  for node in wrapResults:
-    case node.kind:
-      of wekMultitype:
-        var resdecl: seq[PNimTypeDecl]
-        for t in node.decls:
-          assert t.kind != wekMultitype
-          var decl = t.wrapped
+#         var decl = gproc.toNNode(wrapConf).toNimDecl()
 
-          updateComments(decl, t)
-          resdecl.add toNimTypeDecl(decl)
+#         updateComments(decl, node)
+#         result.decls.add decl
 
-        result.decls.add toNimDecl(resdecl)
+#       of wekNimPass:
+#         result.decls.add node.wrapped
 
-      of wekProc:
-        var gproc = node.gproc
-#         let text = split($gproc.cursor.getRawCommentText(), "\n").mapIt("    " & it).join("\n")
-#         gproc.docs.add &"""
-# .. code-block::
-# {text}
-# """
-
-        var decl = gproc.toNNode(wrapConf).toNimDecl()
-
-        updateComments(decl, node)
-        result.decls.add decl
-
-      of wekNimPass:
-        result.decls.add node.wrapped
-
-      of wekNimDecl:
-        var decl = node.wrapped
-        updateComments(decl, node)
-        result.decls.add decl
+#       of wekNimDecl:
+#         var decl = node.wrapped
+#         updateComments(decl, node)
+#         result.decls.add decl
 
 proc wrapWithConfig*(
   infile, outfile: FsFile, wrapConf: WrapConfig, parseConf: ParseConfig) =
