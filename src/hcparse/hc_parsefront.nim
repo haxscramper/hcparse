@@ -384,61 +384,50 @@ proc wrapFile*(
   var res: Table[string, WrappedEntry]
 
   info "Final wrapper generation"
-  when false: # Finel wrapper generation
-    for elem in tmpRes:
-      if elem.kind == wekNimDecl:
-        case elem.nimDecl.kind:
-          # Filter out all type declarations.
-          of nekObjectDecl:
-            let name = elem.nimDecl.objectdecl.name.head
-            res[name] = elem
 
-          of nekEnumDecl:
-            let name = elem.nimDecl.enumdecl.name
-            res[name] = elem
+  for elem in tmpRes:
+    case elem.decl.kind:
+      # Filter out all type declarations.
+      of nekObjectDecl:
+        let name = elem.decl.objectdecl.name.head
+        res[name] = elem
 
-          of nekAliasDecl:
-            let name = elem.nimDecl.aliasdecl.newType.head
-            if name in res:
-              warn "Override type alias for ", name
+      of nekEnumDecl:
+        let name = elem.decl.enumdecl.name
+        res[name] = elem
 
-            res[name] = elem
+      of nekAliasDecl:
+        let name = elem.decl.aliasdecl.newType.head
+        if name in res:
+          warn "Override type alias for ", name
 
-          of nekPasstroughCode:
-            raiseAssert("Passthrough code blocks should use `wekNimPass`")
+        res[name] = elem
 
-          of nekProcDecl, nekMultitype:
-            discard
+      of nekPassthroughCode:
+        if not elem.postTypes:
+          result.add elem
 
-      elif elem.kind == wekNimPass and
-           not elem.postTypes:
-        # Immediately append non-`postTypes` declarations
+      of nekProcDecl, nekMultitype:
+        discard
+
+  block:
+    let elems = collect(newSeq):
+      for k, v in res:
+        v.decl.toNimTypeDecl()
+
+    result.add(newWrappedEntry(toNimDecl(elems), false, currIINfo(), CXCursor()))
+
+  for elem in tmpRes:
+    case elem.decl.kind:
+      of nekProcDecl, nekMultitype:
         result.add elem
 
+      of nekPassthroughCode:
+        if elem.postTypes:
+          result.add elem
 
-    block:
-      let elems = collect(newSeq):
-        for k, v in res:
-          v
-
-      result.add(newWrappedEntry(elems))
-
-    for elem in tmpRes:
-      if elem.kind == wekProc or
-        (elem.kind == wekProc and elem.nimDecl.kind notin {
-        nekObjectDecl, nekAliasDecl, nekPasstroughCode, nekEnumDecl
-      }):
-
-        result.add elem
-
-      elif
-        elem.kind == wekNimPass or (
-        elem.kind == wekNimDecl and
-        elem.nimDecl.kind == nekPasstroughCode
-        ) and elem.postTypes:
-
-        result.add elem
-
+      else:
+        discard
 
 
 proc wrapFile*(

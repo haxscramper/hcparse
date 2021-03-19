@@ -3,8 +3,9 @@ import std/[strformat, tables, hashes, strutils, options]
 import hmisc/other/colorlogger
 import hmisc/algo/hstring_algo
 import hmisc/base_errors
+import hparse/htreesitter/htreesitter
 
-import htsparse/cpp/cpp
+import htsparse/[cpp/cpp, c/c]
 
 proc getName(node: CppNode, text: string): Option[CName] =
   if node.kind in {cppTypeIdentifier, cppIdentifier}:
@@ -86,14 +87,12 @@ proc formatComment*(str: string): string =
   # result = str
   var buf: seq[string]
   for line in str.strip("/*", "*/").split('\n'):
-    buf.add line.strip().dropPrefix("*").dropPrefix("//")
+    buf.add strutils.strip(line).dropPrefix("*").dropPrefix("//")
 
   result = buf.join("\n") #.strip()
 
-
 proc fillDocComments*(file: string, cache: var WrapCache) =
   let tree = parseCppString(file)
-  # echo treeRepr(tree, file)
   var lastComment: seq[Slice[int]]
   logIndented:
     visit(tree, cache, lastComment, file, @[])

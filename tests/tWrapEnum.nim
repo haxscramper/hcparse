@@ -12,7 +12,7 @@ import unittest
 
 let file = "/tmp/a.c"
 let str = """
-typedef struct C {} C1, *C2;
+typedef struct C { float a; } C1, *C2;
 """
 
 file.writeFile(str)
