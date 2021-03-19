@@ -161,8 +161,8 @@ proc typeNameForScoped*(
   var resname: string
   var genParams: seq[NType[PNode]]
   for name in ident:
-    if $name.cursor notin conf.collapsibleNamespaces:
-      resname &= capitalizeAscii($name.cursor)
+    if name.identName() notin conf.collapsibleNamespaces:
+      resname &= capitalizeAscii(name.identName())
       for genParam in name.genParams:
         let tmp = conf.typeNameForScoped(genParam, conf)
         genParams.add tmp

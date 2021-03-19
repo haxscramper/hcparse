@@ -625,17 +625,23 @@ proc getDefaultAccess*(cursor: CXCursor): CXAccessSpecifier =
       raiseAssert("Cannot get default visibility for cursor of kind " & $cursor.cxKind())
 
 
-func publicFields*(cd: CDecl): seq[CDecl] =
-  assert cd.kind in {cdkClass, cdkStruct}
+proc publicFields*(cd: CDecl): seq[CDecl] =
+  assert cd.kind in {cdkClass, cdkStruct, cdkUnion}
   for member in cd.members:
     if (member.kind == cdkField) and (member.access == asPublic):
       result.add member
+
+    elif member.kind in {cdkClass, cdkUnion, cdkStruct} and
+         member.isAnonymous:
+      # Anonymous nested struct, export all fields
+      result.add member.publicFields()
 
 
 proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
   let tdecl = cd.cursor.cxType().getTypeDeclaration()
   assert cd.kind in {cdkClass, cdkStruct}, $cd.kind
 
+  debug "Wrapping object", cd.ident
 
   result = GenObject(
     rawName: $cd.cursor,
@@ -676,30 +682,6 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
 
       else:
         discard
-  #     of
-
-  # for entry in cd.cursor:
-  #   case entry.cxKind():
-  #     of ckEnumDecl:
-  #       let visited = visitEnum(entry, cd.ident, conf)
-  #       result.genBefore.add wrapEnum(visited, conf, cache)
-
-  #     of ckStructDecl, ckClassDecl, ckUnionDecl:
-  #       let visited = visitClass(entry, cd.ident, conf)
-  #       let (obj, pre, post) = wrapObject(visited, conf, cache)
-  #       result.genBefore.add pre & @[obj] & post
-
-  #     of ckFieldDecl, ckMethod, ckFriendDecl,
-  #        ckFunctionTemplate, ckAccessSpecifier,
-  #        ckConstructor, ckDestructor, ckTypedefDecl,
-  #        ckBaseSpecifier:
-  #       # Constructors, field access and other implementation parts have
-  #       # already been added in `visitClass`, now we can ignore them
-  #       # altogether.
-  #       discard
-
-  #     else:
-  #       warn &"#[ IMPLEMENT for kind {entry.cxkind()} {instantiationInfo()} ]#"
 
   # Add getter/setter methods for *all* public fields that are accessible
   # from this object
@@ -713,6 +695,33 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
       fldType: fld.cursor.cxType().toNType(conf).ntype,
       isConst: fld.isConst
     )
+
+    if fld.fieldTypeDecl.getSome(newFieldType):
+      debug "Field with new declaration"
+      var newType = newFieldType
+      if newType.isAnonymous:
+        newType.ident[^1] = toCName("Anon")
+
+      debug "Nested struct declaration", newType.ident
+      debug newType.ident.len
+
+      case newType.kind:
+        of cdkStruct, cdkUnion, cdkClass:
+          debug "Nested object declaration, adding to nested types"
+          var decl = wrapObject(newType, conf, cache)
+
+          result.nestedEntries.add GenEntry(kind: gekObject, genObject: decl)
+          res.fldType.head = decl.nimName.head
+
+        of cdkEnum:
+          debug "Nested object declaration, adding to nested types"
+          var decl = wrapEnum(newType, conf, cache)
+          res.fldType.head = decl[0].genEnum.nimName
+
+          result.nestedEntries.add decl
+
+        else:
+          discard
 
     if fld.cursor.cxType().isEnum():
       # Proxy enum wrapper generator changes enum names, meaning all C/C++
@@ -1235,6 +1244,8 @@ proc getNType*(carg: CArg): NType[PNode] =
   else:
     return carg.ntype
 
+proc toNNode*(gen: GenEntry, conf: WrapConfig): seq[WrappedEntry]
+
 proc toNNode*(gp: GenProc, wrapConf: WrapConfig): PProcDecl =
   result = newPProcDecl(
     name = gp.name,
@@ -1317,6 +1328,17 @@ proc toNNode*(gen: GenObject, conf: WrapConfig): seq[WrappedEntry] =
     name: gen.nimName
   )
 
+  decl.annotation = some newPPragma(
+    newPIdent("bycopy"),
+    nnkExprColonExpr.newPTree(
+      newPIdent(conf.importX()),
+      conf.makeHeader(gen.cdecl.cursor, conf).toNNode()
+    )
+  )
+
+  if gen.cdecl.kind == cdkUnion:
+    decl.annotation.get().add newPIdent("union")
+
   for field in gen.memberFields:
     if field.isConst:
       raiseImplementError("")
@@ -1332,6 +1354,8 @@ proc toNNode*(gen: GenObject, conf: WrapConfig): seq[WrappedEntry] =
         fldType: field.fldType
       )
 
+  for nested in gen.nestedEntries:
+    result.add nested.toNNode(conf)
 
 
   # decl.addCodeComment("Wrapper for `" & toCppNamespace(
@@ -1358,6 +1382,34 @@ proc toNNode*(gen: GenAlias, conf: WrapConfig): AliasDecl[PNode] =
     newType: gen.newAlias
   )
 
+
+proc toNNode*(gen: GenEntry, conf: WrapConfig): seq[WrappedEntry] =
+  case gen.kind:
+    of gekEnum:
+      let (e1, e2) = toNNode(gen.genEnum, conf)
+      result.add toNimDecl(e1).newWrappedEntry(
+        true, gen.genEnum.iinfo, gen.cdecl.cursor)
+
+      result.add toNimDecl(e2).newWrappedEntry(
+        true, gen.genEnum.iinfo, gen.cdecl.cursor)
+
+    of gekPass:
+      result.add gen.genPass.passEntries
+
+    of gekAlias:
+      result.add toNNode(gen.genAlias, conf).
+        toNimDecl().
+        newWrappedEntry(true, gen.genAlias.iinfo, gen.cdecl.cursor)
+
+    of gekObject:
+      result.add toNNode(gen.genObject, conf)
+      # for entry in toNNode(gen.genObject, conf):
+      #   result.add entry.toNimDecl().newWrappedEntry(
+      #     true, gen.genObject.iinfo, gen.cdecl.cursor)
+
+    of gekProc:
+      result.add toNNode(gen.genProc, conf).toNimDecl().newWrappedEntry(
+        true, gen.genProc.iinfo, gen.cdecl.cursor)
 
 proc writeWrapped*(
     res: tuple[decls: seq[NimDecl[PNode]], codegen: seq[CxxCodegen]],

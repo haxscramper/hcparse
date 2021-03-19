@@ -67,8 +67,20 @@ proc argsSignature*(
 
   argsSignature(cursor.getArguments(), types, names, wrap)
 
+proc visitCursor*(
+    cursor: CXCursor, parent: CScopedIdent,
+    conf: WrapConfig, lastTypeDecl: var CDecl
+  ): tuple[decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]]
+
+
+proc visitClass*(
+    cursor: CXCursor, parent: CScopedIdent,
+    conf: WrapConfig, typedef: Option[CXCursor]
+  ): CDecl
+
 proc visitMethod*(
-    cursor: CXCursor, parent: CScopedIdent, accs: CXAccessSpecifier): CDecl =
+    cursor: CXCursor, parent: CScopedIdent, accs: CXAccessSpecifier
+  ): CDecl =
 
   result = CDecl(
     kind: cdkMethod,
@@ -88,10 +100,19 @@ proc visitMethod*(
 
 
 proc visitField*(
-    cursor: CXCursor, parent: CSCopedIdent, accs: CXAccessSpecifier): CDecl =
+    cursor: CXCursor, parent: CSCopedIdent, accs: CXAccessSpecifier,
+    conf: WrapConfig
+  ): CDecl =
 
-  result = CDecl(kind: cdkField, cursor: cursor, ident: parent & toCName(cursor))
+  result = CDecl(
+    kind: cdkField, cursor: cursor, ident: parent & toCName(cursor))
   result.access = accs
+
+  if cursor.len > 0:
+    var decl: CDecl
+    let visit = visitCursor(cursor[0], parent, conf, decl)
+    result.fieldTypeDecl = some decl
+
 
 var undefCnt: int = 0
 
@@ -140,7 +161,8 @@ proc visitEnum*(
   result = CDecl(
     kind: cdkEnum,
     cursor: cursor,
-    ident: parent & toCName(cursor)
+    ident: parent & toCName(cursor),
+    isAnonymous: $cursor == ""
   )
 
   for elem in cursor:
@@ -277,7 +299,7 @@ proc updateParentFields*(decl: var CDecl, conf: WrapConfig) =
       else:
         case entry.cxKind():
           of ckFieldDecl:
-            buf.derived.add visitField(entry, decl.ident, accs)
+            buf.derived.add visitField(entry, decl.ident, accs, conf)
 
           of ckMethod:
             buf.derived.add visitMethod(entry, decl.ident, accs)
@@ -297,8 +319,22 @@ proc visitAlias*(
     # layer of bookeeping to avoud duplication of identifiers.
     if lastTypeDecl.cursor == subn[0]:
       # Second encounter of the typedefed struct
+      if lastTypeDecl.isAnonymous:
+        # FIXME use list of all type declaration kinds
+        if subn[0].cxKind() in {ckStructDecl}:
+          # Type declaration itself is anonymous, but a part of larger
+          # `typedef` statement that declares name that is used in other
+          # code (to avoid `struct` namespacing in C I guess).
+
+          # warn "First declaration was considered anonymous, second visitation"
+          # logIndented:
+            lastTypedecl = visitClass(subn[0], parent, conf, some(subn))
+            lastTypeDecl.isCTypedef = true
+
+
       debug "Found typedef struct", subn
       lastTypeDecl = CDecl(
+        ident: lastTypeDecl.ident,
         cursor: subn,
         kind: cdkAlias,
         newTypes: @[subn],
@@ -306,8 +342,10 @@ proc visitAlias*(
         aliasNewType: lastTypeDecl
       )
 
-      if $lastTypeDecl.aliasNewType.cursor == "":
-        lastTypeDecl.aliasNewType.ident[^1] = toCName(subn)
+      # if $lastTypeDecl.aliasNewType.cursor == "":
+      #   lastTypeDecl.aliasNewType.isCTypedef = true
+      #   # lastTypeDecl.aliasNewType.ident[^1] = toCName(subn)
+      #   # lastTypeDecl.ident[^1] = toCName(subn)
 
     elif lastTypeDecl.kind == cdkAlias and
          lastTypeDecl.isNewType and
@@ -329,7 +367,10 @@ proc visitAlias*(
 
 
 proc visitClass*(
-  cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): CDecl =
+    cursor: CXCursor, parent: CScopedIdent,
+    conf: WrapConfig, typedef: Option[CXCursor]
+  ): CDecl =
+
   ## Convert class under cursor to `CDecl`
   let name =
     if cursor.cxKind == ckStructDecl and len($cursor) == 0:
@@ -353,11 +394,16 @@ proc visitClass*(
 
   var initArgs: seq[CArg]
   result = CDecl(
+    isAnonymous: $cursor == "",
     kind: cdkClass,
     cursor: cursor,
-    ident: parent & toCName(cursor),
+    ident: parent & toCName(
+      if typedef.isSome(): typedef.get() else: cursor),
     isAggregateInit: isAggregateInitable(cursor, initArgs, conf)
   )
+
+  debug "Visited class declaration. Ident: ", result.ident
+  debug "Cursor: ", cursor
 
   result.kind = kind
   if result.isAggregateInit:
@@ -385,7 +431,8 @@ proc visitClass*(
 
         of ckFieldDecl, ckVarDecl:
            # WARNING static fields might need to be wrapped differently
-          result.members.add visitField(subn, result.ident, currentAccs)
+          result.members.add visitField(
+            subn, result.ident, currentAccs, conf)
 
         of ckTemplateTypeParameter, ckFriendDecl,
            ckStaticAssert, ckTemplateTemplateParameter:
@@ -405,7 +452,7 @@ proc visitClass*(
         of ckStructDecl, ckClassDecl, ckUnionDecl, ckClassTemplate:
           if not isNil(lastTypeDecl): result.members.add lastTypeDecl
 
-          lastTypeDecl = visitClass(subn, result.ident, conf)
+          lastTypeDecl = visitClass(subn, result.ident, conf, none(CXCursor))
 
         of ckEnumDecl:
           if not isNil(lastTypeDecl): result.members.add lastTypeDecl
@@ -432,11 +479,6 @@ proc visitClass*(
 
 
 
-proc visitCursor*(
-    cursor: CXCursor, parent: CScopedIdent,
-    conf: WrapConfig, lastTypeDecl: var CDecl
-  ): tuple[decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]]
-
 proc visitNamespace*(
   cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): seq[CDecl] =
   ## Convert all elements in namespace into sequence of `CDecl`
@@ -462,7 +504,10 @@ proc visitCursor*(
     conf: WrapConfig, lastTypeDecl: var CDecl
   ): tuple[decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]] =
 
-  if not conf.ignoreCursor(cursor, conf):
+  if conf.ignoreCursor(cursor, conf):
+    info "Ignoring cursor ", cursor
+
+  else:
     case cursor.cxKind:
       of ckNamespace:
         result.decls.add visitNamespace(cursor, parent, conf)
@@ -472,7 +517,7 @@ proc visitCursor*(
          ckStructDecl:
         if not isNil(lastTypeDecl): result.decls.add lastTypeDecl
 
-        lastTypeDecl = visitClass(cursor, parent, conf)
+        lastTypeDecl = visitClass(cursor, parent, conf, none(CXCursor))
 
       of ckFunctionDecl, ckFunctionTemplate:
         result.decls.add visitFunction(cursor, parent, conf)

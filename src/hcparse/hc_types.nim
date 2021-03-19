@@ -111,6 +111,7 @@ type
     ## alias for `PtrT = *T`.
 
     isConst*: bool ## Field or method declared as `const`
+    isAnonymous*: bool
 
     case kind*: CDeclKind
       of cdkField:
@@ -610,10 +611,10 @@ proc initHeaderSpec*(pnode: PNode): NimHeaderSpec =
 
 func cdecl*(gen: GenEntry): CDecl =
   case gen.kind:
-    of gekEnum: gen.cdecl
-    of gekProc: gen.cdecl
-    of gekObject: gen.cdecl
-    of gekAlias: gen.cdecl
+    of gekEnum: gen.genEnum.cdecl
+    of gekProc: gen.genProc.cdecl
+    of gekObject: gen.genObject.cdecl
+    of gekAlias: gen.genAlias.cdecl
     of gekPass: raiseUnexpectedKindError(gen)
 
 func `$`*(we: WrappedEntry): string = $we.decl
