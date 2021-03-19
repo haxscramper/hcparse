@@ -285,8 +285,10 @@ proc updateParentFields*(decl: var CDecl, conf: WrapConfig) =
           else:
             raiseImplementKindError(entry)
 
-proc visitAlias*(lastTypeDecl: var CDecl, subn: CXCursor, conf: WrapConfig):
-  Option[CDecl] =
+proc visitAlias*(
+    lastTypeDecl: var CDecl, parent: CSCopedIdent,
+    subn: CXCursor, conf: WrapConfig
+  ): Option[CDecl] =
 
   if subn[0].cxKind() in {ckEnumDecl, ckStructDecl, ckUnionDecl, ckClassDecl}:
     # libclang represents grouped typedefs using *multiple* nodes, so
@@ -303,6 +305,9 @@ proc visitAlias*(lastTypeDecl: var CDecl, subn: CXCursor, conf: WrapConfig):
         isNewType: true,
         aliasNewType: lastTypeDecl
       )
+
+      if $lastTypeDecl.aliasNewType.cursor == "":
+        lastTypeDecl.aliasNewType.ident[^1] = toCName(subn)
 
     elif lastTypeDecl.kind == cdkAlias and
          lastTypeDecl.isNewType and
@@ -392,7 +397,7 @@ proc visitClass*(
         of ckTypeAliasTemplateDecl, ckTypeAliasDecl,
            ckTypedefDecl, ckUsingDeclaration:
 
-          let alias = visitAlias(lastTypeDecl, subn, conf)
+          let alias = visitAlias(lastTypeDecl, result.ident, subn, conf)
           if alias.isSome():
             result.members.add alias.get()
           # result.members.add visitAlias(subn, result.ident, conf)
@@ -473,7 +478,7 @@ proc visitCursor*(
         result.decls.add visitFunction(cursor, parent, conf)
 
       of ckTypedefDecl, ckTypeAliasDecl:
-        let alias = visitAlias(lastTypeDecl, cursor, conf)
+        let alias = visitAlias(lastTypeDecl, parent, cursor, conf)
         if alias.isSome():
           result.decls.add alias.get()
 

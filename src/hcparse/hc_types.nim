@@ -416,6 +416,7 @@ type
                            ## correspond to any entry in the underlying C
                            ## code
 
+    isCTypedef*: bool
     nimName*: string ## Converted nim name
     values*: seq[GenEnumValue] ## Filtered, ordered sequence of values
 

@@ -14,6 +14,9 @@ import fusion/matching except addPrefix
 
 import hc_visitors, hc_types
 
+proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache):
+  seq[GenEntry]
+
 
 proc wrapOperator*(
     oper: CDecl,
@@ -407,23 +410,48 @@ proc wrapAlias*(
 
   if al.isNewType:
     info "typdef with new type declaration"
-    let wrapBase = al.aliasNewType.wrapObject(conf, cache)
-    result.add GenEntry(kind: gekObject, genObject: wrapBase)
+    var baseType: NType[PNode]
+
+    if al.aliasNewType.kind in {cdkClass, cdkStruct}:
+      let wrapBase = al.aliasNewType.wrapObject(conf, cache)
+      result.add GenEntry(kind: gekObject, genObject: wrapBase)
+
+      baseType = wrapBase.nimName
+
+    else:
+      var wrapBase = al.aliasNewType.wrapEnum(conf, cache)
+      baseType = newPType(wrapBase[0].genEnum.nimName)
+      debug al.aliasNewType.cursor.treeRepr()
+      result.add wrapBase
+
+      # if $al.aliasNewType.cursor == "":
+
+      #   baseType = newPType($name)
+      #   with wrapBase[0].genEnum:
+      #     isCTypedef = true
+      #     nimName = $name
+
+      #   wrapBase[0].genEnum.cdecl.ident[^1] = toCName(name)
+
+
+
+
 
     for newName in al.newTypes:
       debug "Alternative name", newName
-      var baseType = wrapBase.nimName
       var newType = newPType($newName)
       newType.genParams = baseType.genParams
-      result.add GenEntry(
-        kind: gekAlias,
-        genAlias: GenAlias(
-          iinfo: currIInfo(),
-          cdecl: al,
-          baseType: baseType,
-          newAlias: newType
+      if newType.head != baseType.head:
+        # Alias names might be the same for `typedef struct St {} St;`
+        result.add GenEntry(
+          kind: gekAlias,
+          genAlias: GenAlias(
+            iinfo: currIInfo(),
+            cdecl: al,
+            baseType: baseType,
+            newAlias: newType
+          )
         )
-      )
 
   when false:
     # NOTE returning multiple values because of
@@ -584,7 +612,6 @@ proc getParentFields*(
           result[^1].kind = pkAssgn
 
 
-proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[GenEntry]
 
 proc getDefaultAccess*(cursor: CXCursor): CXAccessSpecifier =
   case cursor.cxKind():
@@ -607,7 +634,7 @@ func publicFields*(cd: CDecl): seq[CDecl] =
 
 proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
   let tdecl = cd.cursor.cxType().getTypeDeclaration()
-  assert cd.kind in {cdkClass, cdkStruct}
+  assert cd.kind in {cdkClass, cdkStruct}, $cd.kind
 
 
   result = GenObject(
@@ -991,66 +1018,14 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[GenEn
   ##
   ## In order to perform conversion between 'proxy' and underlying enum
   ## several helper procs are introduces, such as `toInt`.
-
-
-  # Base wrapped enum
   var ennames: seq[string]
 
-  # Get list of all enum fields with values, construct table of values
-  # without filtering, and then apply cleanups
   let gen = makeGenEnum(
     declEn, getFields(declEn, conf).sortFields(), conf, cache)
 
   cache.genEnums.add gen
-  result.add GenEntry(kind: gekPass, genPass: makeEnumConverters(gen, conf, cache))
   result.add GenEntry(kind: gekEnum, genEnum: gen)
-
-  when false: # enum wrappers
-    block:
-      var rawEnum = newPEnumDecl(gen.rawName, iinfo = currIInfo())
-      rawEnum.addDocComment gen.docComment
-      rawEnum.exported = true
-
-      let importName =
-        if not conf.isImportcpp:
-          "enum " & toCppNamespace(declEn.ident)
-
-        else:
-          toCppNamespace(declEn.ident)
-
-
-      rawEnum.pragma.add newPIdentColonString(
-        (if conf.isImportcpp: "importcpp" else: "importc"),
-        importName
-      )
-
-      rawEnum.pragma.add nnkExprColonExpr.newPTree(
-        newPIdent("header"),
-        conf.makeHeader(declEn.cursor, conf).toNNode()
-      )
-
-      rawEnum.exported = true
-
-      for value in gen.values:
-        rawEnum.addField(
-          value.resCName, some newPLit(value.resVal),
-          docComment = value.docComment
-        )
-
-
-      result.add newWrappedEntry(toNimDecl(rawEnum), declEn)
-
-    block:
-      var nimEnum = newPEnumDecl(gen.nimName, iinfo = currIInfo())
-      nimEnum.addDocComment gen.docComment
-      nimEnum.exported = true
-      for value in gen.values:
-        nimEnum.addField(value.resNimName, docComment = value.docComment)
-
-      result.add newWrappedEntry(toNimDecl(nimEnum), declEn)
-
-
-
+  result.add GenEntry(kind: gekPass, genPass: makeEnumConverters(gen, conf, cache))
 
 
 proc evalTokensInt(strs: seq[string]): Option[int64] =
@@ -1294,18 +1269,84 @@ proc toNNode*(gp: GenProc, wrapConf: WrapConfig): PProcDecl =
     result.impl = gp.impl.get()
 
 proc toNNode*(gen: GenEnum, conf: WrapConfig): (PEnumDecl, PEnumDecl) =
-  raiseImplementError("")
+  block:
+    var rawEnum = newPEnumDecl(gen.rawName, iinfo = currIInfo())
+    rawEnum.addDocComment gen.docComment.join("\n")
+    rawEnum.exported = true
+
+    let importName =
+      if conf.isImportcpp or gen.isCTypedef:
+        toCppNamespace(gen.cdecl.ident)
+
+      else:
+        "enum " & toCppNamespace(gen.cdecl.ident)
+
+
+    rawEnum.pragma.add newPIdentColonString(conf.importX(), importName)
+
+    rawEnum.pragma.add nnkExprColonExpr.newPTree(
+      newPIdent("header"),
+      conf.makeHeader(gen.cdecl.cursor, conf).toNNode()
+    )
+
+    rawEnum.exported = true
+
+    for value in gen.values:
+      rawEnum.addField(
+        value.resCName, some newPLit(value.resVal),
+        docComment = value.docComment.join("\n")
+      )
+
+
+    result[0] = rawEnum
+
+  block:
+    var nimEnum = newPEnumDecl(gen.nimName, iinfo = currIInfo())
+    nimEnum.addDocComment gen.docComment.join("\n")
+    nimEnum.exported = true
+    for value in gen.values:
+      nimEnum.addField(
+        value.resNimName, docComment = value.docComment.join("\n")
+      )
+
+    result[1] = nimEnum
 
 proc toNNode*(gen: GenObject, conf: WrapConfig): seq[WrappedEntry] =
-  result.add newWrappedEntry(
-    toNimDecl(PObjectDecl(
-      iinfo: gen.iinfo,
-      name: gen.nimName
-    )),
-    true,
-    gen.iinfo,
-    gen.cdecl.cursor
+  var decl = PObjectDecl(
+    iinfo: gen.iinfo,
+    name: gen.nimName
   )
+
+  for field in gen.memberFields:
+    if field.isConst:
+      raiseImplementError("")
+
+    else:
+      decl.flds.add PObjectField(
+        docComment: field.docComment.join("\n"),
+        isTuple: false,
+        name: field.nimName,
+        annotation: some newPPragma(
+          newPIdentColonString(conf.importX, field.cdecl.lastName())
+        ),
+        fldType: field.fldType
+      )
+
+
+
+  # decl.addCodeComment("Wrapper for `" & toCppNamespace(
+  #   gen.fullName, withNames = true) & "`\n")
+
+  # if gen.cdecl.cursor.getSpellingLocation().getSome(loc):
+  #   let file = withoutPrefix(AbsFile(loc.file), conf.baseDir)
+  #   decl.addCodeComment(
+  #     &"Declared in {file}:{loc.line}")
+
+  var obj = newWrappedEntry(
+    toNimDecl(decl), true, gen.iinfo, gen.cdecl.cursor
+  )
+
+  result.add obj
 
 proc toNNode*(gen: GenAlias, conf: WrapConfig): AliasDecl[PNode] =
   result = AliasDecl[PNode](

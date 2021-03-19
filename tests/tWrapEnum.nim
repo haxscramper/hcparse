@@ -13,6 +13,9 @@ import unittest
 let file = "/tmp/a.c"
 let str = """
 typedef struct C { float a; } C1, *C2;
+typedef enum En { enB, enC } En;
+typedef enum En2 { e2nB, en2C };
+typedef enum { e3nB } En3;
 """
 
 file.writeFile(str)
