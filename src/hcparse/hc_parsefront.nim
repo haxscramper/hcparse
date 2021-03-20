@@ -335,19 +335,6 @@ proc wrapFile*(
 
   # info "Wrapping", parsed.filename
   var tmpRes: seq[WrappedEntry]
-  # let pushShit = nnkStmtList.newPTree(
-  #   nnkPragma.newPTree(
-  #     newPIdent("push"),
-  #     nnkExprColonExpr.newPTree(
-  #       nnkBracketExpr.newPTree(
-  #         newPIdent("warning"),
-  #         newPIdent("UnusedImport")
-  #       ),
-  #       newPIdent("off")
-  #     )
-  #   )
-  # )
-
   tmpRes.add newWrappedEntry(
     toNimDecl(
       pquote do:
@@ -585,7 +572,6 @@ proc wrapSingleFile*(
   var wrapConf = wrapConf
 
   wrapConf.unit = parsed.unit
-  # info "Wrapping file", file
 
   let wrapped = parsed.wrapFile(wrapConf, cache, index)
 
@@ -597,46 +583,10 @@ proc wrapSingleFile*(
       decl.addCodeComment(
         &"Declared in {file}:{loc.line}")
 
-  # let (wrapResults, codegen) = wrapped.postprocessWrapped(wrapConf, postprocess)
-  # result.codegen = codegen
-
-  for node in wrapped:
-    var node = node
-    updateComments(node.decl, node)
-    result.decls.add node.decl
-     # node.decl
-#     case node.kind:
-#       of wekMultitype:
-#         var resdecl: seq[PNimTypeDecl]
-#         for t in node.decls:
-#           assert t.kind != wekMultitype
-#           var decl = t.wrapped
-
-#           updateComments(decl, t)
-#           resdecl.add toNimTypeDecl(decl)
-
-#         result.decls.add toNimDecl(resdecl)
-
-#       of wekProc:
-#         var gproc = node.gproc
-# #         let text = split($gproc.cursor.getRawCommentText(), "\n").mapIt("    " & it).join("\n")
-# #         gproc.docs.add &"""
-# # .. code-block::
-# # {text}
-# # """
-
-#         var decl = gproc.toNNode(wrapConf).toNimDecl()
-
-#         updateComments(decl, node)
-#         result.decls.add decl
-
-#       of wekNimPass:
-#         result.decls.add node.wrapped
-
-#       of wekNimDecl:
-#         var decl = node.wrapped
-#         updateComments(decl, node)
-#         result.decls.add decl
+    for node in wrapped:
+      var node = node
+      updateComments(node.decl, node)
+      result.decls.add node.decl
 
 proc wrapWithConfig*(
   infile, outfile: FsFile, wrapConf: WrapConfig, parseConf: ParseConfig) =

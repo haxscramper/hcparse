@@ -390,6 +390,13 @@ proc toNType*(
       # WARNING Member pointer
       newPType("!!!")
 
+    of tkDependentSizedArray:
+      warn cxtype
+      newNType("array", @[
+        newPType("???????????????????????"),
+        toNType(cxtype.getElementType(), conf).ntype
+      ])
+
     else:
       err "CANT CONVERT: ".toRed({styleItalic}),
         cxtype.kind, " ", ($cxtype).toGreen(), " ",

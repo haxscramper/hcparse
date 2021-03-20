@@ -39,7 +39,8 @@ proc visit(
     of cppEnumSpecifier:
       let name = getName(node, instr)
       if name.isNone():
-        warn "Cannot get name for enumeration"
+        discard
+        # warn "Cannot get name for enumeration"
 
       else:
         let name = name.get()

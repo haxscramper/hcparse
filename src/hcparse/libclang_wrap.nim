@@ -10,10 +10,16 @@ elif defined(macosx):
 else:
   const
     libclang = "libclang.so"
+
+# import libclang_extensions
+# export libclang_extensions
+
 type
   CXVirtualFileOverlayImpl* = object
   CXModuleMapDescriptorImpl* = object
   time_t* = clong
+
+
 proc install_aborting_llvm_fatal_error_handler*(): void {.cdecl, dynlib: libclang,
     importc: "clang_install_aborting_llvm_fatal_error_handler".}
   ##  Installs error handler that prints error message to stderr and calls abort().

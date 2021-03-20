@@ -353,8 +353,9 @@ proc wrapMethods*(
       asNew = @[true]
 
     for useNew in asNew:
-      let (decl, canAdd) = wrapProcedure(
-        meth, conf, some parent, cache, some cd, useNew)
+      logIndented:
+        let (decl, canAdd) = wrapProcedure(
+          meth, conf, some parent, cache, some cd, useNew)
 
       if canAdd:
         result.methods.add decl[0].genProc
@@ -362,8 +363,6 @@ proc wrapMethods*(
 
   for gproc in mitems(result.methods):
     fixNames(gproc, conf, parent)
-
-  # result = result.deduplicate()
 
 proc wrapFunction*(cd: CDecl, conf: WrapConfig, cache: var WrapCache):
   seq[GenEntry] =
@@ -423,19 +422,6 @@ proc wrapAlias*(
       debug al.aliasNewType.cursor.treeRepr()
       result.add wrapBase
 
-      # if $al.aliasNewType.cursor == "":
-
-      #   baseType = newPType($name)
-      #   with wrapBase[0].genEnum:
-      #     isCTypedef = true
-      #     name = $name
-
-      #   wrapBase[0].genEnum.cdecl.ident[^1] = toCName(name)
-
-
-
-
-
     for newName in al.newTypes:
       debug "Alternative name", newName
       var newType = newPType($newName)
@@ -448,6 +434,9 @@ proc wrapAlias*(
           baseType: baseType,
           newAlias: newType
         )
+
+  else:
+    raiseImplementError("")
 
   when false:
     # NOTE returning multiple values because of
@@ -633,51 +622,26 @@ proc publicFields*(cd: CDecl): seq[CDecl] =
       result.add member.publicFields()
 
 
-proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
-  let tdecl = cd.cursor.cxType().getTypeDeclaration()
-  assert cd.kind in {cdkClass, cdkStruct}, $cd.kind
-
-  debug "Wrapping object", cd.ident
-
-  result = GenObject(
-    rawName: $cd.cursor,
-    iinfo: currIInfo(),
-    name: conf.typeNameForScoped(cd.ident, conf),
-    cdecl: cd
-  )
-
+proc updateAggregateInit*(
+  cd: CDecl, conf: WrapConfig, cache: var WrapCache, gen: var GenObject) = 
   if conf.isImportcpp and # QUESTION how to handle aggregate initalization
                           # for C structures? Just declare `{.emit.}`` proc
                           # (with or without designated initalizers)
      cd.isAggregateInit and cd.initArgs.len > 0:
 
     let pr = initGenProc(cd, currIInfo()).withIt do:
-      it.name = "init" & result.name.head
+      it.name = "init" & gen.name.head
       it.arguments = cd.initArgs
       it.header = conf.makeHeader(cd.cursor, conf)
       it.icpp = &"{toCppNamespace(cd.ident)}({{@}})"
-      it.returnType = result.name
-      it.genParams = result.name.genParams
+      it.returnType = gen.name
+      it.genParams = gen.name.genParams
 
-    result.nestedEntries.add pr
-      # # info obj.name.head, "can be aggregate initialized"
-      # result.genAfter.add newWrappedEntry(
-      #   # WARNING `cd.ident`
-      # )
-
-  # Add type declaration for nested types
-  for entry in cd.nestedTypes:
-    case entry.kind:
-      of cdkEnum:
-        result.nestedEntries.add wrapEnum(entry, conf, cache)
-
-      of cdkStruct, cdkClass, cdkUnion:
-        result.nestedEntries.add wrapObject(entry, conf, cache)
+    gen.nestedEntries.add pr
 
 
-      else:
-        discard
-
+proc updateFieldExport*(
+  cd: CDecl, conf: WrapConfig, cache: var WrapCache, gen: var GenObject) =
   # Add getter/setter methods for *all* public fields that are accessible
   # from this object
   for fld in cd.publicFields():
@@ -705,7 +669,7 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
           debug "Nested object declaration, adding to nested types"
           var decl = wrapObject(newType, conf, cache)
 
-          result.nestedEntries.add decl
+          gen.nestedEntries.add decl
           res.fieldType.head = decl.name.head
 
         of cdkEnum:
@@ -713,7 +677,7 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
           var decl = wrapEnum(newType, conf, cache)
           res.fieldType.head = decl[0].genEnum.name
 
-          result.nestedEntries.add decl
+          gen.nestedEntries.add decl
 
         else:
           discard
@@ -723,11 +687,42 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
       # enum fields should be renamed too.
       res.fieldType.head &= conf.isImportCpp.tern("Cxx", "C")
 
-    result.memberFields.add res
+    gen.memberFields.add res
+
+
+proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
+  let tdecl = cd.cursor.cxType().getTypeDeclaration()
+  assert cd.kind in {cdkClass, cdkStruct}, $cd.kind
+
+  result = GenObject(
+    rawName: $cd.cursor,
+    iinfo: currIInfo(),
+    name: conf.typeNameForScoped(cd.ident, conf),
+    cdecl: cd
+  )
+
+  updateAggregateInit(cd, conf, cache, result)
+
+  # Add type declaration for nested types
+  for entry in cd.nestedTypes:
+    case entry.kind:
+      of cdkEnum:
+        result.nestedEntries.add wrapEnum(entry, conf, cache)
+
+      of cdkStruct, cdkClass, cdkUnion:
+        result.nestedEntries.add wrapObject(entry, conf, cache)
+
+
+      else:
+        discard
+
+
+  updateFieldExport(cd, conf, cache, result)
 
   let (procs, extra) = wrapMethods(cd, conf, result.name, cache)
   result.memberMethods.add procs
   result.nestedEntries.add extra
+
 
 type EnumFieldResult = tuple[
   namedvals: Table[string, BiggestInt],
@@ -1195,7 +1190,6 @@ proc wrapApiUnit*(
     else:
       continue
 
-    debug decl.cursor
     case decl.kind:
       of cdkClass, cdkStruct, cdkUnion:
         identLog()

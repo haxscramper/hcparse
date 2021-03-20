@@ -1,7 +1,7 @@
 import libclang_wrap, cxvisitors
 import std/[strformat, strutils, options, sequtils, sugar, deques]
 import packages/docutils/rstast
-import hmisc/other/oswrap
+import hmisc/other/[oswrap, colorlogger]
 import hmisc/types/colorstring
 import hpprint/hpprint_repr, hpprint
 import hmisc/helpers
@@ -496,12 +496,23 @@ proc getCursorSemanticSiblings*(cursor: CXCursor): tuple[
 
 proc isSemanticAncestorOf*(ancestor, cursor: CXCursor): bool =
   var parent = cursor
+  var cnt: int = 0
   while true:
     parent = parent.getCursorSemanticParent()
     if parent == ancestor:
       return true
-    elif parent.cxKind == ckTranslationUnit:
+
+    elif parent.cxKind in {
+      ckTranslationUnit, ckInvalidFile
+    }:
       return false
+
+    else:
+      inc cnt
+      if cnt > 100:
+        err parent
+        err parent.cxKind()
+        raiseImplementError("")
 
 proc inheritsGenParamsOf*(cursor, ancestor: CXCursor): bool =
   # All arguments are semantic descendants of class

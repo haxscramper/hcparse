@@ -115,7 +115,8 @@ proc visitField*(
   if cursor.len > 0:
     var decl: CDecl
     let visit = visitCursor(cursor[0], parent, conf, decl)
-    result.fieldTypeDecl = some decl
+    if not isNil(decl):
+      result.fieldTypeDecl = some decl
 
 
 var undefCnt: int = 0
@@ -154,6 +155,10 @@ proc visitFunction*(
          # WARNING right now these things are just droppped. Maybe it
          # will cause some errors in the future, I don't really know.
         discard
+
+      of ckCallExpr, ckBinaryOperator, ckUnaryOperator:
+        err "Found call expr at ", subn.getSpellingLocation()
+
       else:
         warn "Unknown element", subn.cxKind, cast[int](subn.cxKind), subn, $cursor
         debug subn.getSpellingLocation()
@@ -188,14 +193,22 @@ proc isAggregateInitable*(
   ## @arg{initArgs}. NOTE: fields will be added unconditionally, so first
   ## check return value.
 
-  if cd.cxKind() in {ckUnionDecl, ckEnumDecl}:
+  if cd.cxKind() in {
+    ckUnionDecl, ckEnumDecl,
+
+    # NOTE I think in some cases it /might/ be possible to use aggregate
+    # initalization for template types, but at this point it is easier to
+    # just fail check on this kind immediately.
+    ckClassTemplatePartialSpecialization
+  }:
     return false
 
   elif cd.cxKind() notin {ckClassDecl, ckStructDecl, ckClassTemplate}:
     assertionFail:
       "Invalid cursor kind of aggregate initalization check."
       "Expected type declaration (union/enum/struct/class),"
-      "but found {toRed($cd.cxKind())}"
+      "but found {toRed($cd.cxKind())} at {cd.getSpellingLocation()}\n"
+      "{cd.treeRepr()}"
 
   # List of entries that immediately mean aggregate initalization is not
   # supported.
@@ -212,7 +225,8 @@ proc isAggregateInitable*(
     ckMethod,
     ckFunctionTemplate,
     ckDestructor,
-    ckAlignedAttr
+    ckAlignedAttr,
+    ckTypeAliasDecl
     # ckBaseClassSpecifier
   }
 
@@ -236,7 +250,7 @@ proc isAggregateInitable*(
       of tkTypedef:
         return aux(cursor.cxType().getCanonicalType().getTypeDeclaration())
 
-      of tkInvalid:
+      of tkInvalid, tkUnexposed:
         return false
 
       of tkConstantArray:
@@ -263,11 +277,9 @@ proc isAggregateInitable*(
           setDefaultForArg(arg, entry, conf)
           initArgs.add arg
 
-      of failKinds:
-        return false
-
-      of ignoreKinds:
-        discard
+      of failKinds: return false
+      of ignoreKinds: discard
+      of ckTypeRef, ckTemplateRef: discard
 
       of ckAccessSpecifier:
         access = entry.getAccessSpecifier()
@@ -288,6 +300,7 @@ proc isAggregateInitable*(
         debug cast[int](entry.cxType().cxKind())
         debug cast[int](entry.cxKind())
         debug entry.getSpellingLocation()
+        debug cd.treeRepr(conf.unit)
         raiseImplementKindError(entry)
 
 
@@ -308,7 +321,11 @@ proc updateParentFields*(decl: var CDecl, conf: WrapConfig) =
           of ckMethod:
             buf.derived.add visitMethod(entry, decl.ident, accs)
 
+          of ckBaseSpecifier:
+            discard
+
           else:
+            debug decl.cursor.treeRepr()
             raiseImplementKindError(entry)
 
 proc visitAlias*(
@@ -346,11 +363,6 @@ proc visitAlias*(
         aliasNewType: lastTypeDecl
       )
 
-      # if $lastTypeDecl.aliasNewType.cursor == "":
-      #   lastTypeDecl.aliasNewType.isCTypedef = true
-      #   # lastTypeDecl.aliasNewType.ident[^1] = toCName(subn)
-      #   # lastTypeDecl.ident[^1] = toCName(subn)
-
     elif lastTypeDecl.kind == cdkAlias and
          lastTypeDecl.isNewType and
          lastTypeDecl.aliasNewType.cursor == subn[0]:
@@ -362,12 +374,14 @@ proc visitAlias*(
         "New typedef without previously visited declaration")
 
   else:
-    raiseImplementError("")
-    # result = some CDecl(
-    # )
-
-
-  # if subn[0] == lastTypeDecl:
+    lastTypeDecl = CDecl(
+      ident: parent & toCName(subn),
+      cursor: subn,
+      kind: cdkAlias,
+      newTypes: @[subn],
+      isNewType: false,
+      aliasBaseType: subn
+    )
 
 
 proc visitClass*(
@@ -506,7 +520,8 @@ proc visitCursor*(
   ): tuple[decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]] =
 
   if conf.ignoreCursor(cursor, conf):
-    info "Ignoring cursor ", cursor
+    discard
+    # info "Ignoring cursor ", cursor
 
   else:
     case cursor.cxKind:
@@ -609,6 +624,7 @@ proc splitDeclarations*(
         else:
           res.decls.add decls
           for decl in decls:
+            assert not isNil(decl)
             res.publicAPI.add decl.getPublicAPI()
 
           return cvrContinue
@@ -616,6 +632,7 @@ proc splitDeclarations*(
       else:
         return cvrRecurse
 
-  res.decls.add lastTypeDecl
+  if not isNil(lastTypeDecl):
+    res.decls.add lastTypeDecl
 
   return res
