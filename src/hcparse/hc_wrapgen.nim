@@ -57,7 +57,7 @@ proc wrapOperator*(
         it.icpp = &"#[#]"
 
     of cxoInfixOp:
-      it.icpp = &"(toCppImport(oper.ident)(#, #))"
+      it.icpp = &"({toCppNamespace(oper.ident)}(#, #))"
 
       if oper.arguments.len == 1:
         result.addThis = true
@@ -1257,7 +1257,10 @@ proc toNNode*(gp: GenProc, wrapConf: WrapConfig): PProcDecl =
 
   if not gp.noPragmas:
     result.signature.pragma.add(
-      newPIdentColonString(wrapConf.importX(), gp.icpp))
+      newExprColonExpr(
+        newPIdent(wrapConf.importX()),
+        newRStrLit(gp.icpp)
+    ))
 
     result.signature.pragma.add(
       newExprColonExpr(newPIdent "header", gp.header.toNNode()))

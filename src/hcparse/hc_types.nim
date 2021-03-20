@@ -465,26 +465,6 @@ type
     ident*: CSCopedIdent
     postTypes*: bool
     cursor* {.requiresinit.}: CXCursor
-    # ## Wrapped entry converted to nim code
-    # ident*: CScopedIdent
-    # codeComment*: string
-    # case isTypeSection*: bool
-    #   of true:
-    #     decls*: seq[WrappedEntry] ## Multiple types for typesection
-    #                               ## declaraton
-
-    #   of false:
-    #     nimDecl*: PNimDecl ## Wrapped nim declaration
-    #     postTypes*: bool ## Put passthrough code blocks before or after
-    #                      ## type section?
-
-
-    # case kind*: WrappedEntryKind
-    #   of wekMultitype:
-    #   of wekNimPass:
-
-    #   of wekNimDecl:
-    #     genBase*: GenEntry
 
   Postprocess* = object
     impl*: proc(we: var WrappedEntry,
@@ -661,25 +641,6 @@ func `==`*(a, b: CArg): bool =
       a.ntype == b.ntype and
       a.default == b.default
   ))
-
-# func `==`*(a, b: WrappedEntry): bool =
-#   a.isTypeSection == b.isTypeSection and
-#   ((
-#     case a.kind:
-#       of wekMultitype: a.decls == b.decls
-#       else:
-#         hnimast.`==`(a.nimDecl, b.nimDecl) and
-#         (a.kind != wekNimPass or a.postTypes == b.postTypes)
-
-#       # of wekProc: a.gproc == b.gproc
-#       # of wekNimDecl:
-#       # of wekNimPass: hnimast.`==`(a.wrapped, b.wrapped) and
-#       #                a.postTypes == b.postTypes
-#   ))
-
-
-# func newWrappedEntry*(wrapped: seq[WrappedEntry]): WrappedEntry =
-#   WrappedEntry(decls: wrapped, kind: wekMultitype)
 
 func newWrappedEntry*(
     nimDecl: PNimDecl, postTypes: bool, iinfo: LineInfo, cursor: CXCursor

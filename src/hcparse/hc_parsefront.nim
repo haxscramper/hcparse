@@ -370,8 +370,6 @@ proc wrapFile*(
   # last type encounter will always be it's definition.
   var res: Table[string, WrappedEntry]
 
-  info "Final wrapper generation"
-
   for elem in tmpRes:
     case elem.decl.kind:
       # Filter out all type declarations.
@@ -402,7 +400,8 @@ proc wrapFile*(
       for k, v in res:
         v.decl.toNimTypeDecl()
 
-    result.add(newWrappedEntry(toNimDecl(elems), false, currIINfo(), CXCursor()))
+    result.add(newWrappedEntry(
+      toNimDecl(elems), false, currIINfo(), CXCursor()))
 
   for elem in tmpRes:
     case elem.decl.kind:
@@ -416,6 +415,7 @@ proc wrapFile*(
       else:
         discard
 
+  debug "Number of wrapped elements: ", result.len
 
 proc wrapFile*(
     file: AbsFile,
@@ -575,6 +575,7 @@ proc wrapSingleFile*(
 
   let wrapped = parsed.wrapFile(wrapConf, cache, index)
 
+
   proc updateComments(decl: var PNimDecl, node: WrappedEntry) =
     decl.addCodeComment("Wrapper for `" & toCppNamespace(
       node.ident, withNames = true) & "`\n")
@@ -583,10 +584,10 @@ proc wrapSingleFile*(
       decl.addCodeComment(
         &"Declared in {file}:{loc.line}")
 
-    for node in wrapped:
-      var node = node
-      updateComments(node.decl, node)
-      result.decls.add node.decl
+  for node in wrapped:
+    var node = node
+    updateComments(node.decl, node)
+    result.decls.add node.decl
 
 proc wrapWithConfig*(
   infile, outfile: FsFile, wrapConf: WrapConfig, parseConf: ParseConfig) =
