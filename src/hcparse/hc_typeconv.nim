@@ -174,7 +174,7 @@ proc sameNoGeneric*(ident1, ident2: CScopedIdent): bool =
   result = ident1.len == ident2.len
   if result:
     for (a, b) in zip(ident1, ident2):
-      if a.identName() != b.identName():
+      if a.getName() != b.getName():
         return false
 
 proc toFullScopedIdent*(cxtype: CXType): CScopedIdent =

@@ -572,13 +572,13 @@ proc getParentFields*(
     for entry in class:
       if entry.kind in {ckFieldDecl}:
         let
-          (fldType, _) = entry.cxType().toNType(wrapConf)
+          (fieldType, _) = entry.cxType().toNType(wrapConf)
           fldname = $entry
 
 
         result.add newPProcDecl(
           name = fldName,
-          rtyp = some(fldType),
+          rtyp = some(fieldType),
           args = { "self" : obj.name },
           iinfo = currIInfo(),
           pragma = newPPragma(newExprColonExpr(
@@ -595,7 +595,7 @@ proc getParentFields*(
           result.add newPProcDecl(
             name = fldName,
             iinfo = currIInfo(),
-            args = { "self" : obj.name, "val" : fldType },
+            args = { "self" : obj.name, "val" : fieldType },
             pragma = newPPragma(newExprColonExpr(
               newPIdent(wrapConf.importX()), newRStrLit(&"(#.{fldName} = @)")))
           )
@@ -687,7 +687,7 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
       rawName: fld.lastName(),
       iinfo: currIInfo(),
       cdecl: fld,
-      fldType: fld.cursor.cxType().toNType(conf).ntype,
+      fieldType: fld.cursor.cxType().toNType(conf).ntype,
       isConst: fld.isConst
     )
 
@@ -706,12 +706,12 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
           var decl = wrapObject(newType, conf, cache)
 
           result.nestedEntries.add decl
-          res.fldType.head = decl.name.head
+          res.fieldType.head = decl.name.head
 
         of cdkEnum:
           debug "Nested object declaration, adding to nested types"
           var decl = wrapEnum(newType, conf, cache)
-          res.fldType.head = decl[0].genEnum.name
+          res.fieldType.head = decl[0].genEnum.name
 
           result.nestedEntries.add decl
 
@@ -721,7 +721,7 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
     if fld.cursor.cxType().isEnum():
       # Proxy enum wrapper generator changes enum names, meaning all C/C++
       # enum fields should be renamed too.
-      res.fldType.head &= conf.isImportCpp.tern("Cxx", "C")
+      res.fieldType.head &= conf.isImportCpp.tern("Cxx", "C")
 
     result.memberFields.add res
 
@@ -1336,7 +1336,7 @@ proc toNNode*(gen: GenObject, conf: WrapConfig): seq[WrappedEntry] =
       block getterImplementation:
         var getImpl = newPProcDecl(field.name)
         with getImpl:
-          returnType = field.fldType
+          returnType = field.fieldType
           iinfo = currIInfo()
           pragma = newPPragma(
             newPIdent("noinit"),
@@ -1368,7 +1368,7 @@ proc toNNode*(gen: GenObject, conf: WrapConfig): seq[WrappedEntry] =
           )
 
         setImpl.addArgument("self", gen.name)
-        setImpl.addArgument("value", field.fldType)
+        setImpl.addArgument("value", field.fieldType)
 
         result.add newWrappedEntry(
           toNimDecl(setImpl), true, field.iinfo, field.cdecl.cursor)
@@ -1381,7 +1381,7 @@ proc toNNode*(gen: GenObject, conf: WrapConfig): seq[WrappedEntry] =
         annotation: some newPPragma(
           newPIdentColonString(conf.importX, field.cdecl.lastName())
         ),
-        fldType: field.fldType
+        fldType: field.fieldType
       )
 
   for nested in gen.nestedEntries:

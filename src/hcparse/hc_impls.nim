@@ -161,8 +161,8 @@ proc typeNameForScoped*(
   var resname: string
   var genParams: seq[NType[PNode]]
   for name in ident:
-    if name.identName() notin conf.collapsibleNamespaces:
-      resname &= capitalizeAscii(name.identName())
+    if name.getName() notin conf.collapsibleNamespaces:
+      resname &= capitalizeAscii(name.getName())
       for genParam in name.genParams:
         let tmp = conf.typeNameForScoped(genParam, conf)
         genParams.add tmp
@@ -296,7 +296,7 @@ let baseCppWrapConf* = WrapConfig(
       enumId: CScopedIdent, conf: WrapConfig, cache: var WrapCache
     ): string =
       result = enumId[^1]
-        .identName()
+        .getName()
         .splitCamel()
         .mapIt(it[0].toLowerAscii())
         .join("")

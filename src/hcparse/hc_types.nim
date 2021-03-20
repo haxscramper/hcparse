@@ -356,7 +356,7 @@ type
     name*: string
     fullName*: CSCopedIdent
     value*: Option[PNode] ## /arbitrary expression/ for field initalization
-    fldType*: NType[PNode]
+    fieldType*: NType[PNode]
     isConst*: bool ## Field is const-qualified
     anonymousType*: Option[GenEntry] ## Wrapper for anonymous type (if any)
 
@@ -534,8 +534,7 @@ proc newProcVisit*(
   if not isNil(conf.newProcCb):
     return conf.newProcCb(genProc, conf, cache)
 
-proc identName*(cn: CName): string =
-  # REFACTOR rename to `getName`
+proc getName*(cn: CName): string =
   if cn.isGenerated:
     cn.name
 
@@ -563,9 +562,10 @@ proc toCppNamespace*(
           genTypes.add "'" & $genIdx
           inc genIdx
 
-      buf.add part.identName() & "<" & genTypes.join(", ") & ">"
+      buf.add part.getName() & "<" & genTypes.join(", ") & ">"
+
     else:
-      buf.add part.identName()
+      buf.add part.getName()
 
   result = buf.join("::")
 
@@ -579,11 +579,11 @@ proc hash*(ident: CScopedIdent): Hash =
   ## Computes a Hash from `x`.
   var h: Hash = 0
   for elem in ident:
-    h = h !& hash(elem.identName())
+    h = h !& hash(elem.getName())
   result = !$h
 
 proc `==`*(a, b: CName): bool =
-  a.identName() == b.identName()
+  a.getName() == b.getName()
 
 proc addDoc*(cache: var WrapCache, id: CSCopedIdent, doc: seq[string]) =
   if doc.len > 0:
@@ -606,7 +606,7 @@ proc setPrefixForEnum*(
       enumId: CScopedIdent, conf: WrapConfig,
       cache: var WrapCache
     ): string =
-      let name = identName(enumId[^1])
+      let name = enumId[^1].getName()
       for (full, prefix) in maps:
         if name == full:
           result = prefix
