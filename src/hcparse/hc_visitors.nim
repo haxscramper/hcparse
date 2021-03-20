@@ -5,6 +5,7 @@ import hnimast
 import std/[sequtils, strutils]
 import hmisc/other/[colorlogger, oswrap]
 import hmisc/algo/hstring_algo
+import hmisc/hexceptions
 import hmisc/types/colorstring
 
 
@@ -157,7 +158,8 @@ proc visitFunction*(
         discard
 
       of ckCallExpr, ckBinaryOperator, ckUnaryOperator:
-        err "Found call expr at ", subn.getSpellingLocation()
+        err "Unwrapped call expression"
+        # err "Found call expr at ", subn.getSpellingLocation()
 
       else:
         warn "Unknown element", subn.cxKind, cast[int](subn.cxKind), subn, $cursor
@@ -508,10 +510,12 @@ proc visitNamespace*(
     for subn in cursor:
       result.add visitCursor(subn, parent, conf, lastTypeDecl).decls
 
+  if not isNil(lastTypeDecl):
+    result.add lastTypeDecl
+
 proc visitMacrodef*(
   cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): CDecl =
   CDecl(cursor: cursor, kind: cdkMacro)
-
 
 
 proc visitCursor*(
@@ -520,8 +524,13 @@ proc visitCursor*(
   ): tuple[decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]] =
 
   if conf.ignoreCursor(cursor, conf):
-    discard
-    # info "Ignoring cursor ", cursor
+    if cursor.cxKind() in {ckNamespace}:
+      info "Ignoring namespace", cursor, "with elements"
+      logIndented:
+        for entry in cursor:
+          debug entry
+
+    # if ["_GLIBCXX", "__cplusplus", "__distance"] notin $cursor:
 
   else:
     case cursor.cxKind:
@@ -534,6 +543,11 @@ proc visitCursor*(
         if not isNil(lastTypeDecl): result.decls.add lastTypeDecl
 
         lastTypeDecl = visitClass(cursor, parent, conf, none(CXCursor))
+        if "basic_string" in $cursor:
+          warn "Visiting basic string declaration", cursor.cxKind()
+          # pprintStackTrace()
+          debug cursor.getSpellingLocation()
+          debug "Last type decl: ", isNil(lastTypeDecl)
 
       of ckFunctionDecl, ckFunctionTemplate:
         result.decls.add visitFunction(cursor, parent, conf)
@@ -617,6 +631,8 @@ proc splitDeclarations*(
       if resolve == drkWrapDirectly:
         let (decls, rec, incls) = visitCursor(
           cursor, @[], conf, lastTypeDecl)
+        if not isNil(lastTypeDecl):
+          debug "Last type decl from cursor"
         res.includes.add incls
         if rec:
           return cvrRecurse

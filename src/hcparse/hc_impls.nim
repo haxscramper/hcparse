@@ -245,7 +245,7 @@ let baseCppWrapConf* = WrapConfig(
           (
             # Default convention is to prefix private parts with underscores
             ($cursor).startsWith(@[ "__", "_" ]) and
-            # But inlien namespaces are still parsed by default
+            # But inline namespaces are still parsed by default
             (not (cursor.isInlineNamespace() == 1))
           )
         ):

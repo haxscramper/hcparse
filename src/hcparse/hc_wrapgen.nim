@@ -405,6 +405,10 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject
 proc wrapAlias*(
     al: CDecl, parent: CScopedIdent, conf: WrapConfig, cache: var WrapCache):
   seq[GenEntry] =
+  # NOTE returning multiple values because of
+  # `typedef struct A {} A, *APtr` shit that can result in multple
+  # declarations, nested types (that might recursively contain who-knows-what)
+
 
   if al.isNewType:
     info "typdef with new type declaration"
@@ -436,13 +440,6 @@ proc wrapAlias*(
         )
 
   else:
-    raiseImplementError("")
-
-  when false:
-    # NOTE returning multiple values because of
-    # `typedef struct A {} A, *APtr` shit that can result in multple
-    # declarations.
-
     # Get underlying type for alias
     let aliasof = al.cursor.cxType().getCanonicalType()
     logIndented:
@@ -507,51 +504,37 @@ proc wrapAlias*(
       debug aliasof.lispRepr()
 
       raiseImplementError("Found unexposed type")
-      # let namespace = parent & @[newPType($al.cursor)]
-      # result = @[newWrappedEntry(
-      #   toNimDecl(
-      #     namespace.wrapTypeFromNamespace(conf, al.cursor)
-      #   ),
-      #   al
-      # )]
 
     else:
-      if al.cursor[0].cxKind() notin {ckStructDecl}:
-        # NOTE ignore `typedef struct` in C
-        result = @[GenEntry(kind: gekAlias, genAlias: GenAlias(
-          iinfo: currIINfo(),
-          isDistinct: conf.isDistinct(al.ident, conf, cache),
-          newAlias: newAlias,
-          baseType: baseType,
-          cdecl: al
-        ))]
-        # result = @[newWrappedEntry(
-        #   toNimDecl(newAliasDecl(
-        #     newAlias, baseType, iinfo = currIInfo(),
-        #     isDistinct =
-        #   )), al
-        # )]
+      # NOTE ignore `typedef struct` in C
+      result.add GenAlias(
+        iinfo: currIINfo(),
+        isDistinct: conf.isDistinct(al.ident, conf, cache),
+        newAlias: newAlias,
+        baseType: baseType,
+        cdecl: al
+      )
 
-      else:
-        if cache.canWrap(al.cursor[0]):
-          # Multiple trailing typedefs result in several `ckTypedefDecl`
-          # nodes
+      # else:
+      #   if cache.canWrap(al.cursor[0]):
+      #     # Multiple trailing typedefs result in several `ckTypedefDecl`
+      #     # nodes
 
-          cache.markWrap(al.cursor[0])
-          let nested = visitClass(al.cursor[0], parent, conf)
+      #     cache.markWrap(al.cursor[0])
+      #     let nested = visitClass(al.cursor[0], parent, conf)
 
-          let (obj, pre, post) = wrapObject(nested, conf, cache)
+      #     let (obj, pre, post) = wrapObject(nested, conf, cache)
 
-          result.add pre & @[obj] & post
+      #     result.add pre & @[obj] & post
 
-        if newAlias != baseType:
-          # `typedef struct {} A;` has the same typedef name and type, and
-          # should only be wrapped as type definition and not alias.
-          result.add newWrappedEntry(
-            toNimDecl(newAliasDecl(
-              newAlias, baseType, iinfo = currIInfo(), isDistinct = false,
-            )), al
-          )
+      #   if newAlias != baseType:
+      #     # `typedef struct {} A;` has the same typedef name and type, and
+      #     # should only be wrapped as type definition and not alias.
+      #     result.add newWrappedEntry(
+      #       toNimDecl(newAliasDecl(
+      #         newAlias, baseType, iinfo = currIInfo(), isDistinct = false,
+      #       )), al
+      #     )
 
 proc getParentFields*(
     inCursor: CXCursor, obj: PObjectDecl, wrapConf: WrapConfig
@@ -656,27 +639,21 @@ proc updateFieldExport*(
     )
 
     if fld.fieldTypeDecl.getSome(newFieldType):
-      debug "Field with new declaration"
       var newType = newFieldType
       if newType.isAnonymous:
         newType.ident[^1] = toCName("Anon")
 
-      debug "Nested struct declaration", newType.ident
-      debug newType.ident.len
-
       case newType.kind:
         of cdkStruct, cdkUnion, cdkClass:
-          debug "Nested object declaration, adding to nested types"
           var decl = wrapObject(newType, conf, cache)
 
           gen.nestedEntries.add decl
           res.fieldType.head = decl.name.head
 
         of cdkEnum:
-          debug "Nested object declaration, adding to nested types"
           var decl = wrapEnum(newType, conf, cache)
-          res.fieldType.head = decl[0].genEnum.name
 
+          res.fieldType.head = decl[0].genEnum.name
           gen.nestedEntries.add decl
 
         else:
@@ -1335,6 +1312,7 @@ proc toNNode*(gen: GenObject, conf: WrapConfig): seq[WrappedEntry] =
         with getImpl:
           returnType = field.fieldType
           iinfo = currIInfo()
+          genParams = gen.name.genParams
           pragma = newPPragma(
             newPIdent("noinit"),
             # newPIdentColonString(conf.importX(), &"#.{field.rawName}"),
