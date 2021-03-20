@@ -353,7 +353,7 @@ type
 
   GenField* = object of GenBase
     rawName*: string
-    nimName*: string
+    name*: string
     fullName*: CSCopedIdent
     value*: Option[PNode] ## /arbitrary expression/ for field initalization
     fldType*: NType[PNode]
@@ -363,7 +363,7 @@ type
   GenObject* = object of GenBase
     kind*: GenObjectKind
     rawName*: string
-    nimName*: NType[PNode]
+    name*: NType[PNode]
     fullName*: CScopedIdent
     memberFields*: seq[GenField] ## Direct member fields
     memberMethods*: seq[GenProc]
@@ -418,7 +418,7 @@ type
                            ## code
 
     isCTypedef*: bool
-    nimName*: string ## Converted nim name
+    name*: string ## Converted nim name
     values*: seq[GenEnumValue] ## Filtered, ordered sequence of values
 
   GenAlias* = object of GenBase
@@ -506,6 +506,26 @@ type
     code*: string
     header*: string
     filename*: RelFile
+
+proc add*(
+    genSeq: var seq[GenEntry],
+    gen: GenProc | GenObject |  GenEnum | GenAlias | GenPass
+  ) =
+
+  when gen is GenProc:
+    genSeq.add GenEntry(kind: gekProc, genProc: gen)
+
+  elif gen is GenObject:
+    genSeq.add GenEntry(kind: gekObject, genObject: gen)
+
+  elif gen is GenEnum:
+    genSeq.add GenEntry(kind: gekEnum, genEnum: gen)
+
+  elif gen is GenAlias:
+    genSeq.add GenEntry(kind: gekAlias, genAlias: gen)
+
+  elif gen is GenPass:
+    genSeq.add GenEntry(kind: gekPass, genPass: gen)
 
 proc newProcVisit*(
     genProc: var GenProc, conf: WrapConfig, cache: var WrapCache

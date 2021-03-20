@@ -105,7 +105,11 @@ proc visitField*(
   ): CDecl =
 
   result = CDecl(
-    kind: cdkField, cursor: cursor, ident: parent & toCName(cursor))
+    kind: cdkField, cursor: cursor,
+    ident: parent & toCName(cursor),
+    isConst: isConstQualified(cursor.cxType())
+  )
+
   result.access = accs
 
   if cursor.len > 0:
@@ -401,9 +405,6 @@ proc visitClass*(
       if typedef.isSome(): typedef.get() else: cursor),
     isAggregateInit: isAggregateInitable(cursor, initArgs, conf)
   )
-
-  debug "Visited class declaration. Ident: ", result.ident
-  debug "Cursor: ", cursor
 
   result.kind = kind
   if result.isAggregateInit:

@@ -306,9 +306,8 @@ proc wrapProcedure*(
     it.pragma.add newPIdent("varargs")
 
   let generated = newProcVisit(it, conf, cache)
-  result.decl.add GenEntry(kind: gekProc, genProc: it)
-  result.decl.add GenEntry(kind: gekPass, genPass:
-    GenPass(iinfo: currIInfo(), passEntries: generated))
+  result.decl.add it
+  result.decl.add GenPass(iinfo: currIInfo(), passEntries: generated)
 
 
 proc fixNames(
@@ -414,13 +413,13 @@ proc wrapAlias*(
 
     if al.aliasNewType.kind in {cdkClass, cdkStruct}:
       let wrapBase = al.aliasNewType.wrapObject(conf, cache)
-      result.add GenEntry(kind: gekObject, genObject: wrapBase)
+      result.add wrapBase
 
-      baseType = wrapBase.nimName
+      baseType = wrapBase.name
 
     else:
       var wrapBase = al.aliasNewType.wrapEnum(conf, cache)
-      baseType = newPType(wrapBase[0].genEnum.nimName)
+      baseType = newPType(wrapBase[0].genEnum.name)
       debug al.aliasNewType.cursor.treeRepr()
       result.add wrapBase
 
@@ -429,7 +428,7 @@ proc wrapAlias*(
       #   baseType = newPType($name)
       #   with wrapBase[0].genEnum:
       #     isCTypedef = true
-      #     nimName = $name
+      #     name = $name
 
       #   wrapBase[0].genEnum.cdecl.ident[^1] = toCName(name)
 
@@ -443,14 +442,11 @@ proc wrapAlias*(
       newType.genParams = baseType.genParams
       if newType.head != baseType.head:
         # Alias names might be the same for `typedef struct St {} St;`
-        result.add GenEntry(
-          kind: gekAlias,
-          genAlias: GenAlias(
-            iinfo: currIInfo(),
-            cdecl: al,
-            baseType: baseType,
-            newAlias: newType
-          )
+        result.add GenAlias(
+          iinfo: currIInfo(),
+          cdecl: al,
+          baseType: baseType,
+          newAlias: newType
         )
 
   when false:
@@ -646,7 +642,7 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
   result = GenObject(
     rawName: $cd.cursor,
     iinfo: currIInfo(),
-    nimName: conf.typeNameForScoped(cd.ident, conf),
+    name: conf.typeNameForScoped(cd.ident, conf),
     cdecl: cd
   )
 
@@ -656,14 +652,14 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
      cd.isAggregateInit and cd.initArgs.len > 0:
 
     let pr = initGenProc(cd, currIInfo()).withIt do:
-      it.name = "init" & result.nimName.head
+      it.name = "init" & result.name.head
       it.arguments = cd.initArgs
       it.header = conf.makeHeader(cd.cursor, conf)
       it.icpp = &"{toCppNamespace(cd.ident)}({{@}})"
-      it.returnType = result.nimName
-      it.genParams = result.nimName.genParams
+      it.returnType = result.name
+      it.genParams = result.name.genParams
 
-    result.nestedEntries.add GenEntry(kind: gekProc, genProc: pr)
+    result.nestedEntries.add pr
       # # info obj.name.head, "can be aggregate initialized"
       # result.genAfter.add newWrappedEntry(
       #   # WARNING `cd.ident`
@@ -676,8 +672,7 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
         result.nestedEntries.add wrapEnum(entry, conf, cache)
 
       of cdkStruct, cdkClass, cdkUnion:
-        result.nestedEntries.add GenEntry(
-          kind: gekObject, genObject: wrapObject(entry, conf, cache))
+        result.nestedEntries.add wrapObject(entry, conf, cache)
 
 
       else:
@@ -688,7 +683,7 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
   for fld in cd.publicFields():
     var res = GenField(
       # QUESTION `conf.identNameForScoped()?`
-      nimName: fixIdentName(fld.lastName()),
+      name: fixIdentName(fld.lastName()),
       rawName: fld.lastName(),
       iinfo: currIInfo(),
       cdecl: fld,
@@ -710,13 +705,13 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
           debug "Nested object declaration, adding to nested types"
           var decl = wrapObject(newType, conf, cache)
 
-          result.nestedEntries.add GenEntry(kind: gekObject, genObject: decl)
-          res.fldType.head = decl.nimName.head
+          result.nestedEntries.add decl
+          res.fldType.head = decl.name.head
 
         of cdkEnum:
           debug "Nested object declaration, adding to nested types"
           var decl = wrapEnum(newType, conf, cache)
-          res.fldType.head = decl[0].genEnum.nimName
+          res.fldType.head = decl[0].genEnum.name
 
           result.nestedEntries.add decl
 
@@ -730,7 +725,7 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
 
     result.memberFields.add res
 
-  let (procs, extra) = wrapMethods(cd, conf, result.nimName, cache)
+  let (procs, extra) = wrapMethods(cd, conf, result.name, cache)
   result.memberMethods.add procs
   result.nestedEntries.add extra
 
@@ -909,7 +904,7 @@ proc makeGenEnum*(
     cdecl: declEn,
     iinfo: currIInfo(),
     rawName: nt.head & tern(conf.isImportCpp, "Cxx", "C"),
-    nimName: nt.head,
+    name: nt.head,
     docComment: @[conf.docCommentFor(declEn.ident, declEn.cursor, cache)]
   )
 
@@ -975,10 +970,10 @@ proc makeEnumConverters(gen: GenEnum, conf: WrapConfig, cache: var WrapCache):
       )
 
   let
-    enName = newPIdent(gen.nimName)
-    arrName = newPIdent("arr" & gen.nimName & "mapping")
+    enName = newPIdent(gen.name)
+    arrName = newPIdent("arr" & gen.name & "mapping")
     reverseConvName = newPident("to" & gen.rawName)
-    convName = newPIdent("to" & gen.nimname)
+    convName = newPIdent("to" & gen.name)
     implName = newPIdent(gen.rawName)
 
 
@@ -1033,8 +1028,8 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[GenEn
     declEn, getFields(declEn, conf).sortFields(), conf, cache)
 
   cache.genEnums.add gen
-  result.add GenEntry(kind: gekEnum, genEnum: gen)
-  result.add GenEntry(kind: gekPass, genPass: makeEnumConverters(gen, conf, cache))
+  result.add gen
+  result.add makeEnumConverters(gen, conf, cache)
 
 
 proc evalTokensInt(strs: seq[string]): Option[int64] =
@@ -1109,11 +1104,11 @@ proc wrapMacroEnum*(
       )
 
   if enumFields.len > 0:
-    let nimName = capitalAscii(enumPref) & capitalAscii(prefix)
+    let name = capitalAscii(enumPref) & capitalAscii(prefix)
     var en = GenEnum(
       isMacroEnum: true,
-      nimName: nimName,
-      proxyName: nimName & conf.isImportcpp.tern("Cxx", "C"),
+      name: name,
+      proxyName: name & conf.isImportcpp.tern("Cxx", "C"),
       iinfo: currIINfo(),
       cdecl: nil,
       values: enumFields.sortedByIt(it.resVal)
@@ -1133,8 +1128,8 @@ proc wrapMacroEnum*(
 
     # result.add newWrappedEntry(toNimDecl(en), values[0])
 
-    result.add GenEntry(kind: gekEnum, genEnum: en)
-    let enName = newPIdent(en.nimName)
+    result.add en
+    let enName = newPIdent(en.name)
 
     var helpers = pquote do:
       proc toCInt*(en: `enName`): cint {.inline.} =
@@ -1146,12 +1141,10 @@ proc wrapMacroEnum*(
         for val in en:
           result = bitor(result, val.cint)
 
-    result.add GenEntry(
-      kind: gekPass,
-      genPass: GenPass(
-        iinfo: currIInfo(),
-        passEntries: @[
-          newWrappedEntry(toNimDecl(helpers), true, currIInfo(), CXCursor())]))
+    result.add GenPass(
+      iinfo: currIInfo(),
+      passEntries: @[
+        newWrappedEntry(toNimDecl(helpers), true, currIInfo(), CXCursor())])
 
 
 
@@ -1212,8 +1205,7 @@ proc wrapApiUnit*(
           discard
 
         else:
-          result.add GenEntry(
-            kind: gekObject, genObject: decl.wrapObject(conf, cache))
+          result.add decl.wrapObject(conf, cache)
 
         dedentLog()
 
@@ -1312,7 +1304,7 @@ proc toNNode*(gen: GenEnum, conf: WrapConfig): (PEnumDecl, PEnumDecl) =
     result[0] = rawEnum
 
   block:
-    var nimEnum = newPEnumDecl(gen.nimName, iinfo = currIInfo())
+    var nimEnum = newPEnumDecl(gen.name, iinfo = currIInfo())
     nimEnum.addDocComment gen.docComment.join("\n")
     nimEnum.exported = true
     for value in gen.values:
@@ -1325,7 +1317,7 @@ proc toNNode*(gen: GenEnum, conf: WrapConfig): (PEnumDecl, PEnumDecl) =
 proc toNNode*(gen: GenObject, conf: WrapConfig): seq[WrappedEntry] =
   var decl = PObjectDecl(
     iinfo: gen.iinfo,
-    name: gen.nimName
+    name: gen.name
   )
 
   decl.annotation = some newPPragma(
@@ -1341,13 +1333,51 @@ proc toNNode*(gen: GenObject, conf: WrapConfig): seq[WrappedEntry] =
 
   for field in gen.memberFields:
     if field.isConst:
-      raiseImplementError("")
+      block getterImplementation:
+        var getImpl = newPProcDecl(field.name)
+        with getImpl:
+          returnType = field.fldType
+          iinfo = currIInfo()
+          pragma = newPPragma(
+            newPIdent("noinit"),
+            # newPIdentColonString(conf.importX(), &"#.{field.rawName}"),
+            newExprColonExpr(
+              newPident("header"),
+              conf.makeHeader(field.cdecl.cursor, conf).toNNode()
+            )
+          )
+
+          impl = toNNode(newPPRagma(
+            newPIdentColonString("emit", &"return `self`.{field.rawName};")
+          ))
+
+        getImpl.addArgument("self", gen.name)
+
+        result.add newWrappedEntry(
+          toNimDecl(getImpl), true, field.iinfo, field.cdecl.cursor)
+
+      block setterImplementation:
+        var setImpl = newPProcDecl(field.name)
+        with setImpl:
+          iinfo = currIInfo()
+          pragma = newPPragma(
+            newPIdentColonString(
+              "error",
+              &"Cannot assign to field {field.name} - declared `const` in {field.cdecl.ident}"
+            )
+          )
+
+        setImpl.addArgument("self", gen.name)
+        setImpl.addArgument("value", field.fldType)
+
+        result.add newWrappedEntry(
+          toNimDecl(setImpl), true, field.iinfo, field.cdecl.cursor)
 
     else:
       decl.flds.add PObjectField(
         docComment: field.docComment.join("\n"),
         isTuple: false,
-        name: field.nimName,
+        name: field.name,
         annotation: some newPPragma(
           newPIdentColonString(conf.importX, field.cdecl.lastName())
         ),

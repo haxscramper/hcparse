@@ -21,6 +21,7 @@ typedef struct {
 
     struct {
         int field1;
+        const int field2;
     };
 
     struct named {
