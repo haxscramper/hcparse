@@ -140,6 +140,7 @@ proc fixTypeName*(
       inc idx
 
   else:
+    debug ntype.kind
     if ntype.rtype.isSome():
       fixTypeName(ntype.rtype.get().getIt(), conf)
 

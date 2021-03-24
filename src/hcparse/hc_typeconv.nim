@@ -25,11 +25,11 @@ proc fromElaboratedPType*(cxtype: CXType, conf: WrapConfig): NType[PNode] =
   let decl = cxtype.getTypeDeclaration()
   if genParams > 0:
     case decl.cxKind:
-      of ckTypedefDecl:
+      of ckTypedefDecl, ckTypeAliasDecl, ckTypeAliasTemplateDecl:
         # WARNING `template <J, Q> using` is not handled
         result = newPType(cxtype.getTypeName(conf))
 
-      of ckClassDecl, ckStructDecl:
+      of ckClassDecl, ckStructDecl, ckClassTemplate:
         # debug "Class decl"
         let params = cxtype.genParams()
         result = newPType(cxtype.getTypeName(conf))
@@ -195,10 +195,13 @@ proc toFullScopedIdent*(cxtype: CXType): CScopedIdent =
 proc getTypeName*(cxtype: CXType, conf: WrapConfig): string =
   let curs = cxtype.getTypeDeclaration()
   case curs.cxKind:
-    of ckTypedefDecl:
+    of ckTypedefDecl, ckTypeAliasDecl:
       return $curs.cxType()
-    of ckClassDecl, ckStructDecl, ckEnumDecl, ckUnionDecl:
+
+    of ckClassDecl, ckStructDecl, ckEnumDecl, ckUnionDecl,
+       ckClassTemplate, ckTypeAliasTemplateDecl:
       result = $curs
+
     else:
       err $curs
       err "Type name for ", curs.treeRepr(conf.unit)
@@ -419,6 +422,10 @@ func fixTypeParams*(nt: var NType[PNode], params: seq[NType[PNode]]) =
         for sub in mitems(nt.genParams):
           aux(sub, idx)
 
+      of ntkProc:
+        for arg in mitems(nt.arguments):
+          aux(arg.vtype, idx)
+
       else:
         raiseImplementKindError(nt)
 
@@ -472,20 +479,40 @@ proc toInitCall*(cursor: CXCursor, conf: WrapConfig): PNode =
           result = aux(cursor[0], ilist)
 
       of ckCallExpr:
+        let str = "init" & $cursor.cxType()
         case cursor[0].cxKind():
           of ckUnexposedExpr, ckCallExpr, ckFunctionalCastExpr:
             result = aux(cursor[0], ilist)
 
-          of ckIntegerLiteral:
-            result = cursor[0].aux(ilist)
+          of ckIntegerLiteral, ckNullPtrLiteralExpr:
+            result = aux(cursor[0], ilist)
+
+          of ckTypeRef:
+            # First found in `clang/Rewriter.h/getRangeSize()`
+            result = newPCall(str)
+            assert cursor.len == 1
+
+          # TEMP
+          # of ckCallExpr:
+          #   let cType = cursor[0].cxType()
+          #   case cType.cxKind():
+          #     of tkTypedef:
+          #       result = aux(cType.getTypeDeclaration(), ilist)
+          #       for arg in cursor[0]:
+          #         result.add aux(arg, ilist)
+
+          #     else:
+          #       raiseImplementKindError(cType)
 
           else:
-            info cursor[0].cxKind()
+            err cursor[0].cxKind()
             debug "\n" & cursor.treeRepr(conf.unit)
+            debug cursor.getSpellingLocation()
             raiseAssert("#[ IMPLEMENT ]#")
 
+        if isNil(result):
+          return
 
-        let str = "init" & $cursor.cxType()
         if result.kind in nkTokenKinds:
           result = newPCall(str, result)
 
@@ -493,9 +520,18 @@ proc toInitCall*(cursor: CXCursor, conf: WrapConfig): PNode =
              result[0].getStrVal() != str:
           result = newPCall(str, result)
 
+      of ckDeclRefExpr:
+        if cursor.cxType().cxKind() == tkFunctionProto:
+          result = newPCall($cursor)
+
+        else:
+          raiseImplementKindError(cursor.cxType())
 
       of ckFunctionalCastExpr:
         result = aux(cursor[1], ilist)
+
+      of ckNullPtrLiteralExpr:
+        result = newPLit(nil)
 
       of ckInitListExpr:
         # debug "Creating initList"
@@ -510,12 +546,16 @@ proc toInitCall*(cursor: CXCursor, conf: WrapConfig): PNode =
         for arg in cursor:
           result.add aux(arg, false)
 
-      of ckIntegerLiteral, ckCharacterLiteral, ckFloatingLiteral:
+      of ckIntegerLiteral, ckCharacterLiteral, ckFloatingLiteral,
+         ckStringLiteral:
         let tokens = cursor.tokenStrings(conf.unit)
 
         case cursor.cxKind():
           of ckIntegerLiteral:
             result = newPCall("cint", newPLit(parseInt(tokens[0])))
+
+          of ckStringLiteral:
+            result = newPCall("cstring", newPLit(tokens[0]))
 
           of ckCharacterLiteral:
             result = newPLit(tokens[0][1])
@@ -526,8 +566,13 @@ proc toInitCall*(cursor: CXCursor, conf: WrapConfig): PNode =
           else:
             discard
 
+      of ckLambdaExpr:
+        err "FIXME implement conversion to call from lambda expr"
+        discard
+
       else:
         err "Implement for kind", cursor.cxKind()
+        debug cursor.getSpellingLocation()
         debug cursor.tokenStrings(conf.unit)
         debug cursor.treeRepr(conf.unit)
         raiseAssert("#[ IMPLEMENT ]#")
@@ -545,5 +590,7 @@ proc setDefaultForArg*(arg: var CArg, cursor: CXCursor, conf: WrapConfig) =
   if cursor.len == 2 and
      cursor[1].cxKind() in {ckUnexposedExpr, ckInitListExpr}:
     # debug cursor.treeRepr(conf.unit)
-    arg.default = some(toInitCall(cursor[1], conf))
+    let default = toInitCall(cursor[1], conf)
+    if not isNil(default):
+      arg.default = some(default)
     # debug arg.default

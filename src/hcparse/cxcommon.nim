@@ -6,7 +6,8 @@ func toCamelCase*(str: string): string =
     filterIt(it.len > 0).
     mapIt(it.capitalizeAscii())
 
-  buf[0][0] = buf[0][0].toLowerAscii()
+  if buf.len > 0 and buf[0].len > 0:
+    buf[0][0] = buf[0][0].toLowerAscii()
 
   return buf.join("")
 

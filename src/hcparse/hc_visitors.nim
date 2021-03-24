@@ -215,7 +215,8 @@ proc isAggregateInitable*(
   # List of entries that immediately mean aggregate initalization is not
   # supported.
   const failKinds = {
-    ckConstructor
+    ckConstructor,
+    ckConversionFunction
   }
 
   const ignoreKinds = {
@@ -228,7 +229,17 @@ proc isAggregateInitable*(
     ckFunctionTemplate,
     ckDestructor,
     ckAlignedAttr,
-    ckTypeAliasDecl
+    ckTypeAliasDecl,
+    ckNonTypeTemplateParameter,
+    ckFriendDecl,
+    ckFinalAttr,
+    ckWarnUnusedAttr,
+    ckWarnUnusedResultAttr,
+    ckClassDecl,
+    ckEnumDecl,
+    ckNamespaceRef,
+    ckStaticAssert,
+    ckClassTemplate,
     # ckBaseClassSpecifier
   }
 
@@ -252,17 +263,19 @@ proc isAggregateInitable*(
       of tkTypedef:
         return aux(cursor.cxType().getCanonicalType().getTypeDeclaration())
 
-      of tkInvalid, tkUnexposed:
+      of tkInvalid, tkUnexposed, tkEnum,
+         tkLValueReference
+           :
         return false
 
       of tkConstantArray:
         return aux(cursor[0])
 
       else:
-        debug cursor.cxType().cxKind()
         debug cast[int](cursor.cxType().cxKind())
         debug cursor.getSpellingLocation()
         debug cursor.treeRepr(conf.unit)
+        err cursor.cxType().cxKind()
         err cursor.cxType()
         raiseAssert("#[ IMPLEMENT ]#")
 
@@ -321,14 +334,16 @@ proc updateParentFields*(decl: var CDecl, conf: WrapConfig) =
             buf.derived.add visitField(entry, decl.ident, accs, conf)
 
           of ckMethod:
+            # FIXME not handling method overrides.
             buf.derived.add visitMethod(entry, decl.ident, accs)
 
-          of ckBaseSpecifier:
-            discard
+          of ckAccessSpecifier:
+            accs = entry.getAccessSpecifier()
 
           else:
-            debug decl.cursor.treeRepr()
-            raiseImplementKindError(entry)
+            # WARNING possibly missing on various edge cases like template
+            # methods in parent classes.
+            discard
 
 proc visitAlias*(
     lastTypeDecl: var CDecl, parent: CSCopedIdent,
@@ -486,9 +501,11 @@ proc visitClass*(
           discard
 
         else:
-          inc undefCnt
+          # inc undefCnt
           if undefCnt > 20:
+            debug subn.getSpellingLocation()
             raiseAssert("Reached unknown class element limit")
+
           else:
             discard
             warn "IMPLEMENT class element:", ($subn.cxKind).toRed(), subn
@@ -631,8 +648,8 @@ proc splitDeclarations*(
       if resolve == drkWrapDirectly:
         let (decls, rec, incls) = visitCursor(
           cursor, @[], conf, lastTypeDecl)
-        if not isNil(lastTypeDecl):
-          debug "Last type decl from cursor"
+        # if not isNil(lastTypeDecl):
+        #   debug "Last type decl from cursor"
         res.includes.add incls
         if rec:
           return cvrRecurse

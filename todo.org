@@ -39,6 +39,13 @@
   - [ ] operator overloading reimplementation is broken and needs partial
     logic refactoring to fix.
 - [ ] Documentation templating system.
+- [ ] Generate ~cxxDynCast~ proc procedures for all derived types (and for
+  all base types to derived ones). For each ~Dn~ derived from ~A~ create
+  ~Dn -> A~ and ~A -> Bn~ conversion casts.
+  - Can this be adopted for use with nim memory management? When placement
+    new procedures will be generated.
+  - Default implementation should check for ~nullptr~ results, and raise
+    exception. Need to add 'raw' version of the procedure.
 
 
 

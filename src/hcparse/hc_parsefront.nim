@@ -569,6 +569,9 @@ proc wrapSingleFile*(
     reparseOnNil = errorReparseVerbose
   )
 
+  if wrapConf.showParsed:
+    debug parsed.unit.getTranslationUnitCursor().treeRepr(parsed.unit)
+
   var wrapConf = wrapConf
 
   wrapConf.unit = parsed.unit

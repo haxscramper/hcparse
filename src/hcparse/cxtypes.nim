@@ -295,6 +295,14 @@ proc `$`*(cxkind: CXCursorKind): string =
   case cxkind:
     of ckBaseSpecifier: "ckBaseSpecifier"
     of ckAlignedAttr: "ckAlignedAttr"
+    of ckMacroDefinition: "ckMacroDefinition"
+    of ckMacroExpansion: "ckMacroExpansion"
+    of ckFinalAttr: "ckFinalAttr"
+    of ckAccessSpecifier: "ckAccessSpecifier"
+    of ckNullPtrLiteralExpr: "ckNullPtrLiteralExpr"
+    of ckWarnUnusedAttr: "ckWarnUnusedAttr"
+    of ckWarnUnusedResultAttr: "ckWarnUnusedResultAttr"
+    of ckConversionFunction: "ckConversionFunction"
 
     else:
       $getCursorKindSpelling(cxkind)
@@ -702,6 +710,9 @@ proc objTreeRepr*(cxtype: CXType): ObjTree =
 proc lispRepr*(cxtype: CXType): string =
   cxtype.objTreeRepr().lispRepr()
 
+proc neededTemplateArgs*(cxtype: CXType): int =
+  ## Get number of necessary generic arguments for a type
+  let cursor = cxtype.getTypeDeclaration()
 
 proc dedentComment*(str: string): string =
   str.split('\n').mapIt(it.dedent()).join("\n")
@@ -713,10 +724,16 @@ proc objTreeRepr*(
   ): ObjTree =
   ## Generate ObjTree representation of cursor
   const colorize = not defined(plainStdout)
+  var typeText = "type: " & $cursor.cxType & " " & $cursor.cxType().cxKind()
+
+  if cursor.cxKind() in {ckTemplateRef}:
+    let specialized = cursor.getSpecializedCursorTemplate()
+    typeText = "ref of: " & $specialized.cxKind()
+
   let ctype = pptConst(
-    "type: " & $cursor.cxType,
-    initPrintStyling(fg = fgBlue,
-                     style = {styleItalic, styleDim}))
+    typeText,
+    initPrintStyling(fg = fgBlue, style = {styleItalic, styleDim})
+  )
 
 
   var commentText = cursor.rawComment()
@@ -743,13 +760,22 @@ proc objTreeRepr*(
       flds.add pptconst(
         $cxRange, initprintstyling(fg = fgBlue))
 
-    pptObj($cursor.cxkind, initPrintStyling(fg = fgYellow), flds)
+    pptObj("[_] " & $cursor.cxkind, initPrintStyling(fg = fgYellow), flds)
   else:
+    var children: seq[ObjTree]
+    for node in cursor.children:
+      if not (
+        cursor.cxKind() == ckTranslationUnit and
+        node.cxKind() in {ckMacroDefinition, ckMacroExpansion}
+      ):
+        children.add objTreeRepr(node, tu, showType)
+
     pptObj(
-      ($cursor.cxkind).toMagenta(colorize) & " " & $cursor,
+      ("[*] " & $cursor.cxkind).toMagenta(colorize) & " " & $cursor,
       showtype.tern(@[ctype], @[]) &
-      showcomment.tern(@[comment], @[]) &
-        toSeq(cursor.children).mapIt(it.objTreeRepr(tu, showtype))
+      showcomment.tern(@[comment], @[]) & children
+        # toSeq(cursor.children).mapIt(it.objTreeRepr(tu, showtype)
+        # )
     )
 
 

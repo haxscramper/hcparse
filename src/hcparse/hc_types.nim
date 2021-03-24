@@ -295,6 +295,7 @@ type
     isInLibrary*: proc(dep: AbsFile): bool ## Determine if `dep` file is in
     ## the library.
 
+    showParsed*: bool ## Show translation unit tree repr when wrapping
     isImportcpp*: bool ## Is wrapped code a C++ or C?
     parseConf*: ParseConfig
 
@@ -655,7 +656,7 @@ func newWrappedEntry*(
 func arg*(cd: CDecl, idx: int): CArg = cd.arguments[idx]
 func member*(cd: CDecl, idx: int): CDecl = cd.members[idx]
 func methods*(cd: CDecl, kinds: set[CXCursorKind]): seq[CDecl] =
-  assert cd.kind in {cdkClass, cdkStruct}
+  assert cd.kind in {cdkClass, cdkStruct, cdkUnion}
   for member in cd.members:
     if (member.kind == cdkMethod) and (member.cursor.cxKind in kinds):
       result.add member

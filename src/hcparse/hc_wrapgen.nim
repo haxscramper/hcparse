@@ -341,9 +341,12 @@ proc wrapMethods*(
   ## - @arg{cd} :: Class declaration to wrap methods for
   ## - @arg{parent} :: Nim name of class declaration
 
-  assert cd.kind in {cdkClass, cdkStruct}
+  assert cd.kind in {cdkClass, cdkStruct, cdkUnion},
+     $cd.kind & $cd.cursor.getSpellingLocation()
+
+
   for meth in cd.methods({
-    ckMethod, ckDestructor, ckConstructor, ckConversionFunction
+    ckMethod, ckDestructor, ckConstructor, ckConversionFunction,
   }):
     var asNew: seq[bool]
     if meth.cursor.cxKind() in {ckConstructor, ckConversionFunction}:
@@ -669,7 +672,7 @@ proc updateFieldExport*(
 
 proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
   let tdecl = cd.cursor.cxType().getTypeDeclaration()
-  assert cd.kind in {cdkClass, cdkStruct}, $cd.kind
+  assert cd.kind in {cdkClass, cdkStruct, cdkUnion}, $cd.kind
 
   result = GenObject(
     rawName: $cd.cursor,
@@ -762,7 +765,35 @@ proc getFields*(declEn: CDecl, conf: WrapConfig): EnumFieldResult =
             resVal = some initEnFieldVal(
               val.tokenStrings(conf.unit)[0].parseInt())
 
+          of ckDeclRefExpr:
+            warn val[0].treeRepr()
+
+            if val[0].cxType().cxKind() in tkPodKinds:
+              if $val[0] in result.namedVals:
+                resVal = some initEnFieldVal(result.namedVals[$val[0]])
+
+
+            else:
+              let decl = val[0].cxType().getTypeDeclaration()
+              assert decl.cxKind() == ckEnumDecl, $decl.cxKind()
+              for (name, value) in visitEnum(decl, @[], conf).getFields(conf).enfields:
+                if $name == $val[0]:
+                  warn "Found name reference from other enum"
+                  resVal = value
+                  break
+
+          of ckBinaryOperator:
+            # `clang/ASTBitCodes.h`
+            # enum StmtCode {
+            #   /// A marker record that indicates that we are at the end
+            #   /// of an expression.
+            #   STMT_STOP = DECL_LAST + 1,
+            err "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+
           else:
+            err val[0].getSpellingLocation()
+            debug val[0].treeRepr()
+            debug val.treeRepr()
             raiseImplementError(&"Kind {val[0].kind}")
 
       elif $val.kind == "OverloadCandidate": # HACK
@@ -1035,7 +1066,7 @@ proc evalTokensInt(strs: seq[string]): Option[int64] =
            :
         return aux(node[0])
 
-      of cppStringLiteral:
+      of cppStringLiteral, cppCastExpression:
         discard
 
       else:
