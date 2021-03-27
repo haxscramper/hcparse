@@ -865,68 +865,6 @@ proc renameField(
       addPrefix(enumPref)
   )
 
-# proc sortFields(cdecl: CDecl): seq[(CXCursor, BiggestInt)] =
-#   result = cdecl.enumFields
-#   result = result.sortedByIt(it[1])
-#   return result.deduplicate()
-  # return enumFields
-
-  # let (namedvals, enfields) = enFields
-  # var fldVals: Table[BiggestInt, string]
-  # var repeated: Table[string, seq[string]]
-
-  # for (key, val) in enfields:
-  #   if val.isSome():
-  #     if val.get().isRefOther:
-  #       repeated.mgetOrPut(val.get().othername, @[ $key ]).add $key
-
-  #     else:
-  #       let val = val.get().value
-  #       if val notin fldVals:
-  #         fldVals[val] = $key
-
-  #       else:
-  #         repeated.mgetOrPut(fldVals[val], @[ $key ]).add $key
-
-
-  # # List of field with respective values. Holes are filled with correct
-  # # values, and duplicated fields are dropped.
-  # var flds: seq[(CXCursor, BiggestInt)]
-
-  # var uniformEnum: bool = true
-  # block:
-  #   var prev: BiggestInt = 0
-  #   for (key, val) in enfields:
-  #     let startPrev = prev
-  #     if val.isSome():
-  #       if val.get().isRefOther:
-  #         discard
-
-  #       else:
-  #         prev = val.get().value
-  #         flds.add (key, prev)
-
-  #     else:
-  #       # NOTE previously `inc prev` was /after/ field addition. Not sure
-  #       # what other edge case was involved, or this is just plain
-  #       # off-by-one error.
-
-  #       # NOTE I swapped this again, but forgot what caused first note, so
-  #       # I would need to return to this again.
-  #       flds.add (key, prev)
-  #       inc prev
-
-  #     if prev > startPrev + 1:
-  #       uniformEnum = false
-
-  #   # Sort fields based on value
-  #   flds = flds.sorted(
-  #     proc(f1, f2: (CXCursor, BiggestInt)): int {.closure.} =
-  #       cmp(f1[1], f2[1])
-  #   )
-
-  # return flds
-
 proc makeGenEnum*(
     declEn: CDecl, flds: seq[(CXCursor, BiggestInt)],
     conf: WrapConfig, cache: var WrapCache
