@@ -1,4 +1,4 @@
-import std/[strutils, sequtils, strformat, tables, lenientops,
+import std/[strutils, sequtils, strformat, tables, lenientops, parseutils,
             bitops, with, sets]
 
 import hc_types, cxtypes, cxcommon, libclang_wrap, hc_typeconv
@@ -704,111 +704,131 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
   result.nestedEntries.add extra
 
 
-type EnumFieldResult = tuple[
-  namedvals: Table[string, BiggestInt],
-  enfields: seq[tuple[name: CXCursor, value: Option[EnFieldVal]]]
-]
+# type EnumFieldResult = tuple[
+#   namedvals: Table[string, BiggestInt],
+#   enfields: seq[tuple[name: CXCursor, value: Option[EnFieldVal]]]
+# ]
 
 
-proc getFields*(declEn: CDecl, conf: WrapConfig): EnumFieldResult
+# proc parseCxxInt*(value: string): BiggestInt =
+#   if value["0x"]:
+#     if parseHex(value[2..^1], result) == 0:
+#       raiseArgumentError($value & " is not valid integer")
 
-proc getEnumFieldValue*(
-    value: CXCursor, conf: WrapConfig,
-    namedValues: var Table[string, BiggestInt]
-  ): Option[EnFieldVal] =
+#   else:
+#     return parseInt(value)
 
-  case value.kind:
-    of ckIntegerLiteral:
-      return some initEnFieldVal(
-        value.tokenStrings(conf.unit)[0].parseInt())
+# proc getFields*(declEn: CDecl, conf: WrapConfig): EnumFieldResult
 
-    of ckBinaryOperator:
-      let subn = value.children()
-      let toks = value.tokenStrings(conf.unit)[1] # TEST for `(1 << 2) | (1 << 3)`
-      # debug toks
-      # debug subn.mapIt(it.tokenStrings(conf.unit))
-      case toks:
-        of "<<":
-          return some initEnFieldVal(
-            subn[0].tokenStrings(conf.unit)[0].parseInt() shl
-            subn[1].tokenStrings(conf.unit)[0].parseInt(),
-          )
+# proc getEnumFieldValue*(
+#     value: CXCursor, conf: WrapConfig,
+#     namedValues: var Table[string, BiggestInt]
+#   ): Option[EnFieldVal] =
 
-        of "|":
-          let toks = value.tokenStrings(conf.unit)
-          # NOTE assuming `EnumField | OtherField` for now
-          let
-            lhs = toks[0]
-            rhs = toks[2]
-            lhsVal = namedValues[lhs]
-            rhsVal = namedValues[rhs]
+#   case value.kind:
+#     of ckIntegerLiteral:
+#       return some initEnFieldVal(
+#         value.tokenStrings(conf.unit)[0].parseCxxInt())
 
-          return some initEnFieldVal(bitor(lhsVal, rhsVal))
+#     of ckBinaryOperator:
+#       let subn = value.children()
+#       let toks = value.tokenStrings(conf.unit)[1] # TEST for `(1 << 2) | (1 << 3)`
+#       # debug toks
+#       # debug subn.mapIt(it.tokenStrings(conf.unit))
+#       case toks:
+#         of "<<":
+#           return some initEnFieldVal(
+#             subn[0].tokenStrings(conf.unit)[0].parseCxxInt() shl
+#             subn[1].tokenStrings(conf.unit)[0].parseCxxInt(),
+#           )
 
-        else:
-          discard
+#         of "|":
+#           let toks = value.tokenStrings(conf.unit)
+#           # NOTE assuming `EnumField | OtherField` for now
+#           let
+#             lhs = toks[0]
+#             rhs = toks[2]
+#             lhsVal = namedValues[lhs]
+#             rhsVal = namedValues[rhs]
 
-    of ckUnaryOperator:
-      let toks = value.tokenStrings(conf.unit)
-      case toks[0]:
-        of "-":
-          return some initEnFieldVal(toks[1].parseInt())
+#           return some initEnFieldVal(bitor(lhsVal, rhsVal))
 
-        else:
-          raiseAssert("#[ IMPLEMENT ]#")
+#         else:
+#           discard
 
-    of ckUnexposedExpr:
-      case value[0].kind:
-        of ckIntegerLiteral:
-          return some initEnFieldVal(
-            value.tokenStrings(conf.unit)[0].parseInt())
+#     of ckUnaryOperator:
+#       let toks = value.tokenStrings(conf.unit)
+#       case toks[0]:
+#         of "-":
+#           return some initEnFieldVal(toks[1].parseCxxInt())
 
-        of ckDeclRefExpr:
-          warn value[0].treeRepr()
+#         else:
+#           raiseAssert("#[ IMPLEMENT ]#")
 
-          if value[0].cxType().cxKind() in tkPodKinds:
-            if $value[0] in namedValues:
-              return some initEnFieldVal(namedValues[$value[0]])
+#     of ckDeclRefExpr:
+#       if value.cxType().cxKind() in tkPodKinds:
+#         if $value in namedValues:
+#           return some initEnFieldVal(namedValues[$value])
 
+#         else:
+#           raiseImplementError(
+#             "Enum referencing value not in named values")
 
-          else:
-            let decl = value[0].cxType().getTypeDeclaration()
-            assert decl.cxKind() == ckEnumDecl, $decl.cxKind()
-            for (name, otherValue) in visitEnum(decl, @[], conf).getFields(conf).enfields:
-              if $name == $value[0]:
-                warn "Found name reference from other enum"
-                return otherValue
-
-        of ckBinaryOperator:
-          # `clang/ASTBitCodes.h`
-          # enum StmtCode {
-          #   /// A marker record that indicates that we are at the end
-          #   /// of an expression.
-          #   STMT_STOP = DECL_LAST + 1,
-          err "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-
-        else:
-          err value[0].getSpellingLocation()
-          debug value[0].treeRepr()
-          debug value.treeRepr()
-          raiseImplementError(&"Kind {value[0].kind}")
-
-    elif $value.kind == "OverloadCandidate": # HACK
-      return none EnFieldVal
-
-    else:
-      err value.treeRepr(conf.unit)
-      raiseAssert(
-        &"#[ IMPLEMENT for kind {value.kind} {instantiationInfo()} ]#")
+#       else:
+#         let decl = value.cxType().getTypeDeclaration()
+#         assert decl.cxKind() == ckEnumDecl, $decl.cxKind()
+#         for (name, otherValue) in visitEnum(decl, @[], conf).getFields(conf).enfields:
+#           if $name == $value:
+#             warn "Found name reference from other enum"
+#             return otherValue
 
 
+#     of ckUnexposedExpr:
+#       case value[0].kind:
+#         of ckIntegerLiteral:
+#           return some initEnFieldVal(
+#             value.tokenStrings(conf.unit)[0].parseCxxInt())
 
-proc getFields*(declEn: CDecl, conf: WrapConfig): EnumFieldResult =
-  for (name, value) in declEn.enumFields:
-    result.enfields.add (
-      name: name,
-      value: getEnumFieldValue(value.get(), conf, result.namedVals)
-    )
+#         of ckDeclRefExpr:
+#           return getEnumFieldValue(value[0], conf, namedValues)
+
+#         of ckBinaryOperator:
+#           # `clang/ASTBitCodes.h`
+#           # enum StmtCode {
+#           #   /// A marker record that indicates that we are at the end
+#           #   /// of an expression.
+#           #   STMT_STOP = DECL_LAST + 1,
+#           err "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+
+#         else:
+#           err value[0].getSpellingLocation()
+#           debug value[0].treeRepr()
+#           debug value.treeRepr()
+#           raiseImplementError(&"Kind {value[0].kind}")
+
+#     elif $value.kind == "OverloadCandidate": # HACK
+#       return none EnFieldVal
+
+#     else:
+#       err value.treeRepr(conf.unit)
+#       raiseAssert(
+#         &"#[ IMPLEMENT for kind {value.kind} {instantiationInfo()} ]#")
+
+
+
+# proc getFields*(declEn: CDecl, conf: WrapConfig): EnumFieldResult =
+#   for (name, value) in declEn.enumFields:
+#     let value = getEnumFieldValue(value.get(), conf, result.namedVals)
+
+#     if value.isSome():
+#       valueCounter  = value.get().value
+
+#     else:
+#       inc valueCounter
+
+#     result.namedVals[$name] = valueCounter
+
+#     result.enfields.add (name: name, value: value)
 
 
 
@@ -845,62 +865,67 @@ proc renameField(
       addPrefix(enumPref)
   )
 
-proc sortFields(enFields: EnumFieldResult): seq[(CXCursor, BiggestInt)] =
-  let (namedvals, enfields) = enFields
-  var fldVals: Table[BiggestInt, string]
-  var repeated: Table[string, seq[string]]
+# proc sortFields(cdecl: CDecl): seq[(CXCursor, BiggestInt)] =
+#   result = cdecl.enumFields
+#   result = result.sortedByIt(it[1])
+#   return result.deduplicate()
+  # return enumFields
 
-  for (key, val) in enfields:
-    if val.isSome():
-      if val.get().isRefOther:
-        repeated.mgetOrPut(val.get().othername, @[ $key ]).add $key
+  # let (namedvals, enfields) = enFields
+  # var fldVals: Table[BiggestInt, string]
+  # var repeated: Table[string, seq[string]]
 
-      else:
-        let val = val.get().value
-        if val notin fldVals:
-          fldVals[val] = $key
+  # for (key, val) in enfields:
+  #   if val.isSome():
+  #     if val.get().isRefOther:
+  #       repeated.mgetOrPut(val.get().othername, @[ $key ]).add $key
 
-        else:
-          repeated.mgetOrPut(fldVals[val], @[ $key ]).add $key
+  #     else:
+  #       let val = val.get().value
+  #       if val notin fldVals:
+  #         fldVals[val] = $key
+
+  #       else:
+  #         repeated.mgetOrPut(fldVals[val], @[ $key ]).add $key
 
 
-  # List of field with respective values. Holes are filled with correct
-  # values, and duplicated fields are dropped.
-  var flds: seq[(CXCursor, BiggestInt)]
+  # # List of field with respective values. Holes are filled with correct
+  # # values, and duplicated fields are dropped.
+  # var flds: seq[(CXCursor, BiggestInt)]
 
-  var uniformEnum: bool = true
-  block:
-    var prev: BiggestInt = 0
-    for (key, val) in enfields:
-      let startPrev = prev
-      if val.isSome():
-        if val.get().isRefOther:
-          discard
+  # var uniformEnum: bool = true
+  # block:
+  #   var prev: BiggestInt = 0
+  #   for (key, val) in enfields:
+  #     let startPrev = prev
+  #     if val.isSome():
+  #       if val.get().isRefOther:
+  #         discard
 
-        else:
-          prev = val.get().value
-          flds.add (key, prev)
+  #       else:
+  #         prev = val.get().value
+  #         flds.add (key, prev)
 
-      else:
-        # NOTE previously `inc prev` was /after/ field addition. Not sure
-        # what other edge case was involved, or this is just plain
-        # off-by-one error.
+  #     else:
+  #       # NOTE previously `inc prev` was /after/ field addition. Not sure
+  #       # what other edge case was involved, or this is just plain
+  #       # off-by-one error.
 
-        # NOTE I swapped this again, but forgot what caused first note, so
-        # I would need to return to this again.
-        flds.add (key, prev)
-        inc prev
+  #       # NOTE I swapped this again, but forgot what caused first note, so
+  #       # I would need to return to this again.
+  #       flds.add (key, prev)
+  #       inc prev
 
-      if prev > startPrev + 1:
-        uniformEnum = false
+  #     if prev > startPrev + 1:
+  #       uniformEnum = false
 
-    # Sort fields based on value
-    flds = flds.sorted(
-      proc(f1, f2: (CXCursor, BiggestInt)): int {.closure.} =
-        cmp(f1[1], f2[1])
-    )
+  #   # Sort fields based on value
+  #   flds = flds.sorted(
+  #     proc(f1, f2: (CXCursor, BiggestInt)): int {.closure.} =
+  #       cmp(f1[1], f2[1])
+  #   )
 
-  return flds
+  # return flds
 
 proc makeGenEnum*(
     declEn: CDecl, flds: seq[(CXCursor, BiggestInt)],
@@ -1031,10 +1056,11 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[GenEn
   ##
   ## In order to perform conversion between 'proxy' and underlying enum
   ## several helper procs are introduces, such as `toInt`.
-  var ennames: seq[string]
-
   let gen = makeGenEnum(
-    declEn, getFields(declEn, conf).sortFields(), conf, cache)
+    declEn,
+    declEn.enumFields.sortedByIt(it[1]).deduplicate(isSorted = true),
+    conf, cache
+  )
 
   cache.genEnums.add gen
   result.add gen
@@ -1187,8 +1213,17 @@ proc wrapMacros*(
           buf = @[]
 
       lastSplit = split
+
     if buf.len > 1:
-      result.add wrapMacroEnum(buf, conf, cache)
+      try:
+        result.add wrapMacroEnum(buf, conf, cache)
+
+      except ImplementError as e:
+        err "Cannot wrap macro collection to enum"
+        debug e.msg
+        logIndented:
+          for element in buf:
+            debug element.cursor.treeRepr(conf.unit)
 
 
 

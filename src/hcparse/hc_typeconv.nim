@@ -524,7 +524,16 @@ proc toInitCall*(cursor: CXCursor, conf: WrapConfig): PNode =
         if cursor.cxType().cxKind() == tkFunctionProto:
           result = newPCall($cursor)
 
+        elif cursor.cxType().cxKind() == tkTypedef:
+          warn "Found typedef used as default value"
+          debug cursor.getSpellingLocation()
+          discard
+
         else:
+          debug cursor.cxType().getTypeDeclaration().treeRepr()
+
+          debug cursor.getSpellingLocation()
+          debug cursor.treeRepr()
           raiseImplementKindError(cursor.cxType())
 
       of ckFunctionalCastExpr:

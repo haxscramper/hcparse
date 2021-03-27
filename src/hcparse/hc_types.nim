@@ -157,7 +157,7 @@ type
         isClassEnum*: bool ## C++ `class enum`, or old-style `C` enum?
         enumFields*: seq[tuple[
           field: CXCursor,
-          value: Option[CXCursor]
+          value: clonglong
         ]]
 
       of cdkAlias:

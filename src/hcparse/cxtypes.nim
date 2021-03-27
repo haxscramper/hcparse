@@ -746,6 +746,7 @@ proc objTreeRepr*(
       cursor.tokens(tu).mapIt(
         getTokenSpelling(tu, it)
       ).join(" "), initprintstyling(fg = fggreen))
+
     var flds: seq[ObjTree]
     if showtype: flds.add ctype
     if showComment: flds.add comment
@@ -770,12 +771,17 @@ proc objTreeRepr*(
       ):
         children.add objTreeRepr(node, tu, showType)
 
+    var suffix: string
+
+    if cursor.cxKind() == ckEnumConstantDecl:
+      suffix &= " " & toRed($cursor.getEnumConstantDeclValue())
+
     pptObj(
-      ("[*] " & $cursor.cxkind).toMagenta(colorize) & " " & $cursor,
-      showtype.tern(@[ctype], @[]) &
-      showcomment.tern(@[comment], @[]) & children
-        # toSeq(cursor.children).mapIt(it.objTreeRepr(tu, showtype)
-        # )
+      &[("[*] " & $cursor.cxkind).toMagenta(colorize), $cursor, $suffix],
+      &[showtype.tern(@[ctype], @[]),
+        showcomment.tern(@[comment], @[]),
+        children
+      ]
     )
 
 

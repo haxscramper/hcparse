@@ -177,7 +177,7 @@ proc visitEnum*(
   )
 
   for elem in cursor:
-    result.enumFields.add (elem, some(elem[0]))
+    result.enumFields.add (elem, getEnumConstantDeclValue(elem))
 
   # info "Found enum", result.name
 
