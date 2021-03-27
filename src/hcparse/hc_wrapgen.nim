@@ -609,7 +609,7 @@ proc publicFields*(cd: CDecl): seq[CDecl] =
 
 
 proc updateAggregateInit*(
-  cd: CDecl, conf: WrapConfig, cache: var WrapCache, gen: var GenObject) = 
+  cd: CDecl, conf: WrapConfig, cache: var WrapCache, gen: var GenObject) =
   if conf.isImportcpp and # QUESTION how to handle aggregate initalization
                           # for C structures? Just declare `{.emit.}`` proc
                           # (with or without designated initalizers)
@@ -709,102 +709,108 @@ type EnumFieldResult = tuple[
   enfields: seq[tuple[name: CXCursor, value: Option[EnFieldVal]]]
 ]
 
+
+proc getFields*(declEn: CDecl, conf: WrapConfig): EnumFieldResult
+
+proc getEnumFieldValue*(
+    value: CXCursor, conf: WrapConfig,
+    namedValues: var Table[string, BiggestInt]
+  ): Option[EnFieldVal] =
+
+  case value.kind:
+    of ckIntegerLiteral:
+      return some initEnFieldVal(
+        value.tokenStrings(conf.unit)[0].parseInt())
+
+    of ckBinaryOperator:
+      let subn = value.children()
+      let toks = value.tokenStrings(conf.unit)[1] # TEST for `(1 << 2) | (1 << 3)`
+      # debug toks
+      # debug subn.mapIt(it.tokenStrings(conf.unit))
+      case toks:
+        of "<<":
+          return some initEnFieldVal(
+            subn[0].tokenStrings(conf.unit)[0].parseInt() shl
+            subn[1].tokenStrings(conf.unit)[0].parseInt(),
+          )
+
+        of "|":
+          let toks = value.tokenStrings(conf.unit)
+          # NOTE assuming `EnumField | OtherField` for now
+          let
+            lhs = toks[0]
+            rhs = toks[2]
+            lhsVal = namedValues[lhs]
+            rhsVal = namedValues[rhs]
+
+          return some initEnFieldVal(bitor(lhsVal, rhsVal))
+
+        else:
+          discard
+
+    of ckUnaryOperator:
+      let toks = value.tokenStrings(conf.unit)
+      case toks[0]:
+        of "-":
+          return some initEnFieldVal(toks[1].parseInt())
+
+        else:
+          raiseAssert("#[ IMPLEMENT ]#")
+
+    of ckUnexposedExpr:
+      case value[0].kind:
+        of ckIntegerLiteral:
+          return some initEnFieldVal(
+            value.tokenStrings(conf.unit)[0].parseInt())
+
+        of ckDeclRefExpr:
+          warn value[0].treeRepr()
+
+          if value[0].cxType().cxKind() in tkPodKinds:
+            if $value[0] in namedValues:
+              return some initEnFieldVal(namedValues[$value[0]])
+
+
+          else:
+            let decl = value[0].cxType().getTypeDeclaration()
+            assert decl.cxKind() == ckEnumDecl, $decl.cxKind()
+            for (name, otherValue) in visitEnum(decl, @[], conf).getFields(conf).enfields:
+              if $name == $value[0]:
+                warn "Found name reference from other enum"
+                return otherValue
+
+        of ckBinaryOperator:
+          # `clang/ASTBitCodes.h`
+          # enum StmtCode {
+          #   /// A marker record that indicates that we are at the end
+          #   /// of an expression.
+          #   STMT_STOP = DECL_LAST + 1,
+          err "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+
+        else:
+          err value[0].getSpellingLocation()
+          debug value[0].treeRepr()
+          debug value.treeRepr()
+          raiseImplementError(&"Kind {value[0].kind}")
+
+    elif $value.kind == "OverloadCandidate": # HACK
+      return none EnFieldVal
+
+    else:
+      err value.treeRepr(conf.unit)
+      raiseAssert(
+        &"#[ IMPLEMENT for kind {value.kind} {instantiationInfo()} ]#")
+
+
+
 proc getFields*(declEn: CDecl, conf: WrapConfig): EnumFieldResult =
   for (name, value) in declEn.enumFields:
-    let val = value.get()
-    var resval: Option[EnFieldVal]
-    case val.kind:
-      of ckIntegerLiteral:
-        resVal = some initEnFieldVal(
-          val.tokenStrings(conf.unit)[0].parseInt())
-
-      of ckBinaryOperator:
-        # FIXME C++ allows to have arbitrary complex expressions for enum
-        # values, so in the end I would have to implement simple math
-        # expression AST interpreter in order to evaluate all of this, or
-        # take some existing one (it is possible to convert expression back
-        # to tokens and use something like
-        # https://github.com/Yardanico/nim-mathexpr)
-        let subn = val.children()
-        let toks = val.tokenStrings(conf.unit)[1] # TEST for `(1 << 2) | (1 << 3)`
-        # debug toks
-        # debug subn.mapIt(it.tokenStrings(conf.unit))
-        case toks:
-          of "<<":
-            resval = some initEnFieldVal(
-              subn[0].tokenStrings(conf.unit)[0].parseInt() shl
-              subn[1].tokenStrings(conf.unit)[0].parseInt(),
-            )
-
-          of "|":
-            let toks = val.tokenStrings(conf.unit)
-            # NOTE assuming `EnumField | OtherField` for now
-            let
-              lhs = toks[0]
-              rhs = toks[2]
-              lhsVal = result.namedVals[lhs]
-              rhsVal = result.namedVals[rhs]
-
-            resval = some initEnFieldVal(bitor(lhsVal, rhsVal))
-
-          else:
-            discard
-
-      of ckUnaryOperator:
-        let toks = val.tokenStrings(conf.unit)
-        case toks[0]:
-          of "-":
-            resval = some initEnFieldVal(toks[1].parseInt())
-
-          else:
-            raiseAssert("#[ IMPLEMENT ]#")
-
-      of ckUnexposedExpr:
-        case val[0].kind:
-          of ckIntegerLiteral:
-            resVal = some initEnFieldVal(
-              val.tokenStrings(conf.unit)[0].parseInt())
-
-          of ckDeclRefExpr:
-            warn val[0].treeRepr()
-
-            if val[0].cxType().cxKind() in tkPodKinds:
-              if $val[0] in result.namedVals:
-                resVal = some initEnFieldVal(result.namedVals[$val[0]])
+    result.enfields.add (
+      name: name,
+      value: getEnumFieldValue(value.get(), conf, result.namedVals)
+    )
 
 
-            else:
-              let decl = val[0].cxType().getTypeDeclaration()
-              assert decl.cxKind() == ckEnumDecl, $decl.cxKind()
-              for (name, value) in visitEnum(decl, @[], conf).getFields(conf).enfields:
-                if $name == $val[0]:
-                  warn "Found name reference from other enum"
-                  resVal = value
-                  break
-
-          of ckBinaryOperator:
-            # `clang/ASTBitCodes.h`
-            # enum StmtCode {
-            #   /// A marker record that indicates that we are at the end
-            #   /// of an expression.
-            #   STMT_STOP = DECL_LAST + 1,
-            err "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-
-          else:
-            err val[0].getSpellingLocation()
-            debug val[0].treeRepr()
-            debug val.treeRepr()
-            raiseImplementError(&"Kind {val[0].kind}")
-
-      elif $val.kind == "OverloadCandidate": # HACK
-        resval = none EnFieldVal
-
-      else:
-        err val.treeRepr(conf.unit)
-        raiseAssert(
-          &"#[ IMPLEMENT for kind {val.kind} {instantiationInfo()} ]#")
-
-    result.enfields.add (name: name, value: resval)
 
 proc cEnumName(
     str: string, nt: NType[PNode], cache: var WrapCache): string =
