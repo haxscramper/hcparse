@@ -311,12 +311,13 @@ proc isAggregateInitable*(
           return false
 
       else:
-        debug entry.treeRepr(conf.unit)
-        debug cast[int](entry.cxType().cxKind())
-        debug cast[int](entry.cxKind())
-        debug entry.getSpellingLocation()
-        debug cd.treeRepr(conf.unit)
-        raiseImplementKindError(entry)
+        return false
+        # debug entry.treeRepr(conf.unit)
+        # debug cast[int](entry.cxType().cxKind())
+        # debug cast[int](entry.cxKind())
+        # debug entry.getSpellingLocation()
+        # debug cd.treeRepr(conf.unit)
+        # raiseImplementKindError(entry)
 
 
 proc updateParentFields*(decl: var CDecl, conf: WrapConfig) =

@@ -272,10 +272,29 @@ proc getDepModules*(file: AbsFile, idx: FileIndex): seq[AbsFile] =
 #*************************************************************************#
 #****************************  File wrapping  ****************************#
 #*************************************************************************#
-func makeImport*(names: seq[string]): PNode =
+func makeImport*(names: NimImportSpec): PNode =
+  var elements: seq[PNode]
+  var imports = names.importPath
+  if names.isRelative:
+    var prefix: PNode
+    if names.relativeDepth == 0:
+      prefix = newPIdent("./")
+
+    else:
+      prefix = newPident(repeat("../", names.relativeDepth))
+
+    elements.add nnkPrefix.newPTree(
+      prefix,
+      newPident(imports[0])
+    )
+
+    imports = imports[1 ..^ 1]
+
+  for path in imports:
+    elements.add newPident(path)
+
   nnkImportStmt.newPTree(
-    names.mapIt(it.newPident()).foldl(
-      nnkInfix.newPTree(newPident("/"), a, b))
+    foldl(elements, nnkInfix.newPTree(newPident("/"), a, b))
   )
 
 proc getExports*(
@@ -355,7 +374,7 @@ proc wrapFile*(
     )
 
   for node in parsed.explicitDeps.mapIt(
-      conf.getImport(it, conf)).
+      conf.getImport(it, conf, false)).
       deduplicate().
       mapIt(it.makeImport()):
     tmpRes.add node.toNimDecl().newWrappedEntry(
@@ -450,14 +469,14 @@ type
     parsed*: ParsedFile
     wrapped*: seq[WrappedEntry]
     infile*: AbsFile
-    importName*: seq[string]
+    importName*: NimImportSpec
 
 proc boolCall*[A](
   cb: proc(a: A): bool, arg: A, default: bool = true): bool =
   if cb == nil: default else: cb(arg)
 
 func wrapName*(res: WrapResult): string =
-  res.importName.join("/") & ".nim"
+  res.importName.importPath.join("/") & ".nim"
 
 proc wrapAll*(
   files: seq[AbsFile],
@@ -507,7 +526,7 @@ proc wrapAll*(
     result.wrapped.add WrapResult(
       parsed: parsed.index[file],
       infile: file,
-      importName: wrap.getImport(file, wrap),
+      importName: wrap.getImport(file, wrap, true),
       wrapped: parsed.index[file].wrapFile(wrap, cache, parsed)
     )
 

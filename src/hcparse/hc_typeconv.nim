@@ -382,7 +382,7 @@ proc toNType*(
               info cxtype.lispRepr()
               debug decl.getSpellingLocation()
               debug decl.cxKind()
-              debug decl.treeRepr(conf.unit)
+              debug decl.treeRepr()
 
 
         res
@@ -490,7 +490,11 @@ proc toInitCall*(cursor: CXCursor, conf: WrapConfig): PNode =
           of ckTypeRef:
             # First found in `clang/Rewriter.h/getRangeSize()`
             result = newPCall(str)
-            assert cursor.len == 1
+            # assert cursor.len == 1, &[
+            #   $cursor.getSpellingLocation(),
+            #   "\n",
+            #   cursor.treeRepr()
+            # ]
 
           # TEMP
           # of ckCallExpr:
@@ -508,7 +512,7 @@ proc toInitCall*(cursor: CXCursor, conf: WrapConfig): PNode =
             err cursor[0].cxKind()
             debug "\n" & cursor.treeRepr(conf.unit)
             debug cursor.getSpellingLocation()
-            raiseAssert("#[ IMPLEMENT ]#")
+            # raiseAssert("#[ IMPLEMENT ]#")
 
         if isNil(result):
           return
@@ -525,7 +529,12 @@ proc toInitCall*(cursor: CXCursor, conf: WrapConfig): PNode =
           result = newPCall($cursor)
 
         elif cursor.cxType().cxKind() == tkTypedef:
-          warn "Found typedef used as default value"
+          err "Found typedef used as default value"
+          debug cursor.getSpellingLocation()
+          discard
+
+        elif cursor.cxType().cxKind() == tkEnum:
+          err "Found enum value as default"
           debug cursor.getSpellingLocation()
           discard
 
@@ -578,6 +587,16 @@ proc toInitCall*(cursor: CXCursor, conf: WrapConfig): PNode =
       of ckLambdaExpr:
         err "FIXME implement conversion to call from lambda expr"
         discard
+
+      of ckTypeRef:
+        err "FIXME implement conversion to call from type ref "
+        discard
+
+      of ckCStyleCastExpr:
+        result = nnkCast.newPTree(
+          cursor[0].cxType().toNType(conf).ntype.toNNode(),
+          aux(cursor[1], ilist)
+        )
 
       else:
         err "Implement for kind", cursor.cxKind()

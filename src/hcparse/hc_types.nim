@@ -247,6 +247,17 @@ type
       of nhskPNode:
         pnode*: PNode ## Anything else
 
+  NimImportSpec* = object
+    importPath*: seq[string]
+    case isRelative*: bool
+      of true:
+        relativeDepth*: int ## `0` means relative to current file, `./`.
+        ## Any number greater than `0` is converted to equal number of
+        ## directory-up `..`
+
+      else:
+        discard
+
   WrapConfig* = ref object
     ## Configuration for wrapping. Mostly deals with type renaming
 
@@ -272,8 +283,8 @@ type
     ## _T]`, where both types should be mapped to `T` you can make `T` and
     ## `T1` respectively, using value provided by `idx`
 
-    getImport*: proc(dep: AbsFile, conf: WrapConfig): seq[string] ## Generate
-    ## import statement for header file dependency
+    getImport*: proc(dep: AbsFile, conf: WrapConfig, isExternalImport: bool):
+      NimImportSpec ## Generate import statement for header file dependency
 
     ignoreCursor*: proc(curs: CXCursor, conf: WrapConfig): bool ## User-defined
     ## predicate for determining whether or not cursor should be
@@ -292,8 +303,8 @@ type
 
     isTypeInternal*: proc(cxt: CXType, conf: WrapConfig): bool
     depResolver*: proc(cursor, referencedBy: CXCursor): DepResolutionKind
-    isInLibrary*: proc(dep: AbsFile): bool ## Determine if `dep` file is in
-    ## the library.
+    isInLibrary*: proc(dep: AbsFile, conf: WrapConfig): bool ## Determine
+    ## if `dep` file is in the library.
 
     showParsed*: bool ## Show translation unit tree repr when wrapping
     isImportcpp*: bool ## Is wrapped code a C++ or C?
@@ -661,6 +672,23 @@ func methods*(cd: CDecl, kinds: set[CXCursorKind]): seq[CDecl] =
     if (member.kind == cdkMethod) and (member.cursor.cxKind in kinds):
       result.add member
 
+func `==`*(s1, s2: NimImportSpec): bool =
+  s1.importPath == s2.importPath and
+  s1.isRelative == s2.isRelative and (
+    if s1.isRelative:
+      s1.relativeDepth == s2.relativeDepth
+
+    else:
+      true
+  )
+
+func initNimImportSpec*(isExternalImport: bool, importPath: seq[string]):
+  NimImportSpec =
+
+  return NimImportSpec(
+    isRelative: not isExternalImport, importPath: importPath)
+
+
 func initCArg*(
     name: string, ntype: NType[PNode], varkind: NVarDeclKind = nvdLet
   ): CArg =
@@ -783,6 +811,9 @@ proc classifyOperator*(cd: CDecl): CXOperatorKind =
         ckFunctionDecl, ckFunctionTemplate
       }) and (name.startsWith("\"\"")):
         cxoUserLitOp
+
+      elif cd.cursor.cxKind() in {ckFunctionTemplate}:
+        cxoConvertOp
 
       else:
         raiseAssert(

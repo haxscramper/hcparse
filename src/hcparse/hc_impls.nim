@@ -80,20 +80,57 @@ proc contains*(dir: AbsDir, file: AbsFile): bool =
   else:
     return file[0 .. dir.high] == dir
 
+proc asIncludeFromDir*(
+  cursor: CXCursor | AbsFile, conf: WrapConfig, dir: AbsDir): string =
+
+  when cursor is CXCursor:
+    let file: AbsFile = cursor.getSpellingLocation().get().file
+
+  else:
+    let file: AbsFile = cursor
+
+  return file.getStr().dropPrefix(dir.getStr()).dropPrefix("/")
 
 proc asGlobalInclude*(cursor: CXCursor, conf: WrapConfig): string =
   let loc = cursor.getSpellingLocation().get()
   for dir in conf.parseConf.includepaths:
     if loc.file in dir:
-      return loc.file.getStr().dropPrefix(dir.getStr()).dropPrefix("/")
+      return asIncludeFromDir(cursor, conf, dir)
 
   return $loc.file
 
-proc asIncludeFromDir*(
-  cursor: CXCursor, conf: WrapConfig, dir: AbsDir): string =
+proc updateForInternalImport*(
+    cursor: CXCursor | AbsFile,
+    conf: WrapConfig,
+    dir: AbsDir, importSpec: var NimImportSpec) =
 
-  let loc = cursor.getSpellingLocation().get()
-  return loc.file.getStr().dropPrefix(dir.getStr()).dropPrefix("/")
+  when cursor is CXCursor:
+    let file = cursor.getSpellingLocation().get().file
+
+  else:
+    let file = cursor
+
+  info "Relative upcount"
+  debug dir
+  debug file
+  importSpec.relativeDepth = relativeUpCount(dir, file)
+  debug importSpec.relativeDepth
+
+
+
+proc asImportFromDir*(
+    cursor: CXCursor | AbsFile,
+    conf: WrapConfig, dir: AbsDir,
+    isExternalImport: bool
+  ): NimImportSpec =
+
+  result = NimImportSpec(isRelative: not isExternalImport)
+
+  for entry in asIncludeFromDir(cursor, conf, dir).split("/"):
+    result.importPath.add fixFileName(entry)
+
+  if not isExternalImport:
+    updateForInternalImport(cursor, conf, dir, result)
 
 proc isFromDir*(cursor: CXCursor, dir: AbsDir): bool =
   cursor.getSpellingLocation().get().file in dir
@@ -171,6 +208,15 @@ proc typeNameForScoped*(
   result = newNType(resname, genParams)
   conf.fixTypeName(result, conf, 0)
 
+proc getImportUsingDependencies*(
+    dependency: AbsFile,
+    wrapConfigurations: seq[WrapConfig],
+    isExternalImport: bool
+  ): NimImportSpec =
+
+  for config in wrapConfigurations:
+    if config.isInLibrary(dependency, config):
+      return config.getImport(dependency, config, true)
 
 proc getBuiltinHeaders*(): seq[AbsDir] =
   ## According to clang `documentation <https://clang.llvm.org/docs/LibTooling.html#builtin-includes>`_
@@ -198,8 +244,9 @@ let baseCParseConfig* = ParseConfig(
 let baseCppWrapConf* = WrapConfig(
   isImportcpp: true,
   parseConf: baseCppParseConfig,
-  isInLIbrary: (
-    proc(dep: AbsFile): bool {.closure.} = true
+  isInLibrary: (
+    proc(dep: AbsFile, conf: WrapConfig): bool {.closure.} =
+      dep.startsWith(conf.baseDir)
   ),
   makeHeader: (
     proc(cursor: CXCursor, conf: WrapConfig): NimHeaderSpec {.closure.} =
@@ -210,17 +257,24 @@ let baseCppWrapConf* = WrapConfig(
         NimHeaderSpec(kind: nhskGlobal, global: file)
   ),
   getImport: (
-    proc(dep: AbsFile, conf: WrapConfig): seq[string] {.closure.} =
+    proc(dep: AbsFile, conf: WrapConfig, isExternalImport: bool):
+      NimImportSpec {.closure.} =
       # if dep.startsWith("/usr/include/c++"):
       #   let (dir, name, ext) = dep.splitFile()
       #   @["cxxstd", "cxx_" & name.fixFileName()]
       # else:
       let (dir, name, ext) = dep.splitFile()
-      @[
-        name.splitCamel().
-          mapIt(it.toLowerAscii()).join("_").
-          fixFileName()
-      ]
+      result = initNimImportSpec(
+        isExternalImport,
+        @[
+          name.splitCamel().
+            mapIt(it.toLowerAscii()).join("_").
+            fixFileName()
+        ]
+      )
+
+      if not isExternalImport:
+        updateForInternalImport(dep, conf, conf.baseDir, result)
   ),
   typeNameForScoped: (
     proc(ident: CScopedIdent, conf: WrapConfig): NType[PNode] {.closure} =

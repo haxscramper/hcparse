@@ -60,7 +60,5 @@ func validCxxIdentifier*(str: string): bool =
   return true
 
 proc fixFileName*(name: string): string =
-  name.multiReplace({
-    "-": "_",
-    "+": "p"
-  })
+  name.multiReplace({"-": "_", "+": "p"}).
+    RelFile().withoutExt().getStr().toSnakeCase()
