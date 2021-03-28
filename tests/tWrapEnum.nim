@@ -12,45 +12,24 @@ import unittest
 
 let file = "/tmp/a.c"
 let str = """
-typedef struct {
-    enum {kFloat, kString} kind;
-    union {
-       float floatVal;
-       char* strVal;
-    };
 
-    struct {
-        int field1;
-        const int field2;
-    };
+class NeverDefined;
+class Forward;
 
-    struct named {
-        int field1;
-    } namedFld;
-} Value;
+class Forward {
+};
+
 """
 
 file.writeFile(str)
 
-let wrapConf = baseCWrapConf.withDeepIt do:
+let wrapConf = baseCppWrapConf.withDeepIt do:
   it.baseDir = AbsDir("/tmp")
-  it.setPrefixForEnum @{
-    "mandoclevel" : "ml",
-    "mandocerr" : "me"
-  }
+  it.showParsed = true
 
 suite "Wrap enum":
-  # echo parseCppString(str).treeRepr(str)
-
   let resFile = "/tmp/res.nim"
-  wrapWithConfig(
-    AbsFile file,
-    AbsFile resFile,
-    wrapConf,
-    baseCParseConfig
-  )
+  wrapWithConfig(AbsFile file, AbsFile resFile, wrapConf, baseCppParseConfig)
 
-
-  # echo readFile(resFile).colorizeToStr("nim")
   execShell shCmd(nim, c).withIt do:
     it.arg resFile

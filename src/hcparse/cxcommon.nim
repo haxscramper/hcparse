@@ -62,3 +62,10 @@ func validCxxIdentifier*(str: string): bool =
 proc fixFileName*(name: string): string =
   name.multiReplace({"-": "_", "+": "p"}).
     RelFile().withoutExt().getStr().toSnakeCase()
+
+proc toNimFile*(file: RelFile): RelFile =
+  var buf: seq[string]
+  for pathPart in file.getStr().split("/"):
+    buf.add fixFileName(pathPart)
+
+  result = RelFile(buf.join("/")).withExt("nim")

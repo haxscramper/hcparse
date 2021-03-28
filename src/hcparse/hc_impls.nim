@@ -110,11 +110,7 @@ proc updateForInternalImport*(
   else:
     let file = cursor
 
-  info "Relative upcount"
-  debug dir
-  debug file
   importSpec.relativeDepth = relativeUpCount(dir, file)
-  debug importSpec.relativeDepth
 
 
 
@@ -209,10 +205,15 @@ proc typeNameForScoped*(
   conf.fixTypeName(result, conf, 0)
 
 proc getImportUsingDependencies*(
+    conf: WrapConfig,
     dependency: AbsFile,
     wrapConfigurations: seq[WrapConfig],
     isExternalImport: bool
   ): NimImportSpec =
+
+  if conf.isInLibrary(dependency, conf):
+    return asImportFromDir(
+      dependency, conf, conf.baseDir, isExternalImport)
 
   for config in wrapConfigurations:
     if config.isInLibrary(dependency, config):

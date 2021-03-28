@@ -434,8 +434,6 @@ proc wrapFile*(
       else:
         discard
 
-  debug "Number of wrapped elements: ", result.len
-
 proc wrapFile*(
     file: AbsFile,
     flags: seq[string],

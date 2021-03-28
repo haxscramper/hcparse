@@ -602,8 +602,8 @@ proc toInitCall*(cursor: CXCursor, conf: WrapConfig): PNode =
         err "Implement for kind", cursor.cxKind()
         debug cursor.getSpellingLocation()
         debug cursor.tokenStrings(conf.unit)
-        debug cursor.treeRepr(conf.unit)
-        raiseAssert("#[ IMPLEMENT ]#")
+        # debug cursor.treeRepr(conf.unit)
+        # raiseAssert("#[ IMPLEMENT ]#")
 
   return aux(cursor, false)
 

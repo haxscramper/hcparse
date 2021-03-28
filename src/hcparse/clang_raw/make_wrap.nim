@@ -25,10 +25,6 @@ let wrapConf* = baseCppWrapConf.withDeepIt do:
     proc(dependency: AbsFile, conf: WrapConfig, isExternalImport: bool):
       NimImportSpec {.closure.} =
 
-      if conf.isInLibrary(dependency, conf):
-        return asImportFromDir(
-          dependency, conf, conf.baseDir.parentDir(), isExternalImport)
-
       return getImportUsingDependencies(
         dependency,
         @[cxxstd_wrap.wrapConf, baseCppWrapConf],
@@ -48,7 +44,7 @@ when isMainModule:
   # files = files[0 ..< min(files.high, 10)]
 
   for file in files:
-    let res = cwd() / file.withExt("nim")
+    let res = cwd() / file.toNimFile()
     if not exists(res) or ("/Rewriter.h" in file):
       debug baseDir / file, "->", res
       wrapWithConfig(baseDir / file, res, wrapConf, parseConf)

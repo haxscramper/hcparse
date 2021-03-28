@@ -611,6 +611,7 @@ proc setPrefixForEnum*(
         cache.enumPrefs.incl result
 
 proc initHeaderSpec*(file: AbsFile): NimHeaderSpec =
+
   NimHeaderSpec(kind: nhskAbsolute, file: file)
 
 proc initHeaderSpec*(global: string): NimHeaderSpec =

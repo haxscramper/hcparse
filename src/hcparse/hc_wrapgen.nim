@@ -1058,14 +1058,14 @@ proc wrapMacroEnum*(
 
   let prefix = commonPrefix(mapIt(values, $it.cursor)).dropSuffix("_")
   let enumPref = conf.prefixForEnum(@[toCName(prefix)], conf, cache)
-  info "Wrapping", prefix, "as", enumPref, values.len
+  # info "Wrapping", prefix, "as", enumPref, values.len
   var enumFields: seq[GenEnumValue]
   for val in values:
     let toks = val.cursor.tokenStrings(conf.unit)
     # FIXME range breaks on `#define func(arg)`
     let value = evalTokensInt(toks[1 ..^ 1])
     let name = enumPref & toks[0].splitCamel()[1..^1].capitalAscii().join("")
-    debug name, toks.join(", ", ("<\e[31m", "\e[39m>")), value
+    # debug name, toks.join(", ", ("<\e[31m", "\e[39m>")), value
 
     if value.isSome():
       enumFields.add GenEnumValue(
@@ -1123,7 +1123,7 @@ proc wrapMacroEnum*(
 
 proc wrapMacros*(
   declMacros: seq[CDecl], conf: WrapConfig, cache: var WrapCache): seq[GenEntry] =
-  info "Wrapping macros"
+  # info "Wrapping macros"
   var prefix: seq[string]
   var buf: seq[CDecl]
   var lastSplit: seq[string]
@@ -1134,7 +1134,7 @@ proc wrapMacros*(
       let split = split($decl.cursor, "_")
       let pref = commonPrefix(@[lastSplit, split])
       # If has any common prefix with last split, add it
-      debug $split, $lastSplit, $pref
+      # debug $split, $lastSplit, $pref
       if pref != prefix and lastSplit.len > 0:
         buf = @[]
 
@@ -1159,9 +1159,6 @@ proc wrapMacros*(
       except ImplementError as e:
         err "Cannot wrap macro collection to enum"
         debug e.msg
-        logIndented:
-          for element in buf:
-            debug element.cursor.treeRepr(conf.unit)
 
 
 
@@ -1170,10 +1167,10 @@ proc wrapApiUnit*(
   cache: var WrapCache, index: FileIndex): seq[GenEntry] =
   ## Generate wrapper for api unit.
   var macrolist: seq[CDecl]
-  info "Wrapping API unit"
   for decl in api.decls:
     if cache.canWrap(decl.cursor):
       cache.markWrap(decl.cursor)
+
     else:
       continue
 

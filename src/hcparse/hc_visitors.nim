@@ -541,6 +541,18 @@ proc visitCursor*(
     conf: WrapConfig, lastTypeDecl: var CDecl
   ): tuple[decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]] =
 
+  const classDeclKinds = {
+    ckClassDecl, ckClassTemplate, ckUnionDecl,
+    ckClassTemplatePartialSpecialization,
+    ckStructDecl
+  }
+
+  if isCursorDefinition(cursor) == 0 and
+     cursor.cxKind() in (classDeclKinds + {ckEnumDecl}):
+    # Early return for method forward declarations.
+    # TODO register forward declaration encounter
+    return
+
   if conf.ignoreCursor(cursor, conf):
     if cursor.cxKind() in {ckNamespace}:
       info "Ignoring namespace", cursor, "with elements"
@@ -555,9 +567,7 @@ proc visitCursor*(
       of ckNamespace:
         result.decls.add visitNamespace(cursor, parent, conf)
 
-      of ckClassDecl, ckClassTemplate, ckUnionDecl,
-         ckClassTemplatePartialSpecialization,
-         ckStructDecl:
+      of classDeclKinds:
         if not isNil(lastTypeDecl): result.decls.add lastTypeDecl
 
         lastTypeDecl = visitClass(cursor, parent, conf, none(CXCursor))
