@@ -31,7 +31,7 @@ func errorEnum*(path: CScopedIdent): CErrorCode =
 
 
 proc errorCodesToException*(
-    genProc: var GenProc, conf: WrapConfig, cache: var WrapCache,
+    genProc: var GenProc, conf: WrapConf, cache: var WrapCache,
     errorMap: seq[(CSCopedIdent, CErrorCode)]
   ): seq[WrappedEntry] =
 
@@ -81,7 +81,7 @@ proc contains*(dir: AbsDir, file: AbsFile): bool =
     return file[0 .. dir.high] == dir
 
 proc asIncludeFromDir*(
-  cursor: CXCursor | AbsFile, conf: WrapConfig, dir: AbsDir): string =
+  cursor: CXCursor | AbsFile, conf: WrapConf, dir: AbsDir): string =
 
   when cursor is CXCursor:
     let file: AbsFile = cursor.getSpellingLocation().get().file
@@ -91,7 +91,7 @@ proc asIncludeFromDir*(
 
   return file.getStr().dropPrefix(dir.getStr()).dropPrefix("/")
 
-proc asGlobalInclude*(cursor: CXCursor, conf: WrapConfig): string =
+proc asGlobalInclude*(cursor: CXCursor, conf: WrapConf): string =
   let loc = cursor.getSpellingLocation().get()
   for dir in conf.parseConf.includepaths:
     if loc.file in dir:
@@ -101,7 +101,7 @@ proc asGlobalInclude*(cursor: CXCursor, conf: WrapConfig): string =
 
 proc updateForInternalImport*(
     cursor: CXCursor | AbsFile,
-    conf: WrapConfig,
+    conf: WrapConf,
     dir: AbsDir, importSpec: var NimImportSpec) =
 
   when cursor is CXCursor:
@@ -116,7 +116,7 @@ proc updateForInternalImport*(
 
 proc asImportFromDir*(
     cursor: CXCursor | AbsFile,
-    conf: WrapConfig, dir: AbsDir,
+    conf: WrapConf, dir: AbsDir,
     isExternalImport: bool
   ): NimImportSpec =
 
@@ -134,7 +134,7 @@ proc isFromDir*(cursor: CXCursor, dir: AbsDir): bool =
 proc isFromFile*(cursor: CXCursor, file: AbsFile): bool =
   cursor.getSpellingLocation().get().file == file
 
-proc fixTypeName*(str: string, idx: int, conf: WrapConfig): string =
+proc fixTypeName*(str: string, idx: int, conf: WrapConf): string =
   ## Correct C++ type name to be used in nim wrappers. Convert `::` to
   ## joined name, use correct upper/lowercasing (nep1 style).
   if str.len == 0:
@@ -163,7 +163,7 @@ proc fixTypeName*(str: string, idx: int, conf: WrapConfig): string =
 
 
 proc fixTypeName*(
-  ntype: var NType[PNode], conf: WrapConfig, idx: int = 0) =
+  ntype: var NType[PNode], conf: WrapConf, idx: int = 0) =
   if ntype.kind in {ntkIdent, ntkGenericSpec}:
     ntype.head = fixTypeName(ntype.head, idx, conf)
 
@@ -190,7 +190,7 @@ proc fixTypeName*(
 
 
 proc typeNameForScoped*(
-    ident: CScopedIdent, conf: WrapConfig): NType[PNode] =
+    ident: CScopedIdent, conf: WrapConf): NType[PNode] =
 
   var resname: string
   var genParams: seq[NType[PNode]]
@@ -205,9 +205,9 @@ proc typeNameForScoped*(
   conf.fixTypeName(result, conf, 0)
 
 proc getImportUsingDependencies*(
-    conf: WrapConfig,
+    conf: WrapConf,
     dependency: AbsFile,
-    wrapConfigurations: seq[WrapConfig],
+    wrapConfurations: seq[WrapConf],
     isExternalImport: bool
   ): NimImportSpec =
 
@@ -215,7 +215,7 @@ proc getImportUsingDependencies*(
     return asImportFromDir(
       dependency, conf, conf.baseDir, isExternalImport)
 
-  for config in wrapConfigurations:
+  for config in wrapConfurations:
     if config.isInLibrary(dependency, config):
       return config.getImport(dependency, config, true)
 
@@ -232,25 +232,25 @@ proc getBuiltinHeaders*(): seq[AbsDir] =
     toAbsDir &"/usr/lib/clang/{version}/include"
   ]
 
-let baseCppParseConfig* = ParseConfig(
+let baseCppParseConf* = ParseConf(
   includepaths: getBuiltinHeaders(),
   globalFlags: @["-xc++", "-std=c++11"]
 )
 
-let baseCParseConfig* = ParseConfig(
+let baseCParseConf* = ParseConf(
   includePaths: getBuiltinHeaders(),
   globalFlags: @[]
 )
 
-let baseCppWrapConf* = WrapConfig(
+let baseCppWrapConf* = WrapConf(
   isImportcpp: true,
-  parseConf: baseCppParseConfig,
+  parseConf: baseCppParseConf,
   isInLibrary: (
-    proc(dep: AbsFile, conf: WrapConfig): bool {.closure.} =
+    proc(dep: AbsFile, conf: WrapConf): bool {.closure.} =
       dep.startsWith(conf.baseDir)
   ),
   makeHeader: (
-    proc(cursor: CXCursor, conf: WrapConfig): NimHeaderSpec {.closure.} =
+    proc(cursor: CXCursor, conf: WrapConf): NimHeaderSpec {.closure.} =
       let file = cursor.asGlobalInclude(conf)
       if file.startsWith("/"):
         NimHeaderSpec(kind: nhskAbsolute, file: AbsFile(file))
@@ -258,7 +258,7 @@ let baseCppWrapConf* = WrapConfig(
         NimHeaderSpec(kind: nhskGlobal, global: file)
   ),
   getImport: (
-    proc(dep: AbsFile, conf: WrapConfig, isExternalImport: bool):
+    proc(dep: AbsFile, conf: WrapConf, isExternalImport: bool):
       NimImportSpec {.closure.} =
       # if dep.startsWith("/usr/include/c++"):
       #   let (dir, name, ext) = dep.splitFile()
@@ -278,23 +278,23 @@ let baseCppWrapConf* = WrapConfig(
         updateForInternalImport(dep, conf, conf.baseDir, result)
   ),
   typeNameForScoped: (
-    proc(ident: CScopedIdent, conf: WrapConfig): NType[PNode] {.closure} =
+    proc(ident: CScopedIdent, conf: WrapConf): NType[PNode] {.closure} =
       typeNameForScoped(ident, conf)
   ),
   isDistinct: (
-    proc(ident: CSCopedIdent, conf: WrapConfig, cache: var WrapCache):
+    proc(ident: CSCopedIdent, conf: WrapConf, cache: var WrapCache):
       bool {.closure.} =
 
       false
   ),
   fixTypeName: (
     proc(ntype: var NType[PNode],
-         conf: WrapConfig, idx: int) {.closure.} =
+         conf: WrapConf, idx: int) {.closure.} =
       # Default implementation for type name fixes
       fixTypeName(ntype, conf, 0)
   ),
   ignoreCursor: (
-    proc(cursor: CXCursor, conf: WrapConfig): bool {.closure.} =
+    proc(cursor: CXCursor, conf: WrapConf): bool {.closure.} =
       if not ($cursor).startsWith("__cxx11") and
         (
           cursor.cxKind() notin { ckTypedefDecl } and
@@ -329,7 +329,7 @@ let baseCppWrapConf* = WrapConfig(
         return false
   ),
   isTypeInternal: (
-    proc(cxt: CXType, conf: WrapConfig): bool {.closure.} =
+    proc(cxt: CXType, conf: WrapConf): bool {.closure.} =
       case cxt.cxKind:
         of tkPodKinds:
           result = false
@@ -343,13 +343,13 @@ let baseCppWrapConf* = WrapConfig(
 
   ),
   isInternal: (
-    proc(dep: AbsFile, conf: WrapConfig,
+    proc(dep: AbsFile, conf: WrapConf,
          index: FileIndex): bool {.closure.} =
       isInternalImpl(dep, conf, index)
   ),
   prefixForEnum: (
     proc(
-      enumId: CScopedIdent, conf: WrapConfig, cache: var WrapCache
+      enumId: CScopedIdent, conf: WrapConf, cache: var WrapCache
     ): string =
       result = enumId[^1]
         .getName()

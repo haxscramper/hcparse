@@ -121,7 +121,7 @@ proc parseTranslationUnit*(
   )
 
 
-proc getFlags*(config: ParseConfig, file: AbsFile): seq[string] =
+proc getFlags*(config: ParseConf, file: AbsFile): seq[string] =
   ## Get list of command-line flags for partigular `file`. This includes
   ## both global flags, and file-specific ones
   result.add config.includepaths.toIncludes()
@@ -130,7 +130,7 @@ proc getFlags*(config: ParseConfig, file: AbsFile): seq[string] =
 
 proc parseFile*(
     file: AbsFile,
-    config: ParseConfig = baseCppParseConfig,
+    config: ParseConf = baseCppParseConf,
     opts: set[CXTranslationUnitFlags] = {
       tufDetailedPreprocessingRecord, tufSkipFunctionBodies}
   ): CXTranslationUnit =
@@ -140,8 +140,8 @@ proc parseFile*(
 
 proc parseFile*(
     file: AbsFile,
-    config: ParseConfig,
-    wrapConf: WrapConfig,
+    config: ParseConf,
+    wrapConf: WrapConf,
     reparseOnNil: bool = true
   ): ParsedFile =
 
@@ -225,8 +225,8 @@ proc registerDeps*(graph: var HeaderDepGraph, parsed: ParsedFile) =
 
 proc parseAll*(
   files: seq[AbsFile],
-  conf: ParseConfig,
-  wrapConf: WrapConfig, ): FileIndex =
+  conf: ParseConf,
+  wrapConf: WrapConf, ): FileIndex =
   for file in files:
     result.index[file] = parseFile(file, conf, wrapConf)
 
@@ -298,7 +298,7 @@ func makeImport*(names: NimImportSpec): PNode =
   )
 
 proc getExports*(
-  parsed: ParsedFile, conf: WrapConfig, index: FileIndex): seq[AbsFile] =
+  parsed: ParsedFile, conf: WrapConf, index: FileIndex): seq[AbsFile] =
   ## Get list of absolute files that provide types, used in public API
   ## for `parsed` file *and* marked as internal (e.g. not supposed to
   ## be imported separately)
@@ -306,7 +306,7 @@ proc getExports*(
     if conf.isInternal(dep, conf, index):
       result.add dep
 
-proc toNNode*(genEntries: seq[GenEntry], conf: WrapConfig):
+proc toNNode*(genEntries: seq[GenEntry], conf: WrapConf):
   seq[WrappedEntry] =
 
   for node in genEntries:
@@ -346,7 +346,7 @@ proc toNNode*(genEntries: seq[GenEntry], conf: WrapConfig):
 
 
 proc wrapFile*(
-  parsed: ParsedFile, conf: WrapConfig,
+  parsed: ParsedFile, conf: WrapConf,
   cache: var WrapCache, index: FileIndex): seq[WrappedEntry] =
   ## Create wrapper for parsed file and return list of wrapped entries. All
   ## type declarations are deduplicated and combined into single
@@ -437,12 +437,12 @@ proc wrapFile*(
 proc wrapFile*(
     file: AbsFile,
     flags: seq[string],
-    conf: WrapConfig,
+    conf: WrapConf,
     cache: var WrapCache,
     index: FileIndex
    ): tuple[parsed: ParsedFile, wrapped: seq[WrappedEntry]] =
 
-  let parsedConf = ParseConfig(
+  let parsedConf = ParseConf(
     globalFlags: getBuiltinHeaders().toIncludes(),
     fileFlags: { file : flags }.toTable()
   )
@@ -453,7 +453,7 @@ proc wrapFile*(
 proc wrapFile*(
     cmd: CXCompileCommand,
     extraFlags: seq[string],
-    conf: WrapConfig,
+    conf: WrapConf,
     cache: var WrapCache,
     index: FileIndex
   ): tuple[parsed: ParsedFile, wrapped: seq[WrappedEntry]] =
@@ -478,8 +478,8 @@ func wrapName*(res: WrapResult): string =
 
 proc wrapAll*(
   files: seq[AbsFile],
-  parseConf: ParseConfig,
-  wrapConf: WrapConfig
+  parseConf: ParseConf,
+  wrapConf: WrapConf
             ): tuple[wrapped: seq[WrapResult], index: FileIndex] =
 
   var
@@ -530,9 +530,9 @@ proc wrapAll*(
 
   result.index = parsed
 
-proc getExpanded*(file: AbsFile, parseConf: ParseConfig): string =
+proc getExpanded*(file: AbsFile, parseConf: ParseConf): string =
   let flags = getFlags(parseConf, file)
-  var cmd = shCmd(clang, -C, -E, -P)
+  var cmd = shellCmd(clang, -C, -E, -P)
   for flag in flags:
     cmd.raw flag
 
@@ -543,8 +543,8 @@ proc getExpanded*(file: AbsFile, parseConf: ParseConfig): string =
 proc wrapSingleFile*(
     file: FsFile,
     errorReparseVerbose: bool = false,
-    wrapConf: WrapConfig = baseCppWrapConf,
-    parseConf: ParseConfig = baseCppParseConfig,
+    wrapConf: WrapConf = baseCppWrapConf,
+    parseConf: ParseConf = baseCppParseConf,
   ): tuple[decls: seq[NimDecl[PNode]], codegen: seq[CxxCodegen]] =
   ## Generate wrapper for a single file.
   ##
@@ -553,7 +553,7 @@ proc wrapSingleFile*(
   ##  `NimDecl`
   ##
   ## `wrapConf` provide user-defined implementation heuristics for
-  ## necessary edge cases (see `WrapConfig` type documentation).
+  ## necessary edge cases (see `WrapConf` type documentation).
   ## `postprocess` is a sequence of postprocessing actions that will be run
   ## on generated `WrappedEntry` structures and then added to final
   ## declaration. Default implementation of postprocessing includes
@@ -609,8 +609,15 @@ proc wrapSingleFile*(
     updateComments(node.decl, node)
     result.decls.add node.decl
 
-proc wrapWithConfig*(
-  infile, outfile: FsFile, wrapConf: WrapConfig, parseConf: ParseConfig) =
+proc wrapAllFiles*(
+    files: seq[AbsFile], wrapConf: WrapConf, parseConf: ParseConf) =
+  ## Generate and write wrappers for all `files`
+
+  discard
+
+
+proc wrapWithConf*(
+  infile, outfile: FsFile, wrapConf: WrapConf, parseConf: ParseConf) =
 
   writeWrapped(
     wrapSingleFile(

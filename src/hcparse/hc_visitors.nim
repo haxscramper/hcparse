@@ -70,13 +70,13 @@ proc argsSignature*(
 
 proc visitCursor*(
     cursor: CXCursor, parent: CScopedIdent,
-    conf: WrapConfig, lastTypeDecl: var CDecl
+    conf: WrapConf, lastTypeDecl: var CDecl
   ): tuple[decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]]
 
 
 proc visitClass*(
     cursor: CXCursor, parent: CScopedIdent,
-    conf: WrapConfig, typedef: Option[CXCursor]
+    conf: WrapConf, typedef: Option[CXCursor]
   ): CDecl
 
 proc visitMethod*(
@@ -102,7 +102,7 @@ proc visitMethod*(
 
 proc visitField*(
     cursor: CXCursor, parent: CSCopedIdent, accs: CXAccessSpecifier,
-    conf: WrapConfig
+    conf: WrapConf
   ): CDecl =
 
   result = CDecl(
@@ -123,12 +123,12 @@ proc visitField*(
 var undefCnt: int = 0
 
 # proc visitAlias*(
-#   cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): CDecl =
+#   cursor: CXCursor, parent: CScopedIdent, conf: WrapConf): CDecl =
 #   result = CDecl(
 #     kind: cdkAlias, cursor: cursor, ident: parent & toCName(cursor))
 
 proc visitFunction*(
-  cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): CDecl =
+  cursor: CXCursor, parent: CScopedIdent, conf: WrapConf): CDecl =
   result = CDecl(
     kind: cdkFunction,
     cursor: cursor,
@@ -168,7 +168,7 @@ proc visitFunction*(
 
 
 proc visitEnum*(
-  cursor: CXcursor, parent: CScopedIdent, conf: WrapConfig): CDecl =
+  cursor: CXcursor, parent: CScopedIdent, conf: WrapConf): CDecl =
   result = CDecl(
     kind: cdkEnum,
     cursor: cursor,
@@ -189,7 +189,7 @@ proc getDefaultAccess*(cursor: CXCursor): CXAccessSpecifier =
 
 
 proc isAggregateInitable*(
-  cd: CXCursor, initArgs: var seq[CArg], conf: WrapConfig): bool =
+  cd: CXCursor, initArgs: var seq[CArg], conf: WrapConf): bool =
   ## Determine if entry pointed to by `cd`'s cursor is subject to aggregate
   ## initalization. Add all fields for aggregate initalization into
   ## @arg{initArgs}. NOTE: fields will be added unconditionally, so first
@@ -320,7 +320,7 @@ proc isAggregateInitable*(
         # raiseImplementKindError(entry)
 
 
-proc updateParentFields*(decl: var CDecl, conf: WrapConfig) =
+proc updateParentFields*(decl: var CDecl, conf: WrapConf) =
   for parent in decl.cursor.getClassBaseCursors():
     var buf = ParentDecl(cursor: parent)
     var accs = parent.getDefaultAccess()
@@ -348,7 +348,7 @@ proc updateParentFields*(decl: var CDecl, conf: WrapConfig) =
 
 proc visitAlias*(
     lastTypeDecl: var CDecl, parent: CSCopedIdent,
-    subn: CXCursor, conf: WrapConfig
+    subn: CXCursor, conf: WrapConf
   ): Option[CDecl] =
 
   if subn[0].cxKind() in {ckEnumDecl, ckStructDecl, ckUnionDecl, ckClassDecl}:
@@ -404,7 +404,7 @@ proc visitAlias*(
 
 proc visitClass*(
     cursor: CXCursor, parent: CScopedIdent,
-    conf: WrapConfig, typedef: Option[CXCursor]
+    conf: WrapConf, typedef: Option[CXCursor]
   ): CDecl =
 
   ## Convert class under cursor to `CDecl`
@@ -515,7 +515,7 @@ proc visitClass*(
 
 
 proc visitNamespace*(
-  cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): seq[CDecl] =
+  cursor: CXCursor, parent: CScopedIdent, conf: WrapConf): seq[CDecl] =
   ## Convert all elements in namespace into sequence of `CDecl`
   ## elements.
 
@@ -532,13 +532,13 @@ proc visitNamespace*(
     result.add lastTypeDecl
 
 proc visitMacrodef*(
-  cursor: CXCursor, parent: CScopedIdent, conf: WrapConfig): CDecl =
+  cursor: CXCursor, parent: CScopedIdent, conf: WrapConf): CDecl =
   CDecl(cursor: cursor, kind: cdkMacro)
 
 
 proc visitCursor*(
     cursor: CXCursor, parent: CScopedIdent,
-    conf: WrapConfig, lastTypeDecl: var CDecl
+    conf: WrapConf, lastTypeDecl: var CDecl
   ): tuple[decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]] =
 
   const classDeclKinds = {
@@ -645,7 +645,7 @@ proc getPublicAPI*(cd: CDecl): seq[CXCursor] =
 
 
 proc splitDeclarations*(
-  tu: CXTranslationUnit, conf: WrapConfig): CApiUnit =
+  tu: CXTranslationUnit, conf: WrapConf): CApiUnit =
   ## Convert main file of translation unit into flattened sequence of
   ## high-level declarations. All cursors for objects/structs are
   ## retained. Public API elements are stored in `publicAPI` field

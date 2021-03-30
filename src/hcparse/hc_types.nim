@@ -219,7 +219,7 @@ type
 
   HeaderDepGraph* = Graph[AbsFile, string, HeaderGraphFlags]
 
-  ParseConfig* = object
+  ParseConf* = object
     globalFlags*: seq[string] ## List of parse flags applied on each
     ## file parse. Mostly for things like include paths.
     fileFlags*: Table[AbsFile, seq[string]] ## List of parse flags
@@ -258,23 +258,23 @@ type
       else:
         discard
 
-  WrapConfig* = ref object
-    ## Configuration for wrapping. Mostly deals with type renaming
+  WrapConf* = ref object
+    ## Confuration for wrapping. Mostly deals with type renaming
 
     header*: AbsFile ## Current main translation file (header)
 
     unit*: CXTranslationUnit
 
-    makeHeader*: proc(cursor: CXCursor, conf: WrapConfig): NimHeaderSpec ## |
+    makeHeader*: proc(cursor: CXCursor, conf: WrapConf): NimHeaderSpec ## |
     ## Generate identifier for `{.header: ... .}`
 
     typeNameForScoped*: proc(
-      ident: CScopedIdent, conf: WrapConfig): NType[PNode]
+      ident: CScopedIdent, conf: WrapConf): NType[PNode]
     ## Generate type name for a scoped identifier - type or function
     ## declaration. The only important things are: `head` name and list of
     ## generic parameters, so `ntkIdent` is the optimal return kind.
 
-    fixTypeName*: proc(ntype: var NType[PNode], conf: WrapConfig, idx: int)
+    fixTypeName*: proc(ntype: var NType[PNode], conf: WrapConf, idx: int)
     ## Change type name for `ntype`.
     ##
     ## First argument is a type to be fixed, second one is parent
@@ -283,10 +283,10 @@ type
     ## _T]`, where both types should be mapped to `T` you can make `T` and
     ## `T1` respectively, using value provided by `idx`
 
-    getImport*: proc(dep: AbsFile, conf: WrapConfig, isExternalImport: bool):
+    getImport*: proc(dep: AbsFile, conf: WrapConf, isExternalImport: bool):
       NimImportSpec ## Generate import statement for header file dependency
 
-    ignoreCursor*: proc(curs: CXCursor, conf: WrapConfig): bool ## User-defined
+    ignoreCursor*: proc(curs: CXCursor, conf: WrapConf): bool ## User-defined
     ## predicate for determining whether or not cursor should be
     ## considered a part of api. Things like `internal` namespaces.
 
@@ -295,23 +295,23 @@ type
     baseDir*: AbsDir ## Root directory for C++ sources being wrapped. Used
                      ## for debug comments in generated sources
     isInternal*: proc(
-      dep: AbsFile, conf: WrapConfig, index: FileIndex): bool ## Determine
+      dep: AbsFile, conf: WrapConf, index: FileIndex): bool ## Determine
     ## if particular dependency (`dep` file) should be re-exported.
     ## Note that this decision is not tied to particular file *from
     ## which* `dep` has been imported, but instead works the same way
     ## for all headers that depend on `dep`
 
-    isTypeInternal*: proc(cxt: CXType, conf: WrapConfig): bool
+    isTypeInternal*: proc(cxt: CXType, conf: WrapConf): bool
     depResolver*: proc(cursor, referencedBy: CXCursor): DepResolutionKind
-    isInLibrary*: proc(dep: AbsFile, conf: WrapConfig): bool ## Determine
+    isInLibrary*: proc(dep: AbsFile, conf: WrapConf): bool ## Determine
     ## if `dep` file is in the library.
 
     showParsed*: bool ## Show translation unit tree repr when wrapping
     isImportcpp*: bool ## Is wrapped code a C++ or C?
-    parseConf*: ParseConfig
+    parseConf*: ParseConf
 
     prefixForEnum*: proc(
-      enumId: CScopedIdent, conf: WrapConfig,
+      enumId: CScopedIdent, conf: WrapConf,
       cache: var WrapCache): string ## Return prefix for enum referred to
     ## by `enumId`. This is used to override autogenrated prefix for
     ## particular enum.
@@ -326,7 +326,7 @@ type
     ## code at the start of generated wrapper for `source` file.
 
     newProcCb*: proc(
-      genProc: var GenProc, conf: WrapConfig, cache: var WrapCache
+      genProc: var GenProc, conf: WrapConf, cache: var WrapCache
     ): seq[WrappedEntry] ## Callback invoked after each new procedure is
     ## generated. Is allowed (and expected to) mutate passed proc, and
     ## generate additional helper wrappers either via return value (added
@@ -334,7 +334,7 @@ type
     ## list of variables.
 
     isDistinct*: proc(
-      ident: CSCopedIdent, conf: WrapConfig, cache: var WrapCache): bool ## |
+      ident: CSCopedIdent, conf: WrapConf, cache: var WrapCache): bool ## |
     ## Determine if given `ident` should be wrapped as nim `distinct` type
     ## or not.
     ## - WARNING :: Default implementation always returns `false` i.e. all
@@ -480,7 +480,7 @@ type
 
   Postprocess* = object
     impl*: proc(we: var WrappedEntry,
-                conf: WrapConfig,
+                conf: WrapConf,
                 codegen: var seq[CxxCodegen]): seq[WrappedEntry]
 
 
@@ -520,7 +520,7 @@ proc add*(
     genSeq.add GenEntry(kind: gekPass, genPass: gen)
 
 proc newProcVisit*(
-    genProc: var GenProc, conf: WrapConfig, cache: var WrapCache
+    genProc: var GenProc, conf: WrapConf, cache: var WrapCache
   ): seq[WrappedEntry] =
 
   if not isNil(conf.newProcCb):
@@ -581,7 +581,7 @@ proc addDoc*(cache: var WrapCache, id: CSCopedIdent, doc: seq[string]) =
   if doc.len > 0:
     cache.identComments.mgetOrPut(id, @[]).add(doc)
 
-proc importX*(conf: WrapConfig): string =
+proc importX*(conf: WrapConf): string =
   if conf.isImportCpp:
     "importcpp"
 
@@ -589,13 +589,13 @@ proc importX*(conf: WrapConfig): string =
     "importc"
 
 proc setPrefixForEnum*(
-  wrapConf: var WrapConfig, maps: seq[(string, string)]) =
+  wrapConf: var WrapConf, maps: seq[(string, string)]) =
 
   let oldImpl = wrapConf.prefixForEnum
 
   wrapConf.prefixForEnum =
     proc(
-      enumId: CScopedIdent, conf: WrapConfig,
+      enumId: CScopedIdent, conf: WrapConf,
       cache: var WrapCache
     ): string =
       let name = enumId[^1].getName()

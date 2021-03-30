@@ -14,13 +14,13 @@ import fusion/matching except addPrefix
 
 import hc_visitors, hc_types
 
-proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache):
+proc wrapEnum*(declEn: CDecl, conf: WrapConf, cache: var WrapCache):
   seq[GenEntry]
 
 
 proc wrapOperator*(
     oper: CDecl,
-    conf: WrapConfig
+    conf: WrapConf
   ): tuple[decl: GenProc, addThis: bool] =
 
   var it = initGenProc(oper, currIInfo())
@@ -118,7 +118,7 @@ proc wrapOperator*(
 
 proc wrapProcedure*(
     pr: CDecl,
-    conf: WrapConfig,
+    conf: WrapConf,
     parent: Option[NType[PNode]],
     cache: var WrapCache,
     parentDecl: Option[CDecl],
@@ -311,7 +311,7 @@ proc wrapProcedure*(
 
 
 proc fixNames(
-  ppd: var GenProc, conf: WrapConfig, parent: NType[PNode]) =
+  ppd: var GenProc, conf: WrapConf, parent: NType[PNode]) =
 
   var idx: int = 0
   for param in mitems(ppd.genParams):
@@ -333,7 +333,7 @@ proc fixNames(
 
 proc wrapMethods*(
     cd: CDecl,
-    conf: WrapConfig,
+    conf: WrapConf,
     parent: NType[PNode],
     cache: var WrapCache
   ): tuple[methods: seq[GenProc], extra: seq[GenEntry]] =
@@ -367,7 +367,7 @@ proc wrapMethods*(
   for gproc in mitems(result.methods):
     fixNames(gproc, conf, parent)
 
-proc wrapFunction*(cd: CDecl, conf: WrapConfig, cache: var WrapCache):
+proc wrapFunction*(cd: CDecl, conf: WrapConf, cache: var WrapCache):
   seq[GenEntry] =
 
   var (decl, canAdd) = wrapProcedure(
@@ -378,7 +378,7 @@ proc wrapFunction*(cd: CDecl, conf: WrapConfig, cache: var WrapCache):
 
 
 proc wrapTypeFromNamespace(
-  ident: CScopedIdent, conf: WrapConfig, cursor: CXCursor): PObjectDecl =
+  ident: CScopedIdent, conf: WrapConf, cursor: CXCursor): PObjectDecl =
   ## `cursor` points to type declaration being wrapped
   # WARNING for now I assume that 'UNEXPOSED' type only occurs in
   # situations like `std::move_iterator<'0>::pointer` where typedef
@@ -403,10 +403,10 @@ proc wrapTypeFromNamespace(
 
 
 
-proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject
+proc wrapObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): GenObject
 
 proc wrapAlias*(
-    al: CDecl, parent: CScopedIdent, conf: WrapConfig, cache: var WrapCache):
+    al: CDecl, parent: CScopedIdent, conf: WrapConf, cache: var WrapCache):
   seq[GenEntry] =
   # NOTE returning multiple values because of
   # `typedef struct A {} A, *APtr` shit that can result in multple
@@ -540,7 +540,7 @@ proc wrapAlias*(
       #     )
 
 proc getParentFields*(
-    inCursor: CXCursor, obj: PObjectDecl, wrapConf: WrapConfig
+    inCursor: CXCursor, obj: PObjectDecl, wrapConf: WrapConf
   ): seq[PProcDecl] =
 
   for class in inCUrsor.getClassBaseCursors():
@@ -609,7 +609,7 @@ proc publicFields*(cd: CDecl): seq[CDecl] =
 
 
 proc updateAggregateInit*(
-  cd: CDecl, conf: WrapConfig, cache: var WrapCache, gen: var GenObject) =
+  cd: CDecl, conf: WrapConf, cache: var WrapCache, gen: var GenObject) =
   if conf.isImportcpp and # QUESTION how to handle aggregate initalization
                           # for C structures? Just declare `{.emit.}`` proc
                           # (with or without designated initalizers)
@@ -627,7 +627,7 @@ proc updateAggregateInit*(
 
 
 proc updateFieldExport*(
-  cd: CDecl, conf: WrapConfig, cache: var WrapCache, gen: var GenObject) =
+  cd: CDecl, conf: WrapConf, cache: var WrapCache, gen: var GenObject) =
   # Add getter/setter methods for *all* public fields that are accessible
   # from this object
   for fld in cd.publicFields():
@@ -670,7 +670,7 @@ proc updateFieldExport*(
     gen.memberFields.add res
 
 
-proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
+proc wrapObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): GenObject =
   let tdecl = cd.cursor.cxType().getTypeDeclaration()
   assert cd.kind in {cdkClass, cdkStruct, cdkUnion}, $cd.kind
 
@@ -718,10 +718,10 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
 #   else:
 #     return parseInt(value)
 
-# proc getFields*(declEn: CDecl, conf: WrapConfig): EnumFieldResult
+# proc getFields*(declEn: CDecl, conf: WrapConf): EnumFieldResult
 
 # proc getEnumFieldValue*(
-#     value: CXCursor, conf: WrapConfig,
+#     value: CXCursor, conf: WrapConf,
 #     namedValues: var Table[string, BiggestInt]
 #   ): Option[EnFieldVal] =
 
@@ -816,7 +816,7 @@ proc wrapObject*(cd: CDecl, conf: WrapConfig, cache: var WrapCache): GenObject =
 
 
 
-# proc getFields*(declEn: CDecl, conf: WrapConfig): EnumFieldResult =
+# proc getFields*(declEn: CDecl, conf: WrapConf): EnumFieldResult =
 #   for (name, value) in declEn.enumFields:
 #     let value = getEnumFieldValue(value.get(), conf, result.namedVals)
 
@@ -867,7 +867,7 @@ proc renameField(
 
 proc makeGenEnum*(
     declEn: CDecl, flds: seq[(CXCursor, BiggestInt)],
-    conf: WrapConfig, cache: var WrapCache
+    conf: WrapConf, cache: var WrapCache
   ): GenEnum =
 
   var nt = conf.typeNameForScoped(declEn.ident, conf)
@@ -914,7 +914,7 @@ proc makeGenEnum*(
 
 
 
-proc makeEnumConverters(gen: GenEnum, conf: WrapConfig, cache: var WrapCache):
+proc makeEnumConverters(gen: GenEnum, conf: WrapConf, cache: var WrapCache):
   GenPass =
 
   # Metadata associated with proxy enum
@@ -984,7 +984,7 @@ proc makeEnumConverters(gen: GenEnum, conf: WrapConfig, cache: var WrapCache):
 
 
 
-proc wrapEnum*(declEn: CDecl, conf: WrapConfig, cache: var WrapCache): seq[GenEntry] =
+proc wrapEnum*(declEn: CDecl, conf: WrapConf, cache: var WrapCache): seq[GenEntry] =
   ## Generate wrapper for enum declaration
   ##
   ## Generates wrapper for enum declaration, using wrap configuration.
@@ -1054,7 +1054,7 @@ func capitalAscii*(strs: seq[string]): seq[string] =
     result.add toLowerAscii(str).capitalizeAscii()
 
 proc wrapMacroEnum*(
-  values: seq[CDecl], conf: WrapConfig, cache: var WrapCache): seq[GenEntry] =
+  values: seq[CDecl], conf: WrapConf, cache: var WrapCache): seq[GenEntry] =
 
   let prefix = commonPrefix(mapIt(values, $it.cursor)).dropSuffix("_")
   let enumPref = conf.prefixForEnum(@[toCName(prefix)], conf, cache)
@@ -1122,7 +1122,7 @@ proc wrapMacroEnum*(
 
 
 proc wrapMacros*(
-  declMacros: seq[CDecl], conf: WrapConfig, cache: var WrapCache): seq[GenEntry] =
+  declMacros: seq[CDecl], conf: WrapConf, cache: var WrapCache): seq[GenEntry] =
   # info "Wrapping macros"
   var prefix: seq[string]
   var buf: seq[CDecl]
@@ -1163,7 +1163,7 @@ proc wrapMacros*(
 
 
 proc wrapApiUnit*(
-  api: CApiUnit, conf: WrapConfig,
+  api: CApiUnit, conf: WrapConf,
   cache: var WrapCache, index: FileIndex): seq[GenEntry] =
   ## Generate wrapper for api unit.
   var macrolist: seq[CDecl]
@@ -1214,9 +1214,9 @@ proc getNType*(carg: CArg): NType[PNode] =
   else:
     return carg.ntype
 
-proc toNNode*(gen: GenEntry, conf: WrapConfig): seq[WrappedEntry]
+proc toNNode*(gen: GenEntry, conf: WrapConf): seq[WrappedEntry]
 
-proc toNNode*(gp: GenProc, wrapConf: WrapConfig): PProcDecl =
+proc toNNode*(gp: GenProc, wrapConf: WrapConf): PProcDecl =
   result = newPProcDecl(
     name = gp.name,
     iinfo = gp.iinfo,
@@ -1252,7 +1252,7 @@ proc toNNode*(gp: GenProc, wrapConf: WrapConfig): PProcDecl =
   if gp.impl.isSome():
     result.impl = gp.impl.get()
 
-proc toNNode*(gen: GenEnum, conf: WrapConfig): (PEnumDecl, PEnumDecl) =
+proc toNNode*(gen: GenEnum, conf: WrapConf): (PEnumDecl, PEnumDecl) =
   block:
     var rawEnum = newPEnumDecl(gen.rawName, iinfo = currIInfo())
     rawEnum.addDocComment gen.docComment.join("\n")
@@ -1295,7 +1295,7 @@ proc toNNode*(gen: GenEnum, conf: WrapConfig): (PEnumDecl, PEnumDecl) =
 
     result[1] = nimEnum
 
-proc toNNode*(gen: GenObject, conf: WrapConfig): seq[WrappedEntry] =
+proc toNNode*(gen: GenObject, conf: WrapConf): seq[WrappedEntry] =
   var decl = PObjectDecl(
     iinfo: gen.iinfo,
     name: gen.name
@@ -1384,7 +1384,7 @@ proc toNNode*(gen: GenObject, conf: WrapConfig): seq[WrappedEntry] =
 
   result.add obj
 
-proc toNNode*(gen: GenAlias, conf: WrapConfig): AliasDecl[PNode] =
+proc toNNode*(gen: GenAlias, conf: WrapConf): AliasDecl[PNode] =
   result = AliasDecl[PNode](
     iinfo: gen.iinfo,
     docComment: gen.docComment.join("\n"),
@@ -1395,7 +1395,7 @@ proc toNNode*(gen: GenAlias, conf: WrapConfig): AliasDecl[PNode] =
   )
 
 
-proc toNNode*(gen: GenEntry, conf: WrapConfig): seq[WrappedEntry] =
+proc toNNode*(gen: GenEntry, conf: WrapConf): seq[WrappedEntry] =
   case gen.kind:
     of gekEnum:
       let (e1, e2) = toNNode(gen.genEnum, conf)
@@ -1428,7 +1428,7 @@ proc writeWrapped*(
     outFile: FsFile,
     codegens: Option[FsDir],
     compile: seq[FsFile],
-    wrapConf: WrapConfig
+    wrapConf: WrapConf
   ) =
 
   ##[

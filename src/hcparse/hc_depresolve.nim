@@ -4,16 +4,16 @@ import hmisc/helpers
 import hmisc/other/[oswrap, colorlogger]
 import cxtypes, cxcommon, hc_types
 
-proc getDepFiles*(deps: seq[CXCursor], conf: WrapConfig): seq[AbsFile]
+proc getDepFiles*(deps: seq[CXCursor], conf: WrapConf): seq[AbsFile]
 
-proc isDependency*(cursor: CXCursor, conf: WrapConfig): bool =
+proc isDependency*(cursor: CXCursor, conf: WrapConf): bool =
   return conf.depResolver(
     cursor, conf.unit.getTranslationUnitCursor()) == drkImportUses
 
 
 
 
-proc getDepFiles*(cxtype: CXType, conf: WrapConfig): seq[AbsFile] =
+proc getDepFiles*(cxtype: CXType, conf: WrapConf): seq[AbsFile] =
   let decl = cxtype.getTypeDeclaration()
   for parm in cxtype.genParams():
     if parm.cxKind != tkInvalid:
@@ -30,10 +30,10 @@ proc getDepFiles*(cxtype: CXType, conf: WrapConfig): seq[AbsFile] =
     assertExists(file)
 
 proc isInternalImpl*(
-  dep: AbsFile, conf: WrapConfig, index: FileIndex): bool =
+  dep: AbsFile, conf: WrapConf, index: FileIndex): bool =
   return not index.index[dep].isExplicitlyAdded
 
-proc getDepFiles*(deps: seq[CXCursor], conf: WrapConfig): seq[AbsFile] =
+proc getDepFiles*(deps: seq[CXCursor], conf: WrapConf): seq[AbsFile] =
   ## Generate list of files that have to be wrapped
   # assert conf.unit.getTranslationUnitCursor().cxKind == ckTranslationUnit
 

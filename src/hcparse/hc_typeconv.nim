@@ -13,13 +13,13 @@ import std/[algorithm, strformat, sequtils, strutils]
 
 import cxcommon
 
-proc getTypeName*(cxtype: CXType, conf: WrapConfig): string
+proc getTypeName*(cxtype: CXType, conf: WrapConf): string
 
 proc toNType*(
   cxtype: CXType,
-  conf: WrapConfig): tuple[ntype: NType[PNode], mutable: bool]
+  conf: WrapConf): tuple[ntype: NType[PNode], mutable: bool]
 
-proc fromElaboratedPType*(cxtype: CXType, conf: WrapConfig): NType[PNode] =
+proc fromElaboratedPType*(cxtype: CXType, conf: WrapConf): NType[PNode] =
   # debug cxtype
   let genParams = cxtype.getNumTemplateArguments()
   let decl = cxtype.getTypeDeclaration()
@@ -46,7 +46,7 @@ proc fromElaboratedPType*(cxtype: CXType, conf: WrapConfig): NType[PNode] =
   else:
     result = newPType(getTypeName(cxtype, conf))
 
-proc dropPOD*(cxtype: CXType, conf: WrapConfig): string =
+proc dropPOD*(cxtype: CXType, conf: WrapConf): string =
   case cxtype.cxKind:
     of tkElaborated:
       cxtype.fromElaboratedPType(conf).head
@@ -60,7 +60,7 @@ proc dropPOD*(cxtype: CXType, conf: WrapConfig): string =
     else:
       ""
 
-proc toPIdentDefs*(cursor: CXCursor, conf: WrapConfig): PIdentDefs =
+proc toPIdentDefs*(cursor: CXCursor, conf: WrapConf): PIdentDefs =
   var varname = $cursor
   if varname.len == 0:
     varname = "arg" & $cursor.cxType().dropPOD(conf)
@@ -192,7 +192,7 @@ proc toFullScopedIdent*(cxtype: CXType): CScopedIdent =
 #   debug cursor.treeRepr()
 #   raiseImplementError("")
 
-proc getTypeName*(cxtype: CXType, conf: WrapConfig): string =
+proc getTypeName*(cxtype: CXType, conf: WrapConf): string =
   let curs = cxtype.getTypeDeclaration()
   case curs.cxKind:
     of ckTypedefDecl, ckTypeAliasDecl:
@@ -236,7 +236,7 @@ proc fromCxxTypeName*(name: string): string =
 
 proc toNType*(
   cxtype: CXType,
-  conf: WrapConfig): tuple[ntype: NType[PNode], mutable: bool] =
+  conf: WrapConf): tuple[ntype: NType[PNode], mutable: bool] =
   ## Convert CXType to nim type. Due to differences in how mutability
   ## handled in nim and C it is not entirely possible to map `CXType`
   ## to `NType` without losing this information. Instead `mutable` is
@@ -466,7 +466,7 @@ proc isEnum*(cxtype: CXType): bool =
     else:
       return false
 
-proc toInitCall*(cursor: CXCursor, conf: WrapConfig): PNode =
+proc toInitCall*(cursor: CXCursor, conf: WrapConf): PNode =
   proc aux(cursor: CXCursor, ilist: bool): PNode =
     case cursor.cxKind():
       of ckUnexposedExpr:
@@ -608,7 +608,7 @@ proc toInitCall*(cursor: CXCursor, conf: WrapConfig): PNode =
   return aux(cursor, false)
 
 
-proc setDefaultForArg*(arg: var CArg, cursor: CXCursor, conf: WrapConfig) =
+proc setDefaultForArg*(arg: var CArg, cursor: CXCursor, conf: WrapConf) =
   ## Update default value for argument.
   ## - @arg{arg} :: Non-raw argument to update default for
   ## - @arg{cursor} :: original cursor for argument declaration
