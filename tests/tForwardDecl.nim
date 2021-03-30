@@ -2,9 +2,11 @@ import hcparse/[wrap_common]
 import hmisc/other/oswrap
 
 withTempDir():
+  startColorLogger()
+
   mkDirStructure:
-    file "class-B.hpp": "class A; class B { A* ptr; };"
-    file "class-A.hpp": "class B; class A { B* ptr; };"
+    file "class-B.hpp": "struct A; struct B { A* ptr; };"
+    file "class-A.hpp": "struct B; struct A { B* ptr; };"
 
   let parseConf = baseCppParseConf.withIt do:
     discard

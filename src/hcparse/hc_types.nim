@@ -351,7 +351,7 @@ type
     nameCache*: StringNameCache
     genEnums*: seq[GenEnum]
 
-  GenBase* {.inheritable.} = object
+  GenBase* {.inheritable.} = ref object
     ## Common fields for all `GenX` types. Not used for inheritance, only
     ## to avoud code duplication.
     cdecl* {.requiresinit.}: CDecl
@@ -364,7 +364,7 @@ type
     gokStruct
     gokClass
 
-  GenField* = object of GenBase
+  GenField* = ref object of GenBase
     rawName*: string
     name*: string
     fullName*: CSCopedIdent
@@ -373,7 +373,7 @@ type
     isConst*: bool ## Field is const-qualified
     anonymousType*: Option[GenEntry] ## Wrapper for anonymous type (if any)
 
-  GenObject* = object of GenBase
+  GenObject* = ref object of GenBase
     kind*: GenObjectKind
     rawName*: string
     name*: NType[PNode]
@@ -387,7 +387,7 @@ type
 
     nestedEntries*: seq[GenEntry]
 
-  GenProc* = object of GenBase
+  GenProc* = ref object of GenBase
     ## Generated wrapped proc
     name*: string ## Name of the generated proc on nim side
     icpp*: string ## `importcpp` pattern string
@@ -405,7 +405,7 @@ type
     noPragmas*: bool ## Do not add default C wrapper pragamas. Used for
                      ## pure nim enums
 
-  GenEnumValue* = object of GenBase
+  GenEnumValue* = ref object of GenBase
     baseName*: string ## Original name of the enum value
     resCName*: string ## Enum field value for 'raw' C wrapper proc
     resNimName*: string ## Enum field name for 'proxy' nim proc
@@ -416,7 +416,7 @@ type
     stringif*: string ## 'stringified' version of fully qualified field
                       ## name (`enumName::fieldname`)
 
-  GenEnum* = object of Genbase
+  GenEnum* = ref object of Genbase
     ## Generated enum
     case isMacroEnum* {.requiresinit.}: bool
       of false:
@@ -434,21 +434,21 @@ type
     name*: string ## Converted nim name
     values*: seq[GenEnumValue] ## Filtered, ordered sequence of values
 
-  GenAlias* = object of GenBase
+  GenAlias* = ref object of GenBase
     isDistinct*: bool
     newAlias*: NType[PNode]
     baseType*: NType[PNode]
 
-  GenPass* = object
+  GenPass* = ref object
     iinfo* {.requiresinit.}: LineInfo
     docComment*: seq[string]
     passEntries*: seq[WrappedEntry]
 
-  GenImport* = object
+  GenImport* = ref object
     iinfo* {.requiresinit.}: LineInfo
     importSpec*: NimImportSpec
 
-  GenForward* = object of GenBase
+  GenForward* = ref object of GenBase
 
 
   GenEntryKind* = enum
@@ -461,7 +461,7 @@ type
     gekForward ## Forward declaration for struct/union/class/enum
     gekImport ## Import statement
 
-  GenEntry* = object
+  GenEntry* = ref object
     ## Toplevel wrapper for different entry kinds.
     ##
     ## Does not server any particular purpose other than to allow storing
@@ -495,7 +495,7 @@ type
     postTypes*: bool
     cursor* {.requiresinit.}: CXCursor
 
-  WrappedFile* = object
+  WrappedFile* = ref object
     entries*: seq[GenEntry]
     case isGenerated*: bool ## File was generated from strongly linked
                             ## cluster of forward-declared types.
@@ -521,7 +521,7 @@ type
     header*: string
     filename*: RelFile
 
-  WrapResult* = object
+  WrapResult* = ref object
     parsed*: ParsedFile
     wrapped*: seq[WrappedEntry]
     infile*: AbsFile

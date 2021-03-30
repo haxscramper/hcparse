@@ -1,4 +1,4 @@
-import std/[tables, options, strutils, strformat,
+import std/[tables, options, strutils, strformat, hashes,
             sequtils, bitops, sugar, deques, sets]
 
 import hnimast
@@ -6,7 +6,7 @@ import hnimast
 import hmisc/helpers
 import hmisc/algo/hstring_algo
 import hmisc/other/[oswrap, colorlogger, hshell]
-import hmisc/types/colorstring
+import hmisc/types/[colorstring, hgraph]
 import gram
 
 import
@@ -296,13 +296,45 @@ proc toNNode*(genEntries: seq[GenEntry], conf: WrapConf):
 
 
 
+type
+  TypeNode = object
+    name*: string
+
+func hash*(typeNode: TypeNode): Hash =
+  hash(typeNode.name)
+
+func initTypeNode*(name: string): TypeNode =
+  TypeNode(name: name)
+
 proc patchForward*(
     wrapped: var seq[WrappedFile], conf: WrapConf, cache: var WrapCache):
   seq[WrappedFile] =
   ## Replace `GenForward` declarations with required import. Return list of
   ## additional generated files.
 
-  discard
+  info "Patching forward declarations"
+
+  var typeGraph = newHGraph[TypeNode, void]()
+
+  for file in wrapped:
+    for entry in file.entries:
+      if entry.kind in {gekObject}:
+        let objectNode = typeGraph.addOrGetNode(
+          initTypeNode(entry.genObject.name.head))
+
+        for field in entry.genObject.memberFields:
+          for used in field.fieldType.allUsedTypes():
+            if not used.isPrimitiveHead():
+              discard typeGraph.addEdge(
+                objectNode,
+                typeGraph.addOrGetNode(initTypeNode(used.head))
+              )
+
+
+  echo typeGraph.graphvizRepr()
+
+
+
 
 
 
@@ -312,7 +344,7 @@ proc wrapFiles*(
 
   var genFiles: seq[WrappedFile]
   for file in parsed:
-    var resFile: WrappedFile
+    var resFile = WrappedFile()
     # Generate necessary default imports for all files
     resFile.entries.add initGenImport(@["bitops"], currIInfo())
     resFile.entries.add initGenImport(@["hcparse", "wraphelp"], currIInfo())
