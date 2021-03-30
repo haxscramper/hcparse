@@ -1,11 +1,8 @@
-import gram, cxtypes, cxcommon
+import cxtypes, cxcommon
 import hmisc/other/[oswrap, colorlogger]
 import hnimast, hnimast/pprint
 import std/[tables, sets, strutils, sequtils, hashes, strformat, macros]
 import hmisc/algo/[hseq_mapping, hstring_algo, hseq_distance]
-
-const HeaderGraphFlags* = toInt({
-  Directed, ValueIndex, UniqueEdges, UniqueNodes})
 
 type
   DepResolutionKind* = enum
@@ -217,8 +214,6 @@ type
     ## original files for wrapping, or was added as dependency
     ## (/transtitive dependency) for other file?
 
-  HeaderDepGraph* = Graph[AbsFile, string, HeaderGraphFlags]
-
   ParseConf* = object
     globalFlags*: seq[string] ## List of parse flags applied on each
     ## file parse. Mostly for things like include paths.
@@ -229,7 +224,6 @@ type
 
   FileIndex* = object
     index*: Table[AbsFile, ParsedFile] ## Index of all parsed files
-    depGraph*: HeaderDepGraph
 
   NimHeaderSpecKind* = enum
     nhskGlobal

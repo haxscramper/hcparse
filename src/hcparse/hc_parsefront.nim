@@ -203,26 +203,6 @@ proc incl*[N, E, F](
 
 
 
-proc registerDeps*(graph: var HeaderDepGraph, parsed: ParsedFile) =
-  let file = parsed.filename
-
-  for dep in parsed.api.includes:
-    let
-      path = dep.includedPath.realpath
-      ifrm = dep.includedFrom.realpath
-
-    graph.incl(path)
-    graph.incl(ifrm)
-    # notice ifrm, " -> ", path
-    graph.incl((ifrm, path), &"{dep.includedAs}:{dep.fromLine}",)
-
-
-  for dep in parsed.explicitDeps:
-    graph.incl(file.realpath)
-    graph.incl(dep.realpath)
-    graph.incl((file.realpath, dep.realpath), "@@@")
-
-
 proc parseAll*(
   files: seq[AbsFile],
   conf: ParseConf,
@@ -230,44 +210,8 @@ proc parseAll*(
   for file in files:
     result.index[file] = parseFile(file, conf, wrapConf)
 
-  result.depGraph = newGraph[AbsFile, string](HeaderGraphFlags)
-
-  for file, parsed in result.index:
-    result.depGraph.registerDeps(parsed)
-
-
-
 import hasts/graphviz_ast
 export toPng, toXDot, AbsFile
-
-func dotRepr*(idx: FileIndex, onlyPP: bool = true): DotGraph =
-  result.styleNode = makeRectConsolasNode()
-  ## Generate dot representation of dependencies in file index
-
-  result.rankdir = grdLeftRight
-  for file in idx.depGraph.nodes:
-    result.addNode(makeDotNode(hash file.value, file.value.getStr()))
-
-  for (source, edge, target) in idx.depGraph.edges:
-    var e =  makeDotEdge(
-      hash source.value,
-      hash target.value,
-      edge.value
-    )
-
-    if edge.value == "@@@":
-      e.style = edsDashed
-      e.label = none(string)
-      if not onlyPP:
-        result.addEdge e
-    else:
-      result.addEdge e
-
-proc getDepModules*(file: AbsFile, idx: FileIndex): seq[AbsFile] =
-  ## Get list of modules that have to be imported in wrapper for file
-  ## `file`.
-  for dep in idx.depGraph[file].outgoing():
-    result.add dep.target.value
 
 #*************************************************************************#
 #****************************  File wrapping  ****************************#
@@ -468,60 +412,6 @@ proc boolCall*[A](
 
 func wrapName*(res: WrapResult): string =
   res.importName.importPath.join("/") & ".nim"
-
-proc wrapAll*(
-  files: seq[AbsFile],
-  parseConf: ParseConf,
-  wrapConf: WrapConf
-            ): tuple[wrapped: seq[WrapResult], index: FileIndex] =
-
-  var
-    que = initDeque[AbsFile]()
-    visited: HashSet[AbsFile]
-    cache: WrapCache
-    parsed: FileIndex = files.parseAll(parseConf, wrapConf)
-
-  for file, _ in parsed.index:
-    que.addLast file # Add all files to que
-    visited.incl file # Mark all as visited
-
-  while que.len > 0:
-    let file = que.popFirst()
-    # info "Parsing file", file
-    if file notin visited: # If dependency is new parse it
-      parsed.index[file] = file.parseFile(parseConf, wrapConf)
-      visited.incl file
-
-    # Add to graph
-    parsed.depGraph.registerDeps(parsed.index[file])
-
-    # Store all explicit dependencies for file
-    for dep in parsed.index[file].explicitDeps:
-      if dep in visited or wrapConf.ignoreFile(dep):
-        discard
-      else:
-        que.addLast dep
-
-    for dep in parsed.index[file].api.includes:
-      if dep.includedPath in visited or
-         wrapConf.ignoreFile.boolCall(dep.includedPath):
-        discard
-      else:
-        que.addLast dep.includedPath
-
-  var wrap = wrapConf
-
-  for file in visited:
-    wrap.header = file
-    wrap.unit = parsed.index[file].unit
-    result.wrapped.add WrapResult(
-      parsed: parsed.index[file],
-      infile: file,
-      importName: wrap.getImport(file, wrap, true),
-      wrapped: parsed.index[file].wrapFile(wrap, cache, parsed)
-    )
-
-  result.index = parsed
 
 proc getExpanded*(file: AbsFile, parseConf: ParseConf): string =
   let flags = getFlags(parseConf, file)
