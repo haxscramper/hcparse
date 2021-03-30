@@ -299,6 +299,7 @@ proc toNNode*(genEntries: seq[GenEntry], conf: WrapConf):
 type
   TypeNode = object
     name*: string
+    declareFile*: Option[WrappedFile]
 
 func hash*(typeNode: TypeNode): Hash =
   hash(typeNode.name)
@@ -319,12 +320,33 @@ proc patchForward*(
   for file in wrapped:
     for entry in file.entries:
       if entry.kind in {gekObject}:
-        let objectNode = typeGraph.addOrGetNode(
+        # Get node for current type
+        var objectNode = typeGraph.addOrGetNode(
           initTypeNode(entry.genObject.name.head))
 
+        if objectNode.value.declareFile.isSome():
+          # Declaration file is added each node. One node is created for
+          # each unique `entry.genObject.name` ecountered. If node with
+          # given name already exists it either means tha algorithm is bad,
+          # or there is a two identically-named types somewhere. Which not
+          # impossible - even more, it can happen quite easily. So I need
+          # to IMPLEMENT some way for additional disambiguation of a type
+          # based on where it is *declared*. But then I have to somehow
+          # deal with type being referenced (and in that case I only know a
+          # type name)
+          raiseImplementError(
+            "Multiple file declarations for type " & $entry.genObject.name)
+
+        else:
+          objectNode.value.declareFile = some(file)
+
+        # Add outgoing edges for all types that were explicitly used.
         for field in entry.genObject.memberFields:
           for used in field.fieldType.allUsedTypes():
             if not used.isPrimitiveHead():
+              # QUESTION what about `int` fields, or other types that are
+              # either not wrapped at all, or wrapped using some convoluted
+              # multi-stage generics?
               discard typeGraph.addEdge(
                 objectNode,
                 typeGraph.addOrGetNode(initTypeNode(used.head))
@@ -332,7 +354,7 @@ proc patchForward*(
 
 
   for typeGroup in typeGraph.connectedComponents():
-    echo typeGroup
+    info typeGroup.mapIt(it.value.name)
 
 
 

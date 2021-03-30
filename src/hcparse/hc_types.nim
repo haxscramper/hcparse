@@ -523,8 +523,12 @@ type
 
   WrapResult* = ref object
     parsed*: ParsedFile
-    wrapped*: seq[WrappedEntry]
-    infile*: AbsFile
+    wrapped*: seq[WrappedEntry] ## Generated wrapped entries
+    # FIXME wrap result might contain multiple files
+    infile*: AbsFile ## Path to base wrapped file
+    # QUESTION `importName` is most likely to cause a lot of headaches if I
+    # only use one. Ideally I need to have 'external' import spec, and the
+    # one relative to project root.
     importName*: NimImportSpec
 
 
