@@ -3,8 +3,8 @@ import hmisc/other/oswrap
 
 withTempDir():
   mkDirStructure:
-    file "class-B.hpp": "class A; class B { A* ptr; }"
-    file "class-A.hpp": "class B; class A { B* ptr; }"
+    file "class-B.hpp": "class A; class B { A* ptr; };"
+    file "class-A.hpp": "class B; class A { B* ptr; };"
 
   let parseConf = baseCppParseConf.withIt do:
     discard

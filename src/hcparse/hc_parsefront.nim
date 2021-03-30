@@ -263,6 +263,13 @@ proc toNNode*(genEntries: seq[GenEntry], conf: WrapConf):
           node.genProc.cdecl.cursor
         )
 
+      of gekImport:
+        result.add node.genImport.toNNode(conf)
+
+      of gekForward:
+        raiseUnexpectedKindError(
+          node, "Forward declaration must be converted to pass/import")
+
       of gekAlias:
         result.add newWrappedEntry(
           node.genAlias.toNNode(conf).toNimDecl(),
@@ -289,49 +296,64 @@ proc toNNode*(genEntries: seq[GenEntry], conf: WrapConf):
 
 
 
+proc patchForward*(
+    wrapped: var seq[WrappedFile], conf: WrapConf, cache: var WrapCache):
+  seq[WrappedFile] =
+  ## Replace `GenForward` declarations with required import. Return list of
+  ## additional generated files.
+
+  discard
+
+
+
+proc wrapFiles*(
+    parsed: seq[ParsedFile], conf: WrapConf,
+    cache: var WrapCache, index: FileIndex): seq[WrappedFile] =
+
+  var genFiles: seq[WrappedFile]
+  for file in parsed:
+    var resFile: WrappedFile
+    # Generate necessary default imports for all files
+    resFile.entries.add initGenImport(@["bitops"], currIInfo())
+    resFile.entries.add initGenImport(@["hcparse", "wraphelp"], currIInfo())
+
+    when false: # QUESTION I don't even remember what this thing does
+      if not isNil(conf.userCode):
+        tmpRes.add newWrappedEntry(
+          toNimDecl(conf.userCode(parsed.filename)),
+          false, currIInfo(), CXCursor()
+        )
+
+    for node in file.explicitDeps.mapIt(
+        conf.getImport(it, conf, false)).
+        deduplicate():
+
+      # Add imports for explicit dependencies
+      resFile.entries.add initGenImport(node, currIInfo())
+
+    # Add wrapper for main API unit
+    resFile.entries.add file.api.wrapApiUnit(conf, cache, index)
+    genFiles.add resFile
+
+  # Patch *all* wrapped file entries at once, replacing `GenForward`
+  # entries with imports and returning list of additional files (for
+  # strongly connected type clusters that span multiple files)
+  result.add patchForward(genFiles, conf, cache)
+  # Add generated wrapper files themselves
+  result.add genFiles
+
+
 proc wrapFile*(
-  parsed: ParsedFile, conf: WrapConf,
-  cache: var WrapCache, index: FileIndex): seq[WrappedEntry] =
-  ## Create wrapper for parsed file and return list of wrapped entries. All
-  ## type declarations are deduplicated and combined into single
-  ## `WrappedEntry` multitype declaration.
-
-  # info "Wrapping", parsed.filename
-  var tmpRes: seq[WrappedEntry]
-  tmpRes.add newWrappedEntry(
-    toNimDecl(
-      pquote do:
-        # `pushShit`
-        {.push warning[UnusedImport]:off.}
-        import bitops, hcparse/wraphelp
-        {.pop.}
-    ),
-    false,
-    currIInfo(),
-    CXCursor()
-  )
-
-  if not isNil(conf.userCode):
-    tmpRes.add newWrappedEntry(
-      toNimDecl(conf.userCode(parsed.filename)),
-      false, currIInfo(), CXCursor()
-    )
-
-  for node in parsed.explicitDeps.mapIt(
-      conf.getImport(it, conf, false)).
-      deduplicate().
-      mapIt(it.makeImport()):
-    tmpRes.add node.toNimDecl().newWrappedEntry(
-      false, currIINfo(), CXCursor())
-
-  tmpRes.add parsed.api.wrapApiUnit(conf, cache, index).toNNode(conf)
-
+    wrapped: WrappedFile, conf: WrapConf,
+    cache: var WrapCache, index: FileIndex):
+  seq[WrappedEntry] =
   # Coollect all types into single wrapped entry type block. All duplicate
   # types (caused by forward declarations which is not really possible to
   # differentiated) will be overwritten. This should be fine I guess,
   # because you can't declare type again after defining it (I hope), so all
   # last type encounter will always be it's definition.
   var res: Table[string, WrappedEntry]
+  var tmpRes = wrapped.entries.toNNode(conf)
 
   for elem in tmpRes:
     case elem.decl.kind:
@@ -378,42 +400,13 @@ proc wrapFile*(
       else:
         discard
 
-proc wrapFile*(
-    file: AbsFile,
-    flags: seq[string],
-    conf: WrapConf,
-    cache: var WrapCache,
-    index: FileIndex
-   ): tuple[parsed: ParsedFile, wrapped: seq[WrappedEntry]] =
-
-  let parsedConf = ParseConf(
-    globalFlags: getBuiltinHeaders().toIncludes(),
-    fileFlags: { file : flags }.toTable()
-  )
-
-  result.parsed = parseFile(file, parsedConf, conf)
-  result.wrapped = result.parsed.wrapFile(conf, cache, index)
-
-proc wrapFile*(
-    cmd: CXCompileCommand,
-    extraFlags: seq[string],
-    conf: WrapConf,
-    cache: var WrapCache,
-    index: FileIndex
-  ): tuple[parsed: ParsedFile, wrapped: seq[WrappedEntry]] =
-
-  wrapFile(
-    toAbsFile($cmd.getFilename(), true),
-    extraFlags & cmd.getFlags(), conf, cache, index)
-
-proc boolCall*[A](
-  cb: proc(a: A): bool, arg: A, default: bool = true): bool =
-  if cb == nil: default else: cb(arg)
-
 func wrapName*(res: WrapResult): string =
   res.importName.importPath.join("/") & ".nim"
 
 proc getExpanded*(file: AbsFile, parseConf: ParseConf): string =
+  ## Return expanded content of the @arg{file} using @sh{clang}. Uses
+  ## include paths and other flags from @arg{parseConf}. Expanded form does
+  ## not contain `#line` directives, but preserves comments.
   let flags = getFlags(parseConf, file)
   var cmd = shellCmd(clang, -C, -E, -P)
   for flag in flags:
@@ -422,6 +415,17 @@ proc getExpanded*(file: AbsFile, parseConf: ParseConf): string =
   cmd.arg file
 
   result = evalShellStdout(cmd)
+
+proc updateComments(
+    decl: var PNimDecl, node: WrappedEntry, wrapConf: WrapConf) =
+
+  decl.addCodeComment("Wrapper for `" & toCppNamespace(
+    node.ident, withNames = true) & "`\n")
+  if node.cursor.getSpellingLocation().getSome(loc):
+    let file = withoutPrefix(AbsFile(loc.file), wrapConf.baseDir)
+    decl.addCodeComment(
+      &"Declared in {file}:{loc.line}")
+
 
 proc wrapSingleFile*(
     file: FsFile,
@@ -476,20 +480,12 @@ proc wrapSingleFile*(
 
   wrapConf.unit = parsed.unit
 
-  let wrapped = parsed.wrapFile(wrapConf, cache, index)
-
-
-  proc updateComments(decl: var PNimDecl, node: WrappedEntry) =
-    decl.addCodeComment("Wrapper for `" & toCppNamespace(
-      node.ident, withNames = true) & "`\n")
-    if node.cursor.getSpellingLocation().getSome(loc):
-      let file = withoutPrefix(AbsFile(loc.file), wrapConf.baseDir)
-      decl.addCodeComment(
-        &"Declared in {file}:{loc.line}")
+  let wrapped = wrapFiles(@[parsed], wrapConf, cache, index)[0].
+    wrapFile(wrapConf, cache, index)
 
   for node in wrapped:
     var node = node
-    updateComments(node.decl, node)
+    updateComments(node.decl, node, wrapConf)
     result.decls.add node.decl
 
 proc wrapAllFiles*(
@@ -497,13 +493,27 @@ proc wrapAllFiles*(
   ## Generate and write wrappers for all `files`
 
   var
-    cache: WrapCache
+    cache: WrapCache # Global cache for all parsed files
     index: FileIndex
+    parsed: seq[ParsedFile] # Full list of all parsed files
+    wrapConf = wrapConf # Global wrapper configuration
 
   for file in files:
     fillDocComments(getExpanded(toAbsFile(file), parseConf), cache)
 
+  for file in files:
+    var parsedFile = parseFile(file, parseConf, wrapConf)
+    wrapConf.unit = parsedFile.unit
 
+    parsed.add parsedFile
+
+  var wrapped: seq[seq[WrappedEntry]]
+  for file in wrapFiles(parsed, wrapConf, cache, index):
+    wrapped.add wrapFile(file, wrapConf, cache, index)
+
+  for file in mitems(wrapped):
+    for node in mitems(file):
+      updateComments(node.decl, node, wrapConf)
 
 
 proc wrapWithConf*(

@@ -1394,6 +1394,9 @@ proc toNNode*(gen: GenAlias, conf: WrapConf): AliasDecl[PNode] =
     newType: gen.newAlias
   )
 
+proc toNNode*(gen: GenImport, conf: WrapConf): WrappedEntry =
+  ## Convert import passthough wrapped entry.
+  discard
 
 proc toNNode*(gen: GenEntry, conf: WrapConf): seq[WrappedEntry] =
   case gen.kind:
@@ -1415,13 +1418,17 @@ proc toNNode*(gen: GenEntry, conf: WrapConf): seq[WrappedEntry] =
 
     of gekObject:
       result.add toNNode(gen.genObject, conf)
-      # for entry in toNNode(gen.genObject, conf):
-      #   result.add entry.toNimDecl().newWrappedEntry(
-      #     true, gen.genObject.iinfo, gen.cdecl.cursor)
 
     of gekProc:
       result.add toNNode(gen.genProc, conf).toNimDecl().newWrappedEntry(
         true, gen.genProc.iinfo, gen.cdecl.cursor)
+
+    of gekImport:
+      result.add toNNode(gen.genImport, conf)
+
+    of gekForward:
+      raiseUnexpectedKindError(
+        gen, "Forward declaration nodes should be converted to import/pass")
 
 proc writeWrapped*(
     res: tuple[decls: seq[NimDecl[PNode]], codegen: seq[CxxCodegen]],

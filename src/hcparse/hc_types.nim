@@ -437,12 +437,22 @@ type
     docComment*: seq[string]
     passEntries*: seq[WrappedEntry]
 
+  GenImport* = object
+    iinfo* {.requiresinit.}: LineInfo
+    importSpec*: NimImportSpec
+
+  GenForward* = object of GenBase
+
+
   GenEntryKind* = enum
-    gekEnum
-    gekProc
-    gekObject
-    gekAlias
-    gekPass
+    gekEnum ## Enum wrapper
+    gekProc ## Method, operator, or function
+    gekObject ## Struct, union, or class
+    gekAlias ## `typedef` or `using`
+    gekPass ## Raw passthrough
+
+    gekForward ## Forward declaration for struct/union/class/enum
+    gekImport ## Import statement
 
   GenEntry* = object
     ## Toplevel wrapper for different entry kinds.
@@ -465,6 +475,12 @@ type
       of gekPass:
         genPass*: GenPass
 
+      of gekImport:
+        genImport*: GenImport
+
+      of gekForward:
+        genForward*: GenForward
+
 
   WrappedEntry* = object
     decl*: PNimDecl
@@ -472,10 +488,15 @@ type
     postTypes*: bool
     cursor* {.requiresinit.}: CXCursor
 
-  Postprocess* = object
-    impl*: proc(we: var WrappedEntry,
-                conf: WrapConf,
-                codegen: var seq[CxxCodegen]): seq[WrappedEntry]
+  WrappedFile* = object
+    entries*: seq[GenEntry]
+    case isGenerated*: bool ## File was generated from strongly linked
+                            ## cluster of forward-declared types.
+      of true:
+        discard
+
+      of false:
+        discard
 
 
   EnFieldVal* = object
@@ -502,7 +523,7 @@ type
 
 proc add*(
     genSeq: var seq[GenEntry],
-    gen: GenProc | GenObject |  GenEnum | GenAlias | GenPass
+    gen: GenProc | GenObject |  GenEnum | GenAlias | GenPass | GenImport
   ) =
 
   when gen is GenProc:
@@ -519,6 +540,9 @@ proc add*(
 
   elif gen is GenPass:
     genSeq.add GenEntry(kind: gekPass, genPass: gen)
+
+  elif gen is GenImport:
+    genSeq.add GenEntry(kind: gekImport, genImport: gen)
 
 proc newProcVisit*(
     genProc: var GenProc, conf: WrapConf, cache: var WrapCache
@@ -629,7 +653,8 @@ func cdecl*(gen: GenEntry): CDecl =
     of gekProc: gen.genProc.cdecl
     of gekObject: gen.genObject.cdecl
     of gekAlias: gen.genAlias.cdecl
-    of gekPass: raiseUnexpectedKindError(gen)
+    of gekForward: gen.genForward.cdecl
+    of gekPass, gekImport: raiseUnexpectedKindError(gen)
 
 func `$`*(we: WrappedEntry): string = $we.decl
 func `$`*(we: seq[WrappedEntry]): string =
@@ -709,6 +734,14 @@ func initCArg*(name: string, cursor: CXCursor): CArg =
 
 func initGenProc*(cdecl: CDecl, iinfo: LineInfo): GenProc =
   GenProc(cdecl: cdecl, iinfo: iinfo)
+
+func initGenImport*(importPath: seq[string], iinfo: LineInfo): GenImport =
+  GenImport(iinfo: iinfo, importSpec: NimImportSpec(
+    isRelative: false, importPath: importPath
+  ))
+
+func initGenImport*(importSpec: NimImportSpec, iinfo: LineInfo): GenImport =
+  GenImport(iinfo: iinfo, importSpec: importSpec)
 
 #==========================  Helper utilities  ===========================#
 proc declHash*(cursor: CXCursor): Hash =
@@ -841,11 +874,6 @@ func getNimName*(cd: CDecl): string =
 
 proc initEnFieldVal*(v: BiggestInt): EnFieldVal =
   EnFieldVal(isRefOther: false, value: v)
-
-
-
-func newPostprocess*(cb: Postprocess.impl): Postprocess =
-  Postprocess(impl: cb)
 
 func toNNode*(nhs: NimHeaderSpec): PNode =
   case nhs.kind:
