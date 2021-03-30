@@ -462,13 +462,6 @@ proc wrapFile*(
     toAbsFile($cmd.getFilename(), true),
     extraFlags & cmd.getFlags(), conf, cache, index)
 
-type
-  WrapResult* = object
-    parsed*: ParsedFile
-    wrapped*: seq[WrappedEntry]
-    infile*: AbsFile
-    importName*: NimImportSpec
-
 proc boolCall*[A](
   cb: proc(a: A): bool, arg: A, default: bool = true): bool =
   if cb == nil: default else: cb(arg)
@@ -613,7 +606,14 @@ proc wrapAllFiles*(
     files: seq[AbsFile], wrapConf: WrapConf, parseConf: ParseConf) =
   ## Generate and write wrappers for all `files`
 
-  discard
+  var
+    cache: WrapCache
+    index: FileIndex
+
+  for file in files:
+    fillDocComments(getExpanded(toAbsFile(file), parseConf), cache)
+
+
 
 
 proc wrapWithConf*(

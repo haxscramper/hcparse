@@ -499,6 +499,13 @@ type
     header*: string
     filename*: RelFile
 
+  WrapResult* = object
+    parsed*: ParsedFile
+    wrapped*: seq[WrappedEntry]
+    infile*: AbsFile
+    importName*: NimImportSpec
+
+
 proc add*(
     genSeq: var seq[GenEntry],
     gen: GenProc | GenObject |  GenEnum | GenAlias | GenPass

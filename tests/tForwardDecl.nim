@@ -14,6 +14,6 @@ withTempDir():
     it.parseConf = parseConf
 
   wrapAllFiles(@[
-    cwd() / "class-B.hpp",
-    cwd() / "class-A.hpp"
-  ])
+    cwd() /. "class-B.hpp",
+    cwd() /. "class-A.hpp"
+  ], wrapConf, parseConf)
