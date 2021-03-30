@@ -551,7 +551,11 @@ proc visitCursor*(
      cursor.cxKind() in (classDeclKinds + {ckEnumDecl}):
     # Early return for method forward declarations.
     # TODO register forward declaration encounter
-    return
+    result.decls.add CDecl(
+      kind: cdkForward,
+      cursor: cursor,
+      ident: parent & toCName(cursor)
+    )
 
   if conf.ignoreCursor(cursor, conf):
     if cursor.cxKind() in {ckNamespace}:
@@ -636,10 +640,14 @@ proc getPublicAPI*(cd: CDecl): seq[CXCursor] =
     of cdkAlias:
       return @[cd.cursor]
 
-    of cdkEnum:
+    of cdkForward, cdkEnum:
       return @[]
 
     of cdkMacro:
+      # While macro can /technically/ be a major source of pain when
+      # wrapping API it is not realistically possible to correctly infer
+      # all API dependencies, let alone map them to entries in translation
+      # unit.
       return @[]
 
 

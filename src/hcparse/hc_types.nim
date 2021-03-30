@@ -18,18 +18,19 @@ type
     cdkUnion
     cdkEnum
     cdkFunction
-    cdkMethod
-    cdkField
-    cdkAlias
-    cdkMacro
+    cdkMethod ## Object methor or operator
+    cdkField ## any kind of field
+    cdkAlias ## `typedef` or `using`
+    cdkMacro ## Any macro-related entry (instantiation, expansion)
+    cdkForward ## Forward declared enum/class/struct/union
 
   CArg* = object
     name*: string
-    case isRaw*: bool
+    case isRaw*: bool ## Points to existing entry
       of true:
         cursor*: CXCursor
 
-      of false:
+      of false: ## Either generated from raw cursor or constructed anew
         varkind*: NVarDeclKind
         ntype*: NType[PNode]
         default*: Option[PNode]
@@ -70,7 +71,8 @@ type
     ## extracted, `genParams` is a (possibly empty) list of generic
     ## parameters for given name. `nimType` is a resulting nim type created
     ## from `cursor`.
-    case isGenerated*: bool
+    case isGenerated*: bool ## Corresponds to existing entry or generated
+                            ## anew
       of false:
         cursor*: CXCursor ## Name declaration cursor
 
@@ -179,6 +181,11 @@ type
                                      ## declaration
 
       of cdkMacro:
+        discard
+
+      of cdkForward:
+        ## Forward declaration contains scoped name for encountered
+        ## identifier and cursor pointing to declaration.
         discard
 
 
@@ -523,7 +530,8 @@ type
 
 proc add*(
     genSeq: var seq[GenEntry],
-    gen: GenProc | GenObject |  GenEnum | GenAlias | GenPass | GenImport
+    gen: GenProc | GenObject | GenEnum | GenAlias |
+         GenPass | GenImport | GenForward
   ) =
 
   when gen is GenProc:
@@ -543,6 +551,9 @@ proc add*(
 
   elif gen is GenImport:
     genSeq.add GenEntry(kind: gekImport, genImport: gen)
+
+  elif gen is GenForward:
+    genSeq.add GenEntry(kind: gekForward, genForward: gen)
 
 proc newProcVisit*(
     genProc: var GenProc, conf: WrapConf, cache: var WrapCache

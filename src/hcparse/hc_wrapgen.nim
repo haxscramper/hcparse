@@ -1204,6 +1204,9 @@ proc wrapApiUnit*(
       of cdkMethod, cdkField:
         discard
 
+      of cdkForward:
+        result.add GenForward(cdecl: decl, iinfo: currIInfo())
+
 
   result.add wrapMacros(macrolist, conf, cache)
 
