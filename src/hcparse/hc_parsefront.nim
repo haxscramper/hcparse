@@ -331,7 +331,8 @@ proc patchForward*(
               )
 
 
-  echo typeGraph.graphvizRepr()
+  for typeGroup in typeGraph.connectedComponents():
+    echo typeGroup
 
 
 
