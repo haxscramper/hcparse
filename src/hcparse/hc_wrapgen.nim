@@ -316,6 +316,13 @@ proc wrapProcedure*(
   if pr.cursor.isVariadic() == 1:
     it.pragma.add newPIdent("varargs")
 
+  if specialProcKind == gpskNewRefConstructor:
+    let argType = newNType("ref", [parent.get().toNType()]).toNNode()
+    let emitStr = &["`self`->~", parentDecl.get().lastName(), "();"]
+    it.impl = some pquote do:
+      # WARNING FAIL experimental
+      new(self, proc(self: `argType`) = {.emit: `emitStr`.})
+
   let generated = newProcVisit(it, conf, cache)
   result.decl.add it
   result.decl.add GenPass(iinfo: currIInfo(), passEntries: generated)
