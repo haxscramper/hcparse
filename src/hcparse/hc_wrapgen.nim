@@ -122,7 +122,7 @@ proc wrapProcedure*(
     parent: Option[NimType],
     cache: var WrapCache,
     parentDecl: Option[CDecl],
-    asNewConstructor: bool
+    specialProcKind: GenProcSpecialKind
   ): tuple[decl: seq[GenEntry], canAdd: bool] =
   ## Generate wrapped entry for procedure, method, operator, or function
   ## declaration
@@ -260,13 +260,21 @@ proc wrapProcedure*(
 
       it.iinfo = currIInfo()
       it.header = conf.makeHeader(pr.cursor, conf)
-      if asNewConstructor:
-        it.returnType = newNimType("ptr", @[parent.get()])
-        it.icpp = &"new {toCppNamespace(parentDecl.get().ident)}(@)"
+      case specialProcKind:
+        of gpskNewPtrConstructor:
+          it.returnType = newNimType("ptr", @[parent.get()])
+          it.icpp = &"new {toCppNamespace(parentDecl.get().ident)}(@)"
 
-      else:
-        it.returnType = parent.get()
-        it.icpp = &"{toCppNamespace(parentDecl.get().ident)}(@)"
+        of gpskNewRefConstructor:
+          it.returnType = newNimType("ref", @[parent.get()])
+          it.icpp = &"new {toCppNamespace(parentDecl.get().ident)}(@)"
+
+        of gpskInitConstructor:
+          it.returnType = parent.get()
+          it.icpp = &"{toCppNamespace(parentDecl.get().ident)}(@)"
+
+        of gpskDefault:
+          discard
 
   else:
     # Default handling of return types
@@ -298,8 +306,12 @@ proc wrapProcedure*(
 
   elif pr.cursor.cxkind in {ckConstructor, ckConversionFunction}:
     if not pr.isOperator:
-      it.name = tern(asNewConstructor, "new", "init") &
-        it.name.capitalizeAscii()
+      let suffix = it.name.capitalizeAscii()
+      case specialProcKind:
+        of gpskNewPtrConstructor: it.name = "cnew" & suffix
+        of gpskNewRefConstructor: it.name = "new" & suffix
+        of gpskInitConstructor: it.name = "init" & suffix
+        of gpskDefault: discard
 
   if pr.cursor.isVariadic() == 1:
     it.pragma.add newPIdent("varargs")
@@ -345,17 +357,29 @@ proc wrapMethods*(
   for meth in cd.methods({
     ckMethod, ckDestructor, ckConstructor, ckConversionFunction,
   }):
-    var asNew: seq[bool]
+    var constructorAddKind: set[GenProcSpecialKind]
+    # QUESTION I'm not entirely sure why this has such weird arrangement
+    # for choosing code generation options. Originally the choice was to
+    # either generate `new T*` or `init T` procedures, but at the time when
+    # I was adding `new ref T` I completely forgot why I can't just
+    # genrated everything in the first place.
     if meth.cursor.cxKind() in {ckConstructor, ckConversionFunction}:
-      asNew = @[true, false]
+      constructorAddKind = {
+        gpskNewRefConstructor,
+        gpskNewPtrConstructor,
+        gpskInitConstructor
+      }
 
     else:
-      asNew = @[true]
+      constructorAddKind = {
+        gpskNewRefConstructor,
+        gpskNewPtrConstructor
+      }
 
-    for useNew in asNew:
+    for kind in constructorAddKind:
       logIndented:
         let (decl, canAdd) = wrapProcedure(
-          meth, conf, some parent, cache, some cd, useNew)
+          meth, conf, some parent, cache, some cd, kind)
 
       if canAdd:
         result.methods.add decl[0].genProc
@@ -368,7 +392,7 @@ proc wrapFunction*(cd: CDecl, conf: WrapConf, cache: var WrapCache):
   seq[GenEntry] =
 
   var (decl, canAdd) = wrapProcedure(
-    cd, conf, none NimType, cache, none CDecl, false)
+    cd, conf, none NimType, cache, none CDecl, gpskDefault)
 
   if canAdd:
     result = decl

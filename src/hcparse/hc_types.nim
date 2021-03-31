@@ -429,8 +429,15 @@ type
     ## (subtypes, nested struct/union/enum declarations, auto-generated
     ## types or procedures)
 
+  GenProcSpecialKind* = enum
+    gpskDefault
+    gpskNewRefConstructor
+    gpskNewPtrConstructor
+    gpskInitConstructor
+
   GenProc* = ref object of GenBase
     ## Generated wrapped proc
+    specialKind*: GenProcSpecialKind
     name*: string ## Name of the generated proc on nim side
     icpp*: string ## `importcpp` pattern string
     private*: bool ## Generated proc should be private?
