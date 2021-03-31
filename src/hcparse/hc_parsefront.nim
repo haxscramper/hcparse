@@ -307,6 +307,29 @@ func hash*(typeNode: TypeNode): Hash =
 func initTypeNode*(name: string): TypeNode =
   TypeNode(name: name)
 
+proc allUsedTypes*(nimType: NimType): seq[NimType] =
+  result.add nimType
+  case nimType.kind:
+    of ctkIdent:
+      for param in nimType.genericParams:
+        result.add allUsedTypes(param)
+
+    of ctkProc:
+      if notNil nimType.returnType:
+        result.add nimType.returnType
+
+      for argument in nimType.arguments:
+        result.add allUsedTypes(argument.nimType)
+
+proc isPrimitiveHead*(nimType: NimType): bool =
+  nimType.kind in {ctkIdent} and nimType.nimName in [
+    "ref", "var", "sink", "ptr"]
+
+proc isPodHead*(nimType: NimType): bool =
+  nimType.kind in {ctkIdent} and nimType.nimName.normalize() in [
+    "int", "float", "string", "cint", "cstring" # ... TODO
+  ]
+
 proc patchForward*(
     wrapped: var seq[WrappedFile], conf: WrapConf, cache: var WrapCache):
   seq[WrappedFile] =
@@ -322,7 +345,7 @@ proc patchForward*(
       if entry.kind in {gekObject}:
         # Get node for current type
         var objectNode = typeGraph.addOrGetNode(
-          initTypeNode(entry.genObject.name.head))
+          initTypeNode(entry.genObject.name.nimName))
 
         if objectNode.value.declareFile.isSome():
           # Declaration file is added each node. One node is created for
@@ -343,13 +366,16 @@ proc patchForward*(
         # Add outgoing edges for all types that were explicitly used.
         for field in entry.genObject.memberFields:
           for used in field.fieldType.allUsedTypes():
-            if not used.isPrimitiveHead():
+            if not (used.isPrimitiveHead() or used.isPodHead()):
               # QUESTION what about `int` fields, or other types that are
               # either not wrapped at all, or wrapped using some convoluted
               # multi-stage generics?
               discard typeGraph.addEdge(
                 objectNode,
-                typeGraph.addOrGetNode(initTypeNode(used.head))
+                typeGraph.addOrGetNode(
+                  # IMPLEMENT use additional information in `CXType` field
+                  # for `used`
+                  initTypeNode(used.nimName))
               )
 
 

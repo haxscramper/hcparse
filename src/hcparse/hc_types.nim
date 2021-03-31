@@ -12,6 +12,46 @@ type
     drkImportUses ## Assume dependency is wrapped in other module, and
                   ## generate `import` for it.
 
+  CTypeKind* = enum
+    ctkIdent
+    ctkProc
+
+  CTypeSpecialKind* = enum
+    ## Special kind of C++ types that are almost impossbile to correctly
+    ## convert to nim and preserve semantics across language barrier
+    ctskNone
+    ctskRvalueRef ## Rvalue reference
+    ctskConstLvalueRef ## `const value&` is basically nim's default passing
+    ## behavior for 'large enough' types, but it has a different behavior
+    ## with `{.bycopy.}` objects (which is what any C++ type uses)
+
+
+  NimType* = ref object
+    specialKind*: CTypeSpecialKind
+    isMutable*: bool
+    isConst*: bool
+
+    case fromCXType*: bool
+      of true:
+        cxType*: CXType
+        fullIdent*: Option[CScopedIdent] ## Full identifier to C type
+        ## declaration.
+
+      of false:
+        ## Entry was automatically generated
+        discard
+
+
+    case kind*: CTypeKind
+      of ctkIdent:
+        nimName*: string
+        genericParams*: seq[NimType]
+
+      of ctkProc:
+        arguments*: seq[CArg]
+        returnType*: NimType
+
+
   CDeclKind* = enum
     cdkClass
     cdkStruct
@@ -32,7 +72,7 @@ type
 
       of false: ## Either generated from raw cursor or constructed anew
         varkind*: NVarDeclKind
-        ntype*: NType[PNode]
+        nimType*: NimType
         default*: Option[PNode]
 
 
@@ -270,12 +310,12 @@ type
     ## Generate identifier for `{.header: ... .}`
 
     typeNameForScoped*: proc(
-      ident: CScopedIdent, conf: WrapConf): NType[PNode]
+      ident: CScopedIdent, conf: WrapConf): NimType
     ## Generate type name for a scoped identifier - type or function
     ## declaration. The only important things are: `head` name and list of
     ## generic parameters, so `ntkIdent` is the optimal return kind.
 
-    fixTypeName*: proc(ntype: var NType[PNode], conf: WrapConf, idx: int)
+    fixTypeName*: proc(ntype: var NimType, conf: WrapConf, idx: int)
     ## Change type name for `ntype`.
     ##
     ## First argument is a type to be fixed, second one is parent
@@ -369,23 +409,25 @@ type
     name*: string
     fullName*: CSCopedIdent
     value*: Option[PNode] ## /arbitrary expression/ for field initalization
-    fieldType*: NType[PNode]
+    fieldType*: NimType
     isConst*: bool ## Field is const-qualified
     anonymousType*: Option[GenEntry] ## Wrapper for anonymous type (if any)
 
   GenObject* = ref object of GenBase
     kind*: GenObjectKind
-    rawName*: string
-    name*: NType[PNode]
+    rawName*: string ## Raw C[++] name of the object
+    name*: NimType ## Nim object name with all generic parameters
     fullName*: CScopedIdent
-    memberFields*: seq[GenField] ## Direct member fields
-    memberMethods*: seq[GenProc]
+    memberFields*: seq[GenField] ## Directly accessible member fields
+    memberMethods*: seq[GenProc] ## Directly accessible methods
     isAggregateInit*: bool ## Subject to aggregate initalization
     isIterableOn*: seq[tuple[beginProc, endProc: GenProc]] ## Object has
     ## `begin()/end()` or any kind of similar procs that can be used to
     ## generate `items` iterators.
 
-    nestedEntries*: seq[GenEntry]
+    nestedEntries*: seq[GenEntry] ## Additional nested entries declaration
+    ## (subtypes, nested struct/union/enum declarations, auto-generated
+    ## types or procedures)
 
   GenProc* = ref object of GenBase
     ## Generated wrapped proc
@@ -393,8 +435,8 @@ type
     icpp*: string ## `importcpp` pattern string
     private*: bool ## Generated proc should be private?
     arguments*: seq[CArg] ## Arguments
-    returnType*: NType[PNode]
-    genParams*: seq[NType[PNode]] ## Nim generic parameters
+    returnType*: NimType
+    genParams*: seq[NimType] ## Nim generic parameters
     declType*: ProcDeclType ## Type of proc declaration (iterator,
                             ## converter etc.)
     header*: NimHeaderSpec ## Header specification for `.header:` pragma
@@ -436,8 +478,8 @@ type
 
   GenAlias* = ref object of GenBase
     isDistinct*: bool
-    newAlias*: NType[PNode]
-    baseType*: NType[PNode]
+    newAlias*: NimType
+    baseType*: NimType
 
   GenPass* = ref object
     iinfo* {.requiresinit.}: LineInfo
@@ -692,7 +734,7 @@ func `==`*(a, b: CArg): bool =
 
     else:
       a.varkind == b.varkind and
-      a.ntype == b.ntype and
+      a.nimType == b.nimType and
       a.default == b.default
   ))
 
@@ -730,19 +772,49 @@ func initNimImportSpec*(isExternalImport: bool, importPath: seq[string]):
   return NimImportSpec(
     isRelative: not isExternalImport, importPath: importPath)
 
+func newNimType*(name: string, cxType: CXType): NimType =
+  NimType(kind: ctkIdent, nimName: name,
+          cxType: cxType, fromCXType: true)
+
+func newNimType*(name: string, genericParams: openarray[NimType] = @[]):
+  NimType =
+
+  NimType(kind: ctkIdent, nimName: name, fromCXtype: false)
+
+func newNimType*(
+    arguments: seq[CArg], returnType: NimType = newNimType("void")):
+  NimType =
+
+  NimType(kind: ctkProc, arguments: arguments, returnType: returnType)
+
+func newNimType*(
+    name: string, genericParams: openarray[NimType], cxType: CXType):
+  NimType =
+
+  result = newNimType(name, cxType)
+  result.genericParams.add genericParams
+
+func add*(
+    nimType: var NimType, genericParam: NimType | seq[NimType]) =
+
+  nimType.genericParams.add genericParam
+
+proc toNType*(nimType: NimType): NType[PNode] =
+  discard
+
+proc `$`*(nimType: NimType): string = $toNType(nimType)
+
+
 
 func initCArg*(
-    name: string, ntype: NType[PNode], varkind: NVarDeclKind = nvdLet
-  ): CArg =
+    name: string, nimType: NimType, varkind: NVarDeclKind):
+  CArg =
 
-  CArg(isRaw: false, name: name, ntype: ntype, varkind: varkind)
+  CArg(isRaw: false, name: name, nimType: nimType, varkind: varkind)
 
 
-func initCArg*(
-    name: string, ntype: NType[PNode], mutable: bool
-  ): CArg =
-
-  initCArg(name, ntype, if mutable: nvdVar else: nvdLet)
+func initCArg*(name: string, nimType: NimType): CArg =
+  initCArg(name, nimType, if nimType.isMutable: nvdVar else: nvdLet)
 
 func initCArg*(name: string, cursor: CXCursor): CArg =
   CArg(isRaw: true, name: name, cursor: cursor)

@@ -287,7 +287,10 @@ proc isAggregateInitable*(
         # debug entry.treeRepr()
         if aux(entry):
           var arg = initCArg(
-            fixIdentName($entry), entry.cxType().toNType(conf).ntype, false)
+            fixIdentName($entry),
+            entry.cxType().toNimType(conf),
+            nvdLet
+          )
 
           setDefaultForArg(arg, entry, conf)
           initArgs.add arg

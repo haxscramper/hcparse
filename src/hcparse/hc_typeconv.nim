@@ -15,11 +15,10 @@ import cxcommon
 
 proc getTypeName*(cxtype: CXType, conf: WrapConf): string
 
-proc toNType*(
-  cxtype: CXType,
-  conf: WrapConf): tuple[ntype: NType[PNode], mutable: bool]
+proc toNimType*(cxtype: CXType, conf: WrapConf): NimType
 
-proc fromElaboratedPType*(cxtype: CXType, conf: WrapConf): NType[PNode] =
+
+proc fromElaboratedPType*(cxtype: CXType, conf: WrapConf): NimType =
   # debug cxtype
   let genParams = cxtype.getNumTemplateArguments()
   let decl = cxtype.getTypeDeclaration()
@@ -27,15 +26,15 @@ proc fromElaboratedPType*(cxtype: CXType, conf: WrapConf): NType[PNode] =
     case decl.cxKind:
       of ckTypedefDecl, ckTypeAliasDecl, ckTypeAliasTemplateDecl:
         # WARNING `template <J, Q> using` is not handled
-        result = newPType(cxtype.getTypeName(conf))
+        result = newNimType(cxtype.getTypeName(conf), cxtype)
 
       of ckClassDecl, ckStructDecl, ckClassTemplate:
         # debug "Class decl"
         let params = cxtype.genParams()
-        result = newPType(cxtype.getTypeName(conf))
+        result = newNimType(cxtype.getTypeName(conf), cxtype)
         for idx, parm in params:
           if parm.cxKind != tkInvalid:
-            result.add parm.toNType(conf).ntype
+            result.add parm.toNimType(conf)
 
       else:
         warn "Conversion from elaborated type: ", decl
@@ -44,12 +43,12 @@ proc fromElaboratedPType*(cxtype: CXType, conf: WrapConf): NType[PNode] =
     conf.fixTypeName(result, conf, 0)
 
   else:
-    result = newPType(getTypeName(cxtype, conf))
+    result = newNimType(getTypeName(cxtype, conf), cxtype)
 
 proc dropPOD*(cxtype: CXType, conf: WrapConf): string =
   case cxtype.cxKind:
     of tkElaborated:
-      cxtype.fromElaboratedPType(conf).head
+      cxtype.fromElaboratedPType(conf).nimName
 
     of tkPointer:
       cxtype[].dropPOD(conf)
@@ -60,17 +59,15 @@ proc dropPOD*(cxtype: CXType, conf: WrapConf): string =
     else:
       ""
 
-proc toPIdentDefs*(cursor: CXCursor, conf: WrapConf): PIdentDefs =
+proc toCArg*(cursor: CXCursor, conf: WrapConf): CArg =
   var varname = $cursor
   if varname.len == 0:
     varname = "arg" & $cursor.cxType().dropPOD(conf)
 
-  result.idents.add newPIdent(varname.fixIdentName())
+  varname = varname.fixIdentName()
+  let argType = cursor.cxType().toNimType(conf)
+  return initCArg(varname, argType)
 
-  let (ctype, mutable) = cursor.cxType().toNType(conf)
-  result.vtype = ctype
-  if mutable:
-    result.kind = nvdVar
 
 
 proc getSemanticNamespaces*(
@@ -234,9 +231,7 @@ proc fromCxxTypeName*(name: string): string =
     of "unsigned long": "culong"
     else: ""
 
-proc toNType*(
-  cxtype: CXType,
-  conf: WrapConf): tuple[ntype: NType[PNode], mutable: bool] =
+proc toNimType*(cxtype: CXType, conf: WrapConf): NimType =
   ## Convert CXType to nim type. Due to differences in how mutability
   ## handled in nim and C it is not entirely possible to map `CXType`
   ## to `NType` without losing this information. Instead `mutable` is
@@ -256,30 +251,30 @@ proc toNType*(
   ##
   ## - TODO :: `const&&` parameters /could/ be mapped to `sink` annotations
   var mutable: bool = false
-  let restype = case cxtype.cxKind:
-    of tkBool:       newPType("bool")
-    of tkInt:        newPType("cint")
-    of tkVoid:       newPType("void")
-    of tkUInt:       newPType("cuint")
-    of tkLongLong:   newPType("clonglong")
-    of tkULongLong:  newPType("culonglong")
-    of tkDouble:     newPType("cdouble")
-    of tkULong:      newPType("culong")
-    of tkUChar:      newPType("cuchar")
-    of tkChar16:     newPType("uint16") # WARNING C++ type is `char16_t`
-    of tkChar32:     newPType("uint32") # WARNING C++ type is `char32_t`
-    of tkWChar:      newPType("uint32") # WARNING C++ type is `wchar_t`
-    of tkChar_S:     newPType("cchar")
-    of tkLong:       newPType("clong")
-    of tkUShort:     newPType("cushort")
-    of tkNullPtr:    newPType("pointer") # WARNING C++ type is `nullptr_t`
-    of tkFloat:      newPType("cfloat")
-    of tkLongDouble: newPType("clongdouble")
-    of tkShort:      newPType("cshort")
-    of tkSChar:      newPType("cschar")
+  result = case cxtype.cxKind():
+    of tkBool:       newNimType("bool",        cxtype)
+    of tkInt:        newNimType("cint",        cxtype)
+    of tkVoid:       newNimType("void",        cxtype)
+    of tkUInt:       newNimType("cuint",       cxtype)
+    of tkLongLong:   newNimType("clonglong",   cxtype)
+    of tkULongLong:  newNimType("culonglong",  cxtype)
+    of tkDouble:     newNimType("cdouble",     cxtype)
+    of tkULong:      newNimType("culong",      cxtype)
+    of tkUChar:      newNimType("cuchar",      cxtype)
+    of tkChar16:     newNimType("uint16",      cxtype) # WARNING C++ type is `char16_t`
+    of tkChar32:     newNimType("uint32",      cxtype) # WARNING C++ type is `char32_t`
+    of tkWChar:      newNimType("uint32",      cxtype) # WARNING C++ type is `wchar_t`
+    of tkChar_S:     newNimType("cchar",       cxtype)
+    of tkLong:       newNimType("clong",       cxtype)
+    of tkUShort:     newNimType("cushort",     cxtype)
+    of tkNullPtr:    newNimType("pointer",     cxtype) # WARNING C++ type is `nullptr_t`
+    of tkFloat:      newNimType("cfloat",      cxtype)
+    of tkLongDouble: newNimType("clongdouble", cxtype)
+    of tkShort:      newNimType("cshort",      cxtype)
+    of tkSChar:      newNimType("cschar",      cxtype)
     of tkTypedef:
-      result.mutable = cxType.isMutableRef()
-      newPType(($cxtype).dropPrefix("const ")) # XXXX typedef processing -
+      mutable = cxType.isMutableRef()
+      newNimType(($cxtype).dropPrefix("const "), cxtype) # XXXX typedef processing -
 
     of tkElaborated, tkRecord, tkEnum:
       # debug "From elaborated type"
@@ -288,60 +283,64 @@ proc toNType*(
     of tkPointer:
       case cxtype[].cxkind:
         of tkChar_S:
-          newPType("cstring")
+          newNimType("cstring", cxtype)
 
         of tkPointer:
           if cxtype[][].cxKind() == tkChar_S:
-            newPType("cstringArray")
+            newNimType("cstringArray", cxtype)
 
           else:
-            newNType("ptr", [toNType(cxtype[], conf).ntype])
+            newNimType("ptr", [toNimType(cxtype[], conf)], cxtype)
 
         of tkVoid:
-          newPType("pointer")
+          newNimType("pointer", cxtype)
 
         of tkFunctionProto:
-          toNType(cxtype[], conf).ntype
+          toNimType(cxtype[], conf)
 
         else:
-          newNType("ptr", [toNType(cxtype[], conf).ntype])
+          newNimType("ptr", [toNimType(cxtype[], conf)], cxtype)
 
     of tkConstantArray:
-      newNType(
-        "ptr", [newNType(
-          "array", @[
-            newPType($cxtype.getNumElements()),
-            toNType(cxtype.getElementType(), conf).ntype])])
+      newNimType(
+        "ptr", [
+          newNimType(
+            "array", @[
+              newNimType($cxtype.getNumElements(), cxtype.getElementType()),
+              toNimType(cxtype.getElementType(), conf)
+            ], cxType)
+        ], cxType)
 
     of tkIncompleteArray:
-      newNType("ptr", [toNType(cxtype.getElementType(), conf).ntype])
+      # QUESTION maybe convert to `ptr UncheckedArray?` or add user-defined
+      # callback for switching between different behaviors.
+      newNimType("ptr", [toNimType(cxtype.getElementType(), conf)], cxType)
 
     of tkFunctionProto:
-      newProcNType[PNode](
-        rtype = cxtype.getResultType().toNType(conf).ntype,
-        args = cxtype.argTypes.mapIt(toNType(it, conf).ntype),
-        pragma = newPPragma("cdecl")
+      newNimType(
+        cxtype.argTypes.mapIt(initCArg("", toNimType(it, conf))),
+        cxtype.getResultType().toNimType(conf)
       )
 
     of tkLValueReference:
-      result.mutable = cxType.isMutableRef()
-      toNType(cxType[], conf).ntype
+      mutable = cxType.isMutableRef()
+      toNimType(cxType[], conf)
 
     of tkRValueReference: # WARNING I'm not 100% sure this is correct
                           # way to map rvalue references to nim type
                           # system.
-      result.mutable = cxType.isMutableRef()
-      toNType(cxType[], conf).ntype
+      mutable = cxType.isMutableRef()
+      toNimType(cxType[], conf)
 
     of tkUnexposed:
       let strval = ($cxType).dropPrefix("const ") # WARNING
       if strval.validCxxIdentifier():
-        newPtype(strval)
+        newNimType(strval, cxtype)
 
       else:
         # pprintStackTrace()
         let decl = cxtype.getTypeDeclaration()
-        var res = newPType($decl)
+        var res = newNimType($decl, cxType)
         let typenameParts = toStrPart(@[
           "type-parameter", "typename type-parameter",
           "typename rebind<type-parameter",
@@ -355,27 +354,18 @@ proc toNType*(
         }:
           for elem in decl:
             if elem.cxKind() in {ckTemplateTypeParameter}:
-              let (sub, _) = elem.cxType().toNType(conf)
-              res.add sub
+              res.add elem.cxType().toNimType(conf)
 
-          # info decl
-          # debug res.toNNode()
         elif startsWith($cxType, typenameParts):
-
           let unprefix = dropPrefix($cxType, typenameParts)
-
           if allIt(unprefix, it in {'0' .. '9', '-'}):
-            res = newPType("TYPE_PARAM " & unprefix)
+            res = newNimType("TYPE_PARAM " & unprefix, cxtype)
 
           else:
-            res = newPType("COMPLEX_PARAM")
-
+            res = newNimType("COMPLEX_PARAM", cxtype)
 
         else:
-          # debug decl.cxKind()
-          res = newPType("UNEXPOSED")
-          # warn strval, "is not a valid identifier for type name, use UNEXPOSED"
-
+          res = newNimType("UNEXPOSED", cxtype)
           if decl.cxKind() notin {ckNoDeclFound}:
             warn "No decl found for type"
             logIndented:
@@ -387,68 +377,65 @@ proc toNType*(
 
         res
 
-    of tkDependent: newPType("DEPENDENT")
+    of tkDependent:
+      newNimType("DEPENDENT", cxType)
 
     of tkMemberPointer:
       # WARNING Member pointer
-      newPType("!!!")
+      newNimType("!!!", cxType)
 
     of tkDependentSizedArray:
       warn cxtype
-      newNType("array", @[
-        newPType("???????????????????????"),
-        toNType(cxtype.getElementType(), conf).ntype
-      ])
+      newNimType("array", @[
+        newNimType("???????????????????????"),
+        toNimType(cxtype.getElementType(), conf)
+      ], cxType)
 
     else:
       err "CANT CONVERT: ".toRed({styleItalic}),
         cxtype.kind, " ", ($cxtype).toGreen(), " ",
         cxtype[]
 
-      newPType("!!!")
+      newNimType("!!!", cxtype)
 
-  result.ntype = restype
-  conf.fixTypeName(result.ntype, conf, 0)
-  result.mutable = mutable
+  result.isMutable = mutable
+  conf.fixTypeName(result, conf, 0)
 
-func fixTypeParams*(nt: var NType[PNode], params: seq[NType[PNode]]) =
-  func aux(nt: var NType[PNode], idx: var int) =
+func fixTypeParams*(nt: var NimType, params: seq[NimType]) =
+  func aux(nt: var NimType, idx: var int) =
     case nt.kind:
-      of ntkIdent, ntkGenericSpec:
-        if startsWith(nt.head, "TYPE_PARAM"):
-          nt.head = params[idx].head
+      of ctkIdent:
+        if startsWith(nt.nimName, "TYPE_PARAM"):
+          nt.nimName = params[idx].nimName
           inc idx
 
-        for sub in mitems(nt.genParams):
+        for sub in mitems(nt.genericParams):
           aux(sub, idx)
 
-      of ntkProc:
+      of ctkProc:
         for arg in mitems(nt.arguments):
-          aux(arg.vtype, idx)
+          aux(arg.nimType, idx)
 
-      else:
-        raiseImplementKindError(nt)
 
 
   var idx: int
   aux(nt, idx)
 
-func hasSpecial*(nt: NType[PNode], special: seq[string]): bool =
+func hasSpecial*(nt: NimType, special: seq[string]): bool =
   case nt.kind:
-    of ntkIdent, ntkGenericSpec:
-      nt.head in special or
-      nt.genParams.anyOfIt(it.hasSpecial(special))
-    of ntkProc:
-      nt.arguments.anyOfIt(it.vtype.hasSpecial(special))
-    else:
-      false
+    of ctkIdent:
+      nt.nimName in special or
+      nt.genericParams.anyOfIt(it.hasSpecial(special))
+
+    of ctkProc:
+      nt.arguments.anyOfIt(it.nimType.hasSpecial(special))
 
 
-func hasUnexposed*(nt: NType[PNode]): bool =
+func hasUnexposed*(nt: NimType): bool =
   nt.hasSpecial(@[ "UNEXPOSED", "DEPENDENT" ])
 
 
-func hasComplexParam*(nt: NType[PNode]): bool =
+func hasComplexParam*(nt: NimType): bool =
   nt.hasSpecial(@[ "COMPLEX_PARAM" ])
 
 proc isEnum*(cxtype: CXType): bool =
@@ -594,7 +581,7 @@ proc toInitCall*(cursor: CXCursor, conf: WrapConf): PNode =
 
       of ckCStyleCastExpr:
         result = nnkCast.newPTree(
-          cursor[0].cxType().toNType(conf).ntype.toNNode(),
+          cursor[0].cxType().toNimType(conf).toNType().toNNode(),
           aux(cursor[1], ilist)
         )
 

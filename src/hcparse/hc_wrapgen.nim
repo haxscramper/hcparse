@@ -47,8 +47,8 @@ proc wrapOperator*(
 
     of cxoArrayOp:
       let rtype = oper.cursor.retType()
-      let (_, mutable) = rtype.toNType(conf)
-      if mutable:
+      let nimReturn = rtype.toNimType(conf)
+      if nimReturn.isMutable:
         it.name = "[]="
         # WARNING potential source of horrible c++ codegen errors
         it.icpp = &"#[#]= #"
@@ -90,20 +90,20 @@ proc wrapOperator*(
       it.kind = pkRegular
 
     of cxoConvertOp:
-      let restype = oper.cursor.retType().toNType(conf).ntype
+      let restype = oper.cursor.retType().toNimType(conf)
 
       with it:
-        name = "to" & capitalizeAscii(restype.head)
+        name = "to" & capitalizeAscii(restype.nimName)
         icpp = &"@"
         returnType = resType
         declType = ptkConverter
         kind = pkRegular
 
     of cxoUserLitOp:
-      let restype = oper.cursor.retType().toNType(conf).ntype
+      let restype = oper.cursor.retType().toNimType(conf)
 
       with it:
-        name = "to" & capitalizeAscii(restype.head)
+        name = "to" & capitalizeAscii(restype.nimName)
         icpp = &"({oper.cursor}(@))"
         returnType = restype
         kind = pkRegular
@@ -119,7 +119,7 @@ proc wrapOperator*(
 proc wrapProcedure*(
     pr: CDecl,
     conf: WrapConf,
-    parent: Option[NType[PNode]],
+    parent: Option[NimType],
     cache: var WrapCache,
     parentDecl: Option[CDecl],
     asNewConstructor: bool
@@ -199,12 +199,12 @@ proc wrapProcedure*(
     )
 
   for arg in pr.arguments:
-    var (vtype, mutable) = arg.cursor.cxType().toNType(conf)
+    var argType = arg.cursor.cxType().toNimType(conf)
     if arg.cursor.cxType().isEnum():
-      vtype.head &= conf.isImportCpp.tern("Cxx", "C")
+      argType.nimName &= conf.isImportCpp.tern("Cxx", "C")
 
-    if vtype.kind in {ntkIdent, ntkGenericSpec}:
-      if vtype.head == "UNEXPOSED":
+    if argType.kind in {ctkIdent}:
+      if argType.nimName == "UNEXPOSED":
         # WARNING currently parameters which contain `tkUnexposed`
         # types are not handled but are skipped instead. I don't
         # know how to fix right now.
@@ -220,18 +220,17 @@ proc wrapProcedure*(
         # code like
         # `<Ta> struct A { <Tb> struct B {void func(); }; };`
         # and only add `Tb` as template parameter for `func()`.
-        vtype.add parent.get().genParams
+        argType.add parent.get().genericParams
         # FAIL most likely broken with recent refactoring
 
     else:
       # FIXME determine and implement edge case handling for procvar
       # arguments
+      discard
 
-      # WARNING might cause duplication, for wrapping C++ functors better
-      # handling should be implemented
-      vtype.pragma.add newPident("cdecl")
 
-    var newArg = initCArg(fixIdentName(arg.name), vtype, mutable)
+
+    var newArg = initCArg(fixIdentName(arg.name), argType)
     setDefaultForArg(newArg, arg.cursor, conf)
     it.arguments.add newArg
 
@@ -250,7 +249,7 @@ proc wrapProcedure*(
 
   if pr.isOperator and pr.classifyOperator() == cxoAsgnOp:
     # HACK Force override return type for assignment operators
-    it.returnType = newPType("void")
+    it.returnType = newNimType("void")
 
   elif pr.cursor.kind in {ckConstructor, ckConversionFunction}:
     # Override handling of return types for constructors
@@ -262,7 +261,7 @@ proc wrapProcedure*(
       it.iinfo = currIInfo()
       it.header = conf.makeHeader(pr.cursor, conf)
       if asNewConstructor:
-        it.returnType = newNType("ptr", @[parent.get()])
+        it.returnType = newNimType("ptr", @[parent.get()])
         it.icpp = &"new {toCppNamespace(parentDecl.get().ident)}(@)"
 
       else:
@@ -271,19 +270,19 @@ proc wrapProcedure*(
 
   else:
     # Default handling of return types
-    var (rtype, mutable) = toNType(pr.cursor.retType(), conf)
+    var returnType = toNimType(pr.cursor.retType(), conf)
     if parentDecl.isSome() and
        parent.isSome() and
        pr.cursor.retType().
        getTypeDeclaration().
        inheritsGenParamsOf(parentDecl.get().cursor):
 
-      rtype.genParams = parent.get().genParams
+      returnType.genericParams = parent.get().genericParams
       # WARNING(refactor)
 
-    it.returnType = rtype
+    it.returnType = returnType
 
-    if rtype.hasUnexposed():
+    if returnType.hasUnexposed():
       # WARNING dropping all methods that use `tkUnexposed` type
       # in return value. This must be fixed in future versions.
       result.canAdd = false
@@ -310,9 +309,7 @@ proc wrapProcedure*(
   result.decl.add GenPass(iinfo: currIInfo(), passEntries: generated)
 
 
-proc fixNames(
-  ppd: var GenProc, conf: WrapConf, parent: NType[PNode]) =
-
+proc fixNames(ppd: var GenProc, conf: WrapConf, parent: NimType) =
   var idx: int = 0
   for param in mitems(ppd.genParams):
     conf.fixTypeName(param, conf, 0)
@@ -320,7 +317,7 @@ proc fixNames(
 
   idx = 0
   for arg in mitems(ppd.arguments):
-    conf.fixTypeName(arg.ntype, conf, idx)
+    conf.fixTypeName(arg.nimType, conf, idx)
     inc idx
 
   conf.fixTypeName(ppd.returnType, conf, 0)
@@ -334,7 +331,7 @@ proc fixNames(
 proc wrapMethods*(
     cd: CDecl,
     conf: WrapConf,
-    parent: NType[PNode],
+    parent: NimType,
     cache: var WrapCache
   ): tuple[methods: seq[GenProc], extra: seq[GenEntry]] =
 
@@ -371,7 +368,7 @@ proc wrapFunction*(cd: CDecl, conf: WrapConf, cache: var WrapCache):
   seq[GenEntry] =
 
   var (decl, canAdd) = wrapProcedure(
-    cd, conf, none NType[PNode], cache, none CDecl, false)
+    cd, conf, none NimType, cache, none CDecl, false)
 
   if canAdd:
     result = decl
@@ -387,7 +384,7 @@ proc wrapTypeFromNamespace(
   # general case.k
 
   result = PObjectDecl(
-    name: conf.typeNameForScoped(ident, conf),
+    name: conf.typeNameForScoped(ident, conf).toNType(),
     exported: true
   )
 
@@ -415,7 +412,7 @@ proc wrapAlias*(
 
   if al.isNewType:
     info "typdef with new type declaration"
-    var baseType: NType[PNode]
+    var baseType: NimType
 
     if al.aliasNewType.kind in {cdkClass, cdkStruct}:
       let wrapBase = al.aliasNewType.wrapObject(conf, cache)
@@ -425,15 +422,15 @@ proc wrapAlias*(
 
     else:
       var wrapBase = al.aliasNewType.wrapEnum(conf, cache)
-      baseType = newPType(wrapBase[0].genEnum.name)
+      baseType = newNimType(wrapBase[0].genEnum.name)
       debug al.aliasNewType.cursor.treeRepr()
       result.add wrapBase
 
     for newName in al.newTypes:
       debug "Alternative name", newName
-      var newType = newPType($newName)
-      newType.genParams = baseType.genParams
-      if newType.head != baseType.head:
+      var newType = newNimType($newName)
+      newType.genericParams = baseType.genericParams
+      if newType.nimName != baseType.nimName:
         # Alias names might be the same for `typedef struct St {} St;`
         result.add GenAlias(
           iinfo: currIInfo(),
@@ -451,14 +448,14 @@ proc wrapAlias*(
     # debug al.ident, " -> ", newAlias
 
     # Identifier for old aliased type
-    var baseType: NType[PNode]
+    var baseType: NimType
     if getTypeDeclaration(aliasof).cxKind() == ckNodeclFound:
       let name = fromCxxTypeName($aliasof)
       if name.len > 0:
-        baseType = newPType(name)
+        baseType = newNimType(name, aliasof)
 
       else:
-        baseType = toNType(aliasof, conf).ntype # newPType($aliasof)
+        baseType = toNimType(aliasof, conf) # .ntype # newPType($aliasof)
 
     else:
       baseType = conf.typeNameForScoped(aliasof.toFullScopedIdent(), conf)
@@ -497,10 +494,10 @@ proc wrapAlias*(
         # defaulted - i.e. only ones that *must* be specified (not defaulted in
         # declaration) are included. Better alias handling is necessary, for
         # now I just drop 'unnecessary' parts.
-        baseType.genParams = baseType.genParams[
-          0 ..< min(required.len(), baseType.genParams.len())]
+        baseType.genericParams = baseType.genericParams[
+          0 ..< min(required.len(), baseType.genericParams.len())]
 
-    fixTypeParams(baseType, newAlias.genParams)
+    fixTypeParams(baseType, newAlias.genericParams)
 
     if baseType.hasUnexposed():
       debug al.cursor.treeRepr()
@@ -540,20 +537,21 @@ proc wrapAlias*(
       #     )
 
 proc getParentFields*(
-    inCursor: CXCursor, obj: PObjectDecl, wrapConf: WrapConf
-  ): seq[PProcDecl] =
+    inCursor: CXCursor, obj: PObjectDecl, wrapConf: WrapConf):
+  seq[PProcDecl] = # FIXME return `GenProc` declarations instead of nested cursors
+
+
 
   for class in inCUrsor.getClassBaseCursors():
     for entry in class:
       if entry.kind in {ckFieldDecl}:
         let
-          (fieldType, _) = entry.cxType().toNType(wrapConf)
+          fieldType = entry.cxType().toNimType(wrapConf)
           fldname = $entry
-
 
         result.add newPProcDecl(
           name = fldName,
-          rtyp = some(fieldType),
+          rtyp = some(fieldType.toNType()),
           args = { "self" : obj.name },
           iinfo = currIInfo(),
           pragma = newPPragma(newExprColonExpr(
@@ -570,7 +568,7 @@ proc getParentFields*(
           result.add newPProcDecl(
             name = fldName,
             iinfo = currIInfo(),
-            args = { "self" : obj.name, "val" : fieldType },
+            args = { "self" : obj.name, "val" : fieldType.toNType() },
             pragma = newPPragma(newExprColonExpr(
               newPIdent(wrapConf.importX()), newRStrLit(&"(#.{fldName} = @)")))
           )
@@ -616,12 +614,12 @@ proc updateAggregateInit*(
      cd.isAggregateInit and cd.initArgs.len > 0:
 
     let pr = initGenProc(cd, currIInfo()).withIt do:
-      it.name = "init" & gen.name.head
+      it.name = "init" & gen.name.nimName
       it.arguments = cd.initArgs
       it.header = conf.makeHeader(cd.cursor, conf)
       it.icpp = &"{toCppNamespace(cd.ident)}({{@}})"
       it.returnType = gen.name
-      it.genParams = gen.name.genParams
+      it.genParams = gen.name.genericParams
 
     gen.nestedEntries.add pr
 
@@ -637,7 +635,7 @@ proc updateFieldExport*(
       rawName: fld.lastName(),
       iinfo: currIInfo(),
       cdecl: fld,
-      fieldType: fld.cursor.cxType().toNType(conf).ntype,
+      fieldType: fld.cursor.cxType().toNimType(conf),
       isConst: fld.isConst
     )
 
@@ -651,12 +649,12 @@ proc updateFieldExport*(
           var decl = wrapObject(newType, conf, cache)
 
           gen.nestedEntries.add decl
-          res.fieldType.head = decl.name.head
+          res.fieldType.nimName = decl.name.nimName
 
         of cdkEnum:
           var decl = wrapEnum(newType, conf, cache)
 
-          res.fieldType.head = decl[0].genEnum.name
+          res.fieldType.nimName = decl[0].genEnum.name
           gen.nestedEntries.add decl
 
         else:
@@ -665,7 +663,7 @@ proc updateFieldExport*(
     if fld.cursor.cxType().isEnum():
       # Proxy enum wrapper generator changes enum names, meaning all C/C++
       # enum fields should be renamed too.
-      res.fieldType.head &= conf.isImportCpp.tern("Cxx", "C")
+      res.fieldType.nimName &= conf.isImportCpp.tern("Cxx", "C")
 
     gen.memberFields.add res
 
@@ -832,12 +830,11 @@ proc wrapObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): GenObject =
 
 
 
-proc cEnumName(
-    str: string, nt: NType[PNode], cache: var WrapCache): string =
+proc cEnumName(str: string, nt: NimType, cache: var WrapCache): string =
   # Generate name for C enum. QUESTION: enum names don't need to be
   # perfectly accurate as they are converted to integers and then casted
   # - I'm not completely sure if this correct.
-  result = nt.head
+  result = nt.nimName
   result[0] = result[0].toLowerAscii()
   result &= "_" & str
   result = result.strip(chars = {'_'})
@@ -875,8 +872,8 @@ proc makeGenEnum*(
     isMacroEnum: false,
     cdecl: declEn,
     iinfo: currIInfo(),
-    rawName: nt.head & tern(conf.isImportCpp, "Cxx", "C"),
-    name: nt.head,
+    rawName: nt.nimName & conf.importX(),
+    name: nt.nimName,
     docComment: @[conf.docCommentFor(declEn.ident, declEn.cursor, cache)]
   )
 
@@ -1081,7 +1078,7 @@ proc wrapMacroEnum*(
     var en = GenEnum(
       isMacroEnum: true,
       name: name,
-      proxyName: name & conf.isImportcpp.tern("Cxx", "C"),
+      proxyName: name & conf.importX(),
       iinfo: currIINfo(),
       cdecl: nil,
       values: enumFields.sortedByIt(it.resVal)
@@ -1210,12 +1207,12 @@ proc wrapApiUnit*(
 
   result.add wrapMacros(macrolist, conf, cache)
 
-proc getNType*(carg: CArg): NType[PNode] =
+proc getNType*(carg: CArg): NimType =
   if carg.isRaw:
     raiseAssert("#[ IMPLEMENT ]#")
 
   else:
-    return carg.ntype
+    return carg.nimType
 
 proc toNNode*(gen: GenEntry, conf: WrapConf): seq[WrappedEntry]
 
@@ -1224,8 +1221,8 @@ proc toNNode*(gp: GenProc, wrapConf: WrapConf): PProcDecl =
     name = gp.name,
     iinfo = gp.iinfo,
     exported = true,
-    rtyp = some(gp.returnType),
-    genParams = gp.genParams,
+    rtyp = some(gp.returnType.toNType()),
+    genParams = gp.genParams.mapIt(it.toNType()),
     declType = gp.declType,
     kind = gp.kind
   )
@@ -1234,7 +1231,7 @@ proc toNNode*(gp: GenProc, wrapConf: WrapConf): PProcDecl =
     result.signature.arguments.add newNIdentDefs(
       vname = arg.name,
       value = arg.default,
-      vtype = arg.getNTYpe(),
+      vtype = arg.getNTYpe().toNType(),
       kind = arg.varkind
     )
 
@@ -1301,7 +1298,7 @@ proc toNNode*(gen: GenEnum, conf: WrapConf): (PEnumDecl, PEnumDecl) =
 proc toNNode*(gen: GenObject, conf: WrapConf): seq[WrappedEntry] =
   var decl = PObjectDecl(
     iinfo: gen.iinfo,
-    name: gen.name
+    name: gen.name.toNType()
   )
 
   decl.annotation = some newPPragma(
@@ -1320,9 +1317,9 @@ proc toNNode*(gen: GenObject, conf: WrapConf): seq[WrappedEntry] =
       block getterImplementation:
         var getImpl = newPProcDecl(field.name)
         with getImpl:
-          returnType = field.fieldType
+          returnType = field.fieldType.toNType()
           iinfo = currIInfo()
-          genParams = gen.name.genParams
+          genParams = gen.name.genericParams.mapIt(it.toNType())
           pragma = newPPragma(
             newPIdent("noinit"),
             # newPIdentColonString(conf.importX(), &"#.{field.rawName}"),
@@ -1336,7 +1333,7 @@ proc toNNode*(gen: GenObject, conf: WrapConf): seq[WrappedEntry] =
             newPIdentColonString("emit", &"return `self`.{field.rawName};")
           ))
 
-        getImpl.addArgument("self", gen.name)
+        getImpl.addArgument("self", gen.name.toNType())
 
         result.add newWrappedEntry(
           toNimDecl(getImpl), true, field.iinfo, field.cdecl.cursor)
@@ -1352,8 +1349,8 @@ proc toNNode*(gen: GenObject, conf: WrapConf): seq[WrappedEntry] =
             )
           )
 
-        setImpl.addArgument("self", gen.name)
-        setImpl.addArgument("value", field.fieldType)
+        setImpl.addArgument("self", gen.name.toNtype())
+        setImpl.addArgument("value", field.fieldType.toNType())
 
         result.add newWrappedEntry(
           toNimDecl(setImpl), true, field.iinfo, field.cdecl.cursor)
@@ -1366,7 +1363,7 @@ proc toNNode*(gen: GenObject, conf: WrapConf): seq[WrappedEntry] =
         annotation: some newPPragma(
           newPIdentColonString(conf.importX, field.cdecl.lastName())
         ),
-        fldType: field.fieldType
+        fldType: field.fieldType.toNType()
       )
 
   for nested in gen.nestedEntries:
@@ -1393,8 +1390,8 @@ proc toNNode*(gen: GenAlias, conf: WrapConf): AliasDecl[PNode] =
     docComment: gen.docComment.join("\n"),
     isDistinct: gen.isDistinct,
     isExported: true,
-    oldType: gen.baseType,
-    newType: gen.newAlias
+    oldType: gen.baseType.toNType(),
+    newType: gen.newAlias.toNType()
   )
 
 proc toNNode*(gen: GenImport, conf: WrapConf): WrappedEntry =

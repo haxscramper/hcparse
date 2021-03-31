@@ -162,38 +162,35 @@ proc fixTypeName*(str: string, idx: int, conf: WrapConf): string =
       inc idx
 
 
-proc fixTypeName*(
-  ntype: var NType[PNode], conf: WrapConf, idx: int = 0) =
-  if ntype.kind in {ntkIdent, ntkGenericSpec}:
-    ntype.head = fixTypeName(ntype.head, idx, conf)
+proc fixTypeName*(ntype: var NimType, conf: WrapConf, idx: int = 0) =
+  case ntype.kind:
+    of ctkIdent:
+      ntype.nimName = fixTypeName(ntype.nimName, idx, conf)
 
-    var idx = idx
-    for gen in mitems(ntype.genParams):
-      conf.fixTypeName(gen, conf, idx)
-      inc idx
+      var idx = idx
+      for gen in mitems(ntype.genericParams):
+        conf.fixTypeName(gen, conf, idx)
+        inc idx
 
-  else:
-    debug ntype.kind
-    if ntype.rtype.isSome():
-      fixTypeName(ntype.rtype.get().getIt(), conf)
+    of ctkProc:
+      debug ntype.kind
+      if notNil ntype.returnType:
+        fixTypeName(ntype.returnType, conf)
 
-    for idx, arg in mpairs(ntype.arguments):
-      arg.idents[0] =
-        if
-          getStrVal(arg.idents[0]).len == 0:
-            newPIdent("a" & $idx)
+      for idx, arg in mpairs(ntype.arguments):
+        arg.name =
+          if arg.name.len == 0:
+            "a" & $idx
 
-        else:
-          newPIdent(fixIdentName(getStrVal(arg.idents[0])))
+          else:
+            fixIdentName(arg.name)
 
-      conf.fixtypename(arg.vtype, conf, idx)
+        conf.fixtypename(arg.nimType, conf, idx)
 
 
-proc typeNameForScoped*(
-    ident: CScopedIdent, conf: WrapConf): NType[PNode] =
-
+proc typeNameForScoped*(ident: CScopedIdent, conf: WrapConf): NimType =
   var resname: string
-  var genParams: seq[NType[PNode]]
+  var genParams: seq[NimType]
   for name in ident:
     if name.getName() notin conf.collapsibleNamespaces:
       resname &= capitalizeAscii(name.getName())
@@ -201,7 +198,7 @@ proc typeNameForScoped*(
         let tmp = conf.typeNameForScoped(genParam, conf)
         genParams.add tmp
 
-  result = newNType(resname, genParams)
+  result = newNimType(resname, genParams)
   conf.fixTypeName(result, conf, 0)
 
 proc getImportUsingDependencies*(
@@ -278,7 +275,7 @@ let baseCppWrapConf* = WrapConf(
         updateForInternalImport(dep, conf, conf.baseDir, result)
   ),
   typeNameForScoped: (
-    proc(ident: CScopedIdent, conf: WrapConf): NType[PNode] {.closure} =
+    proc(ident: CScopedIdent, conf: WrapConf): NimType {.closure} =
       typeNameForScoped(ident, conf)
   ),
   isDistinct: (
@@ -288,8 +285,7 @@ let baseCppWrapConf* = WrapConf(
       false
   ),
   fixTypeName: (
-    proc(ntype: var NType[PNode],
-         conf: WrapConf, idx: int) {.closure.} =
+    proc(ntype: var NimType, conf: WrapConf, idx: int) {.closure.} =
       # Default implementation for type name fixes
       fixTypeName(ntype, conf, 0)
   ),
