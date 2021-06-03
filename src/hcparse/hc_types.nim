@@ -29,6 +29,11 @@ type
 
 
   NimType* = ref object
+    ## C++ type converter to nim-/like/ representation. Due to differences
+    ## in type system (type-level immutability properties in C++ as opposed
+    ## to variable-level in NIM) additional layer of indirection was added.
+    ## First `CXType` is converter to `NimType`, and then to
+    ## `NType[PNode]`.
     specialKind*: CTypeSpecialKind
     isMutable*: bool
     isConst*: bool
@@ -809,7 +814,20 @@ func add*(
   nimType.genericParams.add genericParam
 
 proc toNType*(nimType: NimType): NType[PNode] =
-  discard
+  case nimType.kind:
+    of ctkIdent:
+      result = newPType(nimType.nimName)
+      for param in nimType.genericParams:
+        result.add toNType(param)
+
+    of ctkProc:
+      result = newProcNType(
+        nimType.arguments.mapIt((it.name, it.nimType.toNType())),
+        nimType.returnType.toNType(),
+        newPPragma("cdecl")
+      )
+
+
 
 proc `$`*(nimType: NimType): string = $toNType(nimType)
 

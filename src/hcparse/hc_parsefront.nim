@@ -215,31 +215,6 @@ export toPng, toXDot, AbsFile
 #*************************************************************************#
 #****************************  File wrapping  ****************************#
 #*************************************************************************#
-func makeImport*(names: NimImportSpec): PNode =
-  var elements: seq[PNode]
-  var imports = names.importPath
-  if names.isRelative:
-    var prefix: PNode
-    if names.relativeDepth == 0:
-      prefix = newPIdent("./")
-
-    else:
-      prefix = newPident(repeat("../", names.relativeDepth))
-
-    elements.add nnkPrefix.newPTree(
-      prefix,
-      newPident(imports[0])
-    )
-
-    imports = imports[1 ..^ 1]
-
-  for path in imports:
-    elements.add newPident(path)
-
-  nnkImportStmt.newPTree(
-    foldl(elements, nnkInfix.newPTree(newPident("/"), a, b))
-  )
-
 proc getExports*(
     parsed: ParsedFile, conf: WrapConf, index: hc_types.FileIndex
   ): seq[AbsFile] =
@@ -376,6 +351,9 @@ proc patchForward*(
               # QUESTION what about `int` fields, or other types that are
               # either not wrapped at all, or wrapped using some convoluted
               # multi-stage generics?
+              #
+              # QUESTION 2 now I'm not sure what previous question was
+              # about, so I need to figure /that/ out too.
               discard typeGraph.addEdge(
                 objectNode,
                 typeGraph.addOrGetNode(
@@ -426,6 +404,7 @@ proc wrapFiles*(
   # entries with imports and returning list of additional files (for
   # strongly connected type clusters that span multiple files)
   result.add patchForward(genFiles, conf, cache)
+
   # Add generated wrapper files themselves
   result.add genFiles
 
@@ -446,6 +425,7 @@ proc wrapFile*(
     case elem.decl.kind:
       # Filter out all type declarations.
       of nekObjectDecl:
+        debug elem.decl.objectDecl.name.kind
         debug elem.decl.objectDecl.name, elem.decl.objectDecl.iinfo
 
         let name = elem.decl.objectdecl.name.head
@@ -554,8 +534,6 @@ proc wrapSingleFile*(
   var
     cache: WrapCache
     index: hc_types.FileIndex
-
-  fillDocComments(getExpanded(toAbsFile(file), parseConf), cache)
 
   let parsed = parseFile(
     file.toAbsFile(), parseConf, wrapConf,

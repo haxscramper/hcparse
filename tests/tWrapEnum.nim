@@ -29,4 +29,4 @@ let wrapConf = baseCppWrapConf.withDeepIt do:
 let resFile = "/tmp/res.nim"
 wrapWithConf(AbsFile file, AbsFile resFile, wrapConf, baseCppParseConf)
 
-execShell shellCmd(nim, c, $resFile)
+execShell shellCmd(nim, cpp, $resFile)

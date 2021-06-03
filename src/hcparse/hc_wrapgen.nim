@@ -716,8 +716,6 @@ proc wrapObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): GenObject =
     cdecl: cd
   )
 
-  info result.name
-  info cd.ident
   assert result.name.kind == ctkIdent
 
   updateAggregateInit(cd, conf, cache, result)
@@ -1129,18 +1127,18 @@ proc getNType*(carg: CArg): NimType =
 
 proc toNNode*(gen: GenEntry, conf: WrapConf): seq[WrappedEntry]
 
-proc toNNode*(gp: GenProc, wrapConf: WrapConf): PProcDecl =
+proc toNNode*(gen: GenProc, wrapConf: WrapConf): PProcDecl =
   result = newPProcDecl(
-    name = gp.name,
-    iinfo = gp.iinfo,
+    name = gen.name,
+    iinfo = gen.iinfo,
     exported = true,
-    rtyp = some(gp.returnType.toNType()),
-    genParams = gp.genParams.mapIt(it.toNType()),
-    declType = gp.declType,
-    kind = gp.kind
+    rtyp = some(gen.returnType.toNType()),
+    genParams = gen.genParams.mapIt(it.toNType()),
+    declType = gen.declType,
+    kind = gen.kind
   )
 
-  for arg in gp.arguments:
+  for arg in gen.arguments:
     result.signature.arguments.add newNIdentDefs(
       vname = arg.name,
       value = arg.default,
@@ -1148,22 +1146,22 @@ proc toNNode*(gp: GenProc, wrapConf: WrapConf): PProcDecl =
       kind = arg.varkind
     )
 
-  result.docComment = gp.docComment.join("\n")
+  result.docComment = gen.docComment.join("\n")
 
-  result.signature.pragma = gp.pragma
+  result.signature.pragma = gen.pragma
 
-  if not gp.noPragmas:
+  if not gen.noPragmas:
     result.signature.pragma.add(
       newExprColonExpr(
         newPIdent(wrapConf.importX()),
-        newRStrLit(gp.icpp)
+        newRStrLit(gen.icpp)
     ))
 
     result.signature.pragma.add(
-      newExprColonExpr(newPIdent "header", gp.header.toNNode()))
+      newExprColonExpr(newPIdent "header", gen.header.toNNode()))
 
-  if gp.impl.isSome():
-    result.impl = gp.impl.get()
+  if gen.impl.isSome():
+    result.impl = gen.impl.get()
 
 proc toNNode*(gen: GenEnum, conf: WrapConf): (PEnumDecl, PEnumDecl) =
   block:
@@ -1213,6 +1211,8 @@ proc toNNode*(gen: GenObject, conf: WrapConf): seq[WrappedEntry] =
     iinfo: gen.iinfo,
     name: gen.name.toNType()
   )
+
+  assert decl.name.kind == ntkIdent, $decl.name.kind
 
   decl.pragma = some newPPragma(
     newPIdent("bycopy"),
@@ -1272,6 +1272,7 @@ proc toNNode*(gen: GenObject, conf: WrapConf): seq[WrappedEntry] =
       decl.flds.add PObjectField(
         docComment: field.docComment.join("\n"),
         isTuple: false,
+        isExported: true,
         name: field.name,
         pragma: some newPPragma(
           newPIdentColonString(conf.importX, field.cdecl.lastName())
@@ -1297,9 +1298,43 @@ proc toNNode*(gen: GenAlias, conf: WrapConf): AliasDecl[PNode] =
     newType: gen.newAlias.toNType()
   )
 
+func toNNode*(names: NimImportSpec): PNode =
+  var elements: seq[PNode]
+  var imports = names.importPath
+  if names.isRelative:
+    var prefix: PNode
+    if names.relativeDepth == 0:
+      prefix = newPIdent("./")
+
+    else:
+      prefix = newPident(repeat("../", names.relativeDepth))
+
+    elements.add nnkPrefix.newPTree(
+      prefix,
+      newPident(imports[0])
+    )
+
+    imports = imports[1 ..^ 1]
+
+  for path in imports:
+    elements.add newPident(path)
+
+  nnkImportStmt.newPTree(
+    foldl(elements, nnkInfix.newPTree(newPident("/"), a, b))
+  )
+
+
+
 proc toNNode*(gen: GenImport, conf: WrapConf): WrappedEntry =
   ## Convert import passthough wrapped entry.
-  discard
+  var decl = NimDecl[PNode](
+    kind: nekPassthroughCode,
+    passthrough: gen.importSpec.toNNode(),
+    passIInfo: gen.iinfo
+  )
+
+  return newWrappedEntry(
+    decl, false, gen.iinfo, CXCursor())
 
 proc toNNode*(gen: GenEntry, conf: WrapConf): seq[WrappedEntry] =
   case gen.kind:
