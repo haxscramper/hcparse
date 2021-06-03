@@ -92,9 +92,6 @@ proc visitMethod*(
     isOperator: isOperator(cursor)
   )
 
-  # result.access = accs
-  # result.arguments = cursor.getArguments()
-
   if isOperator(result):
     result.operatorKind = result.classifyOperator()
     result.operatorName = result.lastName().dropPrefix("operator")
@@ -121,11 +118,6 @@ proc visitField*(
 
 
 var undefCnt: int = 0
-
-# proc visitAlias*(
-#   cursor: CXCursor, parent: CScopedIdent, conf: WrapConf): CDecl =
-#   result = CDecl(
-#     kind: cdkAlias, cursor: cursor, ident: parent & toCName(cursor))
 
 proc visitFunction*(
   cursor: CXCursor, parent: CScopedIdent, conf: WrapConf): CDecl =

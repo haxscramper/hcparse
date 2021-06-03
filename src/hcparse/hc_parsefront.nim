@@ -235,7 +235,7 @@ proc toNNode*(genEntries: seq[GenEntry], conf: WrapConf):
           node.genProc.toNNode(conf).toNimDecl(),
           true,
           node.genProc.iinfo,
-          node.genProc.cdecl.cursor
+          node.genProc.cdecl
         )
 
       of gekImport:
@@ -256,7 +256,7 @@ proc toNNode*(genEntries: seq[GenEntry], conf: WrapConf):
           node.genAlias.toNNode(conf).toNimDecl(),
           true,
           node.genAlias.iinfo,
-          node.genAlias.cdecl.cursor
+          node.genAlias.cdecl
         )
 
       of gekObject:
@@ -269,7 +269,7 @@ proc toNNode*(genEntries: seq[GenEntry], conf: WrapConf):
             decl.toNimDecl(),
             true,
             node.genEnum.iinfo,
-            node.genEnum.cdecl.cursor
+            node.genEnum.cdecl
           )
 
       of gekPass:
@@ -409,8 +409,23 @@ proc wrapFiles*(
   result.add genFiles
 
 
+proc updateComments(
+    decl: var PNimDecl, node: WrappedEntry, wrapConf: WrapConf) =
+
+  decl.addCodeComment("Wrapper for `" & toCppNamespace(
+    node.ident, withNames = true) & "`\n")
+  if node.cursor.getSpellingLocation().getSome(loc):
+    let file = withoutPrefix(AbsFile(loc.file), wrapConf.baseDir)
+    decl.addCodeComment(
+      &"Declared in {file}:{loc.line}")
+
+  decl.addDocComment(
+    &"@import{{[[code:{node.ident.toHaxdocIdent()}]]}}")
+
+
+
 proc wrapFile*(
-    wrapped: WrappedFile, conf: WrapConf,
+    wrapped: WrappedFile, wrapConf: WrapConf,
     cache: var WrapCache, index: hc_types.FileIndex
   ): seq[WrappedEntry] =
   # Coollect all types into single wrapped entry type block. All duplicate
@@ -419,15 +434,12 @@ proc wrapFile*(
   # because you can't declare type again after defining it (I hope), so all
   # last type encounter will always be it's definition.
   var res: Table[string, WrappedEntry]
-  var tmpRes: seq[WrappedEntry] = wrapped.entries.toNNode(conf)
+  var tmpRes: seq[WrappedEntry] = wrapped.entries.toNNode(wrapConf)
 
   for elem in tmpRes:
     case elem.decl.kind:
       # Filter out all type declarations.
       of nekObjectDecl:
-        debug elem.decl.objectDecl.name.kind
-        debug elem.decl.objectDecl.name, elem.decl.objectDecl.iinfo
-
         let name = elem.decl.objectdecl.name.head
         res[name] = elem
 
@@ -451,15 +463,20 @@ proc wrapFile*(
 
   block:
     let elems = collect(newSeq):
-      for k, v in res:
-        v.decl.toNimTypeDecl()
+      for _, wrapEntry in mpairs(res):
+        updateComments(wrapEntry.decl, wrapEntry, wrapConf)
+        wrapEntry.decl.toNimTypeDecl()
 
     result.add(newWrappedEntry(
-      toNimDecl(elems), false, currIINfo(), CXCursor()))
+      toNimDecl(elems), false, currIINfo()))
 
-  for elem in tmpRes:
+  for elem in mitems(tmpRes):
     case elem.decl.kind:
-      of nekProcDecl, nekMultitype:
+      of nekProcDecl:
+        updateComments(elem.decl, elem, wrapConf)
+        result.add elem
+
+      of nekMultitype:
         result.add elem
 
       of nekPassthroughCode:
@@ -484,16 +501,6 @@ proc getExpanded*(file: AbsFile, parseConf: ParseConf): string =
   cmd.arg file
 
   result = evalShellStdout(cmd)
-
-proc updateComments(
-    decl: var PNimDecl, node: WrappedEntry, wrapConf: WrapConf) =
-
-  decl.addCodeComment("Wrapper for `" & toCppNamespace(
-    node.ident, withNames = true) & "`\n")
-  if node.cursor.getSpellingLocation().getSome(loc):
-    let file = withoutPrefix(AbsFile(loc.file), wrapConf.baseDir)
-    decl.addCodeComment(
-      &"Declared in {file}:{loc.line}")
 
 
 proc wrapSingleFile*(
@@ -552,7 +559,6 @@ proc wrapSingleFile*(
 
   for node in wrapped:
     var node = node
-    updateComments(node.decl, node, wrapConf)
     result.decls.add node.decl
 
 proc wrapAllFiles*(

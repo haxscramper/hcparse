@@ -1,5 +1,8 @@
 import cxtypes, cxcommon
-import std/[tables, sets, strutils, sequtils, hashes, strformat, macros]
+import std/[
+  tables, sets, strutils, sequtils, hashes, strformat, macros,
+  segfaults
+]
 
 import
   hmisc/other/[oswrap, colorlogger],
@@ -402,6 +405,7 @@ type
     ## Common fields for all `GenX` types. Not used for inheritance, only
     ## to avoud code duplication.
     cdecl* {.requiresinit.}: CDecl
+
     iinfo* {.requiresinit.}: LineInfo
     docComment*: seq[string]
 
@@ -442,6 +446,13 @@ type
     gpskNewPtrConstructor
     gpskInitConstructor
 
+
+  GenPragmaConf* = enum
+    gpcAllPragma
+    gpcNoPragma
+    gpcNoImportcpp
+    gpcNoHeader
+
   GenProc* = ref object of GenBase
     ## Generated wrapped proc
     specialKind*: GenProcSpecialKind
@@ -458,8 +469,8 @@ type
     kind*: ProcKind ## Kind of generated nim proc (operator, field setter,
                     ## regular proc etc.)
     impl*: Option[PNode] ## Optional implementation body
-    noPragmas*: bool ## Do not add default C wrapper pragamas. Used for
-                     ## pure nim enums
+    noPragmas*: GenPragmaConf ## Do not add default C wrapper pragamas.
+    ## Used for pure nim enums
 
   GenEnumValue* = ref object of GenBase
     baseName*: string ## Original name of the enum value
@@ -657,6 +668,9 @@ proc toCppNamespace*(
 
   result = buf.join("::")
 
+proc toHaxdocIdent*(ns: CScopedIdent): string =
+  toCppNamespace(ns, withNames = true)
+
 
 proc `$`*(ident: CSCopedIdent): string =
   toCppNamespace(ident, withNames = true)
@@ -753,12 +767,23 @@ func `==`*(a, b: CArg): bool =
   ))
 
 func newWrappedEntry*(
-    nimDecl: PNimDecl, postTypes: bool, iinfo: LineInfo, cursor: CXCursor
+    nimDecl: PNimDecl, postTypes: bool,
+    iinfo: LineInfo, cdecl: CDecl
   ): WrappedEntry =
 
   result = WrappedEntry(
-    postTypes: postTypes, decl: nimDecl, cursor: cursor)
+    postTypes: postTypes, decl: nimDecl,
+    cursor: cdecl.cursor, ident: cdecl.ident
+  )
 
+  result.decl.iinfo = iinfo
+
+func newWrappedEntry*(
+    nimDecl: PNimDecl, postTypes: bool, iinfo: LineInfo
+  ): WrappedEntry =
+
+  result = WrappedEntry(
+    postTypes: postTypes, decl: nimDecl, cursor: CXCursor())
   result.decl.iinfo = iinfo
 
 #======================  Accessing CDecl elements  =======================#
@@ -793,7 +818,10 @@ func newNimType*(name: string, cxType: CXType): NimType =
 func newNimType*(name: string, genericParams: openarray[NimType] = @[]):
   NimType =
 
-  NimType(kind: ctkIdent, nimName: name, fromCXtype: false)
+  NimType(
+    kind: ctkIdent, nimName: name, fromCXtype: false,
+    genericParams: toSeq(genericParams)
+  )
 
 func newNimType*(
     arguments: seq[CArg], returnType: NimType = newNimType("void")):
@@ -814,18 +842,21 @@ func add*(
   nimType.genericParams.add genericParam
 
 proc toNType*(nimType: NimType): NType[PNode] =
-  case nimType.kind:
-    of ctkIdent:
-      result = newPType(nimType.nimName)
-      for param in nimType.genericParams:
-        result.add toNType(param)
+  if isNil(nimType):
+    result = newPType("void")
 
-    of ctkProc:
-      result = newProcNType(
-        nimType.arguments.mapIt((it.name, it.nimType.toNType())),
-        nimType.returnType.toNType(),
-        newPPragma("cdecl")
-      )
+  else:
+    case nimType.kind:
+      of ctkIdent:
+        result = newPType(nimType.nimName)
+        for param in nimType.genericParams:
+          result.add toNType(param)
+
+      of ctkProc:
+        result = newProcNType(
+          nimType.arguments.mapIt((it.name, it.nimType.toNType())),
+          nimType.returnType.toNType(),
+          newPPragma("cdecl"))
 
 
 

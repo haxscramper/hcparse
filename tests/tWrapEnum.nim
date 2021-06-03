@@ -16,6 +16,7 @@ class DeclareClass {
   public:
     int publicField;
     DeclareClass* publicMethod();
+    int secondPublic();
 };
 
 """
@@ -26,7 +27,9 @@ let wrapConf = baseCppWrapConf.withDeepIt do:
   it.baseDir = AbsDir("/tmp")
   it.showParsed = true
 
-let resFile = "/tmp/res.nim"
-wrapWithConf(AbsFile file, AbsFile resFile, wrapConf, baseCppParseConf)
+let resFile = AbsFile "/tmp/res.nim"
+wrapWithConf(AbsFile file, resFile, wrapConf, baseCppParseConf)
 
-execShell shellCmd(nim, cpp, $resFile)
+resFile.appendFile "let decl = newDeclareClass(); echo decl.publicField"
+
+execShell shellCmd(nim, cpp, -r, $resFile)

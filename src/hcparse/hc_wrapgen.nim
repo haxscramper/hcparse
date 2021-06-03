@@ -13,7 +13,7 @@ import
   hnimast/pprint,
   hmisc/macros/iflet,
   hmisc/algo/[htemplates, hseq_distance, namegen],
-  hmisc/helpers,
+  hmisc/[helpers, hexceptions],
   hmisc/other/[colorlogger, oswrap],
   hmisc/types/colorstring
 
@@ -302,7 +302,7 @@ proc wrapProcedure*(
       result.canAdd = false
 
     if pr.cursor.cxkind == ckDestructor:
-      # Implicitly calling destructor on object (if someone ever needs
+      # Explicitly calling destructor on object (if someone ever needs
       # something like that)
       it.icpp = &"~{it.name}()"
       it.header = conf.makeHeader(pr.cursor, conf)
@@ -323,6 +323,7 @@ proc wrapProcedure*(
     it.pragma.add newPIdent("varargs")
 
   if specialProcKind == gpskNewRefConstructor:
+    pprintStackTrace()
     let argType = newNType("ref", [parent.get().toNType()]).toNNode()
     let emitStr = &["`self`->~", parentDecl.get().lastName(), "();"]
     it.impl = some pquote do:
@@ -367,8 +368,9 @@ proc wrapMethods*(
      $cd.kind & $cd.cursor.getSpellingLocation()
 
 
+  var hasConstructor = false
   for meth in cd.methods({
-    ckMethod, ckDestructor, ckConstructor, ckConversionFunction,
+    ckDestructor, ckConstructor, ckConversionFunction
   }):
     var constructorAddKind: set[GenProcSpecialKind]
     # QUESTION I'm not entirely sure why this has such weird arrangement
@@ -377,6 +379,7 @@ proc wrapMethods*(
     # I was adding `new ref T` I completely forgot why I can't just
     # genrated everything in the first place.
     if meth.cursor.cxKind() in {ckConstructor, ckConversionFunction}:
+      hasConstructor = true
       constructorAddKind = {
         gpskNewRefConstructor,
         gpskNewPtrConstructor,
@@ -398,8 +401,54 @@ proc wrapMethods*(
         result.methods.add decl[0].genProc
         result.extra.add decl[1..^1]
 
+  if not hasConstructor:
+    let className = cd.ident.toCppNamespace()
+    result.extra.add GenProc(
+      name: "cnew" & parent.nimName.capitalizeAscii(),
+      returnType: newNimType("ptr", @[parent]),
+      icpp: &"new {className}()",
+      cdecl: cd,
+      iinfo: currIInfo(),
+      header: conf.makeHeader(cd.cursor, conf)
+    )
+
+    let emitStr = &"new ((void*)result) {className}(); /* Placement new */"
+
+    let
+      ntype = parent.toNTYpe().toNNode()
+      destroyCall = "destroy" & parent.nimName.capitalizeAscii()
+
+    result.extra.add GenProc(
+      name: destroyCall,
+      arguments: @[initCArg("obj", newNimType("ptr", @[parent]))],
+      cdecl: cd,
+      iinfo: currIInfo(),
+      icpp: &"#.~{className}()",
+      header: conf.makeHeader(cd.cursor, conf),
+    )
+
+    result.extra.add GenProc(
+      name: "new" & parent.nimName.capitalizeAscii(),
+      returnType: newNimType("ref", @[parent]),
+      cdecl: cd,
+      noPragmas: gpcNoPragma,
+      iinfo: currIInfo(),
+      impl: some (
+        pquote do:
+          newImportAux()
+          new(
+            result,
+            proc(destr: ref `ntype`) =
+              `newPIdent(destroyCall)`(addr destr[])
+          )
+          {.emit: `emitStr`.}
+      )
+    )
+
+
   for gproc in mitems(result.methods):
     fixNames(gproc, conf, parent)
+
 
 proc wrapFunction*(cd: CDecl, conf: WrapConf, cache: var WrapCache):
   seq[GenEntry] =
@@ -886,7 +935,9 @@ proc makeEnumConverters(gen: GenEnum, conf: WrapConf, cache: var WrapCache):
   return GenPass(
     iinfo: currIInfo(),
     passEntries: @[newWrappedEntry(
-      toNimDecl(helpers), true, currIInfo(), gen.cdecl.cursor)]
+      toNimDecl(helpers), true, currIInfo(),
+      gen.cdecl
+    )]
   )
 
 
@@ -1024,7 +1075,7 @@ proc wrapMacroEnum*(
     result.add GenPass(
       iinfo: currIInfo(),
       passEntries: @[
-        newWrappedEntry(toNimDecl(helpers), true, currIInfo(), CXCursor())])
+        newWrappedEntry(toNimDecl(helpers), true, currIInfo())])
 
 
 
@@ -1092,6 +1143,8 @@ proc wrapApiUnit*(
 
         else:
           result.add decl.wrapObject(conf, cache)
+          for i in result:
+            echo i.kind
 
         dedentLog()
 
@@ -1150,13 +1203,14 @@ proc toNNode*(gen: GenProc, wrapConf: WrapConf): PProcDecl =
 
   result.signature.pragma = gen.pragma
 
-  if not gen.noPragmas:
+  if gen.noPragmas notin {gpcNoImportcpp, gpcNoPragma}:
     result.signature.pragma.add(
       newExprColonExpr(
         newPIdent(wrapConf.importX()),
         newRStrLit(gen.icpp)
     ))
 
+  if gen.noPragmas notin {gpcNoHeader, gpcNoPragma}:
     result.signature.pragma.add(
       newExprColonExpr(newPIdent "header", gen.header.toNNode()))
 
@@ -1218,6 +1272,10 @@ proc toNNode*(gen: GenObject, conf: WrapConf): seq[WrappedEntry] =
     newPIdent("bycopy"),
     nnkExprColonExpr.newPTree(
       newPIdent(conf.importX()),
+      newPLit(gen.cdecl.ident.toCppNamespace())
+    ),
+    nnkExprColonExpr.newPTree(
+      newPIdent("header"),
       conf.makeHeader(gen.cdecl.cursor, conf).toNNode()
     )
   )
@@ -1249,7 +1307,7 @@ proc toNNode*(gen: GenObject, conf: WrapConf): seq[WrappedEntry] =
         getImpl.addArgument("self", gen.name.toNType())
 
         result.add newWrappedEntry(
-          toNimDecl(getImpl), true, field.iinfo, field.cdecl.cursor)
+          toNimDecl(getImpl), true, field.iinfo, field.cdecl)
 
       block setterImplementation:
         var setImpl = newPProcDecl(field.name)
@@ -1266,7 +1324,7 @@ proc toNNode*(gen: GenObject, conf: WrapConf): seq[WrappedEntry] =
         setImpl.addArgument("value", field.fieldType.toNType())
 
         result.add newWrappedEntry(
-          toNimDecl(setImpl), true, field.iinfo, field.cdecl.cursor)
+          toNimDecl(setImpl), true, field.iinfo, field.cdecl)
 
     else:
       decl.flds.add PObjectField(
@@ -1284,9 +1342,14 @@ proc toNNode*(gen: GenObject, conf: WrapConf): seq[WrappedEntry] =
     result.add nested.toNNode(conf)
 
   var obj = newWrappedEntry(
-    toNimDecl(decl), true, gen.iinfo, gen.cdecl.cursor)
+    toNimDecl(decl), true, gen.iinfo, gen.cdecl)
 
   result.add obj
+
+  for meth in gen.memberMethods:
+    result.add toNNode(meth, conf).toNimDecl().newWrappedEntry(
+      true, meth.iinfo, meth.cdecl)
+
 
 proc toNNode*(gen: GenAlias, conf: WrapConf): AliasDecl[PNode] =
   result = AliasDecl[PNode](
@@ -1333,18 +1396,17 @@ proc toNNode*(gen: GenImport, conf: WrapConf): WrappedEntry =
     passIInfo: gen.iinfo
   )
 
-  return newWrappedEntry(
-    decl, false, gen.iinfo, CXCursor())
+  return newWrappedEntry(decl, false, gen.iinfo)
 
 proc toNNode*(gen: GenEntry, conf: WrapConf): seq[WrappedEntry] =
   case gen.kind:
     of gekEnum:
       let (e1, e2) = toNNode(gen.genEnum, conf)
       result.add toNimDecl(e1).newWrappedEntry(
-        true, gen.genEnum.iinfo, gen.cdecl.cursor)
+        true, gen.genEnum.iinfo, gen.cdecl)
 
       result.add toNimDecl(e2).newWrappedEntry(
-        true, gen.genEnum.iinfo, gen.cdecl.cursor)
+        true, gen.genEnum.iinfo, gen.cdecl)
 
     of gekPass:
       result.add gen.genPass.passEntries
@@ -1352,14 +1414,14 @@ proc toNNode*(gen: GenEntry, conf: WrapConf): seq[WrappedEntry] =
     of gekAlias:
       result.add toNNode(gen.genAlias, conf).
         toNimDecl().
-        newWrappedEntry(true, gen.genAlias.iinfo, gen.cdecl.cursor)
+        newWrappedEntry(true, gen.genAlias.iinfo, gen.cdecl)
 
     of gekObject:
       result.add toNNode(gen.genObject, conf)
 
     of gekProc:
       result.add toNNode(gen.genProc, conf).toNimDecl().newWrappedEntry(
-        true, gen.genProc.iinfo, gen.cdecl.cursor)
+        true, gen.genProc.iinfo, gen.cdecl)
 
     of gekImport:
       result.add toNNode(gen.genImport, conf)

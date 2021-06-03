@@ -39,7 +39,7 @@ proc errorCodesToException*(
     if sameNoGeneric(genProc.cdecl.ident, ident):
       var gen2 = genProc
       genProc.name &= "Raw"
-      gen2.noPragmas = true
+      gen2.noPragmas = gpcNoPragma
 
       var call = newPCall(genProc.name)
       for arg in genProc.arguments:
@@ -64,7 +64,7 @@ proc errorCodesToException*(
 
       return @[newWrappedEntry(
         gen2.toNNode(conf).toNimDecl(), false, currIInfo(),
-        genProc.cdecl.cursor
+        genProc.cdecl
       )]
 
 
