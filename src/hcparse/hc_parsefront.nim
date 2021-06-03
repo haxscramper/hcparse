@@ -204,9 +204,8 @@ proc incl*[N, E, F](
 
 
 proc parseAll*(
-  files: seq[AbsFile],
-  conf: ParseConf,
-  wrapConf: WrapConf, ): FileIndex =
+    files: seq[AbsFile], conf: ParseConf, wrapConf: WrapConf
+  ): hc_types.FileIndex =
   for file in files:
     result.index[file] = parseFile(file, conf, wrapConf)
 
@@ -242,7 +241,8 @@ func makeImport*(names: NimImportSpec): PNode =
   )
 
 proc getExports*(
-  parsed: ParsedFile, conf: WrapConf, index: FileIndex): seq[AbsFile] =
+    parsed: ParsedFile, conf: WrapConf, index: hc_types.FileIndex
+  ): seq[AbsFile] =
   ## Get list of absolute files that provide types, used in public API
   ## for `parsed` file *and* marked as internal (e.g. not supposed to
   ## be imported separately)
@@ -267,8 +267,14 @@ proc toNNode*(genEntries: seq[GenEntry], conf: WrapConf):
         result.add node.genImport.toNNode(conf)
 
       of gekForward:
-        raiseUnexpectedKindError(
-          node, "Forward declaration must be converted to pass/import")
+        raise newUnexpectedKindError(
+          node,
+          "forward declaration must be converted to pass/import",
+          "by forward declaration patch state. This code should",
+          "not be reached..\n",
+          "- Entry created in", node.genForward.iinfo, "\n",
+          "- CDecl is", node.genForward.cdecl.cursor
+        )
 
       of gekAlias:
         result.add newWrappedEntry(
@@ -338,7 +344,7 @@ proc patchForward*(
 
   info "Patching forward declarations"
 
-  var typeGraph = newHGraph[TypeNode, void]()
+  var typeGraph = newHGraph[TypeNode, NoProperty]()
 
   for file in wrapped:
     for entry in file.entries:
@@ -347,7 +353,7 @@ proc patchForward*(
         var objectNode = typeGraph.addOrGetNode(
           initTypeNode(entry.genObject.name.nimName))
 
-        if objectNode.value.declareFile.isSome():
+        if typeGraph[objectNode].declareFile.isSome():
           # Declaration file is added each node. One node is created for
           # each unique `entry.genObject.name` ecountered. If node with
           # given name already exists it either means tha algorithm is bad,
@@ -361,7 +367,7 @@ proc patchForward*(
             "Multiple file declarations for type " & $entry.genObject.name)
 
         else:
-          objectNode.value.declareFile = some(file)
+          typeGraph[objectNode].declareFile = some(file)
 
         # Add outgoing edges for all types that were explicitly used.
         for field in entry.genObject.memberFields:
@@ -380,7 +386,7 @@ proc patchForward*(
 
 
   for typeGroup in typeGraph.connectedComponents():
-    info typeGroup.mapIt(it.value.name)
+    info typeGroup.mapIt(typeGraph[it].name)
 
 
 
@@ -389,7 +395,7 @@ proc patchForward*(
 
 proc wrapFiles*(
     parsed: seq[ParsedFile], conf: WrapConf,
-    cache: var WrapCache, index: FileIndex): seq[WrappedFile] =
+    cache: var WrapCache, index: hc_types.FileIndex): seq[WrappedFile] =
 
   var genFiles: seq[WrappedFile]
   for file in parsed:
@@ -426,20 +432,22 @@ proc wrapFiles*(
 
 proc wrapFile*(
     wrapped: WrappedFile, conf: WrapConf,
-    cache: var WrapCache, index: FileIndex):
-  seq[WrappedEntry] =
+    cache: var WrapCache, index: hc_types.FileIndex
+  ): seq[WrappedEntry] =
   # Coollect all types into single wrapped entry type block. All duplicate
   # types (caused by forward declarations which is not really possible to
   # differentiated) will be overwritten. This should be fine I guess,
   # because you can't declare type again after defining it (I hope), so all
   # last type encounter will always be it's definition.
   var res: Table[string, WrappedEntry]
-  var tmpRes = wrapped.entries.toNNode(conf)
+  var tmpRes: seq[WrappedEntry] = wrapped.entries.toNNode(conf)
 
   for elem in tmpRes:
     case elem.decl.kind:
       # Filter out all type declarations.
       of nekObjectDecl:
+        debug elem.decl.objectDecl.name, elem.decl.objectDecl.iinfo
+
         let name = elem.decl.objectdecl.name.head
         res[name] = elem
 
@@ -545,7 +553,7 @@ proc wrapSingleFile*(
 
   var
     cache: WrapCache
-    index: FileIndex
+    index: hc_types.FileIndex
 
   fillDocComments(getExpanded(toAbsFile(file), parseConf), cache)
 
@@ -575,7 +583,7 @@ proc wrapAllFiles*(
 
   var
     cache: WrapCache # Global cache for all parsed files
-    index: FileIndex
+    index: hc_types.FileIndex
     parsed: seq[ParsedFile] # Full list of all parsed files
     wrapConf = wrapConf # Global wrapper configuration
 

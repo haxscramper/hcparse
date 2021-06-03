@@ -777,7 +777,7 @@ proc objTreeRepr*(
       suffix &= " " & toRed($cursor.getEnumConstantDeclValue())
 
     pptObj(
-      &[("[*] " & $cursor.cxkind).toMagenta(colorize), $cursor, $suffix],
+      &[("[*] " & $cursor.cxkind).toMagenta(colorize), " ", $cursor, $suffix],
       &[showtype.tern(@[ctype], @[]),
         showcomment.tern(@[comment], @[]),
         children
@@ -834,18 +834,3 @@ proc getClassBaseCursors*(inCursor: CXCursor): seq[CXCursor] =
         let base = node[0].getCursorReferenced()
         baseQue.addLast base
         result.add base
-
-when (NimMinor >= 3) and (NimPatch >= 5):
-  proc `=destroy`*(tu: var CXTranslationUnit): void =
-    echo "Destroying translation unit"
-    disposeTranslationUnit(tu)
-
-  proc `=destroy`*(index: var CXIndex): void =
-    # echo "Destroying index"
-    disposeIndex(index)
-
-  proc `=destroy`*(dbase: var CXCompilationDatabase): void =
-    dispose(dbase)
-
-  proc `=dispose`*(commands: var CXCompileCommands): void =
-    dispose(commands)

@@ -1,18 +1,24 @@
-import std/[strutils, sequtils, strformat, tables, lenientops, parseutils,
-            bitops, with, sets]
+import
+  std/[
+    strutils, sequtils, strformat, tables,
+    lenientops, parseutils, bitops, with, sets
+  ]
 
-import hc_types, cxtypes, cxcommon, libclang_wrap, hc_typeconv
+import
+  ./hc_types, ./cxtypes, ./cxcommon, ./hc_visitors,
+  ./libclang_wrap, ./hc_typeconv
 
-import hnimast, hnimast/pprint
-import hmisc/macros/iflet
-import hmisc/algo/[htemplates, hseq_distance]
-import hmisc/helpers
-import hmisc/other/[colorlogger, oswrap]
-import hmisc/types/colorstring
+import
+  hnimast,
+  hnimast/pprint,
+  hmisc/macros/iflet,
+  hmisc/algo/[htemplates, hseq_distance, namegen],
+  hmisc/helpers,
+  hmisc/other/[colorlogger, oswrap],
+  hmisc/types/colorstring
+
 import htsparse/cpp/cpp
 import fusion/matching except addPrefix
-
-import hc_visitors, hc_types
 
 proc wrapEnum*(declEn: CDecl, conf: WrapConf, cache: var WrapCache):
   seq[GenEntry]
@@ -419,7 +425,7 @@ proc wrapTypeFromNamespace(
     exported: true
   )
 
-  result.annotation = some(newPPragma(
+  result.pragma = some(newPPragma(
     newExprColonExpr(
       newPIdent(conf.importX()),
       ident.toCppNamespace().newRStrLit()
@@ -709,6 +715,10 @@ proc wrapObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): GenObject =
     name: conf.typeNameForScoped(cd.ident, conf),
     cdecl: cd
   )
+
+  info result.name
+  info cd.ident
+  assert result.name.kind == ctkIdent
 
   updateAggregateInit(cd, conf, cache, result)
 
@@ -1191,8 +1201,9 @@ proc wrapMacros*(
 
 
 proc wrapApiUnit*(
-  api: CApiUnit, conf: WrapConf,
-  cache: var WrapCache, index: FileIndex): seq[GenEntry] =
+    api: CApiUnit, conf: WrapConf,
+    cache: var WrapCache, index: hc_types.FileIndex
+  ): seq[GenEntry] =
   ## Generate wrapper for api unit.
   var macrolist: seq[CDecl]
   for decl in api.decls:
@@ -1332,7 +1343,7 @@ proc toNNode*(gen: GenObject, conf: WrapConf): seq[WrappedEntry] =
     name: gen.name.toNType()
   )
 
-  decl.annotation = some newPPragma(
+  decl.pragma = some newPPragma(
     newPIdent("bycopy"),
     nnkExprColonExpr.newPTree(
       newPIdent(conf.importX()),
@@ -1341,7 +1352,7 @@ proc toNNode*(gen: GenObject, conf: WrapConf): seq[WrappedEntry] =
   )
 
   if gen.cdecl.kind == cdkUnion:
-    decl.annotation.get().add newPIdent("union")
+    decl.pragma.get().add newPIdent("union")
 
   for field in gen.memberFields:
     if field.isConst:
@@ -1391,7 +1402,7 @@ proc toNNode*(gen: GenObject, conf: WrapConf): seq[WrappedEntry] =
         docComment: field.docComment.join("\n"),
         isTuple: false,
         name: field.name,
-        annotation: some newPPragma(
+        pragma: some newPPragma(
           newPIdentColonString(conf.importX, field.cdecl.lastName())
         ),
         fldType: field.fieldType.toNType()
@@ -1400,18 +1411,8 @@ proc toNNode*(gen: GenObject, conf: WrapConf): seq[WrappedEntry] =
   for nested in gen.nestedEntries:
     result.add nested.toNNode(conf)
 
-
-  # decl.addCodeComment("Wrapper for `" & toCppNamespace(
-  #   gen.fullName, withNames = true) & "`\n")
-
-  # if gen.cdecl.cursor.getSpellingLocation().getSome(loc):
-  #   let file = withoutPrefix(AbsFile(loc.file), conf.baseDir)
-  #   decl.addCodeComment(
-  #     &"Declared in {file}:{loc.line}")
-
   var obj = newWrappedEntry(
-    toNimDecl(decl), true, gen.iinfo, gen.cdecl.cursor
-  )
+    toNimDecl(decl), true, gen.iinfo, gen.cdecl.cursor)
 
   result.add obj
 

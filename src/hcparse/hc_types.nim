@@ -1,8 +1,10 @@
 import cxtypes, cxcommon
-import hmisc/other/[oswrap, colorlogger]
-import hnimast, hnimast/pprint
 import std/[tables, sets, strutils, sequtils, hashes, strformat, macros]
-import hmisc/algo/[hseq_mapping, hstring_algo, hseq_distance]
+
+import
+  hmisc/other/[oswrap, colorlogger],
+  hnimast, hnimast/pprint,
+  hmisc/algo/[hseq_mapping, hstring_algo, hseq_distance, namegen]
 
 type
   DepResolutionKind* = enum

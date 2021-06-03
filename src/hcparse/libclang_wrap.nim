@@ -4274,3 +4274,19 @@ proc fullComment_getAsXML*(comment: CXComment): CXString {.cdecl, dynlib: libcla
   ##  AST node.
   ## **
   ##  string containing an XML document.
+
+# WARNING enabling this causes 'realloc()' sigabort 'wrong old size' in
+# `cxtypes.cxType()`
+
+# when (NimMinor >= 3) and (NimPatch >= 5):
+#   proc `=destroy`*(tu: var CXTranslationUnit): void =
+#     disposeTranslationUnit(tu)
+
+#   proc `=destroy`*(index: var CXIndex): void =
+#     disposeIndex(index)
+
+#   proc `=destroy`*(dbase: var CXCompilationDatabase): void =
+#     dispose(dbase)
+
+#   proc `=dispose`*(commands: var CXCompileCommands): void =
+#     dispose(commands)

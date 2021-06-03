@@ -198,6 +198,8 @@ proc typeNameForScoped*(ident: CScopedIdent, conf: WrapConf): NimType =
         let tmp = conf.typeNameForScoped(genParam, conf)
         genParams.add tmp
 
+
+  assert resname.len > 0
   result = newNimType(resname, genParams)
   conf.fixTypeName(result, conf, 0)
 
@@ -340,7 +342,7 @@ let baseCppWrapConf* = WrapConf(
   ),
   isInternal: (
     proc(dep: AbsFile, conf: WrapConf,
-         index: FileIndex): bool {.closure.} =
+         index: hc_types.FileIndex): bool {.closure.} =
       isInternalImpl(dep, conf, index)
   ),
   prefixForEnum: (

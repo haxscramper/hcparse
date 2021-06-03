@@ -10,7 +10,6 @@ srcDir        = "src"
 
 # Dependencies
 
-requires "nim >= 1.2.6"
-requires "hnimast#head", "hmisc >= 0.4.0", "hpprint"
+requires "nim >= 1.4.6"
+requires "hnimast", "hmisc >= 0.11.5", "hpprint"
 requires "nimtraits"
-requires "https://github.com/disruptek/gram >= 0.3.2"
