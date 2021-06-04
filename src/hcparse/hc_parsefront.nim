@@ -495,7 +495,7 @@ proc wrapSingleFile*(
     errorReparseVerbose: bool = false,
     wrapConf: WrapConf = baseCppWrapConf,
     parseConf: ParseConf = baseCppParseConf,
-  ): tuple[decls: seq[NimDecl[PNode]], codegen: seq[CxxCodegen]] =
+  ): CodegenResult =
   ## Generate wrapper for a single file.
   ##
   ## - @arg{postprocess} :: collection of postprocessing actions on
@@ -547,6 +547,8 @@ proc wrapSingleFile*(
   for node in wrapped:
     result.decls.add node.decl
 
+  result.cache = cache
+
 
 proc wrapAllFiles*(
     files: seq[AbsFile], wrapConf: WrapConf, parseConf: ParseConf) =
@@ -568,13 +570,10 @@ proc wrapAllFiles*(
   for file in wrapFiles(parsed, wrapConf, cache, index):
     wrapped.add wrapFile(file, wrapConf, cache, index)
 
-  # for file in mitems(wrapped):
-  #   for node in mitems(file):
-  #     updateComments(node.decl, node, wrapConf, caceh)
-
-
 proc wrapWithConf*(
-  infile, outfile: FsFile, wrapConf: WrapConf, parseConf: ParseConf) =
+    infile, outfile: FsFile, wrapConf: WrapConf,
+    parseConf: ParseConf
+  ) =
 
   writeWrapped(
     wrapSingleFile(
@@ -584,7 +583,6 @@ proc wrapWithConf*(
       parseConf = parseConf
     ),
     outFile = outfile,
-    codegens = none(FsDir),
     compile = @[],
     wrapConf = wrapConf
   )

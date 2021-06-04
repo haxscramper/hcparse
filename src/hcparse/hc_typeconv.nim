@@ -70,67 +70,6 @@ proc toCArg*(cursor: CXCursor, conf: WrapConf): CArg =
 
 
 
-proc getSemanticNamespaces*(
-    parent: CXCursor, filterInline: bool = true, withType: bool = true
-  ): seq[CXCursor] =
-
-  # info "Semantic namespaces for", parent
-
-  var parent = parent
-
-  if withType:
-    result.add parent
-
-  parent = parent.getCursorSemanticParent()
-
-  # info parent
-
-  while parent.cxKind() in {
-    # TEST might be necessary to add templated namespacess (fuck, why C++
-    # is just so god-awful vomit-inducing garbage?)
-    ckNamespace, ckStructDecl, ckClassDecl
-  }:
-    if filterInline and (parent.isInlineNamespace() == 1):
-      discard
-    else:
-      result.add parent
-
-    parent = parent.getCursorSemanticParent()
-    # info parent.cxKind()
-
-  reverse(result)
-
-
-
-
-proc getTypeNamespaces*(
-    cxtype: CXType, filterInline: bool = true, withType: bool = true
-  ): seq[CXCursor] =
-  ## Return list of parent namespaces for given type `cxtype`.
-  ## `filterInline` - remove namespaces that are marked as `inline`.
-  ## `withType` - return type name too, or only namespaces.
-
-  var parent = cxtype.getTypeDeclaration()
-
-  result = getSemanticNamespaces(
-    parent, filterInline = filterInline, withType = withType)
-
-proc requiredGenericParams*(cursor: CXCursor): seq[CXCursor] =
-  ## Get list of required generic parameters from cursor pointing to
-  ## class or struct declaration
-  for subn in cursor:
-    if subn.cxKind in {
-      ckTemplateTemplateParameter,
-      ckTemplateTypeParameter
-    }:
-      if subn.len > 0:
-        # WARNING Just drop all template parameters that are not
-        # simply `T`.
-        discard
-
-      else:
-        result.add subn # WARNING blow up on `a<b>`
-
   # if cursor.cxKind() == ckClassTemplate:
   #   logDefer info, "Required generic for", cursor
   #   debug cursor.getSpellingLocation()

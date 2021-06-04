@@ -55,5 +55,3 @@ proc getRefidLocations*(doxDir: AbsDir): RefidMap =
   for item in index.compound:
     let file = item.fileForItem(doxDir).parseDoxygenFile()
     file.register(result)
-
-  pprint result

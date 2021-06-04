@@ -14,7 +14,7 @@ import
   hmisc/macros/iflet,
   hmisc/algo/[htemplates, hseq_distance, namegen],
   hmisc/[helpers, hexceptions],
-  hmisc/other/[colorlogger, oswrap],
+  hmisc/other/[colorlogger, oswrap, hjson],
   hmisc/types/colorstring
 
 import htsparse/cpp/cpp
@@ -1430,9 +1430,8 @@ proc toNNode*(gen: GenEntry, conf: WrapConf): seq[WrappedEntry] =
         gen, "Forward declaration nodes should be converted to import/pass")
 
 proc writeWrapped*(
-    res: tuple[decls: seq[NimDecl[PNode]], codegen: seq[CxxCodegen]],
+    res: CodegenResult,
     outFile: FsFile,
-    codegens: Option[FsDir],
     compile: seq[FsFile],
     wrapConf: WrapConf
   ) =
@@ -1466,16 +1465,28 @@ Write generated wrappers to single file
 
   var resFiles: Table[string, File]
 
-  if codegens.isSome():
+  if wrapConf.codegenDir.isSome():
+    let dir = wrapConf.codegenDir.get()
     for gen in res.codegen:
-      let target = codegens.get() / gen.filename
+      let target = dir /. gen.filename
       let res = target.withBasePrefix("gen_")
       # info "Writing generated code into", res
       if $target notin resFiles:
-        resFiles[$target] = open($res, fmWrite)
+        resFiles[$target] = open(res, fmWrite)
         resFiles[$target].write(gen.header)
 
       resFiles[$target].write(gen.code)
+
+    var doxRemap = open(
+      dir /. "doxygen-ident-map.json",
+      fmWrite
+    )
+
+    for (ident, dox) in res.cache.identRefidMap:
+      doxRemap.writeLine(pretty(
+        %[ident.toHaxdocJson(), newJString(dox)]))
+
+    doxRemap.close()
 
   for _, file in pairs(resFiles):
     file.close()

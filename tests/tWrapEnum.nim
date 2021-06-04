@@ -24,6 +24,10 @@ class
     int publicField; float otherField;
     DeclareClass* publicMethod();
     int secondPublic() { return 12; }
+    int withArgs(int arg1, int arg2) { return arg1 * arg2 * 3; }
+
+    const char* getNames() { return "test"; }
+    char* const getNames1();
 };
 
 """
@@ -33,6 +37,7 @@ let wrapConf = baseCppWrapConf.withDeepIt do:
   it.baseDir = dir
   it.showParsed = true
   it.refidMap = getRefidLocations(doxDir)
+  it.codegenDir = some dir
 
 let resFile = dir /. "res.nim"
 wrapWithConf(file, resFile, wrapConf, baseCppParseConf)
@@ -42,7 +47,7 @@ resFile.appendFile """
 
 var decl = newDeclareClass()
 echo decl.publicField
-echo decl.secondPublic()
+echo decl.secondPublic() * decl.withArgs(1, 2)
 """
 
 execShell shellCmd(nim, cpp, -r, $resFile)

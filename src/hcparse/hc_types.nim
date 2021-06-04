@@ -6,8 +6,8 @@ import std/[
 
 import
   hpprint,
-  hmisc/hexceptions,
-  hmisc/other/[oswrap, colorlogger],
+  hmisc/[hexceptions, helpers],
+  hmisc/other/[oswrap, colorlogger, hjson],
   hmisc/types/[hmap],
   hnimast, hnimast/pprint,
   hmisc/algo/[
@@ -407,6 +407,8 @@ type
     ## - WARNING :: Default implementation always returns `false` i.e. all
     ##   types are wrapped as not typesafe aliases.
 
+    codegenDir*: Option[AbsDir]
+
 
 
   WrapCache* = object
@@ -425,6 +427,7 @@ type
 
     iinfo* {.requiresinit.}: LineInfo
     docComment*: seq[string]
+    isGenerated*: bool
 
 
   GenObjectKind = enum
@@ -552,6 +555,7 @@ type
     ##
     ## Does not server any particular purpose other than to allow storing
     ## differnt `GenX` entries in the same container.
+    isGenerated*: bool
     case kind*: GenEntryKind
       of gekEnum:
         genEnum*: GenEnum
@@ -618,6 +622,11 @@ type
     # one relative to project root.
     importName*: NimImportSpec
 
+  CodegenResult* = object
+    decls*: seq[NimDecl[PNode]]
+    codegen*: seq[CxxCodegen]
+    cache*: WrapCache
+
 
 
 proc add*(
@@ -647,6 +656,9 @@ proc add*(
   elif gen is GenForward:
     genSeq.add GenEntry(kind: gekForward, genForward: gen)
 
+  when compiles(gen.isGenerated):
+    genSeq[^1].isGenerated = gen.isGenerated
+
 proc newProcVisit*(
     genProc: var GenProc, conf: WrapConf, cache: var WrapCache
   ): seq[WrappedEntry] =
@@ -660,6 +672,69 @@ proc getName*(cn: CName): string =
 
   else:
     $cn.cursor
+
+
+proc getSemanticNamespaces*(
+    parent: CXCursor, filterInline: bool = true, withType: bool = true
+  ): seq[CXCursor] =
+
+  # info "Semantic namespaces for", parent
+
+  var parent = parent
+
+  if withType:
+    result.add parent
+
+  parent = parent.getCursorSemanticParent()
+
+  # info parent
+
+  while parent.cxKind() in {
+    # TEST might be necessary to add templated namespacess (fuck, why C++
+    # is just so god-awful vomit-inducing garbage?)
+    ckNamespace, ckStructDecl, ckClassDecl
+  }:
+    if filterInline and (parent.isInlineNamespace() == 1):
+      discard
+    else:
+      result.add parent
+
+    parent = parent.getCursorSemanticParent()
+    # info parent.cxKind()
+
+  reverse(result)
+
+
+
+
+proc getTypeNamespaces*(
+    cxtype: CXType, filterInline: bool = true, withType: bool = true
+  ): seq[CXCursor] =
+  ## Return list of parent namespaces for given type `cxtype`.
+  ## `filterInline` - remove namespaces that are marked as `inline`.
+  ## `withType` - return type name too, or only namespaces.
+
+  var parent = cxtype.getTypeDeclaration()
+
+  result = getSemanticNamespaces(
+    parent, filterInline = filterInline, withType = withType)
+
+proc requiredGenericParams*(cursor: CXCursor): seq[CXCursor] =
+  ## Get list of required generic parameters from cursor pointing to
+  ## class or struct declaration
+  for subn in cursor:
+    if subn.cxKind in {
+      ckTemplateTemplateParameter,
+      ckTemplateTypeParameter
+    }:
+      if subn.len > 0:
+        # WARNING Just drop all template parameters that are not
+        # simply `T`.
+        discard
+
+      else:
+        result.add subn # WARNING blow up on `a<b>`
+
 
 proc toCppNamespace*(
     ns: CScopedIdent,
@@ -689,8 +764,291 @@ proc toCppNamespace*(
 
   result = buf.join("::")
 
+proc toHaxdocType*(cxtype: CXType): JsonNode =
+  case cxtype.cxKind():
+    of tkBool, tkInt, tkVoid, tkUInt, tkLongLong, tkULongLong,
+       tkDouble, tkULong, tkUChar, tkChar16, tkChar32, tkWChar,
+       tkChar_S, tkLong, tkUShort, tkNullPtr, tkFloat, tkLongDouble,
+       tkShort, tkSChar:
+      result = %{"kind": %"Ident", "name": %($cxtype)}
+
+    of tkPointer:
+      result = %{
+        "kind": %"Ident",
+        "name": %"ptr",
+        "genParms": %[toHaxdocType(cxtype[])]
+      }
+
+    of tkElaborated, tkRecord, tkEnum:
+      var spaces = newJArray()
+      for name in cxtype.getTypeNamespaces(withType = false):
+        spaces.add %($name)
+
+      result = %{
+        "kind": %"Ident",
+        "namespaces": spaces,
+        "name": %($cxtype)
+      }
+      # result = %{"kind": %"Ident", "name": %(cxtype.getTypeName())}
+      # fromElaboratedPType(cxtype, conf)
+
+    of tkConstantArray:
+      result = %{
+        "kind": %"Ident",
+        "name": %"array",
+        "genParms": %[
+          %{"kind": %"Value", "value": %cxtype.getNumElements()},
+          toHaxdocType(cxtype.getElementType())]}
+
+    # of tkIncompleteArray:
+    #   # QUESTION maybe convert to `ptr UncheckedArray?` or add user-defined
+    #   # callback for switching between different behaviors.
+    #   newNimType("ptr", [toNimType(cxtype.getElementType(), conf)], cxType)
+
+    of tkFunctionProto:
+      result = %{
+        "kind": %"Proc",
+        "returnType": cxtype.getResultType().toHaxdocType(),
+        "arguments": %cxtype.argTypes.mapIt(%{
+          "ident": %"",
+          "identType": toHaxdocType(it)
+        })
+      }
+
+    else:
+      result = %($(cxtype.cxKind()))
+
+
+
+    # of tkLValueReference:
+    #   mutable = cxType.isMutableRef()
+    #   toNimType(cxType[], conf)
+
+    # of tkRValueReference: # WARNING I'm not 100% sure this is correct
+    #                       # way to map rvalue references to nim type
+    #                       # system.
+    #   mutable = cxType.isMutableRef()
+    #   toNimType(cxType[], conf)
+
+    # of tkUnexposed:
+    #   let strval = ($cxType).dropPrefix("const ") # WARNING
+    #   if strval.validCxxIdentifier():
+    #     newNimType(strval, cxtype)
+
+    #   else:
+    #     # pprintStackTrace()
+    #     let decl = cxtype.getTypeDeclaration()
+    #     var res = newNimType($decl, cxType)
+    #     let typenameParts = toStrPart(@[
+    #       "type-parameter", "typename type-parameter",
+    #       "typename rebind<type-parameter",
+    #       "typename"
+    #     ])
+    #     if decl.cxKind in {
+    #       # HACK list of necessary kinds is determined by trial and error,
+    #       # I'm still not really sure what `tkUnexposed` actually
+    #       # represents.
+    #       ckClassTemplate, ckClassDecl
+    #     }:
+    #       for elem in decl:
+    #         if elem.cxKind() in {ckTemplateTypeParameter}:
+    #           res.add elem.cxType().toNimType(conf)
+
+    #     elif startsWith($cxType, typenameParts):
+    #       let unprefix = dropPrefix($cxType, typenameParts)
+    #       if allIt(unprefix, it in {'0' .. '9', '-'}):
+    #         res = newNimType("TYPE_PARAM " & unprefix, cxtype)
+
+    #       else:
+    #         res = newNimType("COMPLEX_PARAM", cxtype)
+
+    #     else:
+    #       res = newNimType("UNEXPOSED", cxtype)
+    #       if decl.cxKind() notin {ckNoDeclFound}:
+    #         warn "No decl found for type"
+    #         logIndented:
+    #           info cxtype.lispRepr()
+    #           debug decl.getSpellingLocation()
+    #           debug decl.cxKind()
+    #           debug decl.treeRepr()
+
+
+    #     res
+
+    # of tkDependent:
+    #   newNimType("DEPENDENT", cxType)
+
+    # of tkMemberPointer:
+    #   # WARNING Member pointer
+    #   newNimType("!!!", cxType)
+
+    # of tkDependentSizedArray:
+    #   warn cxtype
+    #   newNimType("array", @[
+    #     newNimType("???????????????????????"),
+    #     toNimType(cxtype.getElementType(), conf)
+    #   ], cxType)
+
+    # else:
+    #   err "CANT CONVERT: ".toRed({styleItalic}),
+    #     cxtype.kind, " ", ($cxtype).toGreen(), " ",
+    #     cxtype[]
+
+    #   newNimType("!!!", cxtype)
+
+  # result.isMutable = mutable
+  # conf.fixTypeName(result, conf, 0)
+
+proc toHaxdocJson*(ns: CScopedIdent): JsonNode =
+  result = newJArray()
+
+  for part in ns:
+    var identPart = %{
+      "name": %part.getName()
+    }
+
+    var kind =
+      case part.cursor.cxKind():
+        of ckClassDecl: %"Class"
+        of ckStructDecl: %"Struct"
+        of ckMethod: %"Method"
+        else:
+          raise newImplementKindError(part.cursor.cxKind())
+
+    identPart["kind"] = kind
+
+    if part.cursor.kind in {ckMethod}:
+      identPart["procType"] = part.cursor.cxType().toHaxdocType()
+
+    result.add identPart
+
+proc toHaxdocIdentType*(
+  cxtype: CXType, procname: string = "proc"): string =
+  case cxtype.cxKind():
+    of tkBool, tkInt, tkVoid, tkUInt, tkLongLong, tkULongLong,
+       tkDouble, tkULong, tkUChar, tkChar16, tkChar32, tkWChar,
+       tkChar_S, tkLong, tkUShort, tkNullPtr, tkFloat, tkLongDouble,
+       tkShort, tkSChar:
+      if cxtype.isConstQualified():
+        result = "const[" & dropPrefix($cxtype, "const ") & "]"
+
+      else:
+        result = $cxtype
+
+    of tkPointer:
+      result = "ptr[" & toHaxdocIdentType(cxtype[]) & "]"
+
+    of tkElaborated, tkRecord, tkEnum:
+      result = cxtype.getTypeNamespaces().mapIt($it).join("::")
+
+    of tkConstantArray:
+      result = &"array[{cxtype.getNumElements()}, {toHaxdocIdentType(cxtype.getElementType())}]"
+
+    of tkFunctionProto:
+      result = &[
+        procname, "(",
+        cxtype.argTypes.mapIt(toHaxdocIdentType(it)).join(", "),
+        "): ", cxtype.getResultType().toHaxdocIdentType()
+      ]
+
+    else:
+      result = $(cxtype.cxKind())
+
+
+
+    # of tkLValueReference:
+    #   mutable = cxType.isMutableRef()
+    #   toNimType(cxType[], conf)
+
+    # of tkRValueReference: # WARNING I'm not 100% sure this is correct
+    #                       # way to map rvalue references to nim type
+    #                       # system.
+    #   mutable = cxType.isMutableRef()
+    #   toNimType(cxType[], conf)
+
+    # of tkUnexposed:
+    #   let strval = ($cxType).dropPrefix("const ") # WARNING
+    #   if strval.validCxxIdentifier():
+    #     newNimType(strval, cxtype)
+
+    #   else:
+    #     # pprintStackTrace()
+    #     let decl = cxtype.getTypeDeclaration()
+    #     var res = newNimType($decl, cxType)
+    #     let typenameParts = toStrPart(@[
+    #       "type-parameter", "typename type-parameter",
+    #       "typename rebind<type-parameter",
+    #       "typename"
+    #     ])
+    #     if decl.cxKind in {
+    #       # HACK list of necessary kinds is determined by trial and error,
+    #       # I'm still not really sure what `tkUnexposed` actually
+    #       # represents.
+    #       ckClassTemplate, ckClassDecl
+    #     }:
+    #       for elem in decl:
+    #         if elem.cxKind() in {ckTemplateTypeParameter}:
+    #           res.add elem.cxType().toNimType(conf)
+
+    #     elif startsWith($cxType, typenameParts):
+    #       let unprefix = dropPrefix($cxType, typenameParts)
+    #       if allIt(unprefix, it in {'0' .. '9', '-'}):
+    #         res = newNimType("TYPE_PARAM " & unprefix, cxtype)
+
+    #       else:
+    #         res = newNimType("COMPLEX_PARAM", cxtype)
+
+    #     else:
+    #       res = newNimType("UNEXPOSED", cxtype)
+    #       if decl.cxKind() notin {ckNoDeclFound}:
+    #         warn "No decl found for type"
+    #         logIndented:
+    #           info cxtype.lispRepr()
+    #           debug decl.getSpellingLocation()
+    #           debug decl.cxKind()
+    #           debug decl.treeRepr()
+
+
+    #     res
+
+    # of tkDependent:
+    #   newNimType("DEPENDENT", cxType)
+
+    # of tkMemberPointer:
+    #   # WARNING Member pointer
+    #   newNimType("!!!", cxType)
+
+    # of tkDependentSizedArray:
+    #   warn cxtype
+    #   newNimType("array", @[
+    #     newNimType("???????????????????????"),
+    #     toNimType(cxtype.getElementType(), conf)
+    #   ], cxType)
+
+    # else:
+    #   err "CANT CONVERT: ".toRed({styleItalic}),
+    #     cxtype.kind, " ", ($cxtype).toGreen(), " ",
+    #     cxtype[]
+
+    #   newNimType("!!!", cxtype)
+
+  # result.isMutable = mutable
+  # conf.fixTypeName(result, conf, 0)
+
+
 proc toHaxdocIdent*(ns: CScopedIdent): string =
-  toCppNamespace(ns, withNames = true)
+  for part in ns:
+    if part.cursor.kind in {ckMethod}:
+      result &= "." & part.cursor.cxType().toHaxdocIdentType(part.getName())
+
+    else:
+      case part.cursor.cxKind():
+        of ckClassDecl: discard
+        of ckStructDecl: discard
+        else:
+          raise newImplementKindError(part.cursor.cxKind())
+
+      result &= part.getName()
 
 
 proc `$`*(ident: CSCopedIdent): string =
