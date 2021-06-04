@@ -370,11 +370,6 @@ let baseCppWrapConf* = WrapConf(
         #   let (dir, file, ext) = loc.file.splitFile()
         #   if "string" in file:
         #     result = drkWrapDirectly
-  ),
-  docCommentFor: (
-    proc(id: CSCopedIdent, cursor: CXCursor, cache: var WrapCache): string =
-      if id in cache.identComments:
-        return cache.identComments[id].join("\n").formatComment()
   )
 )
 

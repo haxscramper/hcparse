@@ -5,9 +5,13 @@ import std/[
 ]
 
 import
+  hpprint,
+  hmisc/hexceptions,
   hmisc/other/[oswrap, colorlogger],
+  hmisc/types/[hmap],
   hnimast, hnimast/pprint,
-  hmisc/algo/[hseq_mapping, hstring_algo, hseq_distance, namegen]
+  hmisc/algo/[
+    hseq_mapping, hstring_algo, hseq_distance, namegen, halgorithm]
 
 type
   DepResolutionKind* = enum
@@ -309,12 +313,24 @@ type
       else:
         discard
 
+
+
+  DoxRefid* = object
+    refid*: string
+    name*: string
+    line*: int
+    column*: int
+
+  RefidMap* = object
+    map*: Table[string, Map[int, seq[DoxRefid]]]
+
   WrapConf* = ref object
     ## Confuration for wrapping. Mostly deals with type renaming
 
     header*: AbsFile ## Current main translation file (header)
 
     unit*: CXTranslationUnit
+    refidMap*: RefidMap
 
     makeHeader*: proc(cursor: CXCursor, conf: WrapConf): NimHeaderSpec ## |
     ## Generate identifier for `{.header: ... .}`
@@ -367,11 +383,11 @@ type
     ## by `enumId`. This is used to override autogenrated prefix for
     ## particular enum.
 
-    docCommentFor*: proc(
-      id: CSCopedIdent, cursor: CXCursor, cache: var WrapCache): string ## |
-    ## Return documentation comment string for entry pointed to by
-    ## `cursor`. `id` is a fully qualified/namespaced path for definition
-    ## (like `std::vector`)
+    # docCommentFor*: proc(
+    #   id: CSCopedIdent, cursor: CXCursor, cache: var WrapCache): string ## |
+    # ## Return documentation comment string for entry pointed to by
+    # ## `cursor`. `id` is a fully qualified/namespaced path for definition
+    # ## (like `std::vector`)
 
     userCode*: proc(source: AbsFile): PNode ## Add arbitarry user-defined
     ## code at the start of generated wrapper for `source` file.
@@ -398,6 +414,7 @@ type
     visited*: HashSet[cuint]
     enumPrefs*: HashSet[string]
     identComments*: Table[CScopedIdent, seq[string]]
+    identRefidMap*: seq[tuple[cxx: CScopedIdent, doxygen: string]]
     nameCache*: StringNameCache
     genEnums*: seq[GenEnum]
 
@@ -471,6 +488,8 @@ type
     impl*: Option[PNode] ## Optional implementation body
     noPragmas*: GenPragmaConf ## Do not add default C wrapper pragamas.
     ## Used for pure nim enums
+
+
 
   GenEnumValue* = ref object of GenBase
     baseName*: string ## Original name of the enum value
@@ -561,6 +580,7 @@ type
     ident*: CSCopedIdent
     postTypes*: bool
     cursor* {.requiresinit.}: CXCursor
+    generated*: bool
 
   WrappedFile* = ref object
     entries*: seq[GenEntry]
@@ -597,6 +617,7 @@ type
     # only use one. Ideally I need to have 'external' import spec, and the
     # one relative to project root.
     importName*: NimImportSpec
+
 
 
 proc add*(
@@ -772,6 +793,7 @@ func newWrappedEntry*(
   ): WrappedEntry =
 
   result = WrappedEntry(
+    generated: false,
     postTypes: postTypes, decl: nimDecl,
     cursor: cdecl.cursor, ident: cdecl.ident
   )
@@ -783,6 +805,7 @@ func newWrappedEntry*(
   ): WrappedEntry =
 
   result = WrappedEntry(
+    generated: true,
     postTypes: postTypes, decl: nimDecl, cursor: CXCursor())
   result.decl.iinfo = iinfo
 
@@ -1030,3 +1053,45 @@ func toNNode*(nhs: NimHeaderSpec): PNode =
 
     of nhskGlobal:
       newRStrLit("<" & nhs.global & ">")
+
+proc findRefidForCursor*(cursor: CXCursor, map: RefidMap): Option[string] =
+  let loc = cursor.getSpellingLocation()
+  if loc.isNone():
+    return
+
+  else:
+    let loc = loc.get()
+
+    if loc.file.string in map.map:
+      for refid in map.map[loc.file.string].valuesFrom(loc.line - 2):
+        for dox in refid:
+          if dox.name == $cursor:
+            return some dox.refid
+
+
+proc updateComments*(
+    decl: var AnyNimDecl[PNode], node: WrappedEntry, wrapConf: WrapConf,
+    cache: var WrapCache
+  ) =
+
+  if node.generated:
+    return
+
+  decl.addCodeComment("Wrapper for `" & toCppNamespace(
+    node.ident, withNames = true) & "`\n")
+
+  let loc = node.cursor.getSpellingLocation()
+  if loc.isSome():
+    let loc = loc.get()
+    let file = withoutPrefix(AbsFile(loc.file), wrapConf.baseDir)
+    decl.addCodeComment(
+      &"Declared in {file}:{loc.line}")
+
+  let refid = node.cursor.findRefidForCursor(wrapConf.refidMap)
+  if refid.isSome():
+    let refid = refid.get()
+    cache.identRefidMap.add((node.ident, refid))
+    decl.addCodeComment(&", doxygen refid is {refid}")
+
+    decl.addDocComment(
+      &"@import{{[[code:{node.ident.toHaxdocIdent()}]]}}")

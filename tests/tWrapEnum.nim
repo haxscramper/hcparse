@@ -4,32 +4,45 @@ import
   hmisc/types/[colortext],
   hmisc/helpers,
   hcparse,
-  htsparse/cpp/cpp
+  hcparse/[dox_xml, hc_docwrap]
 
-startColorLogger()
+startColorLogger(showFile = true)
 startHax()
 
-let file = "/tmp/a.c"
-let str = """
+let
+  dir = getNewTempDir("tWrapEnum")
+  doxDir = dir / "dox"
 
-class DeclareClass {
+let file = dir /. "a.c"
+file.writeFile """
+
+#define CL class
+
+class
+   DeclareClass {
   public:
-    int publicField;
+    int publicField; float otherField;
     DeclareClass* publicMethod();
-    int secondPublic();
+    int secondPublic() { return 12; }
 };
 
 """
 
-file.writeFile(str)
-
+doxygenXmlForDir(dir, doxDir)
 let wrapConf = baseCppWrapConf.withDeepIt do:
-  it.baseDir = AbsDir("/tmp")
+  it.baseDir = dir
   it.showParsed = true
+  it.refidMap = getRefidLocations(doxDir)
 
-let resFile = AbsFile "/tmp/res.nim"
-wrapWithConf(AbsFile file, resFile, wrapConf, baseCppParseConf)
+let resFile = dir /. "res.nim"
+wrapWithConf(file, resFile, wrapConf, baseCppParseConf)
 
-resFile.appendFile "let decl = newDeclareClass(); echo decl.publicField"
+resFile.appendFile """
+{.experimental: "implicitDeref".}
+
+var decl = newDeclareClass()
+echo decl.publicField
+echo decl.secondPublic()
+"""
 
 execShell shellCmd(nim, cpp, -r, $resFile)

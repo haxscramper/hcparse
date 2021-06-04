@@ -377,7 +377,8 @@ proc parseDoxygenFile*(xml: AbsFile): DoxCompound.DoxygenType =
   parser.loadXml(result, "doxygen")
 
 const
-  allDoxIndexKinds* = {low(DoxIndex.CompoundKind) .. high(DoxIndex.CompoundKind)}
+  allDoxIndexKinds* = {
+    low(DoxIndex.CompoundKind) .. high(DoxIndex.CompoundKind)}
 
 proc indexForDir*(toDir: AbsDir): DoxIndex.DoxygenType =
   parseDoxygenIndex(toDir / "xml" /. "index.xml")
@@ -385,3 +386,6 @@ proc indexForDir*(toDir: AbsDir): DoxIndex.DoxygenType =
 proc listGeneratedFiles*(toDir: AbsDir): seq[AbsFile] =
   for item in toDir.indexForDir().compound:
     result.add toDir / "xml" /. (item.refid & ".xml")
+
+proc fileForItem*(item: DoxIndex.CompoundType, doxDir: AbsDir): AbsFile =
+  doxDir / "xml" /. (item.refid & ".xml")

@@ -3,7 +3,7 @@ import std/[tables, options, strutils, strformat, hashes,
 
 import hnimast
 
-import hmisc/helpers
+import hmisc/[helpers, hexceptions]
 import hmisc/algo/hstring_algo
 import hmisc/other/[oswrap, colorlogger, hshell]
 import hmisc/types/[colorstring, hgraph]
@@ -363,8 +363,8 @@ proc patchForward*(
               )
 
 
-  for typeGroup in typeGraph.connectedComponents():
-    info typeGroup.mapIt(typeGraph[it].name)
+  # for typeGroup in typeGraph.connectedComponents():
+  #   info typeGroup.mapIt(typeGraph[it].name)
 
 
 
@@ -403,24 +403,11 @@ proc wrapFiles*(
   # Patch *all* wrapped file entries at once, replacing `GenForward`
   # entries with imports and returning list of additional files (for
   # strongly connected type clusters that span multiple files)
-  result.add patchForward(genFiles, conf, cache)
+  # result.add patchForward(genFiles, conf, cache)
 
   # Add generated wrapper files themselves
   result.add genFiles
 
-
-proc updateComments(
-    decl: var PNimDecl, node: WrappedEntry, wrapConf: WrapConf) =
-
-  decl.addCodeComment("Wrapper for `" & toCppNamespace(
-    node.ident, withNames = true) & "`\n")
-  if node.cursor.getSpellingLocation().getSome(loc):
-    let file = withoutPrefix(AbsFile(loc.file), wrapConf.baseDir)
-    decl.addCodeComment(
-      &"Declared in {file}:{loc.line}")
-
-  decl.addDocComment(
-    &"@import{{[[code:{node.ident.toHaxdocIdent()}]]}}")
 
 
 
@@ -464,7 +451,7 @@ proc wrapFile*(
   block:
     let elems = collect(newSeq):
       for _, wrapEntry in mpairs(res):
-        updateComments(wrapEntry.decl, wrapEntry, wrapConf)
+        updateComments(wrapEntry.decl, wrapEntry, wrapConf, cache)
         wrapEntry.decl.toNimTypeDecl()
 
     result.add(newWrappedEntry(
@@ -473,7 +460,7 @@ proc wrapFile*(
   for elem in mitems(tmpRes):
     case elem.decl.kind:
       of nekProcDecl:
-        updateComments(elem.decl, elem, wrapConf)
+        updateComments(elem.decl, elem, wrapConf, cache)
         result.add elem
 
       of nekMultitype:
@@ -558,8 +545,8 @@ proc wrapSingleFile*(
     wrapFile(wrapConf, cache, index)
 
   for node in wrapped:
-    var node = node
     result.decls.add node.decl
+
 
 proc wrapAllFiles*(
     files: seq[AbsFile], wrapConf: WrapConf, parseConf: ParseConf) =
@@ -572,9 +559,6 @@ proc wrapAllFiles*(
     wrapConf = wrapConf # Global wrapper configuration
 
   for file in files:
-    fillDocComments(getExpanded(toAbsFile(file), parseConf), cache)
-
-  for file in files:
     var parsedFile = parseFile(file, parseConf, wrapConf)
     wrapConf.unit = parsedFile.unit
 
@@ -584,9 +568,9 @@ proc wrapAllFiles*(
   for file in wrapFiles(parsed, wrapConf, cache, index):
     wrapped.add wrapFile(file, wrapConf, cache, index)
 
-  for file in mitems(wrapped):
-    for node in mitems(file):
-      updateComments(node.decl, node, wrapConf)
+  # for file in mitems(wrapped):
+  #   for node in mitems(file):
+  #     updateComments(node.decl, node, wrapConf, caceh)
 
 
 proc wrapWithConf*(

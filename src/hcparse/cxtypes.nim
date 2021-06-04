@@ -741,6 +741,15 @@ proc objTreeRepr*(
   let comment = pptConst(
     commentText.dedentComment(), initStyle(styleItalic, fgCyan))
 
+  let locRange =
+    block:
+      let loc = getSpellingLocation(cursor)
+      if loc.isSome():
+        &" {loc.get().line}:{loc.get().column}"
+
+      else:
+        ""
+
   if cursor.len == 0:
     let val = pptconst(
       cursor.tokens(tu).mapIt(
@@ -761,7 +770,9 @@ proc objTreeRepr*(
       flds.add pptconst(
         $cxRange, initprintstyling(fg = fgBlue))
 
-    pptObj("[_] " & $cursor.cxkind, initPrintStyling(fg = fgYellow), flds)
+    pptObj(
+      "[_] " & $cursor.cxkind & locRange,
+      initPrintStyling(fg = fgYellow), flds)
   else:
     var children: seq[ObjTree]
     for node in cursor.children:
@@ -777,7 +788,9 @@ proc objTreeRepr*(
       suffix &= " " & toRed($cursor.getEnumConstantDeclValue())
 
     pptObj(
-      &[("[*] " & $cursor.cxkind).toMagenta(colorize), " ", $cursor, $suffix],
+      &[("[*] " & $cursor.cxkind).toMagenta(colorize), " ", $cursor, $suffix,
+        locRange
+      ],
       &[showtype.tern(@[ctype], @[]),
         showcomment.tern(@[comment], @[]),
         children

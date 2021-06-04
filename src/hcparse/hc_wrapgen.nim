@@ -177,21 +177,24 @@ proc wrapProcedure*(
       assert conf.isImportcpp,
         "Cannot wrap methods for non-cxx targets"
 
-      it.iinfo = currIInfo()
       if pr.cursor.isStatic():
         addThis = false
+        it.iinfo = currIInfo()
         it.icpp = &"({icppName}(@))"
 
       else:
-        it.icpp = &"(#.{icppName}(@))"
+        it.iinfo = currIInfo()
+        it.icpp = &"(#.{pr.getNimName()}(@))"
 
       it.header = conf.makeHeader(pr.cursor, conf)
 
     else:
       if conf.isImportcpp:
+        it.iinfo = currIInfo()
         it.icpp = &"({icppName}(@))"
 
       else:
+        it.iinfo = currIInfo()
         it.icpp = &"{icppName}"
 
       it.header = conf.makeHeader(pr.cursor, conf)
@@ -367,6 +370,14 @@ proc wrapMethods*(
   assert cd.kind in {cdkClass, cdkStruct, cdkUnion},
      $cd.kind & $cd.cursor.getSpellingLocation()
 
+
+  for meth in cd.methods({ckMethod}):
+    let (decl, canAdd) = wrapProcedure(
+      meth, conf, some parent, cache, some cd, gpskDefault)
+
+    if canAdd:
+      result.methods.add decl[0].genProc
+      result.extra.add decl[1..^1]
 
   var hasConstructor = false
   for meth in cd.methods({
@@ -832,8 +843,7 @@ proc makeGenEnum*(
     cdecl: declEn,
     iinfo: currIInfo(),
     rawName: nt.nimName & conf.importX(),
-    name: nt.nimName,
-    docComment: @[conf.docCommentFor(declEn.ident, declEn.cursor, cache)]
+    name: nt.nimName
   )
 
   # Nim proxy proc declaration.
@@ -846,7 +856,6 @@ proc makeGenEnum*(
 
   var prev = BiggestInt(-120948783)
   for (name, val) in flds:
-    let comment = conf.docCommentFor(declEn.ident & toCName(name), name, cache)
     if val != prev:
       prev = val
       result.values.add GenEnumValue(
@@ -858,16 +867,6 @@ proc makeGenEnum*(
         resVal: val,
         stringif: toCppNamespace(declEn.ident) & "::" & $name
       )
-      # implEn.addField(cEnumName($name, nt, cache),
-      #                 some newPLit(val), docComment = comment)
-
-      # vals[$name] = (
-      #   resName: cEnumName($name, nt, cache),
-      #   resVal: val,
-      #   stringif: ,
-      #   cursor: name
-      # )
-
 
 
 proc makeEnumConverters(gen: GenEnum, conf: WrapConf, cache: var WrapCache):
