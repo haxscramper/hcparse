@@ -38,7 +38,9 @@ proc register(compound: DoxCompound.CompounddefType; ids) =
           ids.addLocation(member.id, $member.name[0], member.location)
 
     of dckFile:
-      discard
+      for section in compound.sectiondef:
+        for member in section.memberdef:
+          ids.addLocation(member.id, $member.name[0], member.location)
 
     else:
       pprint compound

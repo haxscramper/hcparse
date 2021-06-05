@@ -1177,7 +1177,7 @@ proc getNType*(carg: CArg): NimType =
   else:
     return carg.nimType
 
-proc toNNode*(gen: GenEntry, conf: WrapConf): seq[WrappedEntry]
+proc toNNode*(gen: GenEntry, conf: WrapConf, cache: var WrapCache): seq[WrappedEntry]
 
 proc toNNode*(gen: GenProc, wrapConf: WrapConf): PProcDecl =
   result = newPProcDecl(
@@ -1259,7 +1259,9 @@ proc toNNode*(gen: GenEnum, conf: WrapConf): (PEnumDecl, PEnumDecl) =
 
     result[1] = nimEnum
 
-proc toNNode*(gen: GenObject, conf: WrapConf): seq[WrappedEntry] =
+proc toNNode*(
+    gen: GenObject, conf: WrapConf; cache: var WrapCache
+  ): seq[WrappedEntry] =
   var decl = PObjectDecl(
     iinfo: gen.iinfo,
     name: gen.name.toNType()
@@ -1326,7 +1328,7 @@ proc toNNode*(gen: GenObject, conf: WrapConf): seq[WrappedEntry] =
           toNimDecl(setImpl), true, field.iinfo, field.cdecl)
 
     else:
-      decl.flds.add PObjectField(
+      var newField = PObjectField(
         docComment: field.docComment.join("\n"),
         isTuple: false,
         isExported: true,
@@ -1337,8 +1339,16 @@ proc toNNode*(gen: GenObject, conf: WrapConf): seq[WrappedEntry] =
         fldType: field.fieldType.toNType()
       )
 
+      updateComments(
+        newField,
+        newWrappedEntry(toNimDecl(newField), false, field.iinfo, field.cdecl),
+        conf, cache
+      )
+
+      decl.flds.add newField
+
   for nested in gen.nestedEntries:
-    result.add nested.toNNode(conf)
+    result.add nested.toNNode(conf, cache)
 
   var obj = newWrappedEntry(
     toNimDecl(decl), true, gen.iinfo, gen.cdecl)
@@ -1397,7 +1407,7 @@ proc toNNode*(gen: GenImport, conf: WrapConf): WrappedEntry =
 
   return newWrappedEntry(decl, false, gen.iinfo)
 
-proc toNNode*(gen: GenEntry, conf: WrapConf): seq[WrappedEntry] =
+proc toNNode*(gen: GenEntry, conf: WrapConf, cache: var WrapCache): seq[WrappedEntry] =
   case gen.kind:
     of gekEnum:
       let (e1, e2) = toNNode(gen.genEnum, conf)
@@ -1416,7 +1426,7 @@ proc toNNode*(gen: GenEntry, conf: WrapConf): seq[WrappedEntry] =
         newWrappedEntry(true, gen.genAlias.iinfo, gen.cdecl)
 
     of gekObject:
-      result.add toNNode(gen.genObject, conf)
+      result.add toNNode(gen.genObject, conf, cache)
 
     of gekProc:
       result.add toNNode(gen.genProc, conf).toNimDecl().newWrappedEntry(
@@ -1477,16 +1487,11 @@ Write generated wrappers to single file
 
       resFiles[$target].write(gen.code)
 
-    var doxRemap = open(
-      dir /. "doxygen-ident-map.json",
-      fmWrite
-    )
-
+    var content = newJArray()
     for (ident, dox) in res.cache.identRefidMap:
-      doxRemap.writeLine(pretty(
-        %[ident.toHaxdocJson(), newJString(dox)]))
+      content.add %[ident.toHaxdocJson(), newJString(dox)]
 
-    doxRemap.close()
+    writeFile(dir / wrapConf.refidFile, pretty(content))
 
   for _, file in pairs(resFiles):
     file.close()

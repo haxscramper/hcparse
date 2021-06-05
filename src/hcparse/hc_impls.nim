@@ -370,7 +370,8 @@ let baseCppWrapConf* = WrapConf(
         #   let (dir, file, ext) = loc.file.splitFile()
         #   if "string" in file:
         #     result = drkWrapDirectly
-  )
+  ),
+  refidFile: RelFile("refid-map.json")
 )
 
 let baseCWrapConf* = baseCPPWrapConf.withDeepIt do:

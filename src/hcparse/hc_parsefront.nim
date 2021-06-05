@@ -225,7 +225,7 @@ proc getExports*(
     if conf.isInternal(dep, conf, index):
       result.add dep
 
-proc toNNode*(genEntries: seq[GenEntry], conf: WrapConf):
+proc toNNode*(genEntries: seq[GenEntry], conf: WrapConf, cache: var WrapCache):
   seq[WrappedEntry] =
 
   for node in genEntries:
@@ -245,7 +245,7 @@ proc toNNode*(genEntries: seq[GenEntry], conf: WrapConf):
         raise newUnexpectedKindError(
           node,
           "forward declaration must be converted to pass/import",
-          "by forward declaration patch state. This code should",
+          "by forward declaration patch stage. This code should",
           "not be reached..\n",
           "- Entry created in", node.genForward.iinfo, "\n",
           "- CDecl is", node.genForward.cdecl.cursor
@@ -260,7 +260,7 @@ proc toNNode*(genEntries: seq[GenEntry], conf: WrapConf):
         )
 
       of gekObject:
-        result.add node.genObject.toNNode(conf)
+        result.add node.genObject.toNNode(conf, cache)
 
       of gekEnum:
         let (rawDecl, nimDecl) = node.genEnum.toNNode(conf)
@@ -421,7 +421,7 @@ proc wrapFile*(
   # because you can't declare type again after defining it (I hope), so all
   # last type encounter will always be it's definition.
   var res: Table[string, WrappedEntry]
-  var tmpRes: seq[WrappedEntry] = wrapped.entries.toNNode(wrapConf)
+  var tmpRes: seq[WrappedEntry] = wrapped.entries.toNNode(wrapConf, cache)
 
   for elem in tmpRes:
     case elem.decl.kind:
@@ -440,6 +440,13 @@ proc wrapFile*(
           warn "Override type alias for ", name
 
         res[name] = elem
+
+      of nekFieldDecl:
+        raise newUnexpectedKindError(
+          elem.decl,
+          "Field declarations cannot be encountered at toplevel.",
+          "This code cannot be reached."
+        )
 
       of nekPassthroughCode:
         if not elem.postTypes:

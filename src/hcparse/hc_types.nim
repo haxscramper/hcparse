@@ -408,6 +408,7 @@ type
     ##   types are wrapped as not typesafe aliases.
 
     codegenDir*: Option[AbsDir]
+    refidFile*: RelFile
 
 
 
@@ -912,12 +913,14 @@ proc toHaxdocJson*(ns: CScopedIdent): JsonNode =
         of ckClassDecl: %"Class"
         of ckStructDecl: %"Struct"
         of ckMethod: %"Method"
+        of ckFunctionDecl: %"Proc"
+        of ckFieldDecl: %"Field"
         else:
           raise newImplementKindError(part.cursor.cxKind())
 
     identPart["kind"] = kind
 
-    if part.cursor.kind in {ckMethod}:
+    if part.cursor.kind in {ckMethod, ckFunctionDecl}:
       identPart["procType"] = part.cursor.cxType().toHaxdocType()
 
     result.add identPart
@@ -1038,13 +1041,14 @@ proc toHaxdocIdentType*(
 
 proc toHaxdocIdent*(ns: CScopedIdent): string =
   for part in ns:
-    if part.cursor.kind in {ckMethod}:
+    if part.cursor.kind in {ckMethod, ckFunctionDecl}:
       result &= "." & part.cursor.cxType().toHaxdocIdentType(part.getName())
 
     else:
       case part.cursor.cxKind():
         of ckClassDecl: discard
         of ckStructDecl: discard
+        of ckFieldDecl: result &= "."
         else:
           raise newImplementKindError(part.cursor.cxKind())
 
@@ -1435,6 +1439,7 @@ proc updateComments*(
   if node.generated:
     return
 
+  info toCppNamespace(node.ident)
   decl.addCodeComment("Wrapper for `" & toCppNamespace(
     node.ident, withNames = true) & "`\n")
 
