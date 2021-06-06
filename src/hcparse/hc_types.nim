@@ -411,13 +411,21 @@ type
     refidFile*: RelFile
 
 
+  WrapEntryPosition = object
+    file*: AbsFile
+    line*: int
+    column*: int
 
   WrapCache* = object
     hset*: HashSet[Hash]
     visited*: HashSet[cuint]
     enumPrefs*: HashSet[string]
     identComments*: Table[CScopedIdent, seq[string]]
-    identRefidMap*: seq[tuple[cxx: CScopedIdent, doxygen: string]]
+    identRefidMap*: seq[tuple[
+      cxx: CScopedIdent,
+      doxygen: string,
+      position: WrapEntryPosition
+    ]]
     nameCache*: StringNameCache
     genEnums*: seq[GenEnum]
 
@@ -915,6 +923,8 @@ proc toHaxdocJson*(ns: CScopedIdent): JsonNode =
         of ckMethod: %"Method"
         of ckFunctionDecl: %"Proc"
         of ckFieldDecl: %"Field"
+        of ckEnumDecl: %"Enum"
+        of ckEnumConstantDecl: %"EnumField"
         else:
           raise newImplementKindError(part.cursor.cxKind())
 
@@ -1042,13 +1052,23 @@ proc toHaxdocIdentType*(
 proc toHaxdocIdent*(ns: CScopedIdent): string =
   for part in ns:
     if part.cursor.kind in {ckMethod, ckFunctionDecl}:
-      result &= "." & part.cursor.cxType().toHaxdocIdentType(part.getName())
+      if result.len > 0: result &= "."
+      case part.cursor.kind:
+        of ckMethod: result &= "method!"
+        of ckFunctionDecl: result &= "proc!"
+        else:
+          raise newImplementKindError(part.cursor)
+
+      result &= part.cursor.cxType().toHaxdocIdentType(part.getName())
 
     else:
       case part.cursor.cxKind():
-        of ckClassDecl: discard
-        of ckStructDecl: discard
-        of ckFieldDecl: result &= "."
+        of ckClassDecl: result &= "class!"
+        of ckEnumDecl: result &= "enum!"
+        of ckStructDecl: result &= "struct!"
+        of ckUnionDecl: result &= "union!"
+        of ckFieldDecl: result &= ".field!"
+        of ckEnumConstantDecl: result &= ".enumField!"
         else:
           raise newImplementKindError(part.cursor.cxKind())
 
@@ -1431,13 +1451,17 @@ proc findRefidForCursor*(cursor: CXCursor, map: RefidMap): Option[string] =
             return some dox.refid
 
 
+proc docCommentFor*(ident: CScopedIdent): string =
+     &"@import{{[[code:{ident.toHaxdocIdent()}]]}}"
+
 proc updateComments*(
-    decl: var AnyNimDecl[PNode], node: WrappedEntry, wrapConf: WrapConf,
+    decl: var AnyNimDecl[PNode], node: WrappedEntry | CDecl, wrapConf: WrapConf,
     cache: var WrapCache
   ) =
 
-  if node.generated:
-    return
+  when node is WrappedEntry:
+    if node.generated:
+      return
 
   info toCppNamespace(node.ident)
   decl.addCodeComment("Wrapper for `" & toCppNamespace(
@@ -1452,9 +1476,13 @@ proc updateComments*(
 
   let refid = node.cursor.findRefidForCursor(wrapConf.refidMap)
   if refid.isSome():
+    let loc = loc.get()
     let refid = refid.get()
-    cache.identRefidMap.add((node.ident, refid))
+    cache.identRefidMap.add((node.ident, refid, WrapEntryPosition(
+      file: loc.file,
+      line: loc.line,
+      column: loc.column
+    )))
     decl.addCodeComment(&", doxygen refid is {refid}")
 
-    decl.addDocComment(
-      &"@import{{[[code:{node.ident.toHaxdocIdent()}]]}}")
+  decl.addDocComment(node.ident.docCommentFor())

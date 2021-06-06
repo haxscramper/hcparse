@@ -842,8 +842,9 @@ proc makeGenEnum*(
     isMacroEnum: false,
     cdecl: declEn,
     iinfo: currIInfo(),
-    rawName: nt.nimName & conf.importX(),
+    rawName: nt.nimName & conf.importX().capitalizeAscii(),
     name: nt.nimName
+    # docComment: @[declEn.ident.docCommentFor()]
   )
 
   # Nim proxy proc declaration.
@@ -860,6 +861,7 @@ proc makeGenEnum*(
       prev = val
       result.values.add GenEnumValue(
         cdecl: CDecl(cursor: name),
+        docComment: @[docCommentFor(declEn.ident & toCName(name))],
         iinfo: currIInfo(),
         baseName: $name,
         resCName: cEnumName($name, nt, cache),
@@ -1229,7 +1231,6 @@ proc toNNode*(gen: GenEnum, conf: WrapConf): (PEnumDecl, PEnumDecl) =
       else:
         "enum " & toCppNamespace(gen.cdecl.ident)
 
-
     rawEnum.pragma.add newPIdentColonString(conf.importX(), importName)
 
     rawEnum.pragma.add nnkExprColonExpr.newPTree(
@@ -1240,10 +1241,7 @@ proc toNNode*(gen: GenEnum, conf: WrapConf): (PEnumDecl, PEnumDecl) =
     rawEnum.exported = true
 
     for value in gen.values:
-      rawEnum.addField(
-        value.resCName, some newPLit(value.resVal),
-        docComment = value.docComment.join("\n")
-      )
+      rawEnum.addField(value.resCName, some newPLit(value.resVal))
 
 
     result[0] = rawEnum
@@ -1339,11 +1337,7 @@ proc toNNode*(
         fldType: field.fieldType.toNType()
       )
 
-      updateComments(
-        newField,
-        newWrappedEntry(toNimDecl(newField), false, field.iinfo, field.cdecl),
-        conf, cache
-      )
+      updateComments(newField, field.cdecl, conf, cache)
 
       decl.flds.add newField
 
@@ -1488,8 +1482,14 @@ Write generated wrappers to single file
       resFiles[$target].write(gen.code)
 
     var content = newJArray()
-    for (ident, dox) in res.cache.identRefidMap:
-      content.add %[ident.toHaxdocJson(), newJString(dox)]
+    for (ident, dox, loc) in res.cache.identRefidMap:
+      let loc: JsonNode = %{
+        "file": %loc.file.string,
+        "line": %loc.line,
+        "column": %loc.column
+      }
+
+      content.add %[ident.toHaxdocJson(), newJString(dox), loc]
 
     writeFile(dir / wrapConf.refidFile, pretty(content))
 
