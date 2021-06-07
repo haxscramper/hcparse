@@ -1482,17 +1482,16 @@ Write generated wrappers to single file
       resFiles[$target].write(gen.code)
 
     var content = newJArray()
-    for (ident, dox, loc) in res.cache.identRefidMap:
+    for (ident, loc) in res.cache.identRefidMap:
       let loc: JsonNode = %{
         "file": %loc.file.string,
         "line": %loc.line,
         "column": %loc.column
       }
 
-      content.add %[ident.toHaxdocJson(), newJString(dox), loc]
+      content.add %[ident.toHaxdocJson(), loc]
 
     writeFile(dir / wrapConf.refidFile, pretty(content))
 
   for _, file in pairs(resFiles):
     file.close()
-      # writeFile(target, gen.code)

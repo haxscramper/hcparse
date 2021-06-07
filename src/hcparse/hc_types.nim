@@ -423,7 +423,6 @@ type
     identComments*: Table[CScopedIdent, seq[string]]
     identRefidMap*: seq[tuple[
       cxx: CScopedIdent,
-      doxygen: string,
       position: WrapEntryPosition
     ]]
     nameCache*: StringNameCache
@@ -1436,26 +1435,14 @@ func toNNode*(nhs: NimHeaderSpec): PNode =
     of nhskGlobal:
       newRStrLit("<" & nhs.global & ">")
 
-proc findRefidForCursor*(cursor: CXCursor, map: RefidMap): Option[string] =
-  let loc = cursor.getSpellingLocation()
-  if loc.isNone():
-    return
-
-  else:
-    let loc = loc.get()
-
-    if loc.file.string in map.map:
-      for refid in map.map[loc.file.string].valuesFrom(loc.line - 2):
-        for dox in refid:
-          if dox.name == $cursor:
-            return some dox.refid
 
 
 proc docCommentFor*(ident: CScopedIdent): string =
      &"@import{{[[code:{ident.toHaxdocIdent()}]]}}"
 
 proc updateComments*(
-    decl: var AnyNimDecl[PNode], node: WrappedEntry | CDecl, wrapConf: WrapConf,
+    decl: var AnyNimDecl[PNode],
+    node: WrappedEntry | CDecl, wrapConf: WrapConf,
     cache: var WrapCache
   ) =
 
@@ -1474,15 +1461,11 @@ proc updateComments*(
     decl.addCodeComment(
       &"Declared in {file}:{loc.line}")
 
-  let refid = node.cursor.findRefidForCursor(wrapConf.refidMap)
-  if refid.isSome():
-    let loc = loc.get()
-    let refid = refid.get()
-    cache.identRefidMap.add((node.ident, refid, WrapEntryPosition(
+    cache.identRefidMap.add((node.ident, WrapEntryPosition(
       file: loc.file,
       line: loc.line,
       column: loc.column
     )))
-    decl.addCodeComment(&", doxygen refid is {refid}")
+
 
   decl.addDocComment(node.ident.docCommentFor())
