@@ -542,7 +542,7 @@ proc visitCursor*(
     ckStructDecl
   }
 
-  if isCursorDefinition(cursor) == 0 and
+  if cursor.isForward() and
      cursor.cxKind() in (classDeclKinds + {ckEnumDecl}):
     # Early return for method forward declarations.
     # TODO register forward declaration encounter

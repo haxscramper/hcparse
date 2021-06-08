@@ -396,6 +396,9 @@ proc len*(cursor: CXCursor): int =
 
   return cnt
 
+proc isForward*(cursor: CXCursor): bool =
+  isCursorDefinition(cursor) == 0
+
 proc getFirstOfKind*(
   cursor: CXCursor,
   kindSet: set[CXCursorKind], recurse: bool = true): CXCursor =

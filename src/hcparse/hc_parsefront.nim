@@ -280,13 +280,21 @@ proc toNNode*(genEntries: seq[GenEntry], conf: WrapConf, cache: var WrapCache):
 type
   TypeNode = object
     name*: string
+    path*: seq[string]
+    cursor*: CXCursor
+    isDef*: bool
     declareFile*: Option[WrappedFile]
 
 func hash*(typeNode: TypeNode): Hash =
-  hash(typeNode.name)
+  !$(hash(typeNode.name) !& hash(typeNode.isDef) !& hash(typeNode.path))
 
-func initTypeNode*(name: string): TypeNode =
-  TypeNode(name: name)
+func `==`*(t1, t2: TypeNode): bool =
+  t1.name == t2.name and t1.isDef == t2.isDef and
+  t1.path == t2.path
+
+func initTypeNode*(
+  name: string, path: seq[string], cursor: CXCursor, isDef: bool): TypeNode =
+  TypeNode(name: name, path: path, cursor: cursor, isDef: isDef)
 
 proc allUsedTypes*(nimType: NimType): seq[NimType] =
   result.add nimType
@@ -308,7 +316,8 @@ proc isPrimitiveHead*(nimType: NimType): bool =
 
 proc isPodHead*(nimType: NimType): bool =
   nimType.kind in {ctkIdent} and nimType.nimName.normalize() in [
-    "int", "float", "string", "cint", "cstring" # ... TODO
+    "int", "float", "string", "cint", "cstring", # ... TODO
+    "cuint", "sizet", "cstringarray", "ptr", "cchar"
   ]
 
 proc patchForward*(
@@ -319,14 +328,23 @@ proc patchForward*(
 
   info "Patching forward declarations"
 
-  var typeGraph = newHGraph[TypeNode, NoProperty]()
+  type Link = enum direct, forward, forwardReuse
+
+  var typeGraph = newHGraph[TypeNode, Link]()
 
   for file in wrapped:
     for entry in file.entries:
       if entry.kind in {gekObject}:
         # Get node for current type
         var objectNode = typeGraph.addOrGetNode(
-          initTypeNode(entry.genObject.name.nimName))
+          initTypeNode(
+            entry.genObject.name.nimName,
+            conf.getImport(
+              entry.cdecl.cursor.getSpellingLocation.get().file,
+              conf, false).importPath,
+            entry.cdecl.cursor,
+            true
+        ))
 
         if typeGraph[objectNode].declareFile.isSome():
           # Declaration file is added each node. One node is created for
@@ -345,26 +363,146 @@ proc patchForward*(
           typeGraph[objectNode].declareFile = some(file)
 
         # Add outgoing edges for all types that were explicitly used.
+        # info entry.genObject.name.nimName
         for field in entry.genObject.memberFields:
           for used in field.fieldType.allUsedTypes():
-            if not (used.isPrimitiveHead() or used.isPodHead()):
-              # QUESTION what about `int` fields, or other types that are
-              # either not wrapped at all, or wrapped using some convoluted
-              # multi-stage generics?
-              #
-              # QUESTION 2 now I'm not sure what previous question was
-              # about, so I need to figure /that/ out too.
-              discard typeGraph.addEdge(
-                objectNode,
-                typeGraph.addOrGetNode(
-                  # IMPLEMENT use additional information in `CXType` field
-                  # for `used`
-                  initTypeNode(used.nimName))
-              )
+            if not used.isPodHead():
+              if used.fromCXtype:
+                # QUESTION what about `int` fields, or other types that are
+                # either not wrapped at all, or wrapped using some convoluted
+                # multi-stage generics?
+                #
+                # QUESTION 2 now I'm not sure what previous question was
+                # about, so I need to figure /that/ out too.
+                let
+                  decl = used.cxType.getTypeDeclaration()
+                  loc = decl.getSpellingLocation.get()
+                  path = conf.getImport(loc.file, conf, false).importPath
+
+                let node = initTypeNode(
+                  used.nimName, path, decl, not isForward(decl))
+
+                discard typeGraph.addOrGetEdge(
+                  objectNode,
+                  typeGraph.addOrGetNode(node),
+                  if isForward(decl): forward else: direct
+                )
+
+  for t1 in nodes(typeGraph):
+    for t2 in nodes(typeGraph):
+      if t1 != t2 and typeGraph[t1].name == typeGraph[t2].name:
+        discard typeGraph.addOrGetEdge(t1, t2, forwardReuse)
+
+  var fileMarks: MarkTable[string, TermColor8Bit]
+
+  var graph = typeGraph.dotRepr(
+    proc(node: TypeNode, hnode: HNode): DotNode =
+      var importLoc: string
+      let file = node.path.joinq()
+      result = makeDotNode(
+        0, node.name & "\n" & file,
+        fillcolor = dotColor(
+          if node.isDef: fgYellow else: fgCyan,
+          lightDotForegroundMap),
+        color = fileMarks.getRandMark(file).toColor())
+
+      result.penWidth = some(4.0)
+
+    ,
+
+    proc(link: Link, hedge: HEdge): DotEdge =
+      case link:
+        of direct: makeDotEdge(edsBold)
+        of forward: makeDotEdge(edsDashed)
+        of forwardReuse: makeDotEdge(edsDotted)
+  )
+
+  graph.rankdir = grdLeftRight
+
+  graph.toPng(getAppTempFile("forwardComponents.png"))
 
 
-  # for typeGroup in typeGraph.connectedComponents():
-  #   info typeGroup.mapIt(typeGraph[it].name)
+  # var movedConnected:
+
+  var
+    droppedForward: HashSet[CXCursor]
+    movedForward: seq[tuple[
+      cursors: HashSet[CXCursor], file: WrappedFile]]
+
+  for typeGroup in typeGraph.connectedComponents():
+    info typeGroup.mapIt(typeGraph[it].name)
+    var files: HashSet[AbsFile]
+    for node in typeGroup:
+      files.incl typeGraph[node].cursor.getSpellingLocation().get().file
+
+    if files.len == 1:
+      # All parts of the forward-declare graph are located in the same file
+      for node in typeGroup:
+        droppedForward.incl typeGraph[node].cursor
+
+    else:
+      # Forward-declared nodes form strongly connected graph that would
+      # lead to mutually recursive imports. By grouping all declarations in
+      # a single file it is now possible to put them in single `type`
+      # section as well.
+      var cursors: HashSet[CxCursor]
+      for node in typeGroup:
+        cursors.incl typeGraph[node].cursor
+
+      # TEMP HACK
+      var file: AbsFile
+      for f in files:
+        file = f
+        break
+
+      movedForward.add((cursors, WrappedFile(
+        isGenerated: true,
+        # HACK FIXME assuming all files are located in a single directory,
+        # which is most likely not the case.
+        relativeTo: file,
+        # HACK hardcoded testing file name
+        newFile: RelFile("a.nim")
+      )))
+
+
+
+  for file in mitems(wrapped):
+    for entry in mitems(file.entries):
+      if entry.hasCDecl():
+        for (cursors, file) in mitems(movedForward):
+          if entry.cdecl().cursor in cursors:
+            if entry.kind notin {gekForward}:
+              file.entries.add entry
+
+  var addedRel: HashSet[RelFile]
+  for file in mitems(wrapped):
+    for entry in mitems(file.entries):
+      if entry.hasCDecl():
+        # info "processing", entry.cdecl().ident
+        if entry.cdecl().cursor in droppedForward:
+          entry[] = newGenEntry(GenPass(iinfo: currIInfo()))[]
+
+        else:
+          var moved: bool = false
+          for (cursors, file) in movedForward:
+            if entry.cdecl().cursor in cursors:
+              entry = newGenEntry(
+                # HACK hardcoded testing file name
+                initGenImport(@["a"], currIInfo()))
+
+              if file.newFile notin addedRel:
+                addedRel.incl file.newFile
+                result.add file
+
+              moved = true
+              break
+
+          if not moved and entry.kind in {gekForward}:
+            # notice "Removing forward declaration", entry.cdecl().ident
+            entry[] = newGenEntry(GenPass(iinfo: currIINfo()))[]
+
+
+
 
 
 
@@ -377,7 +515,9 @@ proc wrapFiles*(
 
   var genFiles: seq[WrappedFile]
   for file in parsed:
-    var resFile = WrappedFile()
+    var resFile = WrappedFile(
+      isGenerated: false, baseFile: file.filename)
+
     # Generate necessary default imports for all files
     resFile.entries.add initGenImport(@["bitops"], currIInfo())
     resFile.entries.add initGenImport(@["hcparse", "wraphelp"], currIInfo())
@@ -403,7 +543,7 @@ proc wrapFiles*(
   # Patch *all* wrapped file entries at once, replacing `GenForward`
   # entries with imports and returning list of additional files (for
   # strongly connected type clusters that span multiple files)
-  # result.add patchForward(genFiles, conf, cache)
+  result.add patchForward(genFiles, conf, cache)
 
   # Add generated wrapper files themselves
   result.add genFiles
@@ -573,9 +713,45 @@ proc wrapAllFiles*(
 
     parsed.add parsedFile
 
+  assertValid(
+    wrapConf.nimOutDir,
+    "Wrap configuration output directory")
+
   var wrapped: seq[seq[WrappedEntry]]
   for file in wrapFiles(parsed, wrapConf, cache, index):
-    wrapped.add wrapFile(file, wrapConf, cache, index)
+    let outPath =
+      tern(
+        file.isGenerated,
+        withExt(
+          joinPath(
+            wrapConf.nimOutDir,
+            joinPath(
+              relativePath(file.relativeTo, wrapConf.baseDir).dir(),
+              file.newFile)),
+          "nim"),
+        withExt(
+          joinPath(
+            wrapConf.nimOutDir,
+            relativePath(file.baseFile, wrapConf.baseDir)),
+          "nim"))
+
+    info outPath
+    logIndented:
+      for decl in file.entries:
+        if decl.hasCdecl():
+          debug decl.cdecl().ident
+
+    var codegen: CodegenResult
+    for node in wrapFile(file, wrapConf, cache, index):
+      codegen.decls.add node.decl
+
+    codegen.writeWrapped(outPath, @[], wrapConf)
+
+
+proc wrapWithConf*(
+    files: seq[AbsFile], wrapConf: WrapConf,
+    parseConf: ParseConf
+  ) = wrapAllFiles(files, wrapConf, parseConf)
 
 proc wrapWithConf*(
     infile, outfile: FsFile, wrapConf: WrapConf,

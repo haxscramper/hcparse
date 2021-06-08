@@ -991,8 +991,7 @@ proc evalTokensInt(strs: seq[string]): Option[int64] =
             else: raiseImplementError(op)
 
       of cppTranslationUnit, cppSyntaxError, cppExpressionStatement,
-         cppParenthesizedExpression
-           :
+         cppParenthesizedExpression:
         return aux(node[0])
 
       of cppStringLiteral, cppCastExpression:
@@ -1017,14 +1016,12 @@ proc wrapMacroEnum*(
 
   let prefix = commonPrefix(mapIt(values, $it.cursor)).dropSuffix("_")
   let enumPref = conf.prefixForEnum(@[toCName(prefix)], conf, cache)
-  # info "Wrapping", prefix, "as", enumPref, values.len
   var enumFields: seq[GenEnumValue]
   for val in values:
     let toks = val.cursor.tokenStrings(conf.unit)
     # FIXME range breaks on `#define func(arg)`
     let value = evalTokensInt(toks[1 ..^ 1])
     let name = enumPref & toks[0].splitCamel()[1..^1].capitalAscii().join("")
-    # debug name, toks.join(", ", ("<\e[31m", "\e[39m>")), value
 
     if value.isSome():
       enumFields.add GenEnumValue(
@@ -1045,20 +1042,6 @@ proc wrapMacroEnum*(
       cdecl: nil,
       values: enumFields.sortedByIt(it.resVal)
     )
-
-    # vals = vals
-    # var en: PEnumDecl = newPEnumDecl(
-    #   ,
-    #   iinfo = currIInfo()
-    # )
-
-    # var cEnum: PEnumDecl = newPEnumDecl(, iinfo = currIInfo())
-
-    # for value in vals:
-    #   # cEnum.addField(name & "C", )
-    #   en.addField(value.resNimName, some newPLit(value.resVal))
-
-    # result.add newWrappedEntry(toNimDecl(en), values[0])
 
     result.add en
     let enName = newPIdent(en.name)
@@ -1144,8 +1127,6 @@ proc wrapApiUnit*(
 
         else:
           result.add decl.wrapObject(conf, cache)
-          for i in result:
-            echo i.kind
 
         dedentLog()
 

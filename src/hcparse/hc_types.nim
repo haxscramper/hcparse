@@ -359,8 +359,6 @@ type
 
     collapsibleNamespaces*: seq[string]
     ignoreFile*: proc(file: AbsFile): bool
-    baseDir*: AbsDir ## Root directory for C++ sources being wrapped. Used
-                     ## for debug comments in generated sources
     isInternal*: proc(
       dep: AbsFile, conf: WrapConf, index: FileIndex): bool ## Determine
     ## if particular dependency (`dep` file) should be re-exported.
@@ -408,6 +406,10 @@ type
     ##   types are wrapped as not typesafe aliases.
 
     codegenDir*: Option[AbsDir]
+    baseDir*: AbsDir ## Root directory for C++ sources being wrapped. Used
+                     ## for debug comments in generated sources
+    nimOutDir*: AbsDir ## Root directory to write files to
+
     refidFile*: RelFile
 
 
@@ -558,6 +560,9 @@ type
     gekForward ## Forward declaration for struct/union/class/enum
     gekImport ## Import statement
 
+  AnyGenEntry = GenProc | GenObject | GenEnum |
+    GenAlias | GenPass | GenImport | GenForward
+
   GenEntry* = ref object
     ## Toplevel wrapper for different entry kinds.
     ##
@@ -599,10 +604,14 @@ type
     case isGenerated*: bool ## File was generated from strongly linked
                             ## cluster of forward-declared types.
       of true:
-        discard
+        relativeTo* {.requiresinit.}: AbsFile ## Absolute path to original
+                                              ## file
+        newFile* {.requiresinit.}: RelFile ## Relative path to newly
+                                           ## generated file
 
       of false:
-        discard
+        baseFile* {.requiresinit.}: AbsFile ## Absolute path to original
+                                            ## processed file
 
 
   EnFieldVal* = object
@@ -637,35 +646,59 @@ type
 
 
 
-proc add*(
-    genSeq: var seq[GenEntry],
-    gen: GenProc | GenObject | GenEnum | GenAlias |
-         GenPass | GenImport | GenForward
-  ) =
 
+proc newGenEntry*(gen: AnyGenEntry): GenEntry =
   when gen is GenProc:
-    genSeq.add GenEntry(kind: gekProc, genProc: gen)
+    result = GenEntry(kind: gekProc, genProc: gen)
 
   elif gen is GenObject:
-    genSeq.add GenEntry(kind: gekObject, genObject: gen)
+    result = GenEntry(kind: gekObject, genObject: gen)
 
   elif gen is GenEnum:
-    genSeq.add GenEntry(kind: gekEnum, genEnum: gen)
+    result = GenEntry(kind: gekEnum, genEnum: gen)
 
   elif gen is GenAlias:
-    genSeq.add GenEntry(kind: gekAlias, genAlias: gen)
+    result = GenEntry(kind: gekAlias, genAlias: gen)
 
   elif gen is GenPass:
-    genSeq.add GenEntry(kind: gekPass, genPass: gen)
+    result = GenEntry(kind: gekPass, genPass: gen)
 
   elif gen is GenImport:
-    genSeq.add GenEntry(kind: gekImport, genImport: gen)
+    result = GenEntry(kind: gekImport, genImport: gen)
 
   elif gen is GenForward:
-    genSeq.add GenEntry(kind: gekForward, genForward: gen)
+    result = GenEntry(kind: gekForward, genForward: gen)
 
   when compiles(gen.isGenerated):
-    genSeq[^1].isGenerated = gen.isGenerated
+    if result.kind == gekForward:
+      assert not gen.isGenerated
+
+    result.isGenerated = gen.isGenerated
+
+
+proc add*(genSeq: var seq[GenEntry], gen: AnyGenEntry) =
+  genSeq.add newGenEntry(gen)
+
+proc hasCdecl*(gen: GenEntry): bool =
+  (gen.kind in {gekForward}) or
+  (
+    (not gen.isGenerated) and
+    (gen.kind notin {gekPass, gekImport})
+  )
+
+proc cdecl*(gen: GenEntry): CDecl =
+  assert gen.hasCdecl(),
+     &"generated: {gen.isGenerated}, kind: {gen.kind}"
+
+  case gen.kind:
+    of gekEnum: result = gen.genEnum.cdecl
+    of gekProc: result = gen.genProc.cdecl
+    of gekObject: result = gen.genObject.cdecl
+    of gekAlias: result = gen.genAlias.cdecl
+    of gekForward: result = gen.genForward.cdecl
+    of gekPass, gekImport:
+      discard
+
 
 proc newProcVisit*(
     genProc: var GenProc, conf: WrapConf, cache: var WrapCache
@@ -1134,14 +1167,14 @@ proc initHeaderSpec*(pnode: PNode): NimHeaderSpec =
 
 
 
-func cdecl*(gen: GenEntry): CDecl =
-  case gen.kind:
-    of gekEnum: gen.genEnum.cdecl
-    of gekProc: gen.genProc.cdecl
-    of gekObject: gen.genObject.cdecl
-    of gekAlias: gen.genAlias.cdecl
-    of gekForward: gen.genForward.cdecl
-    of gekPass, gekImport: raiseUnexpectedKindError(gen)
+# func cdecl*(gen: GenEntry): CDecl =
+#   case gen.kind:
+#     of gekEnum: gen.genEnum.cdecl
+#     of gekProc: gen.genProc.cdecl
+#     of gekObject: gen.genObject.cdecl
+#     of gekAlias: gen.genAlias.cdecl
+#     of gekForward: gen.genForward.cdecl
+#     of gekPass, gekImport: raiseUnexpectedKindError(gen)
 
 func `$`*(we: WrappedEntry): string = $we.decl
 func `$`*(we: seq[WrappedEntry]): string =
@@ -1311,6 +1344,9 @@ proc markSeen*(cache: var WrapCache, cursor: CXCursor) =
 proc seenCursor*(cache: WrapCache, cursor: CXCursor): bool =
   cursor.hashCursor() in cache.visited
 
+proc hash*(cursor: CXCursor): Hash =
+  Hash(cursor.hashCursor())
+
 proc lastName*(cd: CDecl): string =
   ## Return *last* name for declaration.
   ##
@@ -1450,7 +1486,6 @@ proc updateComments*(
     if node.generated:
       return
 
-  info toCppNamespace(node.ident)
   decl.addCodeComment("Wrapper for `" & toCppNamespace(
     node.ident, withNames = true) & "`\n")
 
