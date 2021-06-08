@@ -1435,18 +1435,19 @@ Write generated wrappers to single file
 ]##
 
   var filenames: HashSet[string]
-  withNewStreamFile(outFile):
-    for gen in res.codegen:
-      if gen.filename.hasExt("cpp") and $gen.filename notin filenames:
-        let res = gen.filename.withBasePrefix("gen_")
-        file.writeLine(&"{{.compile: \"{res}\".}}")
-        filenames.incl $gen.filename
+  if res.codegen.len > 0 or res.decls.len > 0:
+    withNewStreamFile(outFile):
+      for gen in res.codegen:
+        if gen.filename.hasExt("cpp") and $gen.filename notin filenames:
+          let res = gen.filename.withBasePrefix("gen_")
+          file.writeLine(&"{{.compile: \"{res}\".}}")
+          filenames.incl $gen.filename
 
-    for gen in compile:
-      file.writeLine(&"{{.compile: \"{gen}\".}}")
+      for gen in compile:
+        file.writeLine(&"{{.compile: \"{gen}\".}}")
 
-    for entry in res.decls:
-      file.write(entry)
+      for entry in res.decls:
+        file.write(entry)
 
   var resFiles: Table[string, File]
 

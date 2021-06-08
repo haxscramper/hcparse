@@ -438,7 +438,8 @@ proc patchForward*(
     if files.len == 1:
       # All parts of the forward-declare graph are located in the same file
       for node in typeGroup:
-        droppedForward.incl typeGraph[node].cursor
+        if typeGraph[node].cursor.isForward():
+          droppedForward.incl typeGraph[node].cursor
 
     else:
       # Forward-declared nodes form strongly connected graph that would
@@ -480,6 +481,7 @@ proc patchForward*(
       if entry.hasCDecl():
         # info "processing", entry.cdecl().ident
         if entry.cdecl().cursor in droppedForward:
+          notice "Dropped forward declaration", entry.cdecl().ident
           entry[] = newGenEntry(GenPass(iinfo: currIInfo()))[]
 
         else:
@@ -498,7 +500,7 @@ proc patchForward*(
               break
 
           if not moved and entry.kind in {gekForward}:
-            # notice "Removing forward declaration", entry.cdecl().ident
+            notice "Removing forward declaration", entry.cdecl().ident
             entry[] = newGenEntry(GenPass(iinfo: currIINfo()))[]
 
 
@@ -746,6 +748,9 @@ proc wrapAllFiles*(
       codegen.decls.add node.decl
 
     codegen.writeWrapped(outPath, @[], wrapConf)
+
+  CodegenResult(cache: cache).writeWrapped(
+    AbsFile(""), @[], wrapConf)
 
 
 proc wrapWithConf*(
