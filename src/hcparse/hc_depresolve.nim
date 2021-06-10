@@ -1,5 +1,4 @@
 import std/[tables, sequtils, strutils, options]
-import gram
 import hmisc/helpers
 import hmisc/other/[oswrap, colorlogger]
 import cxtypes, cxcommon, hc_types

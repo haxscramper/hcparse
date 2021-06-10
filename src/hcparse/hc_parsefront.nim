@@ -1,13 +1,16 @@
-import std/[tables, options, strutils, strformat, hashes,
-            sequtils, bitops, sugar, deques, sets]
+import std/[
+  tables, options, strutils, strformat,
+  hashes, sequtils, bitops, sugar, deques, sets
+]
 
 import hnimast
 
-import hmisc/[helpers, hexceptions]
-import hmisc/algo/hstring_algo
-import hmisc/other/[oswrap, colorlogger, hshell]
-import hmisc/types/[colorstring, hgraph]
-import gram
+import
+  hmisc/[helpers, hexceptions],
+  hmisc/algo/[hstring_algo, clformat],
+  hmisc/other/[oswrap, colorlogger, hshell],
+  hmisc/types/[colorstring, hgraph]
+
 
 import
   ./cxtypes,
@@ -177,32 +180,6 @@ proc parseFile*(
 
   dedentLog()
 
-proc incl*[N, E, F](gr: var Graph[N, E, F], val: N) =
-  if val notin gr:
-    discard gr.add(val)
-
-proc contains*[N, E, F](gr: Graph[N, E, F], pair: (N, N)): bool =
-  if (pair[0] notin gr) or (pair[1] notin gr):
-    return false
-
-  for (edge, node) in gr[pair[0]].incoming():
-    if node.value == pair[1]:
-    # if edge in gr:
-      return true
-
-
-  for (edge, node) in gr[pair[0]].outgoing():
-    # if edge in gr:
-    if node.value == pair[1]:
-      return true
-
-proc incl*[N, E, F](
-  gr: var Graph[N, E, F], pair: (N, N), edgeVal: E) =
-  if pair notin gr:
-    discard gr.edge(gr[pair[0]], edgeVal, gr[pair[1]])
-
-
-
 proc parseAll*(
     files: seq[AbsFile], conf: ParseConf, wrapConf: WrapConf
   ): hc_types.FileIndex =
@@ -320,23 +297,21 @@ proc isPodHead*(nimType: NimType): bool =
     "cuint", "sizet", "cstringarray", "ptr", "cchar"
   ]
 
-proc patchForward*(
+type
+  Link = enum direct, forward, forwardReuse
+  TypeGraph = HGraph[TypeNode, Link]
+
+proc getTypeGraph(
     wrapped: var seq[WrappedFile], conf: WrapConf, cache: var WrapCache):
-  seq[WrappedFile] =
-  ## Replace `GenForward` declarations with required import. Return list of
-  ## additional generated files.
+  TypeGraph =
 
-  info "Patching forward declarations"
-
-  type Link = enum direct, forward, forwardReuse
-
-  var typeGraph = newHGraph[TypeNode, Link]()
+  result = newHGraph[TypeNode, Link]()
 
   for file in wrapped:
     for entry in file.entries:
       if entry.kind in {gekObject}:
         # Get node for current type
-        var objectNode = typeGraph.addOrGetNode(
+        var objectNode = result.addOrGetNode(
           initTypeNode(
             entry.genObject.name.nimName,
             conf.getImport(
@@ -346,7 +321,7 @@ proc patchForward*(
             true
         ))
 
-        if typeGraph[objectNode].declareFile.isSome():
+        if result[objectNode].declareFile.isSome():
           # Declaration file is added each node. One node is created for
           # each unique `entry.genObject.name` ecountered. If node with
           # given name already exists it either means tha algorithm is bad,
@@ -360,7 +335,7 @@ proc patchForward*(
             "Multiple file declarations for type " & $entry.genObject.name)
 
         else:
-          typeGraph[objectNode].declareFile = some(file)
+          result[objectNode].declareFile = some(file)
 
         # Add outgoing edges for all types that were explicitly used.
         # info entry.genObject.name.nimName
@@ -382,20 +357,84 @@ proc patchForward*(
                 let node = initTypeNode(
                   used.nimName, path, decl, not isForward(decl))
 
-                discard typeGraph.addOrGetEdge(
+                discard result.addOrGetEdge(
                   objectNode,
-                  typeGraph.addOrGetNode(node),
+                  result.addOrGetNode(node),
                   if isForward(decl): forward else: direct
                 )
 
-  for t1 in nodes(typeGraph):
-    for t2 in nodes(typeGraph):
-      if t1 != t2 and typeGraph[t1].name == typeGraph[t2].name:
-        discard typeGraph.addOrGetEdge(t1, t2, forwardReuse)
+  for t1 in nodes(result):
+    for t2 in nodes(result):
+      if t1 != t2 and result[t1].name == result[t2].name:
+        discard result.addOrGetEdge(t1, t2, forwardReuse)
 
+type
+  TypeGroup = object
+    nodes: HNodeSet
+    files: HashSet[AbsFile]
+    external: HashSet[AbsFile]
+
+proc nodeFile(graph: TypeGraph, node: HNode): AbsFile =
+  graph[node].cursor.getSpellingLocation().get().file
+
+proc dependentComponents(graph: TypeGraph): seq[TypeGroup] =
+  var groups: seq[TypeGroup]
+  var inGroup: HNodeSet
+  for path in graph.findCycles(ignoreSelf = true):
+    var group = TypeGroup(nodes: path.toSet())
+    for node in group.nodes:
+      group.files.incl graph.nodeFile(node)
+
+    inGroup.incl group.nodes
+    groups.add group
+
+
+  # Extend each type group with dependencies located in the same file(s).
+  # Take note of the all external dependendencies.
+  for idx, group in pairs(groups):
+    var externalFiles: seq[AbsFile]
+    info "extending group node", group.nodes.mapIt(graph[it].name).hformat()
+    let extendedGroup = extendOutgoing(graph, group.nodes,
+      proc(node: HNode): bool =
+        let file = graph.nodeFile(node)
+        if file in group.files:
+          # If node describes type located in file that is already in the
+          # group extend it unless file is located in other group
+          #
+          # ```C
+          # // this structure must be moved to connected
+          # // cluster file (if any) and subsequently re-exprted
+          # struct Other {};
+          # struct Forward;
+          # struct User { Forward* forward; Other other; };
+          # struct Forward { User* user; }
+          # ```
+
+          result = node notin inGroup
+
+        else:
+          # If requires external file do not extend group, but store file
+          # path
+          externalFiles.add file
+          result = false
+
+        # if not result:
+        #   notice "don't merge", graph[node].name
+        #   debug "in group:", node in inGroup
+        #   debug "in files:", file in group.files
+
+    )
+
+    groups[idx].nodes.incl extendedGroup
+    for file in externalFiles:
+      groups[idx].files.incl file
+
+  return groups
+
+
+proc dotRepr(typeGraph: TypeGraph, groups: seq[TypeGroup] = @[]): DotGraph =
   var fileMarks: MarkTable[string, TermColor8Bit]
-
-  var graph = typeGraph.dotRepr(
+  result = typeGraph.dotRepr(
     proc(node: TypeNode, hnode: HNode): DotNode =
       var importLoc: string
       let file = node.path.joinq()
@@ -406,7 +445,7 @@ proc patchForward*(
           lightDotForegroundMap),
         color = fileMarks.getRandMark(file).toColor())
 
-      result.penWidth = some(4.0)
+      result.penWidth = some(2.5)
 
     ,
 
@@ -415,29 +454,49 @@ proc patchForward*(
         of direct: makeDotEdge(edsBold)
         of forward: makeDotEdge(edsDashed)
         of forwardReuse: makeDotEdge(edsDotted)
+    ,
+
+    clusters = groups.mapIt((
+      it.nodes,
+      block:
+        var files: HashSet[seq[string]]
+        for node in it.nodes:
+          files.incl typeGraph[node].path
+
+        mapIt(files, it.joinq("/")).join(", ")
+    ))
   )
 
-  graph.rankdir = grdLeftRight
+  # result.rankdir = grdLeftRight
+  result.bgColor = some colLightSlateGray
+  result.ranksep = some 1.2
 
-  graph.toPng(getAppTempFile("forwardComponents.png"))
+
+proc patchForward*(
+    wrapped: var seq[WrappedFile], conf: WrapConf, cache: var WrapCache):
+  seq[WrappedFile] =
+  ## Replace `GenForward` declarations with required import. Return list of
+  ## additional generated files.
+
+  info "Patching forward declarations"
 
 
-  # var movedConnected:
+  var typeGraph = getTypeGraph(wrapped, conf, cache)
 
   var
     droppedForward: HashSet[CXCursor]
     movedForward: seq[tuple[
       cursors: HashSet[CXCursor], file: WrappedFile]]
 
-  for typeGroup in typeGraph.connectedComponents():
-    info typeGroup.mapIt(typeGraph[it].name)
-    var files: HashSet[AbsFile]
-    for node in typeGroup:
-      files.incl typeGraph[node].cursor.getSpellingLocation().get().file
+  let components = typeGraph.dependentComponents()
+  typeGraph.dotRepr(components).toPng(getAppTempFile("forwardComponents.png"))
 
-    if files.len == 1:
-      # All parts of the forward-declare graph are located in the same file
-      for node in typeGroup:
+  for group in components:
+    # info group.nodes.mapIt(typeGraph[it].name)
+
+    if group.files.len == 1:
+      # All parts of the forward-declare graph are located in the same file.
+      for node in group.nodes:
         if typeGraph[node].cursor.isForward():
           droppedForward.incl typeGraph[node].cursor
 
@@ -447,12 +506,15 @@ proc patchForward*(
       # a single file it is now possible to put them in single `type`
       # section as well.
       var cursors: HashSet[CxCursor]
-      for node in typeGroup:
+      for node in group.nodes:
         cursors.incl typeGraph[node].cursor
+
+      # Identify list of external files that need to be additionally
+      # imported to generated files.
 
       # TEMP HACK
       var file: AbsFile
-      for f in files:
+      for f in group.files:
         file = f
         break
 
@@ -481,13 +543,14 @@ proc patchForward*(
       if entry.hasCDecl():
         # info "processing", entry.cdecl().ident
         if entry.cdecl().cursor in droppedForward:
-          notice "Dropped forward declaration", entry.cdecl().ident
+          # notice "Dropped forward declaration", entry.cdecl().ident
           entry[] = newGenEntry(GenPass(iinfo: currIInfo()))[]
 
         else:
           var moved: bool = false
           for (cursors, file) in movedForward:
             if entry.cdecl().cursor in cursors:
+              # notice "Importing forward cluster", entry.cdecl().ident
               entry = newGenEntry(
                 # HACK hardcoded testing file name
                 initGenImport(@["a"], currIInfo()))
@@ -717,7 +780,7 @@ proc wrapAllFiles*(
 
   assertValid(
     wrapConf.nimOutDir,
-    "Wrap configuration output directory")
+    ". Output directory for generated nim files.")
 
   var wrapped: seq[seq[WrappedEntry]]
   for file in wrapFiles(parsed, wrapConf, cache, index):
@@ -737,11 +800,11 @@ proc wrapAllFiles*(
             relativePath(file.baseFile, wrapConf.baseDir)),
           "nim"))
 
-    info outPath
-    logIndented:
-      for decl in file.entries:
-        if decl.hasCdecl():
-          debug decl.cdecl().ident
+    # info outPath
+    # logIndented:
+    #   for decl in file.entries:
+    #     if decl.hasCdecl():
+    #       debug decl.cdecl().ident
 
     var codegen: CodegenResult
     for node in wrapFile(file, wrapConf, cache, index):
