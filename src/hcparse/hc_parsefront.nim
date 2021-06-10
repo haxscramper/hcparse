@@ -240,14 +240,7 @@ proc toNNode*(genEntries: seq[GenEntry], conf: WrapConf, cache: var WrapCache):
         result.add node.genObject.toNNode(conf, cache)
 
       of gekEnum:
-        let (rawDecl, nimDecl) = node.genEnum.toNNode(conf)
-        for decl in [rawDecl, nimDecl]:
-          result.add newWrappedEntry(
-            decl.toNimDecl(),
-            true,
-            node.genEnum.iinfo,
-            node.genEnum.cdecl
-          )
+        result.add node.genEnum.toNNode(conf, cache)
 
       of gekPass:
         result.add node.genPass.passEntries
@@ -292,9 +285,11 @@ proc isPrimitiveHead*(nimType: NimType): bool =
     "ref", "var", "sink", "ptr"]
 
 proc isPodHead*(nimType: NimType): bool =
-  nimType.kind in {ctkIdent} and nimType.nimName.normalize() in [
+  let norm = nimType.nimName.normalize()
+  nimType.kind in {ctkIdent} and norm in [
     "int", "float", "string", "cint", "cstring", # ... TODO
-    "cuint", "sizet", "cstringarray", "ptr", "cchar"
+    "cuint", "sizet", "cstringarray", "cchar", "ptr",
+    "void", "pointer"
   ]
 
 type
@@ -302,14 +297,62 @@ type
   TypeGraph = HGraph[TypeNode, Link]
 
 proc getTypeGraph(
-    wrapped: var seq[WrappedFile], conf: WrapConf, cache: var WrapCache):
-  TypeGraph =
+    wrapped: var seq[WrappedFile], conf: WrapConf,
+    cache: var WrapCache
+  ): TypeGraph =
 
   result = newHGraph[TypeNode, Link]()
 
-  for file in wrapped:
+  for file in mitems(wrapped):
+    var extraEntries: seq[GenEntry]
     for entry in file.entries:
-      if entry.kind in {gekObject}:
+      if entry.kind in {gekProc}:
+        # It is possible to use `enum` type without declaring it in the
+        # same translation unit (let alone defining). So wonders like this
+        # are entirely possible.
+        #
+        # ```c
+        # struct	mparse;
+        # struct mparse	 *mparse_alloc(int, enum mandoc_os);
+        # ```
+        #
+        # I suppose (TODO REVIEW) current algorithm
+        # will be able to handle use of enum *and* forward declaration as
+        # well (e.g. `enum mandoc_os` was used in procedure but
+        # forward-declared) in the file as well.
+        var procTypes: seq[NimType]
+        for arg in entry.genProc.arguments:
+          if not arg.isRaw:
+            procTypes.add arg.nimType
+
+        procTypes.add entry.genProc.returnType
+
+        var hasEnumArg = false
+        var cdecl = CDecl()
+        for it in procTypes:
+          for used in it.allUsedTypes():
+            let decl = used.cxType.getTypeDeclaration()
+            if decl.cxKind() in {ckEnumDecl} and decl.isForward():
+              hasEnumArg = true
+              cdecl[] = entry.cdecl()[]
+              cdecl.cursor = decl
+              let
+                loc = decl.getSpellingLocation().get()
+                path = conf.getImport(loc.file, conf, false).importPath
+                node = initTypeNode(
+                  used.nimName, path,
+                  cdecl.cursor, isDef = false)
+
+              let enumNode = result.addOrGetNode(node)
+
+        if hasEnumArg:
+          # Adding nonexistent forward declaration for it to be removed
+          # (and replaced) with corresponding import/export pair during
+          # drop/move phase.
+          extraEntries.add GenForward(
+            iinfo: currIInfo(), cdecl: cdecl)
+
+      elif entry.kind in {gekObject}:
         # Get node for current type
         var objectNode = result.addOrGetNode(
           initTypeNode(
@@ -363,6 +406,8 @@ proc getTypeGraph(
                   if isForward(decl): forward else: direct
                 )
 
+    file.entries.add extraEntries
+
   for t1 in nodes(result):
     for t2 in nodes(result):
       if t1 != t2 and result[t1].name == result[t2].name:
@@ -393,37 +438,28 @@ proc dependentComponents(graph: TypeGraph): seq[TypeGroup] =
   # Take note of the all external dependendencies.
   for idx, group in pairs(groups):
     var externalFiles: seq[AbsFile]
-    info "extending group node", group.nodes.mapIt(graph[it].name).hformat()
-    let extendedGroup = extendOutgoing(graph, group.nodes,
-      proc(node: HNode): bool =
-        let file = graph.nodeFile(node)
-        if file in group.files:
-          # If node describes type located in file that is already in the
-          # group extend it unless file is located in other group
-          #
-          # ```C
-          # // this structure must be moved to connected
-          # // cluster file (if any) and subsequently re-exprted
-          # struct Other {};
-          # struct Forward;
-          # struct User { Forward* forward; Other other; };
-          # struct Forward { User* user; }
-          # ```
+    let extendedGroup = extendOutgoing(graph, group.nodes) do(node: HNode) -> bool:
+      let file = graph.nodeFile(node)
+      if file in group.files:
+        # If node describes type located in file that is already in the
+        # group extend it unless file is located in other group
+        #
+        # ```C
+        # // this structure must be moved to connected
+        # // cluster file (if any) and subsequently re-exprted
+        # struct Other {};
+        # struct Forward;
+        # struct User { Forward* forward; Other other; };
+        # struct Forward { User* user; }
+        # ```
 
-          result = node notin inGroup
+        result = node notin inGroup
 
-        else:
-          # If requires external file do not extend group, but store file
-          # path
-          externalFiles.add file
-          result = false
-
-        # if not result:
-        #   notice "don't merge", graph[node].name
-        #   debug "in group:", node in inGroup
-        #   debug "in files:", file in group.files
-
-    )
+      else:
+        # If requires external file do not extend group, but store file
+        # path
+        externalFiles.add file
+        result = false
 
     groups[idx].nodes.incl extendedGroup
     for file in externalFiles:
@@ -480,21 +516,19 @@ proc patchForward*(
   info "Patching forward declarations"
 
 
-  var typeGraph = getTypeGraph(wrapped, conf, cache)
-
   var
-    droppedForward: HashSet[CXCursor]
-    # movedForward: seq[tuple[
-    #   cursors: HashSet[CXCursor], file: WrappedFile]]
+    typeGraph = getTypeGraph(wrapped, conf, cache)
 
   let components = typeGraph.dependentComponents()
   typeGraph.dotRepr(components).toPng(getAppTempFile("forwardComponents.png"))
 
 
-  var movedForward: Table[string, tuple[cursors: Hashset[CXCursor], file: WrappedFile]]
+  var
+    movedForward: Table[string, tuple[cursors: Hashset[CXCursor], file: WrappedFile]]
+    droppedForward: HashSet[CXCursor]
 
   for group in components:
-    # info group.nodes.mapIt(typeGraph[it].name)
+    info group.nodes.mapIt(typeGraph[it].name)
 
     if group.files.len == 1:
       # All parts of the forward-declare graph are located in the same file.
@@ -541,34 +575,48 @@ proc patchForward*(
             if entry.kind notin {gekForward}:
               file.entries.add entry
 
+  # drop/move phrase of the patching - all cursors that participate in type
+  # groups are either droppped (forward declaration is simply replaced with
+  # empty entry in case of group consisting of a single file) *or*
+  # import-export pair (via modification of the `.imports` and `.exports`
+  # sets for wrapped file)
   var addedRel: HashSet[RelFile]
-  for file in mitems(wrapped):
-    for entry in mitems(file.entries):
+  for wrappedFile in mitems(wrapped):
+    for entry in mitems(wrappedFile.entries):
       if entry.hasCDecl():
         # info "processing", entry.cdecl().ident
         if entry.cdecl().cursor in droppedForward:
-          # notice "Dropped forward declaration", entry.cdecl().ident
+          notice "Dropped forward declaration", entry.cdecl().ident
           entry[] = newGenEntry(GenPass(iinfo: currIInfo()))[]
 
         else:
           var moved: bool = false
-          for filename, (cursors, file) in movedForward:
-            if entry.cdecl().cursor in cursors:
-              # notice "Importing forward cluster", entry.cdecl().ident
-              entry = newGenEntry(
-                # HACK hardcoded testing file name
-                initGenImport(@[fileName], currIInfo()))
+          for filename, _ in movedForward:
+            # HACK I can't use `filename, (cursors, file)` here because of
+            # C codegen bug when compiling.
+            let file = movedForward[filename].file
+            if entry.cdecl().cursor in movedForward[filename].cursors:
+              # if "alloc" in $entry.cdecl().ident:
+              #   notice "Forward declaration ", entry.cdecl().cursor,
+              #      " moved to ", file.newFile
+              #   debug entry.kind
+              # file.entries.add entry
+
+              entry = newGenEntry(GenPass(iinfo: currIInfo()))
+              wrappedFile.imports.incl initNimImportSpec(false, @[filename])
+              wrappedFile.exports.incl filename
 
               if file.newFile notin addedRel:
                 addedRel.incl file.newFile
                 result.add file
 
               moved = true
+
               break
 
           if not moved and entry.kind in {gekForward}:
-            notice "Removing forward declaration", entry.cdecl().ident
             entry[] = newGenEntry(GenPass(iinfo: currIINfo()))[]
+
 
 
 
@@ -588,22 +636,15 @@ proc wrapFiles*(
       isGenerated: false, baseFile: file.filename)
 
     # Generate necessary default imports for all files
-    resFile.entries.add initGenImport(@["bitops"], currIInfo())
-    resFile.entries.add initGenImport(@["hcparse", "wraphelp"], currIInfo())
-
-    when false: # QUESTION I don't even remember what this thing does
-      if not isNil(conf.userCode):
-        tmpRes.add newWrappedEntry(
-          toNimDecl(conf.userCode(parsed.filename)),
-          false, currIInfo(), CXCursor()
-        )
+    # resFile.imports.incl initNimImportSpec(true, @["bitops"])
+    # resFile.imports.incl initNimImportSpec(true, @["hcparse", "wraphelp"])
 
     for node in file.explicitDeps.mapIt(
         conf.getImport(it, conf, false)).
         deduplicate():
 
       # Add imports for explicit dependencies
-      resFile.entries.add initGenImport(node, currIInfo())
+      resFile.imports.incl node
 
     # Add wrapper for main API unit
     resFile.entries.add file.api.wrapApiUnit(conf, cache, index)
@@ -631,6 +672,9 @@ proc wrapFile*(
   # last type encounter will always be it's definition.
   var res: Table[string, WrappedEntry]
   var tmpRes: seq[WrappedEntry] = wrapped.entries.toNNode(wrapConf, cache)
+
+
+
 
   for elem in tmpRes:
     case elem.decl.kind:
@@ -664,6 +708,28 @@ proc wrapFile*(
       of nekProcDecl, nekMultitype:
         discard
 
+  wrapped.imports.incl initNimImportSpec(true, @["std", "bitops"])
+  wrapped.imports.incl initNimImportSpec(true, @["hcparse", "wraphelp"])
+  result.add wrapped.imports.toNNode().
+    toNimDecl().newWrappedEntry(false, currIInfo())
+
+  if wrapped.exports.len > 0:
+    result.add nnkExportStmt.newTree(
+      wrapped.exports.mapIt(newPIdent(it))).
+      toNimDecl().newWrappedEntry(false, currIInfo())
+
+  # Insert user-supplied code elements
+  var addPost: seq[WrappedEntry]
+  if not isNil(wrapConf.userCode):
+    let (node, post) = wrapConf.userCode(wrapped)
+    let entry = newWrappedEntry(toNimDecl(node), post, currIInfo())
+    if not isNil(node):
+      if post:
+        addPost.add entry
+
+      else:
+        result.add entry
+
   block:
     let elems = collect(newSeq):
       for _, wrapEntry in mpairs(res):
@@ -672,6 +738,8 @@ proc wrapFile*(
 
     result.add(newWrappedEntry(
       toNimDecl(elems), false, currIINfo()))
+
+  result.add addPost
 
   for elem in mitems(tmpRes):
     case elem.decl.kind:

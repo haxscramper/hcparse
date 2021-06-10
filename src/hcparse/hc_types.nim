@@ -387,8 +387,9 @@ type
     # ## `cursor`. `id` is a fully qualified/namespaced path for definition
     # ## (like `std::vector`)
 
-    userCode*: proc(source: AbsFile): PNode ## Add arbitarry user-defined
-    ## code at the start of generated wrapper for `source` file.
+    userCode*: proc(file: WrappedFile): tuple[node: PNode, postTypes: bool] ## Add
+    ## arbitarry user-defined code at the start of generated wrapper for
+    ## `source` file.
 
     newProcCb*: proc(
       genProc: var GenProc, conf: WrapConf, cache: var WrapCache
@@ -532,6 +533,7 @@ type
     isCTypedef*: bool
     name*: string ## Converted nim name
     values*: seq[GenEnumValue] ## Filtered, ordered sequence of values
+    auxGen*: seq[GenEntry]
 
   GenAlias* = ref object of GenBase
     isDistinct*: bool
@@ -601,6 +603,8 @@ type
 
   WrappedFile* = ref object
     entries*: seq[GenEntry]
+    imports*: HashSet[NimImportSpec]
+    exports*: HashSet[string]
     case isGenerated*: bool ## File was generated from strongly linked
                             ## cluster of forward-declared types.
       of true:

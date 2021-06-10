@@ -1,7 +1,8 @@
 import
   std/[
     strutils, sequtils, strformat, tables,
-    lenientops, parseutils, bitops, with, sets
+    lenientops, parseutils, bitops, with, sets,
+    hashes
   ]
 
 import
@@ -210,7 +211,7 @@ proc wrapProcedure*(
   for arg in pr.arguments:
     var argType = arg.cursor.cxType().toNimType(conf)
     if arg.cursor.cxType().isEnum():
-      argType.nimName &= conf.isImportCpp.tern("Cxx", "C")
+      argType.nimName &= conf.importX().capitalizeAscii()
 
     if argType.kind in {ctkIdent}:
       if argType.nimName == "UNEXPOSED":
@@ -760,7 +761,7 @@ proc updateFieldExport*(
     if fld.cursor.cxType().isEnum():
       # Proxy enum wrapper generator changes enum names, meaning all C/C++
       # enum fields should be renamed too.
-      res.fieldType.nimName &= conf.isImportCpp.tern("Cxx", "C")
+      res.fieldType.nimName &= conf.importX().capitalizeAscii()
 
     gen.memberFields.add res
 
@@ -844,7 +845,6 @@ proc makeGenEnum*(
     iinfo: currIInfo(),
     rawName: nt.nimName & conf.importX().capitalizeAscii(),
     name: nt.nimName
-    # docComment: @[declEn.ident.docCommentFor()]
   )
 
   # Nim proxy proc declaration.
@@ -953,7 +953,7 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConf, cache: var WrapCache): seq[GenEntr
   ##
   ## In order to perform conversion between 'proxy' and underlying enum
   ## several helper procs are introduces, such as `toInt`.
-  let gen = makeGenEnum(
+  var gen = makeGenEnum(
     declEn,
     declEn.enumFields.sortedByIt(it[1]).deduplicate(isSorted = true),
     conf, cache
@@ -961,8 +961,7 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConf, cache: var WrapCache): seq[GenEntr
 
   cache.genEnums.add gen
   result.add gen
-  result.add makeEnumConverters(gen, conf, cache)
-
+  gen.auxGen.add makeEnumConverters(gen, conf, cache)
 
 proc evalTokensInt(strs: seq[string]): Option[int64] =
   let str = strs.join(" ")
@@ -1199,7 +1198,8 @@ proc toNNode*(gen: GenProc, wrapConf: WrapConf): PProcDecl =
   if gen.impl.isSome():
     result.impl = gen.impl.get()
 
-proc toNNode*(gen: GenEnum, conf: WrapConf): (PEnumDecl, PEnumDecl) =
+proc toNNode*(
+    gen: GenEnum, conf: WrapConf, cache: var WrapCache): seq[WrappedEntry] =
   block:
     var rawEnum = newPEnumDecl(gen.rawName, iinfo = currIInfo())
     rawEnum.addDocComment gen.docComment.join("\n")
@@ -1225,7 +1225,8 @@ proc toNNode*(gen: GenEnum, conf: WrapConf): (PEnumDecl, PEnumDecl) =
       rawEnum.addField(value.resCName, some newPLit(value.resVal))
 
 
-    result[0] = rawEnum
+    result.add newWrappedEntry(
+      rawEnum.toNimDecl(), true, currIInfo(), gen.cdecl)
 
   block:
     var nimEnum = newPEnumDecl(gen.name, iinfo = currIInfo())
@@ -1236,7 +1237,12 @@ proc toNNode*(gen: GenEnum, conf: WrapConf): (PEnumDecl, PEnumDecl) =
         value.resNimName, docComment = value.docComment.join("\n")
       )
 
-    result[1] = nimEnum
+    result.add newWrappedEntry(
+      nimEnum.toNimDecl(), true, currIInfo())
+
+  for aux in gen.auxGen:
+    result.add toNNode(aux, conf, cache)
+
 
 proc toNNode*(
     gen: GenObject, conf: WrapConf; cache: var WrapCache
@@ -1345,6 +1351,21 @@ proc toNNode*(gen: GenAlias, conf: WrapConf): AliasDecl[PNode] =
     newType: gen.newAlias.toNType()
   )
 
+# func toPath*(importSpec: NimImportSpec): seq[string] =
+#   if importSpec.isRelative:
+#     if importSpec.relativeDepth == 0:
+#       result.add "."
+
+#     else:
+#       result.add repeat("..", importSpec.relativeDepth)
+
+#   result.add importSpec.importPath
+
+func hash*(spec: NimImportSpec): Hash =
+  !$(hash(spec.importPath) !&
+     hash(spec.isRelative) !&
+     tern(spec.isRelative, hash(spec.relativeDepth), hash(true)))
+
 func toNNode*(names: NimImportSpec): PNode =
   var elements: seq[PNode]
   var imports = names.importPath
@@ -1370,6 +1391,8 @@ func toNNode*(names: NimImportSpec): PNode =
     foldl(elements, nnkInfix.newPTree(newPident("/"), a, b))
   )
 
+func toNNode*(imports: HashSet[NimImportSpec]): PNode =
+  nnkImportStmt.newPTree(imports.mapIt(it.toNNode()[0]))
 
 
 proc toNNode*(gen: GenImport, conf: WrapConf): WrappedEntry =
@@ -1385,12 +1408,13 @@ proc toNNode*(gen: GenImport, conf: WrapConf): WrappedEntry =
 proc toNNode*(gen: GenEntry, conf: WrapConf, cache: var WrapCache): seq[WrappedEntry] =
   case gen.kind:
     of gekEnum:
-      let (e1, e2) = toNNode(gen.genEnum, conf)
-      result.add toNimDecl(e1).newWrappedEntry(
-        true, gen.genEnum.iinfo, gen.cdecl)
+      result.add toNNode(gen.genEnum, conf, cache)
+      # let (e1, e2) =
+      # result.add toNimDecl(e1).newWrappedEntry(
+      #   true, gen.genEnum.iinfo, gen.cdecl)
 
-      result.add toNimDecl(e2).newWrappedEntry(
-        true, gen.genEnum.iinfo, gen.cdecl)
+      # result.add toNimDecl(e2).newWrappedEntry(
+      #   true, gen.genEnum.iinfo, gen.cdecl)
 
     of gekPass:
       result.add gen.genPass.passEntries
