@@ -432,6 +432,14 @@ proc dependentComponents(graph: TypeGraph): seq[TypeGroup] =
   return groups
 
 
+proc groupFile(group: TypeGroup, graph: TypeGraph): string =
+    var files: HashSet[seq[string]]
+    for node in group.nodes:
+      files.incl graph[node].path
+
+    mapIt(files, it.sorted().join("_")).join("_")
+
+
 proc dotRepr(typeGraph: TypeGraph, groups: seq[TypeGroup] = @[]): DotGraph =
   var fileMarks: MarkTable[string, TermColor8Bit]
   result = typeGraph.dotRepr(
@@ -456,18 +464,9 @@ proc dotRepr(typeGraph: TypeGraph, groups: seq[TypeGroup] = @[]): DotGraph =
         of forwardReuse: makeDotEdge(edsDotted)
     ,
 
-    clusters = groups.mapIt((
-      it.nodes,
-      block:
-        var files: HashSet[seq[string]]
-        for node in it.nodes:
-          files.incl typeGraph[node].path
-
-        mapIt(files, it.joinq("/")).join(", ")
-    ))
+    clusters = groups.mapIt((it.nodes, it.groupFile(typeGraph)))
   )
 
-  # result.rankdir = grdLeftRight
   result.bgColor = some colLightSlateGray
   result.ranksep = some 1.2
 
@@ -485,11 +484,14 @@ proc patchForward*(
 
   var
     droppedForward: HashSet[CXCursor]
-    movedForward: seq[tuple[
-      cursors: HashSet[CXCursor], file: WrappedFile]]
+    # movedForward: seq[tuple[
+    #   cursors: HashSet[CXCursor], file: WrappedFile]]
 
   let components = typeGraph.dependentComponents()
   typeGraph.dotRepr(components).toPng(getAppTempFile("forwardComponents.png"))
+
+
+  var movedForward: Table[string, tuple[cursors: Hashset[CXCursor], file: WrappedFile]]
 
   for group in components:
     # info group.nodes.mapIt(typeGraph[it].name)
@@ -518,21 +520,23 @@ proc patchForward*(
         file = f
         break
 
-      movedForward.add((cursors, WrappedFile(
-        isGenerated: true,
-        # HACK FIXME assuming all files are located in a single directory,
-        # which is most likely not the case.
-        relativeTo: file,
-        # HACK hardcoded testing file name
-        newFile: RelFile("a.nim")
-      )))
+      let newFile = group.groupFile(typeGraph)
+      if newFile notin movedForward:
+        movedForward[newFile] = (cursors, WrappedFile(
+          isGenerated: true,
+          # HACK FIXME assuming all files are located in a single directory,
+          # which is most likely not the case.
+          relativeTo: file,
+          newFile: RelFile(newFile & ".nim")
+        ))
 
-
+      else:
+        movedForward[newFile].cursors.incl cursors
 
   for file in mitems(wrapped):
     for entry in mitems(file.entries):
       if entry.hasCDecl():
-        for (cursors, file) in mitems(movedForward):
+        for _, (cursors, file) in mpairs(movedForward):
           if entry.cdecl().cursor in cursors:
             if entry.kind notin {gekForward}:
               file.entries.add entry
@@ -548,12 +552,12 @@ proc patchForward*(
 
         else:
           var moved: bool = false
-          for (cursors, file) in movedForward:
+          for filename, (cursors, file) in movedForward:
             if entry.cdecl().cursor in cursors:
               # notice "Importing forward cluster", entry.cdecl().ident
               entry = newGenEntry(
                 # HACK hardcoded testing file name
-                initGenImport(@["a"], currIInfo()))
+                initGenImport(@[fileName], currIInfo()))
 
               if file.newFile notin addedRel:
                 addedRel.incl file.newFile
