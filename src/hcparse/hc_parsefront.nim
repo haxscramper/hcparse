@@ -491,25 +491,7 @@ proc dependentComponents(graph: TypeGraph): seq[TypeGroup] =
         # struct User { Forward* forward; Other other; };
         # struct Forward { User* user; }
         # ```
-
-        if node in groupedNodes:
-          # Not already placed in one of the clusters and would have to be
-          # imported.
-          #
-          # FIXME when clusters are merged this might lead to self-imports
-          # where node, previously placed in external file is now moved to
-          # the generated.
-          # if node notin group.nodes:
-          # debug graph[node].name, "depends on external", file.name(), node in group.nodes
-          # externalFiles.incl file
-
-          result = false
-
-        else:
-          result = true
-
-
-
+        result = node notin groupedNodes
 
       else:
         # If requires external file do not extend group, but store file
@@ -520,14 +502,6 @@ proc dependentComponents(graph: TypeGraph): seq[TypeGroup] =
 
     groups[idx].nodes.incl extendedGroup
     groups[idx].imports.incl externalFiles
-
-    # notice groups[idx].groupFile(graph), "imports"
-    # for file in externalFiles:
-    #   logIndented: debug file.name()
-    # groups[idx].imports.excl groups[idx].files
-
-    # debug groups[idx].files
-    # debug groups[idx].imports
 
   return groups
 
