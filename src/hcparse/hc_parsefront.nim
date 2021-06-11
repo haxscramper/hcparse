@@ -716,6 +716,8 @@ proc wrapFiles*(
       # Add imports for explicit dependencies
       resFile.imports.incl node
 
+
+    conf.unit = file.unit
     # Add wrapper for main API unit
     resFile.entries.add file.api.wrapApiUnit(conf, cache, index)
     genFiles.add resFile

@@ -687,11 +687,19 @@ proc add*(genSeq: var seq[GenEntry], gen: AnyGenEntry) =
   genSeq.add newGenEntry(gen)
 
 proc hasCdecl*(gen: GenEntry): bool =
-  (gen.kind in {gekForward}) or
-  (
-    (not gen.isGenerated) and
-    (gen.kind notin {gekPass, gekImport})
+  nor(
+    (gen.kind in {gekEnum} and gen.genEnum.isMacroEnum),
+    (gen.isGenerated),
+    (gen.kind in {gekPass, gekImport})
   )
+
+
+  # (gen.kind in {gekForward}) or
+  # (
+  #   (not gen.isGenerated) and
+  #   (not (gen.kind in {gekEnum}) and)
+  #   (gen.kind notin {gekPass, gekImport})
+  # )
 
 proc cdecl*(gen: GenEntry): CDecl =
   assert gen.hasCdecl(),
@@ -705,6 +713,8 @@ proc cdecl*(gen: GenEntry): CDecl =
     of gekForward: result = gen.genForward.cdecl
     of gekPass, gekImport:
       discard
+
+  assert notNil(result)
 
 proc getSpellingLocation*(entry: GenEntry): AbsFile =
   entry.cdecl().cursor.getSpellingLocation.get().file
@@ -978,12 +988,13 @@ proc toHaxdocJson*(ns: CScopedIdent): JsonNode =
         of ckFieldDecl: %"Field"
         of ckEnumDecl: %"Enum"
         of ckEnumConstantDecl: %"EnumField"
+        of ckMacroDefinition: %"CMacro"
         else:
           raise newImplementKindError(part.cursor.cxKind())
 
     identPart["kind"] = kind
 
-    if part.cursor.kind in {ckMethod, ckFunctionDecl}:
+    if part.cursor.kind in {ckMethod, ckFunctionDecl, ckMacroDefinition}:
       identPart["procType"] = part.cursor.cxType().toHaxdocType()
 
     result.add identPart
@@ -1109,10 +1120,14 @@ proc toHaxdocIdent*(ns: CScopedIdent): string =
       case part.cursor.kind:
         of ckMethod: result &= "method!"
         of ckFunctionDecl: result &= "proc!"
+        of ckMacroDefinition: result &= "cmacro!"
         else:
           raise newImplementKindError(part.cursor)
 
       result &= part.cursor.cxType().toHaxdocIdentType(part.getName())
+
+    elif part.cursor.kind in {ckMacroDefinition}:
+      result &= &"cmacro!{part.cursor}"
 
     else:
       case part.cursor.cxKind():
@@ -1498,7 +1513,10 @@ func toNNode*(nhs: NimHeaderSpec): PNode =
 
 
 proc docCommentFor*(ident: CScopedIdent): string =
-     &"@import{{[[code:{ident.toHaxdocIdent()}]]}}"
+  &"@import{{[[code:{ident.toHaxdocIdent()}]]}}"
+
+# proc docCommentFor*(cursor: Ident): string =
+#   &"@import{{[[code:{cursor.toHaxdocIdent()}]]}}"
 
 proc updateComments*(
     decl: var AnyNimDecl[PNode],

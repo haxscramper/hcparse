@@ -528,7 +528,11 @@ proc visitNamespace*(
 
 proc visitMacrodef*(
   cursor: CXCursor, parent: CScopedIdent, conf: WrapConf): CDecl =
-  CDecl(cursor: cursor, kind: cdkMacro)
+  CDecl(
+    cursor: cursor,
+    kind: cdkMacro,
+    ident: @[toCName(cursor)]
+  )
 
 
 proc visitCursor*(

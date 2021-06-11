@@ -989,7 +989,8 @@ proc evalTokensInt(strs: seq[string]): Option[int64] =
             of "-": some lhs - rhs
             of "/": some lhs div rhs
             of "*": some lhs * rhs
-            else: raiseImplementError(op)
+            else: raise newImplementError(
+              "Operator is not implemented for Cxx AST evaluation: ", op)
 
       of cppTranslationUnit, cppSyntaxError, cppExpressionStatement,
          cppParenthesizedExpression:
@@ -999,7 +1000,10 @@ proc evalTokensInt(strs: seq[string]): Option[int64] =
         discard
 
       else:
-        raiseImplementError(node.treeRepr(str))
+        raise newImplementError(
+          "Cannot evaluate integer expression from tree:\n",
+          node.treeRepr(str)
+        )
 
 
 
@@ -1019,9 +1023,11 @@ proc wrapMacroEnum*(
   let enumPref = conf.prefixForEnum(@[toCName(prefix)], conf, cache)
   var enumFields: seq[GenEnumValue]
   for val in values:
+    assert val.kind == cdkMacro
     let toks = val.cursor.tokenStrings(conf.unit)
     # FIXME range breaks on `#define func(arg)`
-    let value = evalTokensInt(toks[1 ..^ 1])
+    let idx = 1
+    let value = evalTokensInt(toks[idx ..^ 1])
     let name = enumPref & toks[0].splitCamel()[1..^1].capitalAscii().join("")
 
     if value.isSome():
@@ -1077,13 +1083,11 @@ proc wrapMacros*(
       let split = split($decl.cursor, "_")
       let pref = commonPrefix(@[lastSplit, split])
       # If has any common prefix with last split, add it
-      # debug $split, $lastSplit, $pref
       if pref != prefix and lastSplit.len > 0:
         buf = @[]
 
       if prefix.len == 0 or pref == prefix:
-        if pref.len > 0 # or lastSplit.len == 0
-          :
+        if pref.len > 0:
           buf.add decl
           prefix = pref
 
@@ -1202,45 +1206,60 @@ proc toNNode*(gen: GenProc, wrapConf: WrapConf): PProcDecl =
 
 proc toNNode*(
     gen: GenEnum, conf: WrapConf, cache: var WrapCache): seq[WrappedEntry] =
-  block:
-    var rawEnum = newPEnumDecl(gen.rawName, iinfo = currIInfo())
-    rawEnum.addDocComment gen.docComment.join("\n")
-    rawEnum.exported = true
-
-    let importName =
-      if conf.isImportcpp or gen.isCTypedef:
-        toCppNamespace(gen.cdecl.ident)
-
-      else:
-        "enum " & toCppNamespace(gen.cdecl.ident)
-
-    rawEnum.pragma.add newPIdentColonString(conf.importX(), importName)
-
-    rawEnum.pragma.add nnkExprColonExpr.newPTree(
-      newPIdent("header"),
-      conf.makeHeader(gen.cdecl.cursor, conf).toNNode()
-    )
-
+  if gen.isMacroEnum:
+    var rawEnum = newPEnumDecl(gen.proxyName, iinfo = currIInfo())
     rawEnum.exported = true
 
     for value in gen.values:
-      rawEnum.addField(value.resCName, some newPLit(value.resVal))
-
-
-    result.add newWrappedEntry(
-      rawEnum.toNimDecl(), true, currIInfo(), gen.cdecl)
-
-  block:
-    var nimEnum = newPEnumDecl(gen.name, iinfo = currIInfo())
-    nimEnum.addDocComment gen.docComment.join("\n")
-    nimEnum.exported = true
-    for value in gen.values:
-      nimEnum.addField(
-        value.resNimName, docComment = value.docComment.join("\n")
+      rawEnum.addField(
+        value.resNimName,
+        some newPLit(value.resVal),
+        docComment = value.cdecl.ident.docCommentFor()
       )
 
     result.add newWrappedEntry(
-      nimEnum.toNimDecl(), true, currIInfo())
+      rawEnum.toNimDecl(), true, currIInfo())
+
+  else:
+    block:
+      var rawEnum = newPEnumDecl(gen.rawName, iinfo = currIInfo())
+      rawEnum.addDocComment gen.docComment.join("\n")
+      rawEnum.exported = true
+
+      let importName =
+        if conf.isImportcpp or gen.isCTypedef:
+          toCppNamespace(gen.cdecl.ident)
+
+        else:
+          "enum " & toCppNamespace(gen.cdecl.ident)
+
+      rawEnum.pragma.add newPIdentColonString(conf.importX(), importName)
+
+      rawEnum.pragma.add nnkExprColonExpr.newPTree(
+        newPIdent("header"),
+        conf.makeHeader(gen.cdecl.cursor, conf).toNNode()
+      )
+
+      rawEnum.exported = true
+
+      for value in gen.values:
+        rawEnum.addField(value.resCName, some newPLit(value.resVal))
+
+
+      result.add newWrappedEntry(
+        rawEnum.toNimDecl(), true, currIInfo(), gen.cdecl)
+
+    block:
+      var nimEnum = newPEnumDecl(gen.name, iinfo = currIInfo())
+      nimEnum.addDocComment gen.docComment.join("\n")
+      nimEnum.exported = true
+      for value in gen.values:
+        nimEnum.addField(
+          value.resNimName, docComment = value.docComment.join("\n")
+        )
+
+      result.add newWrappedEntry(
+        nimEnum.toNimDecl(), true, currIInfo())
 
   for aux in gen.auxGen:
     result.add toNNode(aux, conf, cache)
