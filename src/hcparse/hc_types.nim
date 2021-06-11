@@ -412,6 +412,9 @@ type
     nimOutDir*: AbsDir ## Root directory to write files to
 
     refidFile*: RelFile
+    wrapName*: Option[string] ## Optional name of the wrapped library. Used
+    ## by default implementation of `getImport` when creating external
+    ## imports.
 
 
   WrapEntryPosition = object
@@ -702,6 +705,20 @@ proc cdecl*(gen: GenEntry): CDecl =
     of gekForward: result = gen.genForward.cdecl
     of gekPass, gekImport:
       discard
+
+proc getSpellingLocation*(entry: GenEntry): AbsFile =
+  entry.cdecl().cursor.getSpellingLocation.get().file
+
+
+proc iinfo*(gen: GenEntry): LineInfo =
+  case gen.kind:
+    of gekEnum: result = gen.genEnum.iinfo
+    of gekProc: result = gen.genProc.iinfo
+    of gekObject: result = gen.genObject.iinfo
+    of gekAlias: result = gen.genAlias.iinfo
+    of gekForward: result = gen.genForward.iinfo
+    of gekPass: result = gen.genPass.iinfo
+    of gekImport: result = gen.genImport.iinfo
 
 
 proc newProcVisit*(
@@ -1136,6 +1153,9 @@ proc importX*(conf: WrapConf): string =
 
   else:
     "importc"
+
+proc rawSuffix*(conf: WrapConf): string =
+  "C"
 
 proc setPrefixForEnum*(
   wrapConf: var WrapConf, maps: seq[(string, string)]) =

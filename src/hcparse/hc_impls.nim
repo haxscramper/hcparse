@@ -219,6 +219,11 @@ proc getImportUsingDependencies*(
     if config.isInLibrary(dependency, config):
       return config.getImport(dependency, config, true)
 
+proc getClangInclude*(): AbsDir =
+  let version = ($getClangVersion()).split(" ")[2] # WARNING
+  return AbsDir(&"/usr/lib/clang/{version}/include")
+
+
 proc getBuiltinHeaders*(): seq[AbsDir] =
   ## According to clang `documentation <https://clang.llvm.org/docs/LibTooling.html#builtin-includes>`_
   ## libclang is needs additional precompiled headers paths in
@@ -226,11 +231,8 @@ proc getBuiltinHeaders*(): seq[AbsDir] =
   ##
   ## NOTE right now I have zero idea how it works on windows, so I
   ## will just hardcode unix-like paths.
+  @[getClangInclude()]
 
-  let version = ($getClangVersion()).split(" ")[2] # WARNING
-  @[
-    toAbsDir &"/usr/lib/clang/{version}/include"
-  ]
 
 let baseCppParseConf* = ParseConf(
   includepaths: getBuiltinHeaders(),
@@ -260,21 +262,19 @@ let baseCppWrapConf* = WrapConf(
   getImport: (
     proc(dep: AbsFile, conf: WrapConf, isExternalImport: bool):
       NimImportSpec {.closure.} =
-      # if dep.startsWith("/usr/include/c++"):
-      #   let (dir, name, ext) = dep.splitFile()
-      #   @["cxxstd", "cxx_" & name.fixFileName()]
-      # else:
       let (dir, name, ext) = dep.splitFile()
       result = initNimImportSpec(
         isExternalImport,
         @[
           name.splitCamel().
             mapIt(it.toLowerAscii()).join("_").
-            fixFileName()
-        ]
-      )
+            fixFileName()])
 
-      if not isExternalImport:
+      if isExternalImport:
+        if conf.wrapName.isSome():
+          result.importPath = conf.wrapName.get() & result.importPath
+
+      else:
         updateForInternalImport(dep, conf, conf.baseDir, result)
   ),
   typeNameForScoped: (

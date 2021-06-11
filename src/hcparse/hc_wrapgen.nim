@@ -211,7 +211,7 @@ proc wrapProcedure*(
   for arg in pr.arguments:
     var argType = arg.cursor.cxType().toNimType(conf)
     if arg.cursor.cxType().isEnum():
-      argType.nimName &= conf.importX().capitalizeAscii()
+      argType.nimName &= conf.rawSuffix()
 
     if argType.kind in {ctkIdent}:
       if argType.nimName == "UNEXPOSED":
@@ -761,7 +761,7 @@ proc updateFieldExport*(
     if fld.cursor.cxType().isEnum():
       # Proxy enum wrapper generator changes enum names, meaning all C/C++
       # enum fields should be renamed too.
-      res.fieldType.nimName &= conf.importX().capitalizeAscii()
+      res.fieldType.nimName &= conf.rawSuffix()
 
     gen.memberFields.add res
 
@@ -843,7 +843,7 @@ proc makeGenEnum*(
     isMacroEnum: false,
     cdecl: declEn,
     iinfo: currIInfo(),
-    rawName: nt.nimName & conf.importX().capitalizeAscii(),
+    rawName: nt.nimName & conf.rawSuffix(),
     name: nt.nimName
   )
 
@@ -1036,7 +1036,7 @@ proc wrapMacroEnum*(
     var en = GenEnum(
       isMacroEnum: true,
       name: name,
-      proxyName: name & conf.importX(),
+      proxyName: name & conf.rawSuffix(),
       iinfo: currIINfo(),
       cdecl: nil,
       values: enumFields.sortedByIt(it.resVal)

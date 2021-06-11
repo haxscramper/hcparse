@@ -306,105 +306,132 @@ proc getTypeGraph(
   for file in mitems(wrapped):
     var extraEntries: seq[GenEntry]
     for entry in file.entries:
-      if entry.kind in {gekProc}:
-        # It is possible to use `enum` type without declaring it in the
-        # same translation unit (let alone defining). So wonders like this
-        # are entirely possible.
-        #
-        # ```c
-        # struct	mparse;
-        # struct mparse	 *mparse_alloc(int, enum mandoc_os);
-        # ```
-        #
-        # I suppose (TODO REVIEW) current algorithm
-        # will be able to handle use of enum *and* forward declaration as
-        # well (e.g. `enum mandoc_os` was used in procedure but
-        # forward-declared) in the file as well.
-        var procTypes: seq[NimType]
-        for arg in entry.genProc.arguments:
-          if not arg.isRaw:
-            procTypes.add arg.nimType
+      case entry.kind:
+        of gekProc:
+          # It is possible to use `enum` type without declaring it in the
+          # same translation unit (let alone defining). So wonders like this
+          # are entirely possible.
+          #
+          # ```c
+          # struct	mparse;
+          # struct mparse	 *mparse_alloc(int, enum mandoc_os);
+          # ```
+          #
+          # I suppose (TODO REVIEW) current algorithm
+          # will be able to handle use of enum *and* forward declaration as
+          # well (e.g. `enum mandoc_os` was used in procedure but
+          # forward-declared) in the file as well.
+          var procTypes: seq[NimType]
+          for arg in entry.genProc.arguments:
+            if not arg.isRaw:
+              procTypes.add arg.nimType
 
-        procTypes.add entry.genProc.returnType
+          procTypes.add entry.genProc.returnType
 
-        var hasEnumArg = false
-        var cdecl = CDecl()
-        for it in procTypes:
-          for used in it.allUsedTypes():
-            let decl = used.cxType.getTypeDeclaration()
-            if decl.cxKind() in {ckEnumDecl} and decl.isForward():
-              hasEnumArg = true
-              cdecl[] = entry.cdecl()[]
-              cdecl.cursor = decl
-              let
-                loc = decl.getSpellingLocation().get()
-                path = conf.getImport(loc.file, conf, false).importPath
-                node = initTypeNode(
-                  used.nimName, path,
-                  cdecl.cursor, isDef = false)
+          var hasEnumArg = false
+          var cdecl = CDecl()
+          for it in procTypes:
+            for used in it.allUsedTypes():
+              let decl = used.cxType.getTypeDeclaration()
+              if decl.cxKind() in {ckEnumDecl} and decl.isForward():
+                hasEnumArg = true
+                cdecl[] = entry.cdecl()[]
+                cdecl.cursor = decl
+                let
+                  loc = decl.getSpellingLocation().get()
+                  path = conf.getImport(loc.file, conf, false).importPath
+                  node = initTypeNode(
+                    used.nimName, path,
+                    cdecl.cursor, isDef = false)
 
-              let enumNode = result.addOrGetNode(node)
+                let enumNode = result.addOrGetNode(node)
 
-        if hasEnumArg:
-          # Adding nonexistent forward declaration for it to be removed
-          # (and replaced) with corresponding import/export pair during
-          # drop/move phase.
-          extraEntries.add GenForward(
-            iinfo: currIInfo(), cdecl: cdecl)
+          if hasEnumArg:
+            # Adding nonexistent forward declaration for it to be removed
+            # (and replaced) with corresponding import/export pair during
+            # drop/move phase.
+            extraEntries.add GenForward(
+              iinfo: currIInfo(), cdecl: cdecl)
 
-      elif entry.kind in {gekObject}:
-        # Get node for current type
-        var objectNode = result.addOrGetNode(
-          initTypeNode(
-            entry.genObject.name.nimName,
-            conf.getImport(
-              entry.cdecl.cursor.getSpellingLocation.get().file,
-              conf, false).importPath,
-            entry.cdecl.cursor,
-            true
-        ))
 
-        if result[objectNode].declareFile.isSome():
-          # Declaration file is added each node. One node is created for
-          # each unique `entry.genObject.name` ecountered. If node with
-          # given name already exists it either means tha algorithm is bad,
-          # or there is a two identically-named types somewhere. Which not
-          # impossible - even more, it can happen quite easily. So I need
-          # to IMPLEMENT some way for additional disambiguation of a type
-          # based on where it is *declared*. But then I have to somehow
-          # deal with type being referenced (and in that case I only know a
-          # type name)
-          raiseImplementError(
-            "Multiple file declarations for type " & $entry.genObject.name)
+        of gekObject:
+          # Get node for current type
+          var objectNode = result.addOrGetNode(
+            initTypeNode(
+              entry.genObject.name.nimName,
+              conf.getImport(
+                entry.getSpellingLocation(), conf, false).importPath,
+              entry.cdecl.cursor,
+              true
+          ))
+
+          if result[objectNode].declareFile.isSome():
+            # Declaration file is added each node. One node is created for
+            # each unique `entry.genObject.name` ecountered. If node with
+            # given name already exists it either means tha algorithm is bad,
+            # or there is a two identically-named types somewhere. Which not
+            # impossible - even more, it can happen quite easily. So I need
+            # to IMPLEMENT some way for additional disambiguation of a type
+            # based on where it is *declared*. But then I have to somehow
+            # deal with type being referenced (and in that case I only know a
+            # type name)
+            raiseImplementError(
+              "Multiple file declarations for type " & $entry.genObject.name)
+
+          else:
+            result[objectNode].declareFile = some(file)
+
+          # Add outgoing edges for all types that were explicitly used.
+          # info entry.genObject.name.nimName
+          for field in entry.genObject.memberFields:
+            for used in field.fieldType.allUsedTypes():
+              if not used.isPodHead():
+                if used.fromCXtype:
+                  # QUESTION what about `int` fields, or other types that are
+                  # either not wrapped at all, or wrapped using some convoluted
+                  # multi-stage generics?
+                  #
+                  # QUESTION 2 now I'm not sure what previous question was
+                  # about, so I need to figure /that/ out too.
+                  let
+                    decl = used.cxType.getTypeDeclaration()
+                    loc = decl.getSpellingLocation.get()
+                    path = conf.getImport(loc.file, conf, false).importPath
+
+                  let node = initTypeNode(
+                    used.nimName, path, decl, not isForward(decl))
+
+                  discard result.addOrGetEdge(
+                    objectNode,
+                    result.addOrGetNode(node),
+                    if isForward(decl): forward else: direct
+                  )
+
+        of gekForward:
+          var objectNode = result.addOrGetNode(
+            initTypeNode(
+              conf.typeNameForScoped(entry.cdecl().ident, conf).nimName,
+              conf.getImport(
+                entry.getSpellingLocation(), conf, false).importPath,
+              entry.cdecl().cursor,
+              false
+            )
+          )
+          # let name =
+          # info "Ignoring entry", entry.cdecl().ident, entry.kind
+          # debug name
+          # debug entry.iinfo
 
         else:
-          result[objectNode].declareFile = some(file)
+          discard
+        # of gekForward:
+        #   var node = result.addOrGetNode(
+        #     initNodeType(
+        #       entry.
+        #     )
+        #   )
 
-        # Add outgoing edges for all types that were explicitly used.
-        # info entry.genObject.name.nimName
-        for field in entry.genObject.memberFields:
-          for used in field.fieldType.allUsedTypes():
-            if not used.isPodHead():
-              if used.fromCXtype:
-                # QUESTION what about `int` fields, or other types that are
-                # either not wrapped at all, or wrapped using some convoluted
-                # multi-stage generics?
-                #
-                # QUESTION 2 now I'm not sure what previous question was
-                # about, so I need to figure /that/ out too.
-                let
-                  decl = used.cxType.getTypeDeclaration()
-                  loc = decl.getSpellingLocation.get()
-                  path = conf.getImport(loc.file, conf, false).importPath
 
-                let node = initTypeNode(
-                  used.nimName, path, decl, not isForward(decl))
-
-                discard result.addOrGetEdge(
-                  objectNode,
-                  result.addOrGetNode(node),
-                  if isForward(decl): forward else: direct
-                )
 
     file.entries.add extraEntries
 
@@ -416,29 +443,41 @@ proc getTypeGraph(
 type
   TypeGroup = object
     nodes: HNodeSet
+    imports: HashSet[AbsFile]
     files: HashSet[AbsFile]
     external: HashSet[AbsFile]
 
 proc nodeFile(graph: TypeGraph, node: HNode): AbsFile =
   graph[node].cursor.getSpellingLocation().get().file
 
+proc groupFile(group: TypeGroup, graph: TypeGraph): string =
+    var files: HashSet[seq[string]]
+    for node in group.nodes:
+      files.incl graph[node].path
+
+    mapIt(files, it.sorted().join("_")).join("_")
+
 proc dependentComponents(graph: TypeGraph): seq[TypeGroup] =
   var groups: seq[TypeGroup]
-  var inGroup: HNodeSet
-  for path in graph.findCycles(ignoreSelf = true):
-    var group = TypeGroup(nodes: path.toSet())
+  var groupedNodes: HNodeSet
+  for path in graph.findCycles(ignoreSelf = true).mergeCycleSets():
+    var group = TypeGroup(nodes: path)
     for node in group.nodes:
       group.files.incl graph.nodeFile(node)
 
-    inGroup.incl group.nodes
+    groupedNodes.incl group.nodes
     groups.add group
 
 
   # Extend each type group with dependencies located in the same file(s).
   # Take note of the all external dependendencies.
   for idx, group in pairs(groups):
-    var externalFiles: seq[AbsFile]
-    let extendedGroup = extendOutgoing(graph, group.nodes) do(node: HNode) -> bool:
+    # Collect external files but only add them later to avoid repeated
+    # extension of the outgoing node set.
+    var externalFiles: HashSet[AbsFile]
+    let extendedGroup = extendOutgoing(
+      graph, group.nodes) do(node: HNode) -> bool:
+
       let file = graph.nodeFile(node)
       if file in group.files:
         # If node describes type located in file that is already in the
@@ -453,27 +492,44 @@ proc dependentComponents(graph: TypeGraph): seq[TypeGroup] =
         # struct Forward { User* user; }
         # ```
 
-        result = node notin inGroup
+        if node in groupedNodes:
+          # Not already placed in one of the clusters and would have to be
+          # imported.
+          #
+          # FIXME when clusters are merged this might lead to self-imports
+          # where node, previously placed in external file is now moved to
+          # the generated.
+          # if node notin group.nodes:
+          # debug graph[node].name, "depends on external", file.name(), node in group.nodes
+          # externalFiles.incl file
+
+          result = false
+
+        else:
+          result = true
+
+
+
 
       else:
         # If requires external file do not extend group, but store file
         # path
-        externalFiles.add file
+        externalFiles.incl file
         result = false
 
+
     groups[idx].nodes.incl extendedGroup
-    for file in externalFiles:
-      groups[idx].files.incl file
+    groups[idx].imports.incl externalFiles
+
+    # notice groups[idx].groupFile(graph), "imports"
+    # for file in externalFiles:
+    #   logIndented: debug file.name()
+    # groups[idx].imports.excl groups[idx].files
+
+    # debug groups[idx].files
+    # debug groups[idx].imports
 
   return groups
-
-
-proc groupFile(group: TypeGroup, graph: TypeGraph): string =
-    var files: HashSet[seq[string]]
-    for node in group.nodes:
-      files.incl graph[node].path
-
-    mapIt(files, it.sorted().join("_")).join("_")
 
 
 proc dotRepr(typeGraph: TypeGraph, groups: seq[TypeGroup] = @[]): DotGraph =
@@ -556,13 +612,18 @@ proc patchForward*(
 
       let newFile = group.groupFile(typeGraph)
       if newFile notin movedForward:
-        movedForward[newFile] = (cursors, WrappedFile(
+        var genFile = WrappedFile(
           isGenerated: true,
           # HACK FIXME assuming all files are located in a single directory,
           # which is most likely not the case.
           relativeTo: file,
           newFile: RelFile(newFile & ".nim")
-        ))
+        )
+
+        for extern in group.imports:
+          genFile.imports.incl conf.getImport(extern, conf, false)
+
+        movedForward[newFile] = (cursors, genFile)
 
       else:
         movedForward[newFile].cursors.incl cursors
