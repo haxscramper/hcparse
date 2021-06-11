@@ -424,14 +424,19 @@ proc visitClass*(
         raiseUnexpectedKindError(cursor)
 
   var initArgs: seq[CArg]
+  let ident = parent & toCName(
+    if typedef.isSome(): typedef.get() else: cursor)
   result = CDecl(
     isAnonymous: $cursor == "",
     kind: cdkClass,
     cursor: cursor,
-    ident: parent & toCName(
-      if typedef.isSome(): typedef.get() else: cursor),
+    icpp: ident.toCppNamespace(),
+    ident: ident,
     isAggregateInit: isAggregateInitable(cursor, initArgs, conf)
   )
+
+  if not conf.isImportCpp:
+    result.icpp = "struct " & result.icpp
 
   result.kind = kind
   if result.isAggregateInit:

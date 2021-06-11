@@ -4,6 +4,8 @@ import std/[
   segfaults
 ]
 
+# import ./libclang_extensions
+
 import
   hpprint,
   hmisc/[hexceptions, helpers],
@@ -145,8 +147,9 @@ type
     ## Higher-level wrapper on top of CXCursor. Mostly used to provide more
     ## intuitive API for working with things to be wrapped.
 
-    ident*: CScopedIdent ## Fully qualified identifier (except namespaces
-    ## that were explicitly marked as 'collapsible' in wrap configuration)
+    ident* {.requiresinit.}: CScopedIdent ## Fully qualified identifier
+    ## (except namespaces that were explicitly marked as 'collapsible' in
+    ## wrap configuration)
 
     cursor*: CXCursor ## Cursor pointing to main declaration entry
     access*: CXAccessSpecifier ## Access specifier for nested class elements.
@@ -191,6 +194,7 @@ type
                                       ## constructor
         isCopyable*: bool ## Type can be copied (does not have copy
                           ## constructor deleted)
+        icpp*: string
         case isAggregateInit*: bool ## Is type subject to aggregate
                                     ## initalization?
           of true:

@@ -862,7 +862,7 @@ proc makeGenEnum*(
     if val != prev:
       prev = val
       result.values.add GenEnumValue(
-        cdecl: CDecl(cursor: name),
+        cdecl: CDecl(cursor: name, kind: cdkField, ident: @[]),
         docComment: @[docCommentFor(declEn.ident & toCName(name))],
         iinfo: currIInfo(),
         baseName: $name,
@@ -1044,7 +1044,7 @@ proc wrapMacroEnum*(
     var en = GenEnum(
       isMacroEnum: true,
       name: name,
-      proxyName: name & conf.rawSuffix(),
+      proxyName: name,
       iinfo: currIINfo(),
       cdecl: nil,
       values: enumFields.sortedByIt(it.resVal)
@@ -1271,13 +1271,14 @@ proc toNNode*(
   var decl = newPObjectDecl(gen.name.nimName, iinfo = currIInfo())
 
   assert decl.name.kind == ntkIdent, $decl.name.kind
+  assert gen.cdecl.kind in {cdkStruct, cdkUnion, cdkClass},
+      $gen.cdecl.ident & " " & $gen.cdecl.kind
 
   decl.pragma = some newPPragma(
     newPIdent("bycopy"),
     nnkExprColonExpr.newPTree(
       newPIdent(conf.importX()),
-      newPLit(gen.cdecl.ident.toCppNamespace())
-    ),
+      newPLit(gen.cdecl.icpp)),
     nnkExprColonExpr.newPTree(
       newPIdent("header"),
       conf.makeHeader(gen.cdecl.cursor, conf).toNNode()

@@ -329,7 +329,7 @@ proc getTypeGraph(
           procTypes.add entry.genProc.returnType
 
           var hasEnumArg = false
-          var cdecl = CDecl()
+          var cdecl = CDecl(kind: cdkEnum, ident: @[])
           for it in procTypes:
             for used in it.allUsedTypes():
               let decl = used.cxType.getTypeDeclaration()
@@ -675,14 +675,33 @@ proc patchForward*(
             # Forward declarations that were never defined in any of the
             # header files (pointer to implementation, opaque handlers
             # etc.)
-            if entry.cdecl().cursor.cxKind() in {ckStructDecl}:
+            if entry.cdecl().cursor.cxKind() in {
+              ckStructDecl, ckClassDecl, ckUnionDecl}:
               # Creating new wrapped entry for forward declaration.
               # `wrapObject` won't create any constructor procedures for
               # this type of object, so it can only be created using
               # pointer (i.e. used as in opaque handler)
-              warn "Dropping not moved entry", entry.cdecl().cursor.kind
+              let cd = entry.cdecl()
+              # warn "Dropping not moved entry", cd.ident
+              var cdecl =
+                case cd.cursor.cxKind():
+                  of ckStructDecl: CDecl(kind: cdkStruct, ident: cd.ident)
+                  of ckClassDecl: CDecl(kind: cdkClass, ident: cd.ident)
+                  of ckUnionDecl: CDecl(kind: cdkUnion, ident: cd.ident)
+                  else:
+                    raise newUnexpectedKindError(cd.cursor)
 
-              entry = wrapObject(entry.cdecl(), conf, cache).newGenEntry()
+              # debug cd.ident
+              cdecl.cursor = cd.cursor
+              cdecl.icpp = cd.ident.toCppNamespace()
+              if not conf.isImportCpp:
+                case cdecl.kind:
+                  of cdkUnion: cdecl.icpp = "union " & cdecl.icpp
+                  of cdkStruct: cdecl.icpp = "struct " & cdecl.icpp
+                  else:
+                    raise newUnexpectedKindError(cdecl)
+
+              entry = wrapObject(cdecl, conf, cache).newGenEntry()
 
             else:
               entry[] = newGenEntry(GenPass(iinfo: currIINfo()))[]
