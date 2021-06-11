@@ -417,19 +417,9 @@ proc getTypeGraph(
               false
             )
           )
-          # let name =
-          # info "Ignoring entry", entry.cdecl().ident, entry.kind
-          # debug name
-          # debug entry.iinfo
 
         else:
           discard
-        # of gekForward:
-        #   var node = result.addOrGetNode(
-        #     initNodeType(
-        #       entry.
-        #     )
-        #   )
 
 
 
@@ -469,9 +459,14 @@ proc dependentComponents(graph: TypeGraph): seq[TypeGroup] =
     groups.add group
 
 
+  var groupDepends: HashSet[(int, int)]
   # Extend each type group with dependencies located in the same file(s).
   # Take note of the all external dependendencies.
   for idx, group in pairs(groups):
+    # Each participates in group cluster of size 1 (at least) - this is
+    # necessary for it to not be ignored when merging group clusters
+    groupDepends.incl((idx, idx))
+
     # Collect external files but only add them later to avoid repeated
     # extension of the outgoing node set.
     var externalFiles: HashSet[AbsFile]
@@ -480,6 +475,12 @@ proc dependentComponents(graph: TypeGraph): seq[TypeGroup] =
 
       let file = graph.nodeFile(node)
       if file in group.files:
+        # Take note of each intergroup dependency
+        if node in groupednodes:
+          for targetIdx, targetGroup in pairs(groups):
+            if node in targetGroup.nodes and targetGroup != group:
+              groupDepends.incl((idx, targetIdx))
+
         # If node describes type located in file that is already in the
         # group extend it unless file is located in other group
         #
@@ -503,7 +504,40 @@ proc dependentComponents(graph: TypeGraph): seq[TypeGroup] =
     groups[idx].nodes.incl extendedGroup
     groups[idx].imports.incl externalFiles
 
-  return groups
+  var groupGraph = newHGraph[int, NoProperty]()
+  for (g1, g2) in groupDepends:
+    discard groupGraph.addOrGetEdge(g1, g2)
+
+  let clusters = groupGraph.
+    # Gather connected components in cluster graph, treating it as
+    # undirected. I think it is the same as minimal spanning *forest*
+    # (there might be multiple disjoing group clusters), but I haven't
+    # implemented this algorithm yet.
+    connectedComponents(overrideDirected = true)
+
+  let dot = groupGraph.dotRepr(
+    proc(node: int, _: HNode): DotNode =
+      makeDotNode(0, groups[node].groupFile(graph)),
+    clusters = clusters.mapIt((it, ""))
+  )
+
+  dot.toPng(getAppTempFile("intergroup.png"))
+
+  # return groups
+
+  for cluster in clusters:
+    var mergedGroup: TypeGroup
+
+    for node in cluster:
+      let group = groups[groupGraph[node]]
+      mergedGroup.files.incl group.files
+      mergedGroup.imports.incl group.imports
+      mergedGroup.external.incl group.external
+      mergedGroup.nodes.incl group.nodes
+
+    result.add mergedGroup
+
+
 
 
 proc dotRepr(typeGraph: TypeGraph, groups: seq[TypeGroup] = @[]): DotGraph =
@@ -543,12 +577,7 @@ proc patchForward*(
   ## Replace `GenForward` declarations with required import. Return list of
   ## additional generated files.
 
-  info "Patching forward declarations"
-
-
-  var
-    typeGraph = getTypeGraph(wrapped, conf, cache)
-
+  var typeGraph = getTypeGraph(wrapped, conf, cache)
   let components = typeGraph.dependentComponents()
   typeGraph.dotRepr(components).toPng(getAppTempFile("forwardComponents.png"))
 
@@ -558,8 +587,6 @@ proc patchForward*(
     droppedForward: HashSet[CXCursor]
 
   for group in components:
-    info group.nodes.mapIt(typeGraph[it].name)
-
     if group.files.len == 1:
       # All parts of the forward-declare graph are located in the same file.
       for node in group.nodes:
@@ -602,10 +629,11 @@ proc patchForward*(
       else:
         movedForward[newFile].cursors.incl cursors
 
-  for file in mitems(wrapped):
-    for entry in mitems(file.entries):
+  for wrappedFile in mitems(wrapped):
+    for entry in mitems(wrappedFile.entries):
       if entry.hasCDecl():
         for _, (cursors, file) in mpairs(movedForward):
+          file.imports.incl wrappedFile.imports
           if entry.cdecl().cursor in cursors:
             if entry.kind notin {gekForward}:
               file.entries.add entry
@@ -631,12 +659,6 @@ proc patchForward*(
             # C codegen bug when compiling.
             let file = movedForward[filename].file
             if entry.cdecl().cursor in movedForward[filename].cursors:
-              # if "alloc" in $entry.cdecl().ident:
-              #   notice "Forward declaration ", entry.cdecl().cursor,
-              #      " moved to ", file.newFile
-              #   debug entry.kind
-              # file.entries.add entry
-
               entry = newGenEntry(GenPass(iinfo: currIInfo()))
               wrappedFile.imports.incl initNimImportSpec(false, @[filename])
               wrappedFile.exports.incl filename
@@ -650,7 +672,20 @@ proc patchForward*(
               break
 
           if not moved and entry.kind in {gekForward}:
-            entry[] = newGenEntry(GenPass(iinfo: currIINfo()))[]
+            # Forward declarations that were never defined in any of the
+            # header files (pointer to implementation, opaque handlers
+            # etc.)
+            if entry.cdecl().cursor.cxKind() in {ckStructDecl}:
+              # Creating new wrapped entry for forward declaration.
+              # `wrapObject` won't create any constructor procedures for
+              # this type of object, so it can only be created using
+              # pointer (i.e. used as in opaque handler)
+              warn "Dropping not moved entry", entry.cdecl().cursor.kind
+
+              entry = wrapObject(entry.cdecl(), conf, cache).newGenEntry()
+
+            else:
+              entry[] = newGenEntry(GenPass(iinfo: currIINfo()))[]
 
 
 

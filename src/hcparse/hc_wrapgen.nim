@@ -768,7 +768,8 @@ proc updateFieldExport*(
 
 proc wrapObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): GenObject =
   let tdecl = cd.cursor.cxType().getTypeDeclaration()
-  assert cd.kind in {cdkClass, cdkStruct, cdkUnion}, $cd.kind
+  assert cd.kind in {
+    cdkClass, cdkStruct, cdkUnion, cdkForward}, $cd.kind
 
   result = GenObject(
     rawName: $cd.cursor,
@@ -781,25 +782,26 @@ proc wrapObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): GenObject =
 
   updateAggregateInit(cd, conf, cache, result)
 
-  # Add type declaration for nested types
-  for entry in cd.nestedTypes:
-    case entry.kind:
-      of cdkEnum:
-        result.nestedEntries.add wrapEnum(entry, conf, cache)
+  if cd.kind != cdkForward:
+    # Add type declaration for nested types
+    for entry in cd.nestedTypes:
+      case entry.kind:
+        of cdkEnum:
+          result.nestedEntries.add wrapEnum(entry, conf, cache)
 
-      of cdkStruct, cdkClass, cdkUnion:
-        result.nestedEntries.add wrapObject(entry, conf, cache)
-
-
-      else:
-        discard
+        of cdkStruct, cdkClass, cdkUnion:
+          result.nestedEntries.add wrapObject(entry, conf, cache)
 
 
-  updateFieldExport(cd, conf, cache, result)
+        else:
+          discard
 
-  let (procs, extra) = wrapMethods(cd, conf, result.name, cache)
-  result.memberMethods.add procs
-  result.nestedEntries.add extra
+
+    updateFieldExport(cd, conf, cache, result)
+
+    let (procs, extra) = wrapMethods(cd, conf, result.name, cache)
+    result.memberMethods.add procs
+    result.nestedEntries.add extra
 
 proc cEnumName(str: string, nt: NimType, cache: var WrapCache): string =
   # Generate name for C enum. QUESTION: enum names don't need to be
@@ -1247,10 +1249,7 @@ proc toNNode*(
 proc toNNode*(
     gen: GenObject, conf: WrapConf; cache: var WrapCache
   ): seq[WrappedEntry] =
-  var decl = PObjectDecl(
-    iinfo: gen.iinfo,
-    name: gen.name.toNType()
-  )
+  var decl = newPObjectDecl(gen.name.nimName, iinfo = currIInfo())
 
   assert decl.name.kind == ntkIdent, $decl.name.kind
 

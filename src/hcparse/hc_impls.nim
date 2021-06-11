@@ -37,8 +37,8 @@ proc errorCodesToException*(
 
   for (ident, code) in errorMap:
     if sameNoGeneric(genProc.cdecl.ident, ident):
-      var gen2 = genProc
-      gen2.name = genProc.name
+      var gen2 = deepCopy(genProc)
+      # gen2.name = genProc.name
       genProc.name &= "Raw"
       gen2.noPragmas = gpcNoPragma
 
