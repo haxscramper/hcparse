@@ -304,6 +304,8 @@ proc `$`*(cxkind: CXCursorKind): string =
     of ckWarnUnusedResultAttr: "ckWarnUnusedResultAttr"
     of ckConversionFunction: "ckConversionFunction"
     of ckMethod: "ckMethod"
+    of ckConstructor: "ckContructor"
+    of ckDestructor: "ckDestructor"
 
     else:
       $getCursorKindSpelling(cxkind)

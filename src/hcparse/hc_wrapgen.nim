@@ -201,6 +201,23 @@ proc wrapProcedure*(
       it.header = conf.makeHeader(pr.cursor, conf)
 
 
+  if $it.cdecl.cursor == "operator=":
+    # FIXME check if first argument and parent declaration types are
+    # identical. Right now it does not work because
+    # `b3Matrix3x3` != `const b3Matrix3x3 &`
+    if parentDecl.get().cursor.cxType() == pr.arguments[0].cursor.cxType():
+      # By default `operator=` is converted to regular `setFrom` proc to
+      # correctly handle multiple overloads (in C++ `operator=` can have
+      # different types on RHS and LHS, but this is not the case in nim).
+      # *if* assignmed is indeed done from two identical types, then it can
+      # be wrapped as actual `=` proc.
+      it.name = "="
+      it.kind = pkOperator
+
+    else:
+      # Otherwise add `self` for wrapped proc
+      addThis = true
+
   if addThis:
     assert parent.isSome()
     it.arguments.add initCArg(
@@ -243,19 +260,6 @@ proc wrapProcedure*(
     var newArg = initCArg(fixIdentName(arg.name), argType)
     setDefaultForArg(newArg, arg.cursor, conf)
     it.arguments.add newArg
-
-  if $it.cdecl.cursor == "operator=":
-    # FIXME check if first argument and parent declaration types are
-    # identical. Right now it does not work because
-    # `b3Matrix3x3` != `const b3Matrix3x3 &`
-    if parentDecl.get().cursor.cxType() == pr.arguments[0].cursor.cxType():
-      # By default `operator=` is converted to regular `setFrom` proc to
-      # correctly handle multiple overloads (in C++ `operator=` can have
-      # different types on RHS and LHS, but this is not the case in nim).
-      # *if* assignmed is indeed done from two identical types, then it can
-      # be wrapped as actual `=` proc.
-      it.name = "="
-      it.kind = pkOperator
 
   if pr.isOperator and pr.classifyOperator() == cxoAsgnOp:
     # HACK Force override return type for assignment operators
@@ -327,7 +331,7 @@ proc wrapProcedure*(
     it.pragma.add newPIdent("varargs")
 
   if specialProcKind == gpskNewRefConstructor:
-    pprintStackTrace()
+    # pprintStackTrace()
     let argType = newNType("ref", [parent.get().toNType()]).toNNode()
     let emitStr = &["`self`->~", parentDecl.get().lastName(), "();"]
     it.impl = some pquote do:
@@ -341,9 +345,9 @@ proc wrapProcedure*(
 
 proc fixNames(ppd: var GenProc, conf: WrapConf, parent: NimType) =
   var idx: int = 0
-  for param in mitems(ppd.genParams):
-    conf.fixTypeName(param, conf, 0)
-    inc idx
+  # for param in mitems(ppd.genParams):
+  #   conf.fixTypeName(param, conf, 0)
+  #   inc idx
 
   idx = 0
   for arg in mitems(ppd.arguments):
@@ -705,7 +709,8 @@ proc publicFields*(cd: CDecl): seq[CDecl] =
 
 
 proc updateAggregateInit*(
-  cd: CDecl, conf: WrapConf, cache: var WrapCache, gen: var GenObject) =
+    cd: CDecl, conf: WrapConf, cache: var WrapCache, gen: var GenObject) =
+
   if conf.isImportcpp and # QUESTION how to handle aggregate initalization
                           # for C structures? Just declare `{.emit.}`` proc
                           # (with or without designated initalizers)
@@ -717,7 +722,7 @@ proc updateAggregateInit*(
       it.header = conf.makeHeader(cd.cursor, conf)
       it.icpp = &"{toCppNamespace(cd.ident)}({{@}})"
       it.returnType = gen.name
-      it.genParams = gen.name.genericParams
+      # it.genParams = gen.name.genericParams
 
     gen.nestedEntries.add pr
 
@@ -1173,10 +1178,12 @@ proc toNNode*(gen: GenProc, wrapConf: WrapConf): PProcDecl =
     iinfo = gen.iinfo,
     exported = true,
     rtyp = some(gen.returnType.toNType()),
-    genParams = gen.genParams.mapIt(it.toNType()),
+    # genParams = gen.genParams.mapIt(it.toNType()),
     declType = gen.declType,
     kind = gen.kind
   )
+
+  var used: seq[NimType]
 
   for arg in gen.arguments:
     result.signature.arguments.add newNIdentDefs(
@@ -1185,6 +1192,21 @@ proc toNNode*(gen: GenProc, wrapConf: WrapConf): PProcDecl =
       vtype = arg.getNTYpe().toNType(),
       kind = arg.varkind
     )
+
+    used.add arg.getNType().allUsedTypes(
+      cxxOnly = false, ignoreHead = true)
+
+  var genParams: OrderedSet[string]
+  for t in used:
+    if t.kind == ctkIdent:
+      genParams.incl t.nimName
+
+  for gen in genParams:
+    result.genParams.add newPType(gen)
+
+
+  debug result.genParams
+
 
   result.docComment = gen.docComment.join("\n")
 
@@ -1269,6 +1291,8 @@ proc toNNode*(
     gen: GenObject, conf: WrapConf; cache: var WrapCache
   ): seq[WrappedEntry] =
   var decl = newPObjectDecl(gen.name.nimName, iinfo = currIInfo())
+  let scoped = conf.typeNameForScoped(gen.cdecl.ident, conf).toNType()
+  decl.name = scoped
 
   assert decl.name.kind == ntkIdent, $decl.name.kind
   assert gen.cdecl.kind in {cdkStruct, cdkUnion, cdkClass},
@@ -1315,7 +1339,7 @@ proc toNNode*(
           toNimDecl(getImpl), true, field.iinfo, field.cdecl)
 
       block setterImplementation:
-        var setImpl = newPProcDecl(field.name)
+        var setImpl = newPProcDecl(field.name, kind = pkAssgn)
         with setImpl:
           iinfo = currIInfo()
           pragma = newPPragma(

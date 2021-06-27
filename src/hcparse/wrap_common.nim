@@ -1,3 +1,6 @@
+import compiler/ast
+export ast
+
 import libclang
 export libclang
 

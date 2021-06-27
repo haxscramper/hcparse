@@ -266,19 +266,6 @@ func initTypeNode*(
   name: string, path: seq[string], cursor: CXCursor, isDef: bool): TypeNode =
   TypeNode(name: name, path: path, cursor: cursor, isDef: isDef)
 
-proc allUsedTypes*(nimType: NimType): seq[NimType] =
-  result.add nimType
-  case nimType.kind:
-    of ctkIdent:
-      for param in nimType.genericParams:
-        result.add allUsedTypes(param)
-
-    of ctkProc:
-      if notNil nimType.returnType:
-        result.add nimType.returnType
-
-      for argument in nimType.arguments:
-        result.add allUsedTypes(argument.nimType)
 
 proc isPrimitiveHead*(nimType: NimType): bool =
   nimType.kind in {ctkIdent} and nimType.nimName in [
@@ -408,15 +395,17 @@ proc getTypeGraph(
                   )
 
         of gekForward:
-          var objectNode = result.addOrGetNode(
-            initTypeNode(
-              conf.typeNameForScoped(entry.cdecl().ident, conf).nimName,
-              conf.getImport(
-                entry.getSpellingLocation(), conf, false).importPath,
-              entry.cdecl().cursor,
-              false
-            )
-          )
+          # HACK. Edge case first encountered in
+          # `stl_iterator_base_funcs.h:73` as `template <typename> struct
+          # _List_iterator;`
+          if entry.cdecl().cursor.kind notin {ckClassTemplate}:
+            var objectNode = result.addOrGetNode(
+              initTypeNode(
+                conf.typeNameForScoped(entry.cdecl().ident, conf).nimName,
+                conf.getImport(
+                  entry.getSpellingLocation(), conf, false).importPath,
+                entry.cdecl().cursor,
+                false))
 
         else:
           discard
@@ -800,7 +789,17 @@ proc wrapFile*(
         discard
 
   wrapped.imports.incl initNimImportSpec(true, @["std", "bitops"])
-  wrapped.imports.incl initNimImportSpec(true, @["hcparse", "wraphelp"])
+  wrapped.imports.incl initNimImportSpec(true, @[
+    "hmisc", "wrappers", "wraphelp"])
+
+  wrapped.exports.incl "wraphelp"
+
+  let push = pquote do:
+    {.push warning[UnusedImport]: off.}
+
+  result.add push.toNimDecl().newWrappedEntry(false, currIInfo())
+
+
   result.add wrapped.imports.toNNode().
     toNimDecl().newWrappedEntry(false, currIInfo())
 
@@ -935,15 +934,15 @@ proc wrapAllFiles*(
     parsed: seq[ParsedFile] # Full list of all parsed files
     wrapConf = wrapConf # Global wrapper configuration
 
+  assertValid(
+    wrapConf.nimOutDir,
+    ". Output directory for generated nim files.")
+
   for file in files:
     var parsedFile = parseFile(file, parseConf, wrapConf)
     wrapConf.unit = parsedFile.unit
 
     parsed.add parsedFile
-
-  assertValid(
-    wrapConf.nimOutDir,
-    ". Output directory for generated nim files.")
 
   var wrapped: seq[seq[WrappedEntry]]
   for file in wrapFiles(parsed, wrapConf, cache, index):

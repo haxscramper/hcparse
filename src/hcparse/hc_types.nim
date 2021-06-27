@@ -46,6 +46,8 @@ type
     specialKind*: CTypeSpecialKind
     isMutable*: bool
     isConst*: bool
+    isParam* {.requiresinit.}: bool ## Type is used as generic parameter
+                                    ## for other types/procedure arguments.
 
     case fromCXType*: bool
       of true:
@@ -499,7 +501,7 @@ type
     private*: bool ## Generated proc should be private?
     arguments*: seq[CArg] ## Arguments
     returnType*: NimType
-    genParams*: seq[NimType] ## Nim generic parameters
+    # genParams*: seq[NimType] ## Nim generic parameters
     declType*: ProcDeclType ## Type of proc declaration (iterator,
                             ## converter etc.)
     header*: NimHeaderSpec ## Header specification for `.header:` pragma
@@ -975,6 +977,11 @@ proc toHaxdocType*(cxtype: CXType): JsonNode =
   # result.isMutable = mutable
   # conf.fixTypeName(result, conf, 0)
 
+const ckProcEntryKinds* = {
+  ckMethod, ckFunctionDecl, ckConstructor,
+  ckMacroDefinition, ckDestructor, ckFunctionTemplate
+}
+
 proc toHaxdocJson*(ns: CScopedIdent): JsonNode =
   result = newJArray()
 
@@ -986,6 +993,12 @@ proc toHaxdocJson*(ns: CScopedIdent): JsonNode =
     var kind =
       case part.cursor.cxKind():
         of ckClassDecl: %"Class"
+        of ckClassTemplate: %"Class"
+        of ckVarDecl: %"Var"
+        of ckConstructor: %"Constructor"
+        of ckDestructor: %"Destructor"
+        of ckFunctionTemplate: %"Proc"
+
         of ckStructDecl: %"Struct"
         of ckMethod: %"Method"
         of ckFunctionDecl: %"Proc"
@@ -993,12 +1006,14 @@ proc toHaxdocJson*(ns: CScopedIdent): JsonNode =
         of ckEnumDecl: %"Enum"
         of ckEnumConstantDecl: %"EnumField"
         of ckMacroDefinition: %"CMacro"
+        of ckNamespace: %"Namespace"
+        of ckTypedefDecl: %"TypeDef"
         else:
           raise newImplementKindError(part.cursor.cxKind())
 
     identPart["kind"] = kind
 
-    if part.cursor.kind in {ckMethod, ckFunctionDecl, ckMacroDefinition}:
+    if part.cursor.kind in ckProcEntryKinds:
       identPart["procType"] = part.cursor.cxType().toHaxdocType()
 
     result.add identPart
@@ -1119,12 +1134,15 @@ proc toHaxdocIdentType*(
 
 proc toHaxdocIdent*(ns: CScopedIdent): string =
   for part in ns:
-    if part.cursor.kind in {ckMethod, ckFunctionDecl}:
+    if part.cursor.kind in ckProcEntryKinds:
       if result.len > 0: result &= "."
       case part.cursor.kind:
         of ckMethod: result &= "method!"
         of ckFunctionDecl: result &= "proc!"
+        of ckFunctionTemplate: result &= "proc!"
         of ckMacroDefinition: result &= "cmacro!"
+        of ckConstructor: result &= "contructor!"
+        of ckDestructor: result &= "destructor!"
         else:
           raise newImplementKindError(part.cursor)
 
@@ -1136,15 +1154,23 @@ proc toHaxdocIdent*(ns: CScopedIdent): string =
     else:
       case part.cursor.cxKind():
         of ckClassDecl: result &= "class!"
+        of ckClassTemplate: result &= "class!"
+        of ckVarDecl: result &= "var!"
+
         of ckEnumDecl: result &= "enum!"
         of ckStructDecl: result &= "struct!"
         of ckUnionDecl: result &= "union!"
         of ckFieldDecl: result &= ".field!"
         of ckEnumConstantDecl: result &= ".enumField!"
+        of ckNamespace: result &= "namespace!"
+        of ckTypedefDecl: result &= ".typedef!"
         else:
           raise newImplementKindError(part.cursor.cxKind())
 
       result &= part.getName()
+
+      if part.cursor.cxKind() == ckNamespace:
+        result &= "::"
 
 
 proc `$`*(ident: CSCopedIdent): string =
@@ -1550,3 +1576,31 @@ proc updateComments*(
 
 
   decl.addDocComment(node.ident.docCommentFor())
+
+proc allUsedTypes*(
+    nimType: NimType,
+    cxxOnly: bool = true,
+    ignoreHead: bool = false
+  ): seq[NimType] =
+
+  if not ignoreHead:
+    if nimType.fromCXtype or not cxxOnly:
+      result.add nimType
+
+
+  case nimType.kind:
+    of ctkIdent:
+      for param in nimType.genericParams:
+        result.add allUsedTypes(
+          param,
+          # ignoreHead and nimType.nimName in [
+          #   "ptr", "var", "ref", "sink"]
+        )
+
+    of ctkProc:
+      if notNil nimType.returnType:
+        if nimType.returnType.fromCXType or not cxxOnly:
+          result.add nimType.returnType
+
+      for argument in nimType.arguments:
+        result.add allUsedTypes(argument.nimType)
