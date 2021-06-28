@@ -247,14 +247,14 @@ proc wrapProcedure*(
         # code like
         # `<Ta> struct A { <Tb> struct B {void func(); }; };`
         # and only add `Tb` as template parameter for `func()`.
-        argType.add parent.get().genericParams
+        for param in parent.get().genericParams:
+          argType.add param
         # FAIL most likely broken with recent refactoring
 
     else:
       # FIXME determine and implement edge case handling for procvar
       # arguments
       discard
-
 
 
     var newArg = initCArg(fixIdentName(arg.name), argType)
@@ -529,7 +529,6 @@ proc wrapAlias*(
       result.add wrapBase
 
     for newName in al.newTypes:
-      debug "Alternative name", newName
       var newType = newNimType($newName)
       newType.genericParams = baseType.genericParams
       if newType.nimName != baseType.nimName:
@@ -598,6 +597,9 @@ proc wrapAlias*(
         # now I just drop 'unnecessary' parts.
         baseType.genericParams = baseType.genericParams[
           0 ..< min(required.len(), baseType.genericParams.len())]
+
+        for param in mitems(baseType.genericParams):
+          param.isParam = true
 
     fixTypeParams(baseType, newAlias.genericParams)
 
@@ -1205,7 +1207,7 @@ proc toNNode*(gen: GenProc, wrapConf: WrapConf): PProcDecl =
     result.genParams.add newPType(gen)
 
 
-  debug result.genParams
+  # debug result.genParams
 
 
   result.docComment = gen.docComment.join("\n")

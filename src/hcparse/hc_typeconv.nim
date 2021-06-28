@@ -3,13 +3,14 @@
 import cxtypes, hc_types
 import hnimast
 
-import hmisc/other/[colorlogger]
-import hmisc/types/colorstring
-import hmisc/algo/[hstring_algo, hseq_mapping]
-import hmisc/helpers
-import hmisc/macros/iflet
+import
+  hmisc/other/[colorlogger],
+  hmisc/types/colorstring,
+  hmisc/algo/[hstring_algo, hseq_mapping],
+  hmisc/helpers,
+  hmisc/macros/iflet
 
-import std/[algorithm, strformat, sequtils, strutils]
+import std/[algorithm, strformat, sequtils, strutils, parseutils]
 
 import cxcommon
 
@@ -148,8 +149,8 @@ proc getTypeName*(cxtype: CXType, conf: WrapConf): string =
     dropPrefix($it, toStrPart(["const ", "enum ", "struct ", "union "]))
   ).join("::")
 
-  # debug cxtype.getTypeNamespaces()
-  # debug result
+  debug cxtype.getTypeNamespaces()
+  debug result
 
 proc isMutableRef*(cxtype: CXType): bool =
   case cxType.cxKind:
@@ -273,18 +274,25 @@ proc toNimType*(cxtype: CXType, conf: WrapConf): NimType =
 
     of tkUnexposed:
       let strval = ($cxType).dropPrefix("const ") # WARNING
+      let db = "string" in strval
+
+      if db: warn strval
       if strval.validCxxIdentifier():
-        newNimType(strval, cxtype)
+        newNimType(strval, cxtype, true)
 
       else:
         # pprintStackTrace()
-        let decl = cxtype.getTypeDeclaration()
-        var res = newNimType($decl, cxType)
-        let typenameParts = toStrPart(@[
-          "type-parameter", "typename type-parameter",
-          "typename rebind<type-parameter",
-          "typename"
-        ])
+        let
+          decl = cxtype.getTypeDeclaration()
+          name = cxType.getTypeNamespaces().mapIt($it).join("::")
+          typenameParts = toStrPart(@[
+            "type-parameter", "typename type-parameter",
+            "typename rebind<type-parameter",
+            "typename"
+          ])
+
+
+        var res = newNimType(name, cxType, true)
         if decl.cxKind in {
           # HACK list of necessary kinds is determined by trial and error,
           # I'm still not really sure what `tkUnexposed` actually
@@ -295,16 +303,18 @@ proc toNimType*(cxtype: CXType, conf: WrapConf): NimType =
             if elem.cxKind() in {ckTemplateTypeParameter}:
               res.add elem.cxType().toNimType(conf)
 
+          if db: debug res
+
         elif startsWith($cxType, typenameParts):
           let unprefix = dropPrefix($cxType, typenameParts)
           if allIt(unprefix, it in {'0' .. '9', '-'}):
-            res = newNimType("TYPE_PARAM " & unprefix, cxtype)
+            res = newNimType("TYPE_PARAM " & unprefix, cxtype, true)
 
           else:
-            res = newNimType("COMPLEX_PARAM", cxtype)
+            res = newNimType("COMPLEX_PARAM", cxtype, true)
 
         else:
-          res = newNimType("UNEXPOSED", cxtype)
+          res = newNimType("UNEXPOSED", cxtype, true)
           if decl.cxKind() notin {ckNoDeclFound}:
             warn "No decl found for type"
             logIndented:
@@ -317,16 +327,17 @@ proc toNimType*(cxtype: CXType, conf: WrapConf): NimType =
         res
 
     of tkDependent:
-      newNimType("DEPENDENT", cxType)
+      newNimType("DEPENDENT", cxType, true)
 
     of tkMemberPointer:
       # WARNING Member pointer
-      newNimType("!!!", cxType)
+      newNimType("!!!", cxType, false)
 
     of tkDependentSizedArray:
-      warn cxtype
+      let cx = $cxtype
+      let name = cx[cx.skipUntil('[') + 1 .. ^2].strip()
       newNimType("array", @[
-        newNimType("???????????????????????"),
+        newNimType(name),
         toNimType(cxtype.getElementType(), conf)
       ], cxType)
 

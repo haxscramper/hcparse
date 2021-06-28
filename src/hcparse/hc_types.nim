@@ -46,7 +46,7 @@ type
     specialKind*: CTypeSpecialKind
     isMutable*: bool
     isConst*: bool
-    isParam* {.requiresinit.}: bool ## Type is used as generic parameter
+    isParam*: bool ## Type is used as generic parameter
                                     ## for other types/procedure arguments.
 
     case fromCXType*: bool
@@ -770,7 +770,7 @@ proc getSemanticNamespaces*(
   while parent.cxKind() in {
     # TEST might be necessary to add templated namespacess (fuck, why C++
     # is just so god-awful vomit-inducing garbage?)
-    ckNamespace, ckStructDecl, ckClassDecl
+    ckNamespace, ckStructDecl, ckClassDecl, ckClassTemplate
   }:
     if filterInline and (parent.isInlineNamespace() == 1):
       discard
@@ -1317,29 +1317,43 @@ func initNimImportSpec*(isExternalImport: bool, importPath: seq[string]):
   return NimImportSpec(
     isRelative: not isExternalImport, importPath: importPath)
 
-func newNimType*(name: string, cxType: CXType): NimType =
-  NimType(kind: ctkIdent, nimName: name,
+func isBuiltinGeneric*(str: string): bool =
+  str in ["ptr", "ref", "sink", "var"]
+
+func newNimType*(name: string, cxType: CXType,
+                 isParam: bool = false): NimType =
+  NimType(kind: ctkIdent, nimName: name, isParam: isParam,
           cxType: cxType, fromCXType: true)
 
-func newNimType*(name: string, genericParams: openarray[NimType] = @[]):
-  NimType =
+func newNimType*(
+    name: string,
+    genericParams: openarray[NimType] = @[],
+    isParam: bool = false
+  ): NimType =
 
-  NimType(
+  result = NimType(
+    isParam: isParam,
     kind: ctkIdent, nimName: name, fromCXtype: false,
     genericParams: toSeq(genericParams)
   )
 
 func newNimType*(
-    arguments: seq[CArg], returnType: NimType = newNimType("void")):
-  NimType =
+    arguments: seq[CArg],
+    returnType: NimType = newNimType("void", @[], false)
+  ): NimType =
 
-  NimType(kind: ctkProc, arguments: arguments, returnType: returnType)
+  NimType(
+    kind: ctkProc, arguments: arguments,
+    returnType: returnType, isParam: false)
 
 func newNimType*(
-    name: string, genericParams: openarray[NimType], cxType: CXType):
-  NimType =
+    name: string,
+    genericParams: openarray[NimType],
+    cxType: CXType,
+    isParam: bool = false
+  ): NimType =
 
-  result = newNimType(name, cxType)
+  result = newNimType(name, cxType, isParam)
   result.genericParams.add genericParams
 
 func add*(
