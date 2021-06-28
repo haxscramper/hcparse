@@ -27,17 +27,18 @@ proc wrapEnum*(declEn: CDecl, conf: WrapConf, cache: var WrapCache):
 
 proc wrapOperator*(
     oper: CDecl,
-    conf: WrapConf
+    conf: WrapConf,
+    cache: var WrapCache
   ): tuple[decl: GenProc, addThis: bool] =
 
   var it = initGenProc(oper, currIInfo())
 
-  it.name = oper.getNimName()
+  it.name = oper.getNimName(conf)
   # it.genParams = genParams # FIXME: was it necessary to have generic
   # parameters conversion for operators?
 
   assert conf.isImportcpp
-  let kind = oper.classifyOperator()
+  let kind = oper.classifyOperator(conf)
   it.kind = pkOperator
 
   case oper.operatorKind:
@@ -54,7 +55,7 @@ proc wrapOperator*(
 
     of cxoArrayOp:
       let rtype = oper.cursor.retType()
-      let nimReturn = rtype.toNimType(conf)
+      let nimReturn = rtype.toNimType(conf, cache)
       if nimReturn.isMutable:
         it.name = "[]="
         # WARNING potential source of horrible c++ codegen errors
@@ -97,7 +98,7 @@ proc wrapOperator*(
       it.kind = pkRegular
 
     of cxoConvertOp:
-      let restype = oper.cursor.retType().toNimType(conf)
+      let restype = oper.cursor.retType().toNimType(conf, cache)
 
       with it:
         name = "to" & capitalizeAscii(restype.nimName)
@@ -107,7 +108,7 @@ proc wrapOperator*(
         kind = pkRegular
 
     of cxoUserLitOp:
-      let restype = oper.cursor.retType().toNimType(conf)
+      let restype = oper.cursor.retType().toNimType(conf, cache)
 
       with it:
         name = "to" & capitalizeAscii(restype.nimName)
@@ -156,8 +157,10 @@ proc wrapProcedure*(
   result.canAdd = true
   if pr.isOperator:
     # HACK temporary workaround for `new` and `delete` operator handing
-    if classifyOperator(pr) notin {cxoNewOp, cxoDeleteOp}:
-      let (decl, adt) = pr.wrapOperator(conf)
+    if classifyOperator(pr, conf) notin {cxoNewOp, cxoDeleteOp}:
+      # debug classifyOperator(pr, conf), pr.arguments.len
+      let (decl, adt) = pr.wrapOperator(conf, cache)
+      # debug adt
       it = decl
       it.iinfo = currIInfo()
       addThis = adt
@@ -167,7 +170,8 @@ proc wrapProcedure*(
       result.canAdd = false
 
   else:
-    it.name = pr.getNimName().fixIdentName()
+    it.name = pr.getNimName(conf).fixIdentName()
+    # debug it.name, pr.ident, pr.lastName
 
     # FIXME
     # iflet (par = parent):
@@ -185,7 +189,7 @@ proc wrapProcedure*(
 
       else:
         it.iinfo = currIInfo()
-        it.icpp = &"(#.{pr.getNimName()}(@))"
+        it.icpp = &"(#.{pr.getNimName(conf)}(@))"
 
       it.header = conf.makeHeader(pr.cursor, conf)
 
@@ -216,8 +220,11 @@ proc wrapProcedure*(
 
     else:
       # Otherwise add `self` for wrapped proc
-      addThis = true
+      addThis = parent.isSome()
 
+  # debug pr.ident
+  # debug pr.cursor.getSpellingLocation()
+  # info pr.arguments.len
   if addThis:
     assert parent.isSome()
     it.arguments.add initCArg(
@@ -226,7 +233,14 @@ proc wrapProcedure*(
     )
 
   for arg in pr.arguments:
-    var argType = arg.cursor.cxType().toNimType(conf)
+    # debug arg.cursor.cxType().kind, arg.cursor.treeRepr()
+    # debug arg.cursor.getSpellingLocation()
+    var argType = arg.cursor.cxType().toNimType(conf, cache)
+    # var params: seq[NimType]
+    # for node in arg.cursor:
+    #   if node.kind == ckTypeRef:
+
+
     if arg.cursor.cxType().isEnum():
       argType.nimName &= conf.rawSuffix()
 
@@ -257,11 +271,11 @@ proc wrapProcedure*(
       discard
 
 
-    var newArg = initCArg(fixIdentName(arg.name), argType)
-    setDefaultForArg(newArg, arg.cursor, conf)
+    var newArg = initCArg(arg.name, argType)
+    setDefaultForArg(newArg, arg.cursor, conf, cache)
     it.arguments.add newArg
 
-  if pr.isOperator and pr.classifyOperator() == cxoAsgnOp:
+  if pr.isOperator and pr.classifyOperator(conf) == cxoAsgnOp:
     # HACK Force override return type for assignment operators
     it.returnType = newNimType("void")
 
@@ -292,7 +306,7 @@ proc wrapProcedure*(
 
   else:
     # Default handling of return types
-    var returnType = toNimType(pr.cursor.retType(), conf)
+    var returnType = toNimType(pr.cursor.retType(), conf, cache)
     if parentDecl.isSome() and
        parent.isSome() and
        pr.cursor.retType().
@@ -333,7 +347,7 @@ proc wrapProcedure*(
   if specialProcKind == gpskNewRefConstructor:
     # pprintStackTrace()
     let argType = newNType("ref", [parent.get().toNType()]).toNNode()
-    let emitStr = &["`self`->~", parentDecl.get().lastName(), "();"]
+    let emitStr = &["`self`->~", parentDecl.get().lastName(conf), "();"]
     it.impl = some pquote do:
       # WARNING FAIL experimental
       new(self, proc(self: `argType`) = {.emit: `emitStr`.})
@@ -556,7 +570,7 @@ proc wrapAlias*(
         baseType = newNimType(name, aliasof)
 
       else:
-        baseType = toNimType(aliasof, conf) # .ntype # newPType($aliasof)
+        baseType = toNimType(aliasof, conf, cache) # .ntype # newPType($aliasof)
 
     else:
       baseType = conf.typeNameForScoped(aliasof.toFullScopedIdent(), conf)
@@ -641,16 +655,15 @@ proc wrapAlias*(
       #     )
 
 proc getParentFields*(
-    inCursor: CXCursor, obj: PObjectDecl, wrapConf: WrapConf):
-  seq[PProcDecl] = # FIXME return `GenProc` declarations instead of nested cursors
-
-
+    inCursor: CXCursor, obj: PObjectDecl,
+    wrapConf: WrapConf, cache: var WrapCache
+  ): seq[PProcDecl] = # FIXME return `GenProc` declarations instead of nested cursors
 
   for class in inCUrsor.getClassBaseCursors():
     for entry in class:
       if entry.kind in {ckFieldDecl}:
         let
-          fieldType = entry.cxType().toNimType(wrapConf)
+          fieldType = entry.cxType().toNimType(wrapConf, cache)
           fldname = $entry
 
         result.add newPProcDecl(
@@ -736,11 +749,11 @@ proc updateFieldExport*(
   for fld in cd.publicFields():
     var res = GenField(
       # QUESTION `conf.identNameForScoped()?`
-      name: fixIdentName(fld.lastName()),
-      rawName: fld.lastName(),
+      name: fixIdentName(fld.lastName(conf)),
+      rawName: fld.lastName(conf),
       iinfo: currIInfo(),
       cdecl: fld,
-      fieldType: fld.cursor.cxType().toNimType(conf),
+      fieldType: fld.cursor.cxType().toNimType(conf, cache),
       isConst: fld.isConst
     )
 
@@ -1195,14 +1208,14 @@ proc toNNode*(gen: GenProc, wrapConf: WrapConf): PProcDecl =
       kind = arg.varkind
     )
 
-    used.add arg.getNType().allUsedTypes(
-      cxxOnly = false, ignoreHead = true)
+    used.add arg.getNType().allGenericParams()
 
   var genParams: OrderedSet[string]
   for t in used:
     if t.kind == ctkIdent:
       genParams.incl t.nimName
 
+  # debug genParams
   for gen in genParams:
     result.genParams.add newPType(gen)
 
@@ -1364,8 +1377,8 @@ proc toNNode*(
         isExported: true,
         name: field.name,
         pragma: some newPPragma(
-          newPIdentColonString(conf.importX, field.cdecl.lastName())
-        ),
+          newPIdentColonString(
+            conf.importX, field.cdecl.lastName(conf))),
         fldType: field.fieldType.toNType()
       )
 

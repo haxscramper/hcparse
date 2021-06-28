@@ -145,6 +145,7 @@ proc parseFile*(
     file: AbsFile,
     config: ParseConf,
     wrapConf: WrapConf,
+    cache: var WrapCache,
     reparseOnNil: bool = true
   ): ParsedFile =
 
@@ -172,7 +173,7 @@ proc parseFile*(
     debug config.getFlags(file).joinl()
     raise
 
-  result.api = result.unit.splitDeclarations(wrapConf)
+  result.api = result.unit.splitDeclarations(wrapConf, cache)
   result.explicitDeps = result.api.publicApi.
     getDepFiles(wrapConf).filterIt(it != file)
 
@@ -181,10 +182,12 @@ proc parseFile*(
   dedentLog()
 
 proc parseAll*(
-    files: seq[AbsFile], conf: ParseConf, wrapConf: WrapConf
+    files: seq[AbsFile], conf: ParseConf, wrapConf: WrapConf,
+    cache: var WrapCache
   ): hc_types.FileIndex =
   for file in files:
-    result.index[file] = parseFile(file, conf, wrapConf)
+    result.index[file] = parseFile(
+      file, conf, wrapConf, cache)
 
 import hasts/graphviz_ast
 export toPng, toXDot, AbsFile
@@ -905,6 +908,7 @@ proc wrapSingleFile*(
 
   let parsed = parseFile(
     file.toAbsFile(), parseConf, wrapConf,
+    cache,
     reparseOnNil = errorReparseVerbose
   )
 
@@ -939,7 +943,7 @@ proc wrapAllFiles*(
     ". Output directory for generated nim files.")
 
   for file in files:
-    var parsedFile = parseFile(file, parseConf, wrapConf)
+    var parsedFile = parseFile(file, parseConf, wrapConf, cache)
     wrapConf.unit = parsedFile.unit
 
     parsed.add parsedFile

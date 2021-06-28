@@ -16,10 +16,12 @@ import cxcommon
 
 proc getTypeName*(cxtype: CXType, conf: WrapConf): string
 
-proc toNimType*(cxtype: CXType, conf: WrapConf): NimType
+proc toNimType*(
+    cxtype: CXType, conf: WrapConf, cache: var WrapCache): NimType
 
 
-proc fromElaboratedPType*(cxtype: CXType, conf: WrapConf): NimType =
+proc fromElaboratedPType*(
+    cxtype: CXType, conf: WrapConf, cache: var WrapCache): NimType =
   # debug cxtype
   let genParams = cxtype.getNumTemplateArguments()
   let decl = cxtype.getTypeDeclaration()
@@ -35,7 +37,7 @@ proc fromElaboratedPType*(cxtype: CXType, conf: WrapConf): NimType =
         result = newNimType(cxtype.getTypeName(conf), cxtype)
         for idx, parm in params:
           if parm.cxKind != tkInvalid:
-            result.add parm.toNimType(conf)
+            result.add parm.toNimType(conf, cache)
 
       else:
         warn "Conversion from elaborated type: ", decl
@@ -46,13 +48,14 @@ proc fromElaboratedPType*(cxtype: CXType, conf: WrapConf): NimType =
   else:
     result = newNimType(getTypeName(cxtype, conf), cxtype)
 
-proc dropPOD*(cxtype: CXType, conf: WrapConf): string =
+proc dropPOD*(
+    cxtype: CXType, conf: WrapConf, cache: var WrapCache): string =
   case cxtype.cxKind:
     of tkElaborated:
-      cxtype.fromElaboratedPType(conf).nimName
+      cxtype.fromElaboratedPType(conf, cache).nimName
 
     of tkPointer:
-      cxtype[].dropPOD(conf)
+      cxtype[].dropPOD(conf, cache)
 
     of tkTypedef:
       ($cxtype).dropPrefix("const ")
@@ -60,13 +63,13 @@ proc dropPOD*(cxtype: CXType, conf: WrapConf): string =
     else:
       ""
 
-proc toCArg*(cursor: CXCursor, conf: WrapConf): CArg =
+proc toCArg*(cursor: CXCursor, conf: WrapConf, cache: var WrapCache): CArg =
   var varname = $cursor
   if varname.len == 0:
-    varname = "arg" & $cursor.cxType().dropPOD(conf)
+    varname = "arg" & $cursor.cxType().dropPOD(conf, cache)
 
   varname = varname.fixIdentName()
-  let argType = cursor.cxType().toNimType(conf)
+  let argType = cursor.cxType().toNimType(conf, cache)
   return initCArg(varname, argType)
 
 
@@ -171,7 +174,8 @@ proc fromCxxTypeName*(name: string): string =
     of "unsigned long": "culong"
     else: ""
 
-proc toNimType*(cxtype: CXType, conf: WrapConf): NimType =
+proc toNimType*(
+    cxtype: CXType, conf: WrapConf, cache: var WrapCache): NimType =
   ## Convert CXType to nim type. Due to differences in how mutability
   ## handled in nim and C it is not entirely possible to map `CXType`
   ## to `NType` without losing this information. Instead `mutable` is
@@ -218,7 +222,7 @@ proc toNimType*(cxtype: CXType, conf: WrapConf): NimType =
 
     of tkElaborated, tkRecord, tkEnum:
       # debug "From elaborated type"
-      fromElaboratedPType(cxtype, conf)
+      fromElaboratedPType(cxtype, conf, cache)
 
     of tkPointer:
       case cxtype[].cxkind:
@@ -230,16 +234,16 @@ proc toNimType*(cxtype: CXType, conf: WrapConf): NimType =
             newNimType("cstringArray", cxtype)
 
           else:
-            newNimType("ptr", [toNimType(cxtype[], conf)], cxtype)
+            newNimType("ptr", [toNimType(cxtype[], conf, cache)], cxtype)
 
         of tkVoid:
           newNimType("pointer", cxtype)
 
         of tkFunctionProto:
-          toNimType(cxtype[], conf)
+          toNimType(cxtype[], conf, cache)
 
         else:
-          newNimType("ptr", [toNimType(cxtype[], conf)], cxtype)
+          newNimType("ptr", [toNimType(cxtype[], conf, cache)], cxtype)
 
     of tkConstantArray:
       newNimType(
@@ -247,38 +251,38 @@ proc toNimType*(cxtype: CXType, conf: WrapConf): NimType =
           newNimType(
             "array", @[
               newNimType($cxtype.getNumElements(), cxtype.getElementType()),
-              toNimType(cxtype.getElementType(), conf)
+              toNimType(cxtype.getElementType(), conf, cache)
             ], cxType)
         ], cxType)
 
     of tkIncompleteArray:
       # QUESTION maybe convert to `ptr UncheckedArray?` or add user-defined
       # callback for switching between different behaviors.
-      newNimType("ptr", [toNimType(cxtype.getElementType(), conf)], cxType)
+      newNimType("ptr", [toNimType(
+        cxtype.getElementType(), conf, cache)], cxType)
 
     of tkFunctionProto:
       newNimType(
-        cxtype.argTypes.mapIt(initCArg("", toNimType(it, conf))),
-        cxtype.getResultType().toNimType(conf)
+        cxtype.argTypes.mapIt(initCArg("", toNimType(it, conf, cache))),
+        cxtype.getResultType().toNimType(conf, cache)
       )
 
     of tkLValueReference:
       mutable = cxType.isMutableRef()
-      toNimType(cxType[], conf)
+      toNimType(cxType[], conf, cache)
 
     of tkRValueReference: # WARNING I'm not 100% sure this is correct
                           # way to map rvalue references to nim type
                           # system.
       mutable = cxType.isMutableRef()
-      toNimType(cxType[], conf)
+      toNimType(cxType[], conf, cache)
 
     of tkUnexposed:
       let strval = ($cxType).dropPrefix("const ") # WARNING
       let db = "string" in strval
 
-      if db: warn strval
       if strval.validCxxIdentifier():
-        newNimType(strval, cxtype, true)
+        newNimType(strval, cxtype)
 
       else:
         # pprintStackTrace()
@@ -292,18 +296,16 @@ proc toNimType*(cxtype: CXType, conf: WrapConf): NimType =
           ])
 
 
-        var res = newNimType(name, cxType, true)
+        var res = newNimType(name, cxType)
         if decl.cxKind in {
           # HACK list of necessary kinds is determined by trial and error,
           # I'm still not really sure what `tkUnexposed` actually
           # represents.
           ckClassTemplate, ckClassDecl
         }:
-          for elem in decl:
-            if elem.cxKind() in {ckTemplateTypeParameter}:
-              res.add elem.cxType().toNimType(conf)
-
-          if db: debug res
+          let name = cxType.getTypeNamespaces().mapIt($it)
+          for param in cache.getParamsForType(name):
+            res.add param
 
         elif startsWith($cxType, typenameParts):
           let unprefix = dropPrefix($cxType, typenameParts)
@@ -338,7 +340,7 @@ proc toNimType*(cxtype: CXType, conf: WrapConf): NimType =
       let name = cx[cx.skipUntil('[') + 1 .. ^2].strip()
       newNimType("array", @[
         newNimType(name),
-        toNimType(cxtype.getElementType(), conf)
+        toNimType(cxtype.getElementType(), conf, cache)
       ], cxType)
 
     else:
@@ -403,26 +405,27 @@ proc isEnum*(cxtype: CXType): bool =
     else:
       return false
 
-proc toInitCall*(cursor: CXCursor, conf: WrapConf): PNode =
-  proc aux(cursor: CXCursor, ilist: bool): PNode =
+proc toInitCall*(
+    cursor: CXCursor, conf: WrapConf, cache: var WrapCache): PNode =
+  proc aux(cursor: CXCursor, ilist: bool, cache: var WrapCache): PNode =
     case cursor.cxKind():
       of ckUnexposedExpr:
         # info $cursor.cxType()
         if startsWith($cursor.cxType(), "std::initializer_list"):
           # info "Found init list"
-          result = aux(cursor[0], true)
+          result = aux(cursor[0], true, cache)
 
         else:
-          result = aux(cursor[0], ilist)
+          result = aux(cursor[0], ilist, cache)
 
       of ckCallExpr:
         let str = "init" & $cursor.cxType()
         case cursor[0].cxKind():
           of ckUnexposedExpr, ckCallExpr, ckFunctionalCastExpr:
-            result = aux(cursor[0], ilist)
+            result = aux(cursor[0], ilist, cache)
 
           of ckIntegerLiteral, ckNullPtrLiteralExpr:
-            result = aux(cursor[0], ilist)
+            result = aux(cursor[0], ilist, cache)
 
           of ckTypeRef:
             # First found in `clang/Rewriter.h/getRangeSize()`
@@ -483,7 +486,7 @@ proc toInitCall*(cursor: CXCursor, conf: WrapConf): PNode =
           raiseImplementKindError(cursor.cxType())
 
       of ckFunctionalCastExpr:
-        result = aux(cursor[1], ilist)
+        result = aux(cursor[1], ilist, cache)
 
       of ckNullPtrLiteralExpr:
         result = newPLit(nil)
@@ -499,7 +502,7 @@ proc toInitCall*(cursor: CXCursor, conf: WrapConf): PNode =
           result = newPCall("init" & $cursor.cxType())
 
         for arg in cursor:
-          result.add aux(arg, false)
+          result.add aux(arg, false, cache)
 
       of ckIntegerLiteral, ckCharacterLiteral, ckFloatingLiteral,
          ckStringLiteral:
@@ -531,8 +534,8 @@ proc toInitCall*(cursor: CXCursor, conf: WrapConf): PNode =
 
       of ckCStyleCastExpr:
         result = nnkCast.newPTree(
-          cursor[0].cxType().toNimType(conf).toNType().toNNode(),
-          aux(cursor[1], ilist)
+          cursor[0].cxType().toNimType(conf, cache).toNType().toNNode(),
+          aux(cursor[1], ilist, cache)
         )
 
       else:
@@ -542,10 +545,11 @@ proc toInitCall*(cursor: CXCursor, conf: WrapConf): PNode =
         # debug cursor.treeRepr(conf.unit)
         # raiseAssert("#[ IMPLEMENT ]#")
 
-  return aux(cursor, false)
+  return aux(cursor, false, cache)
 
 
-proc setDefaultForArg*(arg: var CArg, cursor: CXCursor, conf: WrapConf) =
+proc setDefaultForArg*(
+    arg: var CArg, cursor: CXCursor, conf: WrapConf, cache: var WrapCache) =
   ## Update default value for argument.
   ## - @arg{arg} :: Non-raw argument to update default for
   ## - @arg{cursor} :: original cursor for argument declaration
@@ -555,7 +559,7 @@ proc setDefaultForArg*(arg: var CArg, cursor: CXCursor, conf: WrapConf) =
   if cursor.len == 2 and
      cursor[1].cxKind() in {ckUnexposedExpr, ckInitListExpr}:
     # debug cursor.treeRepr(conf.unit)
-    let default = toInitCall(cursor[1], conf)
+    let default = toInitCall(cursor[1], conf, cache)
     if not isNil(default):
       arg.default = some(default)
     # debug arg.default

@@ -1,4 +1,4 @@
-import hmisc/helpers, std/[strutils, sequtils]
+import hmisc/helpers, std/[strutils, sequtils, parseutils]
 import hmisc/other/oswrap
 
 func toCamelCase*(str: string): string =
@@ -12,6 +12,9 @@ func toCamelCase*(str: string): string =
   return buf.join("")
 
 proc fixIdentName*(str: string): string =
+  var str = str
+  str = str[str.skipWhile({'_'}) .. ^1]
+
   case str:
     of "set": "cxSet"
     of "type": "cxType"

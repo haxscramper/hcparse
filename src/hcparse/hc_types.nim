@@ -1,7 +1,7 @@
 import cxtypes, cxcommon
 import std/[
   tables, sets, strutils, sequtils, hashes, strformat, macros,
-  segfaults
+  segfaults, parseutils
 ]
 
 # import ./libclang_extensions
@@ -439,6 +439,7 @@ type
     ]]
     nameCache*: StringNameCache
     genEnums*: seq[GenEnum]
+    paramsForType*: Table[seq[string], seq[string]]
 
   GenBase* {.inheritable.} = ref object
     ## Common fields for all `GenX` types. Not used for inheritance, only
@@ -979,7 +980,8 @@ proc toHaxdocType*(cxtype: CXType): JsonNode =
 
 const ckProcEntryKinds* = {
   ckMethod, ckFunctionDecl, ckConstructor,
-  ckMacroDefinition, ckDestructor, ckFunctionTemplate
+  ckMacroDefinition, ckDestructor, ckFunctionTemplate,
+  ckConversionFunction
 }
 
 proc toHaxdocJson*(ns: CScopedIdent): JsonNode =
@@ -996,6 +998,7 @@ proc toHaxdocJson*(ns: CScopedIdent): JsonNode =
         of ckClassTemplate: %"Class"
         of ckVarDecl: %"Var"
         of ckConstructor: %"Constructor"
+        of ckConversionFunction: %"Converter"
         of ckDestructor: %"Destructor"
         of ckFunctionTemplate: %"Proc"
 
@@ -1025,11 +1028,19 @@ proc toHaxdocIdentType*(
        tkDouble, tkULong, tkUChar, tkChar16, tkChar32, tkWChar,
        tkChar_S, tkLong, tkUShort, tkNullPtr, tkFloat, tkLongDouble,
        tkShort, tkSChar:
-      if cxtype.isConstQualified():
-        result = "const[" & dropPrefix($cxtype, "const ") & "]"
 
-      else:
-        result = $cxtype
+      case cxtype.cxKind:
+        of tkLongDouble: result = "long[double]"
+        of tkULong: result = "unsigned[long]"
+        of tkULongLong: result = "unsigned[long[long]]"
+        of tkUInt: result = "unsigned[int]"
+        of tkLongLong: result = "long[long]"
+        else:
+          result = dropPrefix($cxtype, "const ")
+
+
+      if cxtype.isConstQualified():
+        result = "const[" & result & "]"
 
     of tkPointer:
       result = "ptr[" & toHaxdocIdentType(cxtype[]) & "]"
@@ -1140,6 +1151,7 @@ proc toHaxdocIdent*(ns: CScopedIdent): string =
         of ckMethod: result &= "method!"
         of ckFunctionDecl: result &= "proc!"
         of ckFunctionTemplate: result &= "proc!"
+        of ckConversionFunction: result &= "converter!"
         of ckMacroDefinition: result &= "cmacro!"
         of ckConstructor: result &= "contructor!"
         of ckDestructor: result &= "destructor!"
@@ -1392,7 +1404,8 @@ func initCArg*(
 
 
 func initCArg*(name: string, nimType: NimType): CArg =
-  initCArg(name, nimType, if nimType.isMutable: nvdVar else: nvdLet)
+  initCArg(name.fixIdentName(),
+           nimType, if nimType.isMutable: nvdVar else: nvdLet)
 
 func initCArg*(name: string, cursor: CXCursor): CArg =
   CArg(isRaw: true, name: name, cursor: cursor)
@@ -1430,29 +1443,53 @@ proc seenCursor*(cache: WrapCache, cursor: CXCursor): bool =
 proc hash*(cursor: CXCursor): Hash =
   Hash(cursor.hashCursor())
 
-proc lastName*(cd: CDecl): string =
+proc lastName*(cd: CDecl, conf: WrapConf, dropTemplate: bool = true): string =
   ## Return *last* name for declaration.
   ##
   ## `std::vector<int> -> vector`, `int main() -> main` etc.
-  $cd.ident[^1].cursor
+  result = $cd.ident[^1].cursor
+
+  if dropTemplate:
+    let old = result
+    if result.len != old.len:
+      # yes, I hate this shit too.
+      result = old[0 ..< old.skipUntil('<')]
+      let other = old[result.high .. ^1]
+      var
+        `<cnt` = 0
+        `>cnt` = 0
+
+      for ch in old:
+        if ch == '<': inc `<cnt`
+        if ch == '>': dec `>cnt`
+
+      if   `<cnt` + 2 == `>cnt`: result &= tern(other["<<="], "<<=", "<<")
+      elif `<cnt` + 1 == `>cnt`: result &= tern(other["<="], "<=", "<")
+      elif `<cnt`     == `>cnt`: result &= tern(other["<=>"], "<=>", "")
+      elif `<cnt` - 1 == `>cnt`: result &= tern(other[">="], ">=", ">")
+      elif `<cnt` - 2 == `>cnt`: result &= tern(other[">>="], ">>=", ">>")
+      else:
+        err `<cnt`, `>cnt`, old
+
+
 
 #==========================  Operator handling  ==========================#
 
 
 
-func isOperator*(cd: CDecl): bool =
+proc isOperator*(cd: CDecl, conf: WrapConf): bool =
   cd.kind in {cdkMethod, cdkFunction} and
-  cd.lastName().startsWith("operator") and
-  (not cd.lastName().validIdentifier())
+  cd.lastName(conf).startsWith("operator") and
+  (not cd.lastName(conf).validIdentifier())
 
 proc isOperator*(cx: CXCursor): bool =
   ($cx).startsWith("operator") and
   (not ($cx).validIdentifier())
 
 
-proc classifyOperator*(cd: CDecl): CXOperatorKind =
+proc classifyOperator*(cd: CDecl, conf: WrapConf): CXOperatorKind =
   assert cd.isOperator
-  let name = cd.lastName().dropPrefix("operator")
+  let name = cd.lastName(conf).dropPrefix("operator")
   case name:
     of "=":
       cxoCopyAsgnOp
@@ -1516,6 +1553,7 @@ proc classifyOperator*(cd: CDecl): CXOperatorKind =
         cxoUserLitOp
 
       elif cd.cursor.cxKind() in {ckFunctionTemplate}:
+        # warn cd.ident
         cxoConvertOp
 
       else:
@@ -1525,20 +1563,22 @@ proc classifyOperator*(cd: CDecl): CXOperatorKind =
         )
 
 
-func getNimName*(cd: CDecl): string =
+proc getNimName*(
+    cd: CDecl, conf: WrapConf, dropTemplate: bool = true): string =
+
   case cd.kind:
     of cdkMethod, cdkFunction:
       if cd.isOperator:
-        if cd.lastName() == "operator=":
+        if cd.lastName(conf) == "operator=":
           "setFrom" # REVIEW change name to something different if possible
         else:
-          cd.lastName().dropPrefix("operator")
+          cd.lastName(conf).dropPrefix("operator")
 
       else:
-        cd.lastName()
+        cd.lastName(conf, dropTemplate)
 
     else:
-      cd.lastName()
+      cd.lastName(conf, dropTemplate)
 
 proc initEnFieldVal*(v: BiggestInt): EnFieldVal =
   EnFieldVal(isRefOther: false, value: v)
@@ -1618,3 +1658,39 @@ proc allUsedTypes*(
 
       for argument in nimType.arguments:
         result.add allUsedTypes(argument.nimType)
+
+proc allGenericParams*(nimType: NimType): seq[NimType] =
+  if nimType.isParam:
+    # debug nimType
+    result.add nimType
+
+
+  case nimType.kind:
+    of ctkIdent:
+      for param in nimType.genericParams:
+        result.add allGenericParams(param)
+
+    of ctkProc:
+      if notNil nimType.returnType:
+        if nimType.returnType.fromCXType:
+          result.add nimType.returnType.allGenericParams()
+
+      for argument in nimType.arguments:
+        result.add allGenericParams(argument.nimType)
+
+proc setParamsForType*(
+  cache: var WrapCache, ident: CScopedIdent, params: seq[string]) =
+  # debug ident, $params
+  if params.len > 0:
+    var key: seq[string]
+    for part in ident:
+      key.add $part.cursor
+
+    cache.paramsForType[key] = params
+
+proc getParamsForType*(
+  cache: WrapCache, name: seq[string]): seq[NimType] =
+
+  if name in cache.paramsForType:
+    for p in cache.paramsForType[name]:
+      result.add newNimType(p, @[], true)

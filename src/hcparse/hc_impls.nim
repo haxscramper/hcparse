@@ -182,7 +182,8 @@ proc fixTypeName*(str: string, idx: int, conf: WrapConf): string =
     "bool", "cint", "cuint", "ptr", "void", "char",
     "cuchar", "cstring", "cchar", "uint32", "uint16",
     "culong", "clong", "cshort", "cushort", "array",
-    "ushort", "cfloat", "cstringarray", "pointer"
+    "ushort", "cfloat", "cstringarray", "pointer",
+    "culonglong", "clonglong"
   ]:
     return str
   else:

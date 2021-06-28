@@ -70,17 +70,20 @@ proc argsSignature*(
 
 proc visitCursor*(
     cursor: CXCursor, parent: CScopedIdent,
-    conf: WrapConf, lastTypeDecl: var CDecl
+    conf: WrapConf, lastTypeDecl: var CDecl,
+    cache: var WrapCache
   ): tuple[decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]]
 
 
 proc visitClass*(
     cursor: CXCursor, parent: CScopedIdent,
-    conf: WrapConf, typedef: Option[CXCursor]
+    conf: WrapConf, typedef: Option[CXCursor],
+    cache: var WrapCache,
   ): CDecl
 
 proc visitMethod*(
-    cursor: CXCursor, parent: CScopedIdent, accs: CXAccessSpecifier
+    cursor: CXCursor, parent: CScopedIdent, accs: CXAccessSpecifier,
+    conf: WrapConf
   ): CDecl =
 
   result = CDecl(
@@ -92,14 +95,14 @@ proc visitMethod*(
     isOperator: isOperator(cursor)
   )
 
-  if isOperator(result):
-    result.operatorKind = result.classifyOperator()
-    result.operatorName = result.lastName().dropPrefix("operator")
+  if isOperator(result, conf):
+    result.operatorKind = result.classifyOperator(conf)
+    result.operatorName = result.lastName(conf).dropPrefix("operator")
 
 
 proc visitField*(
     cursor: CXCursor, parent: CSCopedIdent, accs: CXAccessSpecifier,
-    conf: WrapConf
+    conf: WrapConf, cache: var WrapCache
   ): CDecl =
 
   result = CDecl(
@@ -112,7 +115,7 @@ proc visitField*(
 
   if cursor.len > 0:
     var decl: CDecl
-    let visit = visitCursor(cursor[0], parent, conf, decl)
+    let visit = visitCursor(cursor[0], parent, conf, decl, cache)
     if not isNil(decl):
       result.fieldTypeDecl = some decl
 
@@ -129,8 +132,8 @@ proc visitFunction*(
   )
 
   if result.isOperator:
-    result.operatorKind = result.classifyOperator()
-    result.operatorName = result.lastName().dropPrefix("operator")
+    result.operatorKind = result.classifyOperator(conf)
+    result.operatorName = result.lastName(conf).dropPrefix("operator")
 
   result.arguments = cursor.getArguments()
 
@@ -154,7 +157,9 @@ proc visitFunction*(
         # err "Found call expr at ", subn.getSpellingLocation()
 
       else:
-        warn "Unknown element", subn.cxKind, cast[int](subn.cxKind), subn, $cursor
+        warn "Unknown element", subn.cxKind, cast[int](subn.cxKind),
+                          subn, $cursor
+
         debug subn.getSpellingLocation()
         debug cursor.treeRepr()
 
@@ -181,7 +186,9 @@ proc getDefaultAccess*(cursor: CXCursor): CXAccessSpecifier =
 
 
 proc isAggregateInitable*(
-  cd: CXCursor, initArgs: var seq[CArg], conf: WrapConf): bool =
+    cd: CXCursor, initArgs: var seq[CArg],
+    conf: WrapConf, cache: var WrapCache
+  ): bool =
   ## Determine if entry pointed to by `cd`'s cursor is subject to aggregate
   ## initalization. Add all fields for aggregate initalization into
   ## @arg{initArgs}. NOTE: fields will be added unconditionally, so first
@@ -280,11 +287,11 @@ proc isAggregateInitable*(
         if aux(entry):
           var arg = initCArg(
             fixIdentName($entry),
-            entry.cxType().toNimType(conf),
+            entry.cxType().toNimType(conf, cache),
             nvdLet
           )
 
-          setDefaultForArg(arg, entry, conf)
+          setDefaultForArg(arg, entry, conf, cache)
           initArgs.add arg
 
       of failKinds: return false
@@ -315,7 +322,9 @@ proc isAggregateInitable*(
         # raiseImplementKindError(entry)
 
 
-proc updateParentFields*(decl: var CDecl, conf: WrapConf) =
+proc updateParentFields*(
+    decl: var CDecl, conf: WrapConf, cache: var WrapCache) =
+
   for parent in decl.cursor.getClassBaseCursors():
     var buf = ParentDecl(cursor: parent)
     var accs = parent.getDefaultAccess()
@@ -327,11 +336,11 @@ proc updateParentFields*(decl: var CDecl, conf: WrapConf) =
       else:
         case entry.cxKind():
           of ckFieldDecl:
-            buf.derived.add visitField(entry, decl.ident, accs, conf)
+            buf.derived.add visitField(entry, decl.ident, accs, conf, cache)
 
           of ckMethod:
             # FIXME not handling method overrides.
-            buf.derived.add visitMethod(entry, decl.ident, accs)
+            buf.derived.add visitMethod(entry, decl.ident, accs, conf)
 
           of ckAccessSpecifier:
             accs = entry.getAccessSpecifier()
@@ -343,7 +352,7 @@ proc updateParentFields*(decl: var CDecl, conf: WrapConf) =
 
 proc visitAlias*(
     lastTypeDecl: var CDecl, parent: CSCopedIdent,
-    subn: CXCursor, conf: WrapConf
+    subn: CXCursor, conf: WrapConf, cache: var WrapCache
   ): Option[CDecl] =
 
   if subn[0].cxKind() in {ckEnumDecl, ckStructDecl, ckUnionDecl, ckClassDecl}:
@@ -362,7 +371,7 @@ proc visitAlias*(
 
           # warn "First declaration was considered anonymous, second visitation"
           # logIndented:
-            lastTypedecl = visitClass(subn[0], parent, conf, some(subn))
+            lastTypedecl = visitClass(subn[0], parent, conf, some(subn), cache)
             lastTypeDecl.isCTypedef = true
 
 
@@ -399,7 +408,8 @@ proc visitAlias*(
 
 proc visitClass*(
     cursor: CXCursor, parent: CScopedIdent,
-    conf: WrapConf, typedef: Option[CXCursor]
+    conf: WrapConf, typedef: Option[CXCursor],
+    cache: var WrapCache
   ): CDecl =
 
   ## Convert class under cursor to `CDecl`
@@ -432,7 +442,8 @@ proc visitClass*(
     cursor: cursor,
     icpp: ident.toCppNamespace(),
     ident: ident,
-    isAggregateInit: isAggregateInitable(cursor, initArgs, conf)
+    isAggregateInit: isAggregateInitable(
+      cursor, initArgs, conf, cache)
   )
 
   if not conf.isImportCpp:
@@ -442,22 +453,29 @@ proc visitClass*(
   if result.isAggregateInit:
     result.initArgs = initArgs
 
-  updateParentFields(result, conf)
+  updateParentFields(result, conf, cache)
 
   var currentAccs = cursor.getDefaultAccess()
 
   var lastTypeDecl: CDecl
 
+  var params: seq[string]
   for subn in cursor:
     if subn.cxKind == ckAccessSpecifier:
       currentAccs = subn.getAccessSpecifier()
+
+    elif subn.cxKind in {
+      ckTemplateTypeParameter, ckTemplateTemplateParameter
+    }:
+      params.add $subn
 
     if currentAccs == asPublic and
        not conf.ignoreCursor(subn, conf):
 
       case subn.cxKind:
         of ckMethod, ckConversionFunction, ckConstructor, ckDestructor:
-          result.members.add visitMethod(subn, result.ident, currentAccs)
+          result.members.add visitMethod(
+            subn, result.ident, currentAccs, conf)
 
         of ckAccessSpecifier:
           currentAccs = subn.getAccessSpecifier()
@@ -465,10 +483,12 @@ proc visitClass*(
         of ckFieldDecl, ckVarDecl:
            # WARNING static fields might need to be wrapped differently
           result.members.add visitField(
-            subn, result.ident, currentAccs, conf)
+            subn, result.ident, currentAccs, conf, cache)
 
-        of ckTemplateTypeParameter, ckFriendDecl,
-           ckStaticAssert, ckTemplateTemplateParameter:
+        of ckTemplateTypeParameter, ckTemplateTemplateParameter:
+          discard
+
+        of ckFriendDecl, ckStaticAssert:
           discard
 
         of ckFunctionTemplate:
@@ -477,7 +497,9 @@ proc visitClass*(
         of ckTypeAliasTemplateDecl, ckTypeAliasDecl,
            ckTypedefDecl, ckUsingDeclaration:
 
-          let alias = visitAlias(lastTypeDecl, result.ident, subn, conf)
+          let alias = visitAlias(
+            lastTypeDecl, result.ident, subn, conf, cache)
+
           if alias.isSome():
             result.members.add alias.get()
           # result.members.add visitAlias(subn, result.ident, conf)
@@ -485,7 +507,8 @@ proc visitClass*(
         of ckStructDecl, ckClassDecl, ckUnionDecl, ckClassTemplate:
           if not isNil(lastTypeDecl): result.members.add lastTypeDecl
 
-          lastTypeDecl = visitClass(subn, result.ident, conf, none(CXCursor))
+          lastTypeDecl = visitClass(
+            subn, result.ident, conf, none(CXCursor), cache)
 
         of ckEnumDecl:
           if not isNil(lastTypeDecl): result.members.add lastTypeDecl
@@ -513,9 +536,13 @@ proc visitClass*(
             # debug subn.treeRepr()
 
 
+  cache.setParamsForType(ident, params)
+
 
 proc visitNamespace*(
-  cursor: CXCursor, parent: CScopedIdent, conf: WrapConf): seq[CDecl] =
+    cursor: CXCursor, parent: CScopedIdent, conf: WrapConf,
+    cache: var WrapCache
+  ): seq[CDecl] =
   ## Convert all elements in namespace into sequence of `CDecl`
   ## elements.
 
@@ -526,7 +553,8 @@ proc visitNamespace*(
   var lastTypeDecl: CDecl
   if not conf.ignoreCursor(cursor, conf):
     for subn in cursor:
-      result.add visitCursor(subn, parent, conf, lastTypeDecl).decls
+      result.add visitCursor(
+        subn, parent, conf, lastTypeDecl, cache).decls
 
   if not isNil(lastTypeDecl):
     result.add lastTypeDecl
@@ -542,7 +570,8 @@ proc visitMacrodef*(
 
 proc visitCursor*(
     cursor: CXCursor, parent: CScopedIdent,
-    conf: WrapConf, lastTypeDecl: var CDecl
+    conf: WrapConf, lastTypeDecl: var CDecl,
+    cache: var WrapCache
   ): tuple[decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]] =
 
   const classDeclKinds = {
@@ -573,12 +602,12 @@ proc visitCursor*(
   else:
     case cursor.cxKind:
       of ckNamespace:
-        result.decls.add visitNamespace(cursor, parent, conf)
+        result.decls.add visitNamespace(cursor, parent, conf, cache)
 
       of classDeclKinds:
         if not isNil(lastTypeDecl): result.decls.add lastTypeDecl
 
-        lastTypeDecl = visitClass(cursor, parent, conf, none(CXCursor))
+        lastTypeDecl = visitClass(cursor, parent, conf, none(CXCursor), cache)
         if "basic_string" in $cursor:
           warn "Visiting basic string declaration", cursor.cxKind()
           # pprintStackTrace()
@@ -589,7 +618,9 @@ proc visitCursor*(
         result.decls.add visitFunction(cursor, parent, conf)
 
       of ckTypedefDecl, ckTypeAliasDecl:
-        let alias = visitAlias(lastTypeDecl, parent, cursor, conf)
+        let alias = visitAlias(
+          lastTypeDecl, parent, cursor, conf, cache)
+
         if alias.isSome():
           result.decls.add alias.get()
 
@@ -657,7 +688,7 @@ proc getPublicAPI*(cd: CDecl): seq[CXCursor] =
 
 
 proc splitDeclarations*(
-  tu: CXTranslationUnit, conf: WrapConf): CApiUnit =
+  tu: CXTranslationUnit, conf: WrapConf, cache: var WrapCache): CApiUnit =
   ## Convert main file of translation unit into flattened sequence of
   ## high-level declarations. All cursors for objects/structs are
   ## retained. Public API elements are stored in `publicAPI` field
@@ -666,11 +697,11 @@ proc splitDeclarations*(
   var res: CApiUnit
   var lastTypeDecl: CDecl
   tuCursor.visitChildren do:
-    makeVisitor [tu, res, conf, tuCursor, lastTypeDecl]:
+    makeVisitor [tu, res, conf, tuCursor, lastTypeDecl, cache]:
       let resolve = conf.depResolver(cursor, tuCursor)
       if resolve == drkWrapDirectly:
         let (decls, rec, incls) = visitCursor(
-          cursor, @[], conf, lastTypeDecl)
+          cursor, @[], conf, lastTypeDecl, cache)
         # if not isNil(lastTypeDecl):
         #   debug "Last type decl from cursor"
         res.includes.add incls
