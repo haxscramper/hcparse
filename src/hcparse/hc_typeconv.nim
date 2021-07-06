@@ -4,7 +4,7 @@ import cxtypes, hc_types
 import hnimast
 
 import
-  hmisc/other/[colorlogger],
+  hmisc/other/[hlogger],
   hmisc/types/colorstring,
   hmisc/algo/[hstring_algo, hseq_mapping],
   hmisc/helpers,
@@ -40,8 +40,8 @@ proc fromElaboratedPType*(
             result.add parm.toNimType(conf, cache)
 
       else:
-        warn "Conversion from elaborated type: ", decl
-        debug "  ", decl.cxKind(), " in ", decl.getSpellingLocation()
+        conf.warn "Conversion from elaborated type: ", decl
+        conf.debug "  ", decl.cxKind(), " in ", decl.getSpellingLocation()
 
     conf.fixTypeName(result, conf, 0)
 
@@ -143,8 +143,8 @@ proc getTypeName*(cxtype: CXType, conf: WrapConf): string =
       result = $curs
 
     else:
-      err $curs
-      err "Type name for ", curs.treeRepr(conf.unit)
+      conf.err $curs
+      conf.err "Type name for ", curs.treeRepr(conf.unit)
       raiseAssert(
         &"Cannot convert cursor of kind {curs.cxKind} to type")
 
@@ -152,8 +152,8 @@ proc getTypeName*(cxtype: CXType, conf: WrapConf): string =
     dropPrefix($it, toStrPart(["const ", "enum ", "struct ", "union "]))
   ).join("::")
 
-  debug cxtype.getTypeNamespaces()
-  debug result
+  conf.debug cxtype.getTypeNamespaces()
+  conf.debug result
 
 proc isMutableRef*(cxtype: CXType): bool =
   case cxType.cxKind:
@@ -318,12 +318,12 @@ proc toNimType*(
         else:
           res = newNimType("UNEXPOSED", cxtype, true)
           if decl.cxKind() notin {ckNoDeclFound}:
-            warn "No decl found for type"
-            logIndented:
-              info cxtype.lispRepr()
-              debug decl.getSpellingLocation()
-              debug decl.cxKind()
-              debug decl.treeRepr()
+            conf.warn "No decl found for type"
+            conf.logger.indented:
+              conf.info cxtype.lispRepr()
+              conf.debug decl.getSpellingLocation()
+              conf.debug decl.cxKind()
+              conf.debug decl.treeRepr()
 
 
         res
@@ -344,7 +344,7 @@ proc toNimType*(
       ], cxType)
 
     else:
-      err "CANT CONVERT: ".toRed({styleItalic}),
+      conf.err "CANT CONVERT: ".toRed({styleItalic}),
         cxtype.kind, " ", ($cxtype).toGreen(), " ",
         cxtype[]
 
@@ -449,9 +449,9 @@ proc toInitCall*(
           #       raiseImplementKindError(cType)
 
           else:
-            err cursor[0].cxKind()
-            debug "\n" & cursor.treeRepr(conf.unit)
-            debug cursor.getSpellingLocation()
+            conf.err cursor[0].cxKind()
+            conf.debug "\n" & cursor.treeRepr(conf.unit)
+            conf.debug cursor.getSpellingLocation()
             # raiseAssert("#[ IMPLEMENT ]#")
 
         if isNil(result):
@@ -469,20 +469,20 @@ proc toInitCall*(
           result = newPCall($cursor)
 
         elif cursor.cxType().cxKind() == tkTypedef:
-          err "Found typedef used as default value"
-          debug cursor.getSpellingLocation()
+          conf.err "Found typedef used as default value"
+          conf.debug cursor.getSpellingLocation()
           discard
 
         elif cursor.cxType().cxKind() == tkEnum:
-          err "Found enum value as default"
-          debug cursor.getSpellingLocation()
+          conf.err "Found enum value as default"
+          conf.debug cursor.getSpellingLocation()
           discard
 
         else:
-          debug cursor.cxType().getTypeDeclaration().treeRepr()
+          conf.debug cursor.cxType().getTypeDeclaration().treeRepr()
 
-          debug cursor.getSpellingLocation()
-          debug cursor.treeRepr()
+          conf.debug cursor.getSpellingLocation()
+          conf.debug cursor.treeRepr()
           raiseImplementKindError(cursor.cxType())
 
       of ckFunctionalCastExpr:
@@ -525,11 +525,11 @@ proc toInitCall*(
             discard
 
       of ckLambdaExpr:
-        err "FIXME implement conversion to call from lambda expr"
+        conf.err "FIXME implement conversion to call from lambda expr"
         discard
 
       of ckTypeRef:
-        err "FIXME implement conversion to call from type ref "
+        conf.err "FIXME implement conversion to call from type ref "
         discard
 
       of ckCStyleCastExpr:
@@ -539,9 +539,9 @@ proc toInitCall*(
         )
 
       else:
-        err "Implement for kind", cursor.cxKind()
-        debug cursor.getSpellingLocation()
-        debug cursor.tokenStrings(conf.unit)
+        conf.err "Implement for kind", cursor.cxKind()
+        conf.debug cursor.getSpellingLocation()
+        conf.debug cursor.tokenStrings(conf.unit)
         # debug cursor.treeRepr(conf.unit)
         # raiseAssert("#[ IMPLEMENT ]#")
 

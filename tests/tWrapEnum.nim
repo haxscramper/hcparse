@@ -1,13 +1,10 @@
 import
   std/[sugar, strutils, sequtils, strformat, options],
-  hmisc/other/[oswrap, hshell, colorlogger],
+  hmisc/other/[oswrap, hshell, hlogger],
   hmisc/types/[colortext],
   hmisc/helpers,
   hcparse,
   hcparse/[dox_xml, hc_docwrap]
-
-startColorLogger(showFile = true)
-startHax()
 
 let
   dir = getNewTempDir("tWrapEnum")

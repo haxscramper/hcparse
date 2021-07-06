@@ -8,7 +8,7 @@ import hnimast
 import
   hmisc/[helpers, hexceptions],
   hmisc/algo/[hstring_algo, clformat],
-  hmisc/other/[oswrap, colorlogger, hshell],
+  hmisc/other/[oswrap, hlogger, hshell],
   hmisc/types/[colorstring, hgraph]
 
 
@@ -151,8 +151,8 @@ proc parseFile*(
 
 
   file.assertExists()
+  wrapConf.logger.thisScope("Parse file")
   # info "Parsing file", file
-  identLog()
 
   let flags = config.getFlags(file)
   result.filename = file
@@ -169,8 +169,8 @@ proc parseFile*(
     wrapConf.unit = result.unit
 
   except:
-    err file.realpath
-    debug config.getFlags(file).joinl()
+    wrapConf.err file.realpath
+    wrapConf.debug config.getFlags(file).joinl()
     raise
 
   result.api = result.unit.splitDeclarations(wrapConf, cache)
@@ -179,7 +179,6 @@ proc parseFile*(
 
   result.isExplicitlyAdded = true
 
-  dedentLog()
 
 proc parseAll*(
     files: seq[AbsFile], conf: ParseConf, wrapConf: WrapConf,
@@ -641,7 +640,7 @@ proc patchForward*(
       if entry.hasCDecl():
         # info "processing", entry.cdecl().ident
         if entry.cdecl().cursor in droppedForward:
-          notice "Dropped forward declaration", entry.cdecl().ident
+          conf.notice "Dropped forward declaration", entry.cdecl().ident
           entry[] = newGenEntry(GenPass(iinfo: currIInfo()))[]
 
         else:
@@ -745,7 +744,7 @@ proc wrapFiles*(
 
 
 proc wrapFile*(
-    wrapped: WrappedFile, wrapConf: WrapConf,
+    wrapped: WrappedFile, conf: WrapConf,
     cache: var WrapCache, index: hc_types.FileIndex
   ): seq[WrappedEntry] =
   # Coollect all types into single wrapped entry type block. All duplicate
@@ -754,7 +753,7 @@ proc wrapFile*(
   # because you can't declare type again after defining it (I hope), so all
   # last type encounter will always be it's definition.
   var res: Table[string, WrappedEntry]
-  var tmpRes: seq[WrappedEntry] = wrapped.entries.toNNode(wrapConf, cache)
+  var tmpRes: seq[WrappedEntry] = wrapped.entries.toNNode(conf, cache)
 
 
 
@@ -773,7 +772,7 @@ proc wrapFile*(
       of nekAliasDecl:
         let name = elem.decl.aliasdecl.newType.head
         if name in res:
-          warn "Override type alias for ", name
+          conf.warn "Override type alias for ", name
 
         res[name] = elem
 
@@ -813,8 +812,8 @@ proc wrapFile*(
 
   # Insert user-supplied code elements
   var addPost: seq[WrappedEntry]
-  if not isNil(wrapConf.userCode):
-    let (node, post) = wrapConf.userCode(wrapped)
+  if not isNil(conf.userCode):
+    let (node, post) = conf.userCode(wrapped)
     let entry = newWrappedEntry(toNimDecl(node), post, currIInfo())
     if not isNil(node):
       if post:
@@ -826,7 +825,7 @@ proc wrapFile*(
   block:
     let elems = collect(newSeq):
       for _, wrapEntry in mpairs(res):
-        updateComments(wrapEntry.decl, wrapEntry, wrapConf, cache)
+        updateComments(wrapEntry.decl, wrapEntry, conf, cache)
         wrapEntry.decl.toNimTypeDecl()
 
     result.add(newWrappedEntry(
@@ -837,7 +836,7 @@ proc wrapFile*(
   for elem in mitems(tmpRes):
     case elem.decl.kind:
       of nekProcDecl:
-        updateComments(elem.decl, elem, wrapConf, cache)
+        updateComments(elem.decl, elem, conf, cache)
         result.add elem
 
       of nekMultitype:
@@ -913,7 +912,7 @@ proc wrapSingleFile*(
   )
 
   if wrapConf.showParsed:
-    debug parsed.unit.getTranslationUnitCursor().treeRepr(parsed.unit)
+    wrapConf.debug parsed.unit.getTranslationUnitCursor().treeRepr(parsed.unit)
 
   var wrapConf = wrapConf
 
@@ -966,16 +965,11 @@ proc wrapAllFiles*(
             relativePath(file.baseFile, wrapConf.baseDir)),
           "nim"))
 
-    # info outPath
-    # logIndented:
-    #   for decl in file.entries:
-    #     if decl.hasCdecl():
-    #       debug decl.cdecl().ident
-
     var codegen: CodegenResult
     for node in wrapFile(file, wrapConf, cache, index):
       codegen.decls.add node.decl
 
+    wrapConf.debug outPath
     codegen.writeWrapped(outPath, @[], wrapConf)
 
   CodegenResult(cache: cache).writeWrapped(

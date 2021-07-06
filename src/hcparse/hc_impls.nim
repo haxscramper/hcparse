@@ -3,7 +3,7 @@ import hc_types, cxcommon, hnimast, cxtypes, hc_docwrap,
        std/[sequtils, strutils, strformat, tables]
 
 import hmisc/helpers
-import hmisc/other/[oswrap, colorlogger]
+import hmisc/other/[oswrap, hlogger]
 import hmisc/types/colorstring
 import hnimast
 import std/[sets]
@@ -212,7 +212,7 @@ proc fixTypeName*(ntype: var NimType, conf: WrapConf, idx: int = 0) =
         inc idx
 
     of ctkProc:
-      debug ntype.kind
+      conf.debug ntype.kind
       if notNil ntype.returnType:
         fixTypeName(ntype.returnType, conf)
 

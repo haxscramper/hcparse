@@ -15,7 +15,7 @@ import hnimast
 
 import hmisc/helpers
 import hmisc/other/oswrap
-import hmisc/other/colorlogger
+import hmisc/other/hlogger
 
 import std/[decls, strutils, sequtils, tables, sugar, strformat]
 

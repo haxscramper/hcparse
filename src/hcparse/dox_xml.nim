@@ -3,7 +3,7 @@ import
   ./dox_index as DoxIndex,
   std/[strtabs, tables],
   hmisc/hasts/[xml_ast],
-  hmisc/other/[oswrap, hshell, colorlogger],
+  hmisc/other/[oswrap, hshell, hlogger],
   hmisc/algo/halgorithm,
   hmisc/hdebug_misc
 

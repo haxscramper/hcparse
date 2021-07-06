@@ -15,7 +15,7 @@ import
   hmisc/macros/iflet,
   hmisc/algo/[htemplates, hseq_distance, namegen],
   hmisc/[helpers, hexceptions],
-  hmisc/other/[colorlogger, oswrap, hjson],
+  hmisc/other/[hlogger, oswrap, hjson],
   hmisc/types/colorstring
 
 import htsparse/cpp/cpp
@@ -423,7 +423,7 @@ proc wrapMethods*(
       }
 
     for kind in constructorAddKind:
-      logIndented:
+      conf.logger.indented:
         let (decl, canAdd) = wrapProcedure(
           meth, conf, some parent, cache, some cd, kind)
 
@@ -527,7 +527,7 @@ proc wrapAlias*(
 
 
   if al.isNewType:
-    info "typdef with new type declaration"
+    conf.info "typdef with new type declaration"
     var baseType: NimType
 
     if al.aliasNewType.kind in {cdkClass, cdkStruct}:
@@ -539,7 +539,7 @@ proc wrapAlias*(
     else:
       var wrapBase = al.aliasNewType.wrapEnum(conf, cache)
       baseType = newNimType(wrapBase[0].genEnum.name)
-      debug al.aliasNewType.cursor.treeRepr()
+      conf.debug al.aliasNewType.cursor.treeRepr()
       result.add wrapBase
 
     for newName in al.newTypes:
@@ -557,7 +557,7 @@ proc wrapAlias*(
   else:
     # Get underlying type for alias
     let aliasof = al.cursor.cxType().getCanonicalType()
-    logIndented:
+    conf.logger.indented:
       # Create new identifier for aliased type
       var newAlias = conf.typeNameForScoped(al.ident, conf)
     # debug al.ident, " -> ", newAlias
@@ -618,8 +618,8 @@ proc wrapAlias*(
     fixTypeParams(baseType, newAlias.genericParams)
 
     if baseType.hasUnexposed():
-      debug al.cursor.treeRepr()
-      debug aliasof.lispRepr()
+      conf.debug al.cursor.treeRepr()
+      conf.debug aliasof.lispRepr()
 
       raiseImplementError("Found unexposed type")
 
@@ -1096,7 +1096,7 @@ proc wrapMacros*(
   var prefix: seq[string]
   var buf: seq[CDecl]
   var lastSplit: seq[string]
-  logIndented:
+  conf.logger.indented:
     for decl in declMacros:
       # This implementation ties to find macro names with common prefixes,
       # group them together.
@@ -1124,8 +1124,8 @@ proc wrapMacros*(
         result.add wrapMacroEnum(buf, conf, cache)
 
       except ImplementError as e:
-        err "Cannot wrap macro collection to enum"
-        debug e.msg
+        conf.err "Cannot wrap macro collection to enum"
+        conf.debug e.msg
 
 
 
@@ -1144,7 +1144,8 @@ proc wrapApiUnit*(
 
     case decl.kind:
       of cdkClass, cdkStruct, cdkUnion:
-        identLog()
+        conf.logger.thisScope("Class wrapping")
+
         let spec = decl.cursor.getSpecializedCursorTemplate()
 
         if spec.cxKind() != ckFirstInvalid:
@@ -1153,10 +1154,9 @@ proc wrapApiUnit*(
         else:
           result.add decl.wrapObject(conf, cache)
 
-        dedentLog()
 
       of cdkAlias:
-        logIndented:
+        conf.logger.indented:
           result.add decl.wrapAlias(decl.ident, conf, cache)
 
       of cdkEnum:

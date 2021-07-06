@@ -33,9 +33,6 @@ let wrapConf* = baseCppWrapConf.withDeepIt do:
   )
 
 when isMainModule:
-  startColorLogger(showfile = true)
-  startHax()
-
   var files = collect(newSeq):
     for file in walkDir(basedir, RelFile, recurse = true):
       if file.ext() == "h":

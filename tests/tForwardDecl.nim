@@ -2,8 +2,6 @@ import hcparse/[wrap_common]
 import hmisc/other/oswrap
 
 withTempDir():
-  startColorLogger()
-
   mkDirStructure:
     file "class-B.hpp": "struct A; struct B { A* ptr; };"
     file "class-A.hpp": "struct B; struct A { B* ptr; };"

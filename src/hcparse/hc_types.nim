@@ -9,7 +9,7 @@ import std/[
 import
   hpprint,
   hmisc/[hexceptions, helpers],
-  hmisc/other/[oswrap, colorlogger, hjson],
+  hmisc/other/[oswrap, hlogger, hjson],
   hmisc/types/[hmap],
   hnimast, hnimast/pprint,
   hmisc/algo/[
@@ -181,6 +181,7 @@ type
         ## that don't declare any type.
 
       of cdkMethod, cdkFunction:
+        complexTemplate*: bool
         arguments*: seq[CArg] ## Method or function argumets
         returnType*: Option[CXType] ## Optional return type
         case isOperator*: bool
@@ -333,6 +334,7 @@ type
   WrapConf* = ref object
     ## Confuration for wrapping. Mostly deals with type renaming
 
+    logger*: HLogger
     header*: AbsFile ## Current main translation file (header)
 
     unit*: CXTranslationUnit
@@ -659,7 +661,7 @@ type
     cache*: WrapCache
 
 
-
+WrapConf.loggerField(logger, doExport = true)
 
 proc newGenEntry*(gen: AnyGenEntry): GenEntry =
   when gen is GenProc:
@@ -1469,7 +1471,7 @@ proc lastName*(cd: CDecl, conf: WrapConf, dropTemplate: bool = true): string =
       elif `<cnt` - 1 == `>cnt`: result &= tern(other[">="], ">=", ">")
       elif `<cnt` - 2 == `>cnt`: result &= tern(other[">>="], ">>=", ">>")
       else:
-        err `<cnt`, `>cnt`, old
+        conf.err `<cnt`, `>cnt`, old
 
 
 

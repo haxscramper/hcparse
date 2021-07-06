@@ -3,7 +3,7 @@ import ./hc_types, ./cxtypes, ./cxvisitors, ./hc_typeconv, ./cxcommon
 import hnimast
 
 import std/[sequtils, strutils]
-import hmisc/other/[colorlogger, oswrap]
+import hmisc/other/[hlogger, oswrap]
 import hmisc/algo/hstring_algo
 import hmisc/hexceptions
 import hmisc/types/colorstring
@@ -153,15 +153,26 @@ proc visitFunction*(
         discard
 
       of ckCallExpr, ckBinaryOperator, ckUnaryOperator:
-        err "Unwrapped call expression"
-        # err "Found call expr at ", subn.getSpellingLocation()
+        # NOTE first encountered in `range_access.h:131`
+        #```
+        # template<typename _Container>
+        #   inline constexpr auto
+        #   cend(const _Container& __cont) noexcept(noexcept(std::end(__cont)))
+        #     -> decltype(std::end(__cont))
+        #   { return std::end(__cont); }
+        #```
+        #
+        # HACK untilI figure out how to correctly translate
+        # `decltype(std::end(__const))` (call to templated method of the
+        # class) to nim I'm going to mark this template as 'complex'.
+        result.complexTemplate = true
 
       else:
-        warn "Unknown element", subn.cxKind, cast[int](subn.cxKind),
+        conf.warn "Unknown element", subn.cxKind, cast[int](subn.cxKind),
                           subn, $cursor
 
-        debug subn.getSpellingLocation()
-        debug cursor.treeRepr()
+        conf.debug subn.getSpellingLocation()
+        conf.debug cursor.treeRepr()
 
 
 proc visitEnum*(
@@ -271,11 +282,11 @@ proc isAggregateInitable*(
         return aux(cursor[0])
 
       else:
-        debug cast[int](cursor.cxType().cxKind())
-        debug cursor.getSpellingLocation()
-        debug cursor.treeRepr(conf.unit)
-        err cursor.cxType().cxKind()
-        err cursor.cxType()
+        conf.debug cast[int](cursor.cxType().cxKind())
+        conf.debug cursor.getSpellingLocation()
+        conf.debug cursor.treeRepr(conf.unit)
+        conf.err cursor.cxType().cxKind()
+        conf.err cursor.cxType()
         raiseAssert("#[ IMPLEMENT ]#")
 
   result = true
@@ -296,14 +307,11 @@ proc isAggregateInitable*(
 
       of failKinds: return false
       of ignoreKinds: discard
+      of ckVarDecl: discard
       of ckTypeRef, ckTemplateRef: discard
 
       of ckAccessSpecifier:
         access = entry.getAccessSpecifier()
-
-      of ckVarDecl:
-        debug entry.treeRepr(conf.unit)
-        discard
 
       of ckBaseSpecifier:
         if aux(entry[0]):
@@ -314,12 +322,6 @@ proc isAggregateInitable*(
 
       else:
         return false
-        # debug entry.treeRepr(conf.unit)
-        # debug cast[int](entry.cxType().cxKind())
-        # debug cast[int](entry.cxKind())
-        # debug entry.getSpellingLocation()
-        # debug cd.treeRepr(conf.unit)
-        # raiseImplementKindError(entry)
 
 
 proc updateParentFields*(
@@ -375,7 +377,7 @@ proc visitAlias*(
             lastTypeDecl.isCTypedef = true
 
 
-      debug "Found typedef struct", subn
+      conf.debug "Found typedef struct", subn
       lastTypeDecl = CDecl(
         ident: lastTypeDecl.ident,
         cursor: subn,
@@ -524,15 +526,19 @@ proc visitClass*(
           # Visibility attributes are ignored for now
           discard
 
+        of ckTypeRef, ckTemplateRef:
+          # First found in std strign, need to find better location
+          discard
+
         else:
           # inc undefCnt
           if undefCnt > 20:
-            debug subn.getSpellingLocation()
+            conf.debug subn.getSpellingLocation()
             raiseAssert("Reached unknown class element limit")
 
           else:
             discard
-            warn "IMPLEMENT class element:", ($subn.cxKind).toRed(), subn
+            conf.warn "IMPLEMENT class element:", ($subn.cxKind).toRed(), subn
             # debug subn.treeRepr()
 
 
@@ -592,10 +598,10 @@ proc visitCursor*(
 
   if conf.ignoreCursor(cursor, conf):
     if cursor.cxKind() in {ckNamespace}:
-      info "Ignoring namespace", cursor, "with elements"
-      logIndented:
+      conf.info "Ignoring namespace", cursor, "with elements"
+      conf.logger.indented:
         for entry in cursor:
-          debug entry
+          conf.debug entry
 
     # if ["_GLIBCXX", "__cplusplus", "__distance"] notin $cursor:
 
@@ -609,10 +615,9 @@ proc visitCursor*(
 
         lastTypeDecl = visitClass(cursor, parent, conf, none(CXCursor), cache)
         if "basic_string" in $cursor:
-          warn "Visiting basic string declaration", cursor.cxKind()
-          # pprintStackTrace()
-          debug cursor.getSpellingLocation()
-          debug "Last type decl: ", isNil(lastTypeDecl)
+          conf.warn "Visiting basic string declaration", cursor.cxKind()
+          conf.debug cursor.getSpellingLocation()
+          conf.debug "Last type decl:", isNil(lastTypeDecl)
 
       of ckFunctionDecl, ckFunctionTemplate:
         result.decls.add visitFunction(cursor, parent, conf)

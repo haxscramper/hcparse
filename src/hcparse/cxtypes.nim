@@ -1,7 +1,8 @@
 import libclang_wrap, cxvisitors
 import std/[strformat, strutils, options, sequtils, sugar, deques]
 import packages/docutils/rstast
-import hmisc/other/[oswrap, colorlogger]
+import hmisc/other/[oswrap, hlogger]
+import hmisc/algo/[clformat]
 import hmisc/types/colorstring
 import hpprint/hpprint_repr, hpprint
 import hmisc/helpers
@@ -486,9 +487,14 @@ proc `==`*(c1, c2: CXCursor): bool = equalCursors(c1, c2) == 1
 
 
 #========================  Location information  =========================#
-proc getSpellingLocation*(cursor: CXCursor): Option[tuple[
-  file: AbsFile, line, column, offset: int]] =
+
+type CxLocation = tuple[file: AbsFile, line, column, offset: int]
+
+proc getSpellingLocation*(cursor: CXCursor): Option[CxLocation] =
   result = cursor.getCursorLocation().getExpansionLocation()
+
+proc `$`*(loc: CxLocation): string =
+  &[hshow(loc.file), ":", hshow(loc.line), ":", hshow(loc.line)]
 
 proc relSpellingFile*(cursor: CXCursor): RelFile =
   cursor.getSpellingLocation().get().file.splitFile2().file.RelFile()
@@ -524,8 +530,6 @@ proc isSemanticAncestorOf*(ancestor, cursor: CXCursor): bool =
     else:
       inc cnt
       if cnt > 100:
-        err parent
-        err parent.cxKind()
         raiseImplementError("")
 
 proc inheritsGenParamsOf*(cursor, ancestor: CXCursor): bool =

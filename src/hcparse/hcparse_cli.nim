@@ -1,4 +1,4 @@
-import hmisc/other/[hcligen, oswrap, colorlogger]
+import hmisc/other/[hcligen, oswrap, hlogger]
 import hmisc/algo/halgorithm
 import hmisc/types/colortext
 import hmisc/hdebug_misc

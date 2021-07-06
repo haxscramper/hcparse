@@ -1,6 +1,6 @@
 import std/[tables, sequtils, strutils, options]
 import hmisc/helpers
-import hmisc/other/[oswrap, colorlogger]
+import hmisc/other/[oswrap]
 import cxtypes, cxcommon, hc_types
 
 proc getDepFiles*(deps: seq[CXCursor], conf: WrapConf): seq[AbsFile]

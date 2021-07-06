@@ -2,7 +2,6 @@
 #   ./hc_types, ./cxcommon, ./cxtypes, ./hc_typeconv,
 #   ./dox_xml,
 #   std/[strformat, tables, hashes, strutils, options, xmltree],
-#   hmisc/other/[colorlogger, oswrap],
 #   hmisc/algo/hstring_algo,
 #   hmisc/types/[hmap],
 #   hmisc/base_errors,
