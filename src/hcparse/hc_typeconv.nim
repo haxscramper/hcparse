@@ -138,6 +138,22 @@ proc getTypeName*(decl: CxCursor, conf: WrapConf): string =
 
 proc defaultTypeParameter*(
   cursor: CxCursor, cache: var WrapCache, conf: WrapConf): Option[NimType] =
+  # Clang represents default template type parameters using flat list that I
+  # need to collect back into recursive structure again. The algorithm is pretty
+  # similar to recursive descent parsing and handles only couple use cases right
+  # now - mainly `alloc = std::alloccator<char_t>`
+
+  # Example of the template type parameters `_Alloc = std::allocator<_CharT>`
+  #```
+  # kind: TemplateTypeParameter _Alloc:
+  #   +-> type: _Alloc
+  #   +-> TemplateRef:
+  #   |   +-> type: <invalid>
+  #   |   +-> allocator
+  #   +-> TypeRef:
+  #       +-> type: _CharT
+  #       +-> _CharT
+  #```
 
   let params = toSeq(cursor)
 
@@ -164,6 +180,27 @@ proc setParamsForType*(
     cache: var WrapCache, conf: WrapConf,
     ident: CScopedIdent, params: seq[CxCursor]
   ) =
+  ## Set or update default template type parameters for type `ident`
+
+  # This procedure is called multiple times and iteratively builds list of
+  # actual default templated parameters based on different type occurencies.
+  # This is necessary becase type /declaration/ is not guaranteed to contain all
+  # the necessary information. Specific example - `std::baisc_string`. It is
+  # defined as regular templated class with not default parameters, which are
+  # specified in completely different file.
+
+  # #+caption: `basic_string.h`
+  # ```cpp
+  # template<typename _CharT, typename _Traits, typename _Alloc>
+  #   class basic_string
+  # ```
+  #
+  # #+caption: `stringfwd.h`
+  # ```cpp
+  # template<typename _CharT, typename _Traits = char_traits<_CharT>,
+  #        typename _Alloc = allocator<_CharT> >
+  # class basic_string;
+  # ```
 
   if params.len > 0:
     var key: seq[string]
@@ -173,6 +210,8 @@ proc setParamsForType*(
     if key notin cache.paramsForType:
       cache.paramsForType[key] = @[]
 
+    # Convenience helper to avoid writing `cache.paramsForType[key]`
+    # all over the place.
     var list {.byaddr1.} = cache.paramsForType[key]
 
     for idx, param in params:
@@ -182,6 +221,8 @@ proc setParamsForType*(
         list.add NimType(kind: ctkIdent)
 
       if list[idx].defaultType.isNone():
+        # Only assign if default template type parameter is none - current type
+        # conversion is likely to have at least as much information (or more).
         conf.fixTypeName(nimType, conf, 0)
         list[idx] = nimType
 
@@ -192,16 +233,20 @@ proc setParamsForType*(
         if default.isSome():
           conf.fixTypeName(default.get(), conf, 0)
           list[idx].defaultType = default
-          conf.debug "Set default type for", idx, "type parameter",
-            key.hshow()
+          # conf.debug "Set default type for", idx, "type parameter",
+          #   key.hshow()
 
-          conf.debug cache.paramsForType[key][idx]
+          # conf.debug cache.paramsForType[key][idx]
 
 
 proc replacePartials*(
     nimType: var NimType,
     partials: Table[string, NimType],
     conf: WrapConf) =
+
+  ## Replace templated type names in `nimType` with corresponding ones from
+  ## `partials`. This is used to create concrete instantiation of C++ template
+  ## type with defaulted parameters
 
   proc aux(nimType: var NimType) =
     if nimType.kind == ctkIdent:
@@ -250,15 +295,50 @@ proc getParamsForType*(
         raise newImplementError(
           &"Type {cxtype} does not have generic parameter indexed {paramIdx}")
 
+
+
+
+    # Collect names of the template type parameters that were explicitly
+    # specified in the `partial` instantiation
     let minVal = min(paramRange.a, partial.genericParams.len)
     for partialIdx in 0 ..< minVal:
       partials[params[partialIdx].nimName] = partial.genericParams[partialIdx]
 
     if partials.len > 0:
       for item in mitems(result):
+        # For each element in result replace partial template type parameter
+        # with concrete type specialization
         item.replacePartials(partials, conf)
 
       conf.dump result
+
+    # NOTE current solution is a hack and it operates on assumption that
+    # template type parameter will match, which is not the case. Specific
+    # example that works right now due to that assumption:
+
+    # ```cpp
+    # template<typename _CharT, typename _Traits = char_traits<_CharT>,
+    #        typename _Alloc = allocator<_CharT> >
+    # class basic_string;
+    # ```
+
+    # When `basic_string` is instantiated it needs to fill default template
+    # parameters as well - `_Traits` and `_Alloc` part. First type parameter for
+    # basic string was called `_CharT` and (if we instantiated `std::string =
+    # basic_string<char>`) it would be mapped to `cchar`. It is a lucky
+    # coincidence that `std::char_traits` also uses template parameter called
+    # `_CharT` - because of this simple replace `_CharT -> cchar` would give me
+    # fully correct instantiation of the std string. In general more
+    # sophisticated mechanism must be provided to deal with cases that don't
+    # magically agree on template type parameter names.
+
+    # ```
+    # Type1[C]
+    # Type2[A, B = Type1[A]] // Must keep track of multistep renames `C -> A` (or `A -> C`)
+    #                        // most likely this would mean recursive calls to replace partials.
+    # ```
+
+    # TODO update this comment when new algorithm is implemented
 
 
 
