@@ -1,7 +1,7 @@
 import cxtypes, cxcommon
 import std/[
   tables, sets, strutils, sequtils, hashes, strformat, macros,
-  segfaults, parseutils
+  segfaults, parseutils, decls
 ]
 
 # import ./libclang_extensions
@@ -21,7 +21,7 @@ type
     drkIgnoreIfUsed ## Ignore dependency
     drkWrapDirectly ## Wrap dependency in main generated wrappers file
     drkImportUses ## Assume dependency is wrapped in other module, and
-                  ## generate `import` for it.
+    ## generate `import` for it.
 
   CTypeKind* = enum
     ctkIdent
@@ -46,8 +46,9 @@ type
     specialKind*: CTypeSpecialKind
     isMutable*: bool
     isConst*: bool
-    isParam*: bool ## Type is used as generic parameter
-                                    ## for other types/procedure arguments.
+    isParam*: bool ## Type is used as generic parameter for other
+    ## types/procedure arguments.
+
 
     case fromCXType*: bool
       of true:
@@ -62,6 +63,7 @@ type
 
     case kind*: CTypeKind
       of ctkIdent:
+        defaultType*: Option[NimType]
         nimName*: string
         genericParams*: seq[NimType]
 
@@ -231,15 +233,22 @@ type
                                  ## typedef.
         case isNewType*: bool
           of true:
+            ## Typedef contained new type declaration
+
             withBaseType*: bool ## no `struct T` declaration is present -
             ## `typedef` was immediately used to declare type.
 
             aliasNewType*: CDecl ## New type declaration introduced by
             ## C-style `typedef`
 
-          else:
+          of false:
+            ## Regular typedef declaration `alias = base`
+
             aliasBaseType*: CXCursor ## Base type used for alias
-                                     ## declaration
+            ## declaration
+
+            # genParams*: seq[CxType]
+
 
       of cdkMacro:
         discard
@@ -441,7 +450,10 @@ type
     ]]
     nameCache*: StringNameCache
     genEnums*: seq[GenEnum]
-    paramsForType*: Table[seq[string], seq[string]]
+    paramsForType*: Table[seq[string], seq[NimType]] ## Generic
+    ## parameters for each type. Type is uniquely represented using
+    ## `fully::scoped::ident`.
+    # defaultParamsForType*: Table[seq[string], Table[int, NimType]]
 
   GenBase* {.inheritable.} = ref object
     ## Common fields for all `GenX` types. Not used for inheritance, only
@@ -1337,7 +1349,7 @@ func isBuiltinGeneric*(str: string): bool =
 func newNimType*(name: string, cxType: CXType,
                  isParam: bool = false): NimType =
   NimType(kind: ctkIdent, nimName: name, isParam: isParam,
-          cxType: cxType, fromCXType: true)
+          cxType: cxType, fromCXType: true, defaultType: none(NimType))
 
 func newNimType*(
     name: string,
@@ -1394,7 +1406,28 @@ proc toNType*(nimType: NimType): NType[PNode] =
 
 
 
-proc `$`*(nimType: NimType): string = $toNType(nimType)
+proc `$`*(nimType: NimType): string =
+  if isNil(nimType):
+    result = "void"
+
+  else:
+    case nimType.kind:
+      of ctkIdent:
+        result = nimType.nimName
+        if nimType.genericParams.len > 0:
+          result &= "["
+          result &= nimType.genericParams.mapIt($it).join(", ")
+          result &= "]"
+
+      of ctkProc:
+        result = "proc "
+        result &= nimType.arguments.mapIt(it.name & ": " & $it.nimType).join(", ")
+        result &= ": "
+        result &= $nimType.returnType
+
+    if nimType.defaultType.isSome():
+      result &= " = "
+      result &= $nimType.defaultType.get()
 
 
 
@@ -1679,20 +1712,3 @@ proc allGenericParams*(nimType: NimType): seq[NimType] =
 
       for argument in nimType.arguments:
         result.add allGenericParams(argument.nimType)
-
-proc setParamsForType*(
-  cache: var WrapCache, ident: CScopedIdent, params: seq[string]) =
-  # debug ident, $params
-  if params.len > 0:
-    var key: seq[string]
-    for part in ident:
-      key.add $part.cursor
-
-    cache.paramsForType[key] = params
-
-proc getParamsForType*(
-  cache: WrapCache, name: seq[string]): seq[NimType] =
-
-  if name in cache.paramsForType:
-    for p in cache.paramsForType[name]:
-      result.add newNimType(p, @[], true)

@@ -354,57 +354,68 @@ proc updateParentFields*(
 
 proc visitAlias*(
     lastTypeDecl: var CDecl, parent: CSCopedIdent,
-    subn: CXCursor, conf: WrapConf, cache: var WrapCache
+    cursor: CXCursor, conf: WrapConf, cache: var WrapCache
   ): Option[CDecl] =
 
-  if subn[0].cxKind() in {ckEnumDecl, ckStructDecl, ckUnionDecl, ckClassDecl}:
+
+
+  if cursor[0].cxKind() in {ckEnumDecl, ckStructDecl, ckUnionDecl, ckClassDecl}:
     # libclang represents grouped typedefs using *multiple* nodes, so
     # `typedef struct S1 {} S2, *S3` will appear *three times* in the clang
     # IR. It is not really convenient to work with, as it requires additional
     # layer of bookeeping to avoud duplication of identifiers.
-    if lastTypeDecl.cursor == subn[0]:
+    if lastTypeDecl.cursor == cursor[0]:
       # Second encounter of the typedefed struct
       if lastTypeDecl.isAnonymous:
         # FIXME use list of all type declaration kinds
-        if subn[0].cxKind() in {ckStructDecl}:
+        if cursor[0].cxKind() in {ckStructDecl}:
           # Type declaration itself is anonymous, but a part of larger
           # `typedef` statement that declares name that is used in other
           # code (to avoid `struct` namespacing in C I guess).
 
           # warn "First declaration was considered anonymous, second visitation"
           # logIndented:
-            lastTypedecl = visitClass(subn[0], parent, conf, some(subn), cache)
+            lastTypedecl = visitClass(cursor[0], parent, conf, some(cursor), cache)
             lastTypeDecl.isCTypedef = true
 
 
-      conf.debug "Found typedef struct", subn
+      conf.debug "Found typedef struct", cursor
       lastTypeDecl = CDecl(
         ident: lastTypeDecl.ident,
-        cursor: subn,
+        cursor: cursor,
         kind: cdkAlias,
-        newTypes: @[subn],
+        newTypes: @[cursor],
         isNewType: true,
         aliasNewType: lastTypeDecl
       )
 
     elif lastTypeDecl.kind == cdkAlias and
          lastTypeDecl.isNewType and
-         lastTypeDecl.aliasNewType.cursor == subn[0]:
+         lastTypeDecl.aliasNewType.cursor == cursor[0]:
       # More trailing typedefs for existing declaration
-      lastTypeDecl.newTypes.add subn
+      lastTypeDecl.newTypes.add cursor
 
     else:
       raiseImplementError(
         "New typedef without previously visited declaration")
 
+  elif cursor[0].cxKind() in {ckTemplateRef}:
+    result = some CDecl(
+      isNewType: false,
+      cursor: cursor,
+      aliasBaseType: cursor[0],
+      ident: parent & toCName(cursor),
+      kind: cdkAlias
+    )
+
   else:
     lastTypeDecl = CDecl(
-      ident: parent & toCName(subn),
-      cursor: subn,
+      ident: parent & toCName(cursor),
+      cursor: cursor,
       kind: cdkAlias,
-      newTypes: @[subn],
+      newTypes: @[cursor],
       isNewType: false,
-      aliasBaseType: subn
+      aliasBaseType: cursor
     )
 
 
@@ -461,7 +472,7 @@ proc visitClass*(
 
   var lastTypeDecl: CDecl
 
-  var params: seq[string]
+  var params: seq[CxCursor]
   for subn in cursor:
     if subn.cxKind == ckAccessSpecifier:
       currentAccs = subn.getAccessSpecifier()
@@ -469,7 +480,7 @@ proc visitClass*(
     elif subn.cxKind in {
       ckTemplateTypeParameter, ckTemplateTemplateParameter
     }:
-      params.add $subn
+      params.add subn
 
     if currentAccs == asPublic and
        not conf.ignoreCursor(subn, conf):
@@ -542,7 +553,7 @@ proc visitClass*(
             # debug subn.treeRepr()
 
 
-  cache.setParamsForType(ident, params)
+  cache.setParamsForType(conf, ident, params)
 
 
 proc visitNamespace*(
@@ -614,13 +625,17 @@ proc visitCursor*(
         if not isNil(lastTypeDecl): result.decls.add lastTypeDecl
 
         lastTypeDecl = visitClass(cursor, parent, conf, none(CXCursor), cache)
-        if "basic_string" in $cursor:
-          conf.warn "Visiting basic string declaration", cursor.cxKind()
-          conf.debug cursor.getSpellingLocation()
-          conf.debug "Last type decl:", isNil(lastTypeDecl)
+        # if "basic_string" in $cursor:
+        #   conf.warn "Visiting basic string declaration", cursor.cxKind()
+        #   conf.debug cursor.getSpellingLocation()
+        #   conf.debug "Last type decl:", isNil(lastTypeDecl)
 
       of ckFunctionDecl, ckFunctionTemplate:
         result.decls.add visitFunction(cursor, parent, conf)
+
+      of ckMethod:
+        # Method definition in toplevel
+        discard
 
       of ckTypedefDecl, ckTypeAliasDecl:
         let alias = visitAlias(
@@ -649,7 +664,6 @@ proc visitCursor*(
         result.decls.add visitMacrodef(cursor, parent, conf)
 
       else:
-        # warn "Recursing on", cursor, "of kind", cursor.cxKind()
         result.recurse = true
 
 proc getPublicAPI*(cd: CDecl): seq[CXCursor] =

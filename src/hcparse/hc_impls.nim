@@ -183,7 +183,9 @@ proc fixTypeName*(str: string, idx: int, conf: WrapConf): string =
     "cuchar", "cstring", "cchar", "uint32", "uint16",
     "culong", "clong", "cshort", "cushort", "array",
     "ushort", "cfloat", "cstringarray", "pointer",
-    "culonglong", "clonglong"
+    "culonglong", "clonglong",
+
+    "cwchar", "cchar16", "cchar32"
   ]:
     return str
   else:
@@ -227,7 +229,9 @@ proc fixTypeName*(ntype: var NimType, conf: WrapConf, idx: int = 0) =
         conf.fixtypename(arg.nimType, conf, idx)
 
 
-proc typeNameForScoped*(ident: CScopedIdent, conf: WrapConf): NimType =
+proc typeNameForScoped*(
+    ident: CScopedIdent, conf: WrapConf): NimType {.deprecated: "getParamsForType".} =
+
   assert ident.len > 0
   var resname: string
   var genParams: seq[NimType]
@@ -288,6 +292,9 @@ let baseCParseConf* = ParseConf(
   includePaths: getBuiltinHeaders(),
   globalFlags: @[]
 )
+
+
+
 
 let baseCppWrapConf* = WrapConf(
   isImportcpp: true,

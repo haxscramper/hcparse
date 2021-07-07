@@ -6,11 +6,12 @@ import hnimast
 import
   hmisc/other/[hlogger],
   hmisc/types/colorstring,
-  hmisc/algo/[hstring_algo, hseq_mapping],
+  hmisc/algo/[hstring_algo, hseq_mapping, clformat],
   hmisc/helpers,
   hmisc/macros/iflet
 
-import std/[algorithm, strformat, sequtils, strutils, parseutils]
+import std/[algorithm, strformat, sequtils, strutils,
+            parseutils, tables, decls]
 
 import cxcommon
 
@@ -88,6 +89,15 @@ proc toScopedIdent*(cursor: CXCursor): CScopedIdent =
   for elem in cursor:
     result.add toCName(elem)
 
+
+proc fullScopedIdent*(
+    cxtype: CXType, filterInline: bool = true, withType: bool = true):
+  CScopedIdent =
+
+  for cursor in getTypeNamespaces(cxtype, filterInline, withType):
+    result.add toCName(cursor)
+
+
 proc toCName*(cursor: CXCursor): CName =
   result = CName(cursor: cursor, isGenerated: false)
   for genParam in requiredGenericParams(cursor):
@@ -117,20 +127,110 @@ proc sameNoGeneric*(ident1, ident2: CScopedIdent): bool =
       if a.getName() != b.getName():
         return false
 
-proc toFullScopedIdent*(cxtype: CXType): CScopedIdent =
-  for ns in getTypeNamespaces(cxtype):
-    result.add CName(
-      isGenerated: false,
-      cursor: ns,
-      genParams: requiredGenericParams(
-        ns.cxType().getTypeDeclaration()).mapIt(toScopedIdent(it))
-    )
+proc typeName*(ident: CScopedIdent): seq[string] = ident.mapIt($it.cursor)
 
-# proc isDirectTypeDecl*(cursor: CXCursor): bool =
-#   case cursor.cxKind():
-#     of
-#   debug cursor.treeRepr()
-#   raiseImplementError("")
+proc getTypeName*(decl: CxCursor, conf: WrapConf): string =
+  assertKind(decl, {ckClassDecl, ckStructDecl, ckClassTemplate})
+  decl.getSemanticNamespaces().mapIt(
+    dropPrefix($it, toStrPart(["const ", "enum ", "struct ", "union "]))
+  ).join("::")
+
+
+proc defaultTypeParameter*(
+  cursor: CxCursor, cache: var WrapCache, conf: WrapConf): Option[NimType] =
+
+  let params = toSeq(cursor)
+
+  proc foldTypes(idx: var int, cache: var WrapCache): NimType =
+    case params[idx].kind:
+      of ckTypeRef:
+        result = toNimType(params[idx].cxType(), conf, cache)
+        inc idx
+
+      of ckTemplateRef:
+        result = newNimType(
+          params[idx].getCursorDefinition().getTypeName(conf))
+        inc idx
+
+        result.genericParams.add foldTypes(idx, cache)
+
+      else:
+        raise newUnexpectedKindError(params[idx])
+
+  var idx = 0
+  return some foldTypes(idx, cache)
+
+proc setParamsForType*(
+    cache: var WrapCache, conf: WrapConf,
+    ident: CScopedIdent, params: seq[CxCursor]
+  ) =
+
+  if params.len > 0:
+    var key: seq[string]
+    for part in ident:
+      key.add $part.cursor
+
+    if key notin cache.paramsForType:
+      cache.paramsForType[key] = @[]
+
+    var list {.byaddr1.} = cache.paramsForType[key]
+
+    for idx, param in params:
+      var nimType = param.cxtype.toNimType(conf, cache)
+
+      if list.high < idx:
+        list.add NimType(kind: ctkIdent)
+
+      if list[idx].defaultType.isNone():
+        list[idx] = nimType
+
+      if param.len() > 0:
+        let default = defaultTypeParameter(
+          param, cache, conf)
+
+        if default.isSome():
+          list[idx].defaultType = default
+          conf.debug "Set default type for", idx, "type parameter",
+            key.hshow()
+
+          conf.debug cache.paramsForType[key][idx]
+
+
+
+proc getParamsForType*(
+    cache: var WrapCache, cxtype: CScopedIdent,
+    conf: WrapConf,
+    paramRange: Slice[int] = 0 .. high(int),
+    default: bool = false
+  ): seq[NimType] =
+  ## One or more (potentially defaulted) generic type parameters for type
+  ## `cxtype`. Parameter range starts at first requested parameter /index/.
+  ## If end of range equal to `high(int)` return all template parameters.
+
+
+  let name = cxtype.mapIt($it.cursor)
+
+  if name in cache.paramsForType:
+    var params {.byaddr1.} = cache.paramsForType[name]
+    for paramIdx in paramRange:
+      if paramIdx < params.len:
+        var res =
+          if params[paramIdx].defaultType.isSome() and default:
+            params[paramIdx].defaultType.get()
+
+          else:
+            params[paramIdx]
+
+        conf.fixTypeName(res, conf, 0)
+        result.add res
+        #   conf.debug params[paramIdx].defaultType.get()
+
+      elif paramRange.b == high(int):
+        break
+
+      else:
+        raise newImplementError(
+          &"Type {cxtype} does not have generic parameter indexed {paramIdx}")
 
 proc getTypeName*(cxtype: CXType, conf: WrapConf): string =
   let curs = cxtype.getTypeDeclaration()
@@ -177,9 +277,9 @@ proc fromCxxTypeName*(name: string): string =
 proc toNimType*(
     cxtype: CXType, conf: WrapConf, cache: var WrapCache): NimType =
   ## Convert CXType to nim type. Due to differences in how mutability
-  ## handled in nim and C it is not entirely possible to map `CXType`
-  ## to `NType` without losing this information. Instead `mutable` is
-  ## returned, indicating whether or not the type was mutable.
+  ## handled in nim and C it is not entirely possible to map `CXType` to
+  ## `NimType` without losing this information. Instead `isMutable` is set
+  ## in resulting type, indicating whether or not the type was mutable.
   ## Conversion is performed as follows
   ##
   ## - `T&` is considered mutable and mapped to `var T`
@@ -205,9 +305,9 @@ proc toNimType*(
     of tkDouble:     newNimType("cdouble",     cxtype)
     of tkULong:      newNimType("culong",      cxtype)
     of tkUChar:      newNimType("cuchar",      cxtype)
-    of tkChar16:     newNimType("uint16",      cxtype) # WARNING C++ type is `char16_t`
-    of tkChar32:     newNimType("uint32",      cxtype) # WARNING C++ type is `char32_t`
-    of tkWChar:      newNimType("uint32",      cxtype) # WARNING C++ type is `wchar_t`
+    of tkChar16:     newNimType("cchar16",     cxtype)
+    of tkChar32:     newNimType("cchar32",     cxtype)
+    of tkWChar:      newNimType("cwchar",      cxtype)
     of tkChar_S:     newNimType("cchar",       cxtype)
     of tkLong:       newNimType("clong",       cxtype)
     of tkUShort:     newNimType("cushort",     cxtype)
@@ -303,8 +403,7 @@ proc toNimType*(
           # represents.
           ckClassTemplate, ckClassDecl
         }:
-          let name = cxType.getTypeNamespaces().mapIt($it)
-          for param in cache.getParamsForType(name):
+          for param in cache.getParamsForType(cxType.fullScopedIdent(), conf):
             res.add param
 
         elif startsWith($cxType, typenameParts):
@@ -372,6 +471,7 @@ func fixTypeParams*(nt: var NimType, params: seq[NimType]) =
 
   var idx: int
   aux(nt, idx)
+
 
 func hasSpecial*(nt: NimType, special: seq[string]): bool =
   case nt.kind:

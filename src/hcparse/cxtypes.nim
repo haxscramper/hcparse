@@ -106,7 +106,7 @@ proc genParams*(cxtype: CXType): seq[CXType] =
   # TODO maybe mark generated parameters as defaulted/non-defaulted?
   let args = cxtype.getNumTemplateArguments()
   if args > 0:
-    for i in 0 .. args:
+    for i in 0 ..< args:
       result.add cxtype.getTemplateArgumentAsType(i.cuint)
 
 
