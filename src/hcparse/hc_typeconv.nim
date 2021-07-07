@@ -182,13 +182,15 @@ proc setParamsForType*(
         list.add NimType(kind: ctkIdent)
 
       if list[idx].defaultType.isNone():
+        conf.fixTypeName(nimType, conf, 0)
         list[idx] = nimType
 
       if param.len() > 0:
-        let default = defaultTypeParameter(
+        var default = defaultTypeParameter(
           param, cache, conf)
 
         if default.isSome():
+          conf.fixTypeName(default.get(), conf, 0)
           list[idx].defaultType = default
           conf.debug "Set default type for", idx, "type parameter",
             key.hshow()
@@ -196,22 +198,40 @@ proc setParamsForType*(
           conf.debug cache.paramsForType[key][idx]
 
 
+proc replacePartials*(
+    nimType: var NimType,
+    partials: Table[string, NimType],
+    conf: WrapConf) =
+
+  proc aux(nimType: var NimType) =
+    if nimType.kind == ctkIdent:
+      if nimType.nimName in partials:
+        nimType = partials[nimType.nimName]
+
+      else:
+        for subnode in mitems(nimType.genericParams):
+          aux(subnode)
+
+  conf.dump partials
+  aux(nimType)
 
 proc getParamsForType*(
     cache: var WrapCache, cxtype: CScopedIdent,
     conf: WrapConf,
     paramRange: Slice[int] = 0 .. high(int),
-    default: bool = false
+    default: bool = false,
+    partial: NimType = NimType(kind: ctkIdent)
   ): seq[NimType] =
   ## One or more (potentially defaulted) generic type parameters for type
   ## `cxtype`. Parameter range starts at first requested parameter /index/.
   ## If end of range equal to `high(int)` return all template parameters.
 
-
-  let name = cxtype.mapIt($it.cursor)
+  let name = cxtype.typeName()
 
   if name in cache.paramsForType:
     var params {.byaddr1.} = cache.paramsForType[name]
+    var partials: Table[string, NimType]
+
     for paramIdx in paramRange:
       if paramIdx < params.len:
         var res =
@@ -221,9 +241,7 @@ proc getParamsForType*(
           else:
             params[paramIdx]
 
-        conf.fixTypeName(res, conf, 0)
         result.add res
-        #   conf.debug params[paramIdx].defaultType.get()
 
       elif paramRange.b == high(int):
         break
@@ -231,6 +249,19 @@ proc getParamsForType*(
       else:
         raise newImplementError(
           &"Type {cxtype} does not have generic parameter indexed {paramIdx}")
+
+    let minVal = min(paramRange.a, partial.genericParams.len)
+    for partialIdx in 0 ..< minVal:
+      partials[params[partialIdx].nimName] = partial.genericParams[partialIdx]
+
+    if partials.len > 0:
+      for item in mitems(result):
+        item.replacePartials(partials, conf)
+
+      conf.dump result
+
+
+
 
 proc getTypeName*(cxtype: CXType, conf: WrapConf): string =
   let curs = cxtype.getTypeDeclaration()

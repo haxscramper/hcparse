@@ -605,7 +605,8 @@ proc wrapAlias*(
     baseType.genericParams.add cache.getParamsForType(
       aliasof.fullScopedIdent(), conf,
       maxIdx + 1 .. high(int),
-      default = true
+      default = true,
+      partial = baseType
     )
 
     if false: # TEMP need to find a real-world use-case to correctly handle
