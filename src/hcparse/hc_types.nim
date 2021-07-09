@@ -4,8 +4,6 @@ import std/[
   segfaults, parseutils, decls
 ]
 
-# import ./libclang_extensions
-
 import
   hpprint,
   hmisc/[hexceptions, helpers],
@@ -1346,8 +1344,13 @@ func initNimImportSpec*(isExternalImport: bool, importPath: seq[string]):
 func isBuiltinGeneric*(str: string): bool =
   str in ["ptr", "ref", "sink", "var"]
 
-func newNimType*(name: string, cxType: CXType,
-                 isParam: bool = false): NimType =
+{.warning[Deprecated]:on.}
+
+func newNimType*(
+    name: string, cxType: CXType,
+    isParam: bool = false
+  ): NimType =
+
   NimType(kind: ctkIdent, nimName: name, isParam: isParam,
           cxType: cxType, fromCXType: true, defaultType: none(NimType))
 
@@ -1379,6 +1382,7 @@ func newNimType*(
     isParam: bool = false
   ): NimType =
 
+  # {.warning[Deprecated]:on.}
   result = newNimType(name, cxType, isParam)
   result.genericParams.add genericParams
 

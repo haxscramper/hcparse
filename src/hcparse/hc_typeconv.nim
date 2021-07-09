@@ -15,6 +15,7 @@ import std/[algorithm, strformat, sequtils, strutils,
 
 import cxcommon
 
+
 proc getTypeName*(cxtype: CXType, conf: WrapConf): string
 
 proc toNimType*(
@@ -129,11 +130,17 @@ proc sameNoGeneric*(ident1, ident2: CScopedIdent): bool =
 
 proc typeName*(ident: CScopedIdent): seq[string] = ident.mapIt($it.cursor)
 
-proc getTypeName*(decl: CxCursor, conf: WrapConf): string =
+proc namespacedName*(name: seq[CxCursor], conf: WrapConf): string =
+  name.mapIt(dropPrefix(
+    $it, toStrPart(["const ", "enum ", "struct ", "union "]))).join("::")
+
+proc namespacedName*(decl: CxCursor, conf: WrapConf): string =
   assertKind(decl, {ckClassDecl, ckStructDecl, ckClassTemplate})
-  decl.getSemanticNamespaces().mapIt(
-    dropPrefix($it, toStrPart(["const ", "enum ", "struct ", "union "]))
-  ).join("::")
+  decl.getSemanticNamespaces().namespacedName(conf)
+
+proc namespacedName*(cxtype: CxType, conf: WrapConf): string =
+  cxtype.getTypeNamespaces().namespacedName(conf)
+
 
 
 proc defaultTypeParameter*(
@@ -165,7 +172,7 @@ proc defaultTypeParameter*(
 
       of ckTemplateRef:
         result = newNimType(
-          params[idx].getCursorDefinition().getTypeName(conf))
+          params[idx].getCursorDefinition().namespacedName(conf))
         inc idx
 
         result.genericParams.add foldTypes(idx, cache)
@@ -342,7 +349,6 @@ proc getParamsForType*(
 
 
 
-
 proc getTypeName*(cxtype: CXType, conf: WrapConf): string =
   let curs = cxtype.getTypeDeclaration()
   case curs.cxKind:
@@ -359,10 +365,7 @@ proc getTypeName*(cxtype: CXType, conf: WrapConf): string =
       raiseAssert(
         &"Cannot convert cursor of kind {curs.cxKind} to type")
 
-  result = cxtype.getTypeNamespaces().mapIt(
-    dropPrefix($it, toStrPart(["const ", "enum ", "struct ", "union "]))
-  ).join("::")
-
+  result = namespacedName(cxtype, conf)
   conf.debug cxtype.getTypeNamespaces()
   conf.debug result
 
@@ -499,7 +502,7 @@ proc toNimType*(
         # pprintStackTrace()
         let
           decl = cxtype.getTypeDeclaration()
-          name = cxType.getTypeNamespaces().mapIt($it).join("::")
+          name = cxType.namespacedName(conf)
           typenameParts = toStrPart(@[
             "type-parameter", "typename type-parameter",
             "typename rebind<type-parameter",
