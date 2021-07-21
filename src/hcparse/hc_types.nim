@@ -1429,9 +1429,10 @@ proc `$`*(nimType: NimType): string =
         result &= ": "
         result &= $nimType.returnType
 
-    if nimType.defaultType.isSome():
-      result &= " = "
-      result &= $nimType.defaultType.get()
+    if nimType.kind == ctkIdent:
+      if nimType.defaultType.isSome():
+        result &= " = "
+        result &= $nimType.defaultType.get()
 
 
 

@@ -742,6 +742,65 @@ proc wrapFiles*(
 
 
 
+proc registerUse*(
+    nimType: NimType,
+    used: var HashSet[CxCursor],
+    conf: WrapConf
+  ) =
+
+  if isNil(nimType):
+    return
+
+  if nimType.fromCxType:
+    conf.trace nimType
+
+  case nimType.kind:
+    of ctkIdent:
+      for param in nimType.genericParams:
+        registerUse(param, used, conf)
+
+    of ctkProc:
+      for arg in nimType.arguments:
+        if not arg.isRaw:
+          registerUse(arg.nimType, used, conf)
+
+      registerUse(nimType.returnType, used, conf)
+
+
+proc registerUsedTypes*(genProc: GenProc, used: var HashSet[CxCursor], conf: WrapConf) =
+  for arg in genProc.arguments:
+    if not arg.isRaw:
+      registerUse(arg.nimType, used, conf)
+
+  registerUse(genProc.returnType, used, conf)
+
+proc registerUsedTypes*(
+    entry: GenEntry,
+    used: var HashSet[CxCursor],
+    conf: WrapConf) =
+  case entry.kind:
+    of gekEnum:
+      discard
+
+    of gekProc:
+      registerUsedTypes(entry.genProc, used, conf)
+
+    of gekObject:
+      for field in entry.genObject.memberFields:
+        registerUse(field.fieldType, used, conf)
+
+      for meth in entry.genObject.memberMethods:
+        registerUsedTypes(meth, used, conf)
+
+      for nested in entry.genObject.nestedEntries:
+        registerUsedTypes(nested, used, conf)
+
+    of gekAlias:
+      registerUse(entry.genAlias.baseType, used, conf)
+
+    of gekPass, gekImport, gekForward:
+      discard
+
 
 proc wrapFile*(
     wrapped: WrappedFile, conf: WrapConf,
@@ -753,10 +812,21 @@ proc wrapFile*(
   # because you can't declare type again after defining it (I hope), so all
   # last type encounter will always be it's definition.
   var res: Table[string, WrappedEntry]
+
+  var usedApis: HashSet[CxCursor] # Set of cursors pointing to declarations
+                                  # for different types used in the file
+                                  # entries (procedure argument and return,
+                                  # field, global variable types).
+
+  for entry in wrapped.entries:
+    registerUsedTypes(entry, usedApis, conf)
+
+  for usedType in usedApis:
+    let loc = usedType.getSpellingLocation()
+    if loc.isSome():
+      wrapped.imports.incl conf.getImport(loc.get().file, conf, false)
+
   var tmpRes: seq[WrappedEntry] = wrapped.entries.toNNode(conf, cache)
-
-
-
 
   for elem in tmpRes:
     case elem.decl.kind:

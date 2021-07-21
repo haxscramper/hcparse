@@ -692,57 +692,57 @@ proc visitCursor*(
 #       raise newImplementKindError(
 #         cursor, cursor.treeRepr())
 
-proc getPublicAPI*(cd: CDecl, conf: WrapConf): seq[CXCursor] =
-  ## Get list of cursors referring to parts of the public API for a
-  ## declaration: return and argument types for functions and methods,
-  ## public fields for objects.
-  case cd.kind:
-    of cdkClass, cdkStruct, cdkUnion:
-      # for node in cd.cursor:
-      #   case node.kind:
-      #     of ckTypeRef, ckTemplateRef, ckBaseSpecifier,
-      #        ckTemplateTypeParameter:
-      #       result.add getPublicApi(node, conf)
+# proc getPublicAPI*(cd: CDecl, conf: WrapConf): seq[CXCursor] =
+#   ## Get list of cursors referring to parts of the public API for a
+#   ## declaration: return and argument types for functions and methods,
+#   ## public fields for objects.
+#   case cd.kind:
+#     of cdkClass, cdkStruct, cdkUnion:
+#       # for node in cd.cursor:
+#       #   case node.kind:
+#       #     of ckTypeRef, ckTemplateRef, ckBaseSpecifier,
+#       #        ckTemplateTypeParameter:
+#       #       result.add getPublicApi(node, conf)
 
-      #     of ckMethod, ckFieldDecl:
-      #       discard
+#       #     of ckMethod, ckFieldDecl:
+#       #       discard
 
-      #     else:
-      #       conf.warn node.kind, node
-      #       conf.debug node.treeRepr()
+#       #     else:
+#       #       conf.warn node.kind, node
+#       #       conf.debug node.treeRepr()
 
-      for member in cd.members:
-        result.add member.getPublicAPI(conf)
+#       for member in cd.members:
+#         result.add member.getPublicAPI(conf)
 
-    of cdkField:
-      if cd.access == asPublic:
-        return @[ cd.cursor ]
+#     of cdkField:
+#       if cd.access == asPublic:
+#         return @[ cd.cursor ]
 
-      else:
-        return @[]
+#       else:
+#         return @[]
 
-    of cdkFunction, cdkMethod:
-      let exportd: bool = (cd.kind == cdkFunction) or
-        (cd.access == asPublic)
+#     of cdkFunction, cdkMethod:
+#       let exportd: bool = (cd.kind == cdkFunction) or
+#         (cd.access == asPublic)
 
-      if exportd:
-        result.add cd.cursor
-        for arg in cd.arguments:
-          result.add arg.cursor
+#       if exportd:
+#         result.add cd.cursor
+#         for arg in cd.arguments:
+#           result.add arg.cursor
 
-    of cdkAlias:
-      result = @[cd.cursor]
-      # result.add getPublicApi(cd.cursor, conf)
+#     of cdkAlias:
+#       result = @[cd.cursor]
+#       # result.add getPublicApi(cd.cursor, conf)
 
-    of cdkForward, cdkEnum:
-      return @[]
+#     of cdkForward, cdkEnum:
+#       return @[]
 
-    of cdkMacro:
-      # While macro can /technically/ be a major source of pain when
-      # wrapping API it is not realistically possible to correctly infer
-      # all API dependencies, let alone map them to entries in translation
-      # unit.
-      return @[]
+#     of cdkMacro:
+#       # While macro can /technically/ be a major source of pain when
+#       # wrapping API it is not realistically possible to correctly infer
+#       # all API dependencies, let alone map them to entries in translation
+#       # unit.
+#       return @[]
 
 
 
@@ -771,7 +771,7 @@ proc splitDeclarations*(
           res.decls.add decls
           for decl in decls:
             assert not isNil(decl)
-            res.publicAPI.add decl.getPublicAPI(conf)
+            # res.publicAPI.add decl.getPublicAPI(conf)
 
           return cvrContinue
 
