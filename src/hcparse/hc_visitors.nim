@@ -666,14 +666,53 @@ proc visitCursor*(
       else:
         result.recurse = true
 
-proc getPublicAPI*(cd: CDecl): seq[CXCursor] =
+# proc getPublicApi*(cursor: CXcursor, conf: WrapConf): seq[CxCursor] =
+#   case cursor.kind:
+#     of ckTypedefDecl:
+#       result.add cursor[0]
+
+#     of ckTypeRef:
+#       result.add cursor
+
+#     of ckTemplateRef:
+#       if cursor.cxType().kind == tkInvalid:
+#         discard
+
+#       else:
+#         raise newImplementKindError(cursor.cxType(), cursor.treeRepr())
+
+#     of ckBaseSpecifier:
+#       for node in cursor:
+#         result.add getPublicApi(node, conf)
+
+#     of ckTemplateTypeParameter:
+#       conf.debug cursor.treeRepr()
+
+#     else:
+#       raise newImplementKindError(
+#         cursor, cursor.treeRepr())
+
+proc getPublicAPI*(cd: CDecl, conf: WrapConf): seq[CXCursor] =
   ## Get list of cursors referring to parts of the public API for a
   ## declaration: return and argument types for functions and methods,
   ## public fields for objects.
   case cd.kind:
     of cdkClass, cdkStruct, cdkUnion:
+      # for node in cd.cursor:
+      #   case node.kind:
+      #     of ckTypeRef, ckTemplateRef, ckBaseSpecifier,
+      #        ckTemplateTypeParameter:
+      #       result.add getPublicApi(node, conf)
+
+      #     of ckMethod, ckFieldDecl:
+      #       discard
+
+      #     else:
+      #       conf.warn node.kind, node
+      #       conf.debug node.treeRepr()
+
       for member in cd.members:
-        result.add member.getPublicAPI()
+        result.add member.getPublicAPI(conf)
 
     of cdkField:
       if cd.access == asPublic:
@@ -692,7 +731,8 @@ proc getPublicAPI*(cd: CDecl): seq[CXCursor] =
           result.add arg.cursor
 
     of cdkAlias:
-      return @[cd.cursor]
+      result = @[cd.cursor]
+      # result.add getPublicApi(cd.cursor, conf)
 
     of cdkForward, cdkEnum:
       return @[]
@@ -731,7 +771,7 @@ proc splitDeclarations*(
           res.decls.add decls
           for decl in decls:
             assert not isNil(decl)
-            res.publicAPI.add decl.getPublicAPI()
+            res.publicAPI.add decl.getPublicAPI(conf)
 
           return cvrContinue
 

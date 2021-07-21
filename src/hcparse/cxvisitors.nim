@@ -60,7 +60,7 @@ func makeVisitorImpl*(
   var procDecl = newNProcDecl(
     name = "visitor",
     args = procArgs,
-    rtyp = some(returnType),
+    returnType = some(returnType),
     exported = false,
     pragma = newNPragma("cdecl"),
     impl = (

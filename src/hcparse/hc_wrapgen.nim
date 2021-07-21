@@ -31,7 +31,7 @@ proc wrapOperator*(
     cache: var WrapCache
   ): tuple[decl: GenProc, addThis: bool] =
 
-  var it = initGenProc(oper, currIInfo())
+  var it = initGenProc(oper, currLInfo())
 
   it.name = oper.getNimName(conf)
   # it.genParams = genParams # FIXME: was it necessary to have generic
@@ -145,7 +145,7 @@ proc wrapProcedure*(
   ## - TODO :: allow creating placement new constructors that generate
   ##   nim `ref` types and allow for nim-managed memory.
 
-  var it = initGenProc(pr, currIInfo())
+  var it = initGenProc(pr, currLInfo())
 
   var addThis = (
     pr.kind == cdkMethod and
@@ -162,7 +162,7 @@ proc wrapProcedure*(
       let (decl, adt) = pr.wrapOperator(conf, cache)
       # debug adt
       it = decl
-      it.iinfo = currIInfo()
+      it.iinfo = currLInfo()
       addThis = adt
 
     else:
@@ -184,22 +184,22 @@ proc wrapProcedure*(
 
       if pr.cursor.isStatic():
         addThis = false
-        it.iinfo = currIInfo()
+        it.iinfo = currLInfo()
         it.icpp = &"({icppName}(@))"
 
       else:
-        it.iinfo = currIInfo()
+        it.iinfo = currLInfo()
         it.icpp = &"(#.{pr.getNimName(conf)}(@))"
 
       it.header = conf.makeHeader(pr.cursor, conf)
 
     else:
       if conf.isImportcpp:
-        it.iinfo = currIInfo()
+        it.iinfo = currLInfo()
         it.icpp = &"({icppName}(@))"
 
       else:
-        it.iinfo = currIInfo()
+        it.iinfo = currLInfo()
         it.icpp = &"{icppName}"
 
       it.header = conf.makeHeader(pr.cursor, conf)
@@ -286,7 +286,7 @@ proc wrapProcedure*(
       # `operator T()`
       assert parent.isSome(), "Cannot wrap constructor without parent object"
 
-      it.iinfo = currIInfo()
+      it.iinfo = currLInfo()
       it.header = conf.makeHeader(pr.cursor, conf)
       case specialProcKind:
         of gpskNewPtrConstructor:
@@ -354,7 +354,7 @@ proc wrapProcedure*(
 
   let generated = newProcVisit(it, conf, cache)
   result.decl.add it
-  result.decl.add GenPass(iinfo: currIInfo(), passEntries: generated)
+  result.decl.add GenPass(iinfo: currLInfo(), passEntries: generated)
 
 
 proc fixNames(ppd: var GenProc, conf: WrapConf, parent: NimType) =
@@ -438,7 +438,7 @@ proc wrapMethods*(
       returnType: newNimType("ptr", @[parent]),
       icpp: &"new {className}()",
       cdecl: cd,
-      iinfo: currIInfo(),
+      iinfo: currLInfo(),
       header: conf.makeHeader(cd.cursor, conf)
     )
 
@@ -452,7 +452,7 @@ proc wrapMethods*(
       name: destroyCall,
       arguments: @[initCArg("obj", newNimType("ptr", @[parent]))],
       cdecl: cd,
-      iinfo: currIInfo(),
+      iinfo: currLInfo(),
       icpp: &"#.~{className}()",
       header: conf.makeHeader(cd.cursor, conf),
     )
@@ -462,7 +462,7 @@ proc wrapMethods*(
       returnType: newNimType("ref", @[parent]),
       cdecl: cd,
       noPragmas: gpcNoPragma,
-      iinfo: currIInfo(),
+      iinfo: currLInfo(),
       impl: some (
         pquote do:
           newImportAux()
@@ -548,7 +548,7 @@ proc wrapAlias*(
       if newType.nimName != baseType.nimName:
         # Alias names might be the same for `typedef struct St {} St;`
         result.add GenAlias(
-          iinfo: currIInfo(),
+          iinfo: currLInfo(),
           cdecl: al,
           baseType: baseType,
           newAlias: newType
@@ -638,7 +638,7 @@ proc wrapAlias*(
     else:
       # NOTE ignore `typedef struct` in C
       result.add GenAlias(
-        iinfo: currIINfo(),
+        iinfo: currLInfo(),
         isDistinct: conf.isDistinct(al.ident, conf, cache),
         newAlias: newAlias,
         baseType: baseType,
@@ -658,9 +658,9 @@ proc getParentFields*(
 
         result.add newPProcDecl(
           name = fldName,
-          rtyp = some(fieldType.toNType()),
+          returnType = some(fieldType.toNType()),
           args = { "self" : obj.name },
-          iinfo = currIInfo(),
+          iinfo = currLInfo(),
           pragma = newPPragma(newExprColonExpr(
             newPIdent(wrapConf.importX()), newRStrLit(&"(#.{fldName})")))
         )
@@ -674,7 +674,7 @@ proc getParentFields*(
           # FIXME replace with `GProc` declaration
           result.add newPProcDecl(
             name = fldName,
-            iinfo = currIInfo(),
+            iinfo = currLInfo(),
             args = { "self" : obj.name, "val" : fieldType.toNType() },
             pragma = newPPragma(newExprColonExpr(
               newPIdent(wrapConf.importX()), newRStrLit(&"(#.{fldName} = @)")))
@@ -721,7 +721,7 @@ proc updateAggregateInit*(
                           # (with or without designated initalizers)
      cd.isAggregateInit and cd.initArgs.len > 0:
 
-    let pr = initGenProc(cd, currIInfo()).withIt do:
+    let pr = initGenProc(cd, currLInfo()).withIt do:
       it.name = "init" & gen.name.nimName
       it.arguments = cd.initArgs
       it.header = conf.makeHeader(cd.cursor, conf)
@@ -741,7 +741,7 @@ proc updateFieldExport*(
       # QUESTION `conf.identNameForScoped()?`
       name: fixIdentName(fld.lastName(conf)),
       rawName: fld.lastName(conf),
-      iinfo: currIInfo(),
+      iinfo: currLInfo(),
       cdecl: fld,
       fieldType: fld.cursor.cxType().toNimType(conf, cache),
       isConst: fld.isConst
@@ -783,7 +783,7 @@ proc wrapObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): GenObject =
 
   result = GenObject(
     rawName: $cd.cursor,
-    iinfo: currIInfo(),
+    iinfo: currLInfo(),
     name: conf.typeNameForScoped(cd.ident, conf),
     cdecl: cd
   )
@@ -854,7 +854,7 @@ proc makeGenEnum*(
   result = GenEnum(
     isMacroEnum: false,
     cdecl: declEn,
-    iinfo: currIInfo(),
+    iinfo: currLInfo(),
     rawName: nt.nimName & conf.rawSuffix(),
     name: nt.nimName
   )
@@ -874,7 +874,7 @@ proc makeGenEnum*(
       result.values.add GenEnumValue(
         cdecl: CDecl(cursor: name, kind: cdkField, ident: @[]),
         docComment: @[docCommentFor(declEn.ident & toCName(name))],
-        iinfo: currIInfo(),
+        iinfo: currLInfo(),
         baseName: $name,
         resCName: cEnumName($name, nt, cache),
         resNimName: renameField($name, pref, enumPref, cache),
@@ -946,9 +946,9 @@ proc makeEnumConverters(gen: GenEnum, conf: WrapConf, cache: var WrapCache):
       `arrName`[en].cEnum
 
   return GenPass(
-    iinfo: currIInfo(),
+    iinfo: currLInfo(),
     passEntries: @[newWrappedEntry(
-      toNimDecl(helpers), true, currIInfo(),
+      toNimDecl(helpers), true, currLInfo(),
       gen.cdecl
     )]
   )
@@ -991,7 +991,7 @@ proc evalTokensInt(strs: seq[string]): Option[int64] =
       of cppBinaryExpression:
         if (Some(@lhs), Some(@rhs)) ?= (aux(node[0]), aux(node[1])):
           var invert = (node[0].slice().b + 2) .. (node[1].slice().a - 2)
-          let op = strip(str[invert])
+          let op = strutils.strip(str[invert])
           result = case op:
             of "<<": some lhs shl rhs
             of ">>": some lhs shr rhs
@@ -1043,7 +1043,7 @@ proc wrapMacroEnum*(
     if value.isSome():
       enumFields.add GenEnumValue(
         cdecl: val,
-        iinfo: currIInfo(),
+        iinfo: currLInfo(),
         resNimName: name,
         resVal: value.get(),
         stringif: toks[0]
@@ -1055,7 +1055,7 @@ proc wrapMacroEnum*(
       isMacroEnum: true,
       name: name,
       proxyName: name,
-      iinfo: currIINfo(),
+      iinfo: currLInfo(),
       cdecl: nil,
       values: enumFields.sortedByIt(it.resVal)
     )
@@ -1074,9 +1074,9 @@ proc wrapMacroEnum*(
           result = bitor(result, val.cint)
 
     result.add GenPass(
-      iinfo: currIInfo(),
+      iinfo: currLInfo(),
       passEntries: @[
-        newWrappedEntry(toNimDecl(helpers), true, currIInfo())])
+        newWrappedEntry(toNimDecl(helpers), true, currLInfo())])
 
 
 
@@ -1163,7 +1163,7 @@ proc wrapApiUnit*(
         discard
 
       of cdkForward:
-        result.add GenForward(cdecl: decl, iinfo: currIInfo())
+        result.add GenForward(cdecl: decl, iinfo: currLInfo())
 
 
   result.add wrapMacros(macrolist, conf, cache)
@@ -1182,7 +1182,7 @@ proc toNNode*(gen: GenProc, wrapConf: WrapConf): PProcDecl =
     name = gen.name,
     iinfo = gen.iinfo,
     exported = true,
-    rtyp = some(gen.returnType.toNType()),
+    returnType = some(gen.returnType.toNType()),
     # genParams = gen.genParams.mapIt(it.toNType()),
     declType = gen.declType,
     kind = gen.kind
@@ -1234,7 +1234,7 @@ proc toNNode*(gen: GenProc, wrapConf: WrapConf): PProcDecl =
 proc toNNode*(
     gen: GenEnum, conf: WrapConf, cache: var WrapCache): seq[WrappedEntry] =
   if gen.isMacroEnum:
-    var rawEnum = newPEnumDecl(gen.proxyName, iinfo = currIInfo())
+    var rawEnum = newPEnumDecl(gen.proxyName, iinfo = currLInfo())
     rawEnum.exported = true
 
     for value in gen.values:
@@ -1245,11 +1245,11 @@ proc toNNode*(
       )
 
     result.add newWrappedEntry(
-      rawEnum.toNimDecl(), true, currIInfo())
+      rawEnum.toNimDecl(), true, currLInfo())
 
   else:
     block:
-      var rawEnum = newPEnumDecl(gen.rawName, iinfo = currIInfo())
+      var rawEnum = newPEnumDecl(gen.rawName, iinfo = currLInfo())
       rawEnum.addDocComment gen.docComment.join("\n")
       rawEnum.exported = true
 
@@ -1274,10 +1274,10 @@ proc toNNode*(
 
 
       result.add newWrappedEntry(
-        rawEnum.toNimDecl(), true, currIInfo(), gen.cdecl)
+        rawEnum.toNimDecl(), true, currLInfo(), gen.cdecl)
 
     block:
-      var nimEnum = newPEnumDecl(gen.name, iinfo = currIInfo())
+      var nimEnum = newPEnumDecl(gen.name, iinfo = currLInfo())
       nimEnum.addDocComment gen.docComment.join("\n")
       nimEnum.exported = true
       for value in gen.values:
@@ -1286,7 +1286,7 @@ proc toNNode*(
         )
 
       result.add newWrappedEntry(
-        nimEnum.toNimDecl(), true, currIInfo())
+        nimEnum.toNimDecl(), true, currLInfo())
 
   for aux in gen.auxGen:
     result.add toNNode(aux, conf, cache)
@@ -1295,7 +1295,7 @@ proc toNNode*(
 proc toNNode*(
     gen: GenObject, conf: WrapConf; cache: var WrapCache
   ): seq[WrappedEntry] =
-  var decl = newPObjectDecl(gen.name.nimName, iinfo = currIInfo())
+  var decl = newPObjectDecl(gen.name.nimName, iinfo = currLInfo())
   let scoped = conf.typeNameForScoped(gen.cdecl.ident, conf).toNType()
   decl.name = scoped
 
@@ -1323,7 +1323,7 @@ proc toNNode*(
         var getImpl = newPProcDecl(field.name)
         with getImpl:
           returnType = field.fieldType.toNType()
-          iinfo = currIInfo()
+          iinfo = currLInfo()
           genParams = gen.name.genericParams.mapIt(it.toNType())
           pragma = newPPragma(
             newPIdent("noinit"),
@@ -1346,7 +1346,7 @@ proc toNNode*(
       block setterImplementation:
         var setImpl = newPProcDecl(field.name, kind = pkAssgn)
         with setImpl:
-          iinfo = currIInfo()
+          iinfo = currLInfo()
           pragma = newPPragma(
             newPIdentColonString(
               "error",

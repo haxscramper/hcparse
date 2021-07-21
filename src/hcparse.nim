@@ -9,5 +9,12 @@ import hcparse/[
   hc_impls
 ]
 
-export libclang, cxcommon, cxvisitors, cxtypes,
-       hc_types, hc_visitors, hc_impls, libclang_wrap
+export
+  libclang,
+  cxcommon,
+  cxvisitors,
+  cxtypes,
+  hc_types,
+  hc_visitors,
+  hc_impls,
+  libclang_wrap

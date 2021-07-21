@@ -101,7 +101,7 @@ proc errorCodesToException*(
           raiseImplementError("")
 
       return @[newWrappedEntry(
-        gen2.toNNode(conf).toNimDecl(), false, currIInfo(),
+        gen2.toNNode(conf).toNimDecl(), false, currLInfo(),
         genProc.cdecl
       )]
 

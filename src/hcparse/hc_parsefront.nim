@@ -340,7 +340,7 @@ proc getTypeGraph(
             # (and replaced) with corresponding import/export pair during
             # drop/move phase.
             extraEntries.add GenForward(
-              iinfo: currIInfo(), cdecl: cdecl)
+              iinfo: currLInfo(), cdecl: cdecl)
 
 
         of gekObject:
@@ -641,7 +641,7 @@ proc patchForward*(
         # info "processing", entry.cdecl().ident
         if entry.cdecl().cursor in droppedForward:
           conf.notice "Dropped forward declaration", entry.cdecl().ident
-          entry[] = newGenEntry(GenPass(iinfo: currIInfo()))[]
+          entry[] = newGenEntry(GenPass(iinfo: currLInfo()))[]
 
         else:
           var moved: bool = false
@@ -650,7 +650,7 @@ proc patchForward*(
             # C codegen bug when compiling.
             let file = movedForward[filename].file
             if entry.cdecl().cursor in movedForward[filename].cursors:
-              entry = newGenEntry(GenPass(iinfo: currIInfo()))
+              entry = newGenEntry(GenPass(iinfo: currLInfo()))
               wrappedFile.imports.incl initNimImportSpec(false, @[filename])
               wrappedFile.exports.incl filename
 
@@ -695,7 +695,7 @@ proc patchForward*(
               entry = wrapObject(cdecl, conf, cache).newGenEntry()
 
             else:
-              entry[] = newGenEntry(GenPass(iinfo: currIINfo()))[]
+              entry[] = newGenEntry(GenPass(iinfo: currLInfo()))[]
 
 
 
@@ -799,22 +799,22 @@ proc wrapFile*(
   let push = pquote do:
     {.push warning[UnusedImport]: off.}
 
-  result.add push.toNimDecl().newWrappedEntry(false, currIInfo())
+  result.add push.toNimDecl().newWrappedEntry(false, currLInfo())
 
 
   result.add wrapped.imports.toNNode().
-    toNimDecl().newWrappedEntry(false, currIInfo())
+    toNimDecl().newWrappedEntry(false, currLInfo())
 
   if wrapped.exports.len > 0:
     result.add nnkExportStmt.newTree(
       wrapped.exports.mapIt(newPIdent(it))).
-      toNimDecl().newWrappedEntry(false, currIInfo())
+      toNimDecl().newWrappedEntry(false, currLInfo())
 
   # Insert user-supplied code elements
   var addPost: seq[WrappedEntry]
   if not isNil(conf.userCode):
     let (node, post) = conf.userCode(wrapped)
-    let entry = newWrappedEntry(toNimDecl(node), post, currIInfo())
+    let entry = newWrappedEntry(toNimDecl(node), post, currLInfo())
     if not isNil(node):
       if post:
         addPost.add entry
@@ -829,7 +829,7 @@ proc wrapFile*(
         wrapEntry.decl.toNimTypeDecl()
 
     result.add(newWrappedEntry(
-      toNimDecl(elems), false, currIINfo()))
+      toNimDecl(elems), false, currLInfo()))
 
   result.add addPost
 
