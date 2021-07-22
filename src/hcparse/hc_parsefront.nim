@@ -756,9 +756,11 @@ proc registerUse*(
     if cxDecl.kind notin {ckNoDeclFound}:
       used.incl cxDecl
 
-
   case nimType.kind:
     of ctkIdent:
+      if nimType.defaultType.isSome():
+        registerUse(nimType.defaultType.get(), used, conf)
+
       for param in nimType.genericParams:
         registerUse(param, used, conf)
 

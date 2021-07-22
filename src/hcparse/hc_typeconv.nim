@@ -135,10 +135,16 @@ proc namespacedName*(name: seq[CxCursor], conf: WrapConf): string =
     $it, toStrPart(["const ", "enum ", "struct ", "union "]))).join("::")
 
 proc namespacedName*(decl: CxCursor, conf: WrapConf): string =
+  ## Create /raw/ identifier from fully namespaces Cxx declaration entry.
+  ##
+  ## - EXAMPLE :: Given `namespace nsp { struct Str{}; }` and cursor that
+  ##   points to the `Str` /declaration/ it should return
   assertKind(decl, {ckClassDecl, ckStructDecl, ckClassTemplate})
   decl.getSemanticNamespaces().namespacedName(conf)
 
 proc namespacedName*(cxtype: CxType, conf: WrapConf): string =
+  ## Return fully qualified namespaced name for a type based on the type
+  ## instance.
   cxtype.getTypeNamespaces().namespacedName(conf)
 
 
@@ -147,8 +153,8 @@ proc defaultTypeParameter*(
   cursor: CxCursor, cache: var WrapCache, conf: WrapConf): Option[NimType] =
   # Clang represents default template type parameters using flat list that I
   # need to collect back into recursive structure again. The algorithm is pretty
-  # similar to recursive descent parsing and handles only couple use cases right
-  # now - mainly `alloc = std::alloccator<char_t>`
+  # similar to recursive descent parsing. Current implementation handles
+  # only couple use cases right now - mainly `alloc = std::alloccator<char_t>`
 
   # Example of the template type parameters `_Alloc = std::allocator<_CharT>`
   #```
@@ -164,15 +170,27 @@ proc defaultTypeParameter*(
 
   let params = toSeq(cursor)
 
+  # conf.info cursor.treeRepr()
+  # conf.dump cursor.getSpellingLocation()
+
   proc foldTypes(idx: var int, cache: var WrapCache): NimType =
-    case params[idx].kind:
+    let param = params[idx]
+    case param.kind:
       of ckTypeRef:
-        result = toNimType(params[idx].cxType(), conf, cache)
+        result = toNimType(param.cxType(), conf, cache)
         inc idx
 
       of ckTemplateRef:
-        result = newNimType(
-          params[idx].getCursorDefinition().namespacedName(conf))
+        let
+          cxtype = param.cxType()
+          def = param.getCursorDefinition()
+          semspaces = def.getSemanticNamespaces()
+
+        result = newNimType(semSpaces.namespacedName(conf), cxtype)
+
+        conf.dump def.cxType()
+        conf.dump cxtype, cxtype.getNumTemplateArguments()
+        # conf.trace result
         inc idx
 
         result.genericParams.add foldTypes(idx, cache)
@@ -234,14 +252,12 @@ proc setParamsForType*(
         list[idx] = nimType
 
       if param.len() > 0:
-        var default = defaultTypeParameter(
-          param, cache, conf)
+        var default = defaultTypeParameter(param, cache, conf)
 
         if default.isSome():
           conf.fixTypeName(default.get(), conf, 0)
           list[idx].defaultType = default
-          # conf.debug "Set default type for", idx, "type parameter",
-          #   key.hshow()
+          conf.debug "Set default type for", idx, "type parameter", key.hshow()
 
           # conf.debug cache.paramsForType[key][idx]
 

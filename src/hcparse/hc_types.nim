@@ -1464,10 +1464,11 @@ func initCArg*(name: string, cursor: CXCursor): CArg =
 func initGenProc*(cdecl: CDecl, iinfo: LineInfo): GenProc =
   GenProc(cdecl: cdecl, iinfo: iinfo)
 
+func initImportSpec*(path: seq[string]): NimImportSpec =
+  NimImportSpec(isRelative: false, importPath: path)
+
 func initGenImport*(importPath: seq[string], iinfo: LineInfo): GenImport =
-  GenImport(iinfo: iinfo, importSpec: NimImportSpec(
-    isRelative: false, importPath: importPath
-  ))
+  GenImport(iinfo: iinfo, importSpec: initImportSpec(importPath))
 
 func initGenImport*(importSpec: NimImportSpec, iinfo: LineInfo): GenImport =
   GenImport(iinfo: iinfo, importSpec: importSpec)

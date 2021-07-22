@@ -46,6 +46,12 @@
     new procedures will be generated.
   - Default implementation should check for ~nullptr~ results, and raise
     exception. Need to add 'raw' version of the procedure.
+- [ ] Allow completely overwriting output paths for generated files. That
+  is necessary to avoid weird name clases for imports, or fix original file
+  naming that might include dashes, or any other 'non-standard' path
+  elements. [[code:NimImportSpec]] should also support imports from generated
+  files and those two must be interlinked with each other to support this
+  use case.
 
 
 
