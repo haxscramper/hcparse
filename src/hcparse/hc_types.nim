@@ -1410,6 +1410,17 @@ proc toNType*(nimType: NimType): NType[PNode] =
 
 
 
+proc `$`*(spec: NimImportSpec): string =
+  if spec.isRelative:
+    if spec.relativeDepth == 0:
+      result = "./"
+
+    else:
+      result = "..".repeat(spec.relativeDepth)
+      result &= "/"
+
+  result &= join(spec.importPath, "/")
+
 proc `$`*(nimType: NimType): string =
   if isNil(nimType):
     result = "void"

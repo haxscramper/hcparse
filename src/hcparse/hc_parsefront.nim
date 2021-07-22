@@ -752,7 +752,10 @@ proc registerUse*(
     return
 
   if nimType.fromCxType:
-    conf.trace nimType
+    let cxDecl = nimType.cxType.getTypeDeclaration()
+    if cxDecl.kind notin {ckNoDeclFound}:
+      used.incl cxDecl
+
 
   case nimType.kind:
     of ctkIdent:
