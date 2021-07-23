@@ -22,8 +22,9 @@ type
     ## generate `import` for it.
 
   CTypeKind* = enum
-    ctkIdent
-    ctkProc
+    ## Kind of the wrapped Cxx type
+    ctkIdent ## Identifier with optional list of template parameters
+    ctkProc ## Procedural (callback) type
 
   CTypeSpecialKind* = enum
     ## Special kind of C++ types that are almost impossbile to correctly
@@ -42,28 +43,27 @@ type
     ## First `CXType` is converter to `NimType`, and then to
     ## `NType[PNode]`.
     specialKind*: CTypeSpecialKind
-    isMutable*: bool
-    isConst*: bool
+    isMutable*: bool ## Original type was mutable (mutable reference)
+    isConst*: bool ## Original type was immutable (const or const reference)
     isParam*: bool ## Type is used as generic parameter for other
     ## types/procedure arguments.
 
+    fullIdent*: Option[CScopedIdent] ## Full identifier to Cxx type declaration.
 
     case fromCXType*: bool
       of true:
         cxType*: CXType
-        fullIdent*: Option[CScopedIdent] ## Full identifier to C type
-        ## declaration.
 
       of false:
-        ## Entry was automatically generated
+        ## Entry was automatically generated or constructed from invalid CxType.
         discard
 
 
     case kind*: CTypeKind
       of ctkIdent:
-        defaultType*: Option[NimType]
-        nimName*: string
-        genericParams*: seq[NimType]
+        defaultType*: Option[NimType] ## Default type value. Used in template type parameters
+        nimName*: string ## Converted nim name
+        genericParams*: seq[NimType] ## Optional list of generic parameters
 
       of ctkProc:
         arguments*: seq[CArg]
@@ -71,6 +71,7 @@ type
 
 
   CDeclKind* = enum
+    ## Raw C declaration kind
     cdkClass
     cdkStruct
     cdkUnion
@@ -83,15 +84,15 @@ type
     cdkForward ## Forward declared enum/class/struct/union
 
   CArg* = object
-    name*: string
+    name*: string ## Converted argument name
     case isRaw*: bool ## Points to existing entry
       of true:
-        cursor*: CXCursor
+        cursor*: CXCursor ## Raw Cxx cursor
 
       of false: ## Either generated from raw cursor or constructed anew
-        varkind*: NVarDeclKind
-        nimType*: NimType
-        default*: Option[PNode]
+        varkind*: NVarDeclKind ## Kind of the argument (`var`, `lent`, `sink` etc)
+        nimType*: NimType ## Argument type
+        default*: Option[PNode] ## Optional default value for an argument
 
 
   CXOperatorKind* = enum
@@ -281,7 +282,7 @@ type
     unit*: CXTranslationUnit ## Translation unit
     filename*: AbsFile ## Name of the original file
     api*: CApiUnit ## File's API
-    index*: CXIndex
+    index*: CXIndex ## Liblcang index object
     explicitDeps*: seq[AbsFile] ## Filenames in which types exposed in
     ## API are declared. Guaranteed to have every file listed once &
     ## no self-dependencies.
@@ -295,17 +296,20 @@ type
     fileFlags*: Table[AbsFile, seq[string]] ## List of parse flags
     ## specific only to particular file
 
-    includepaths*: seq[AbsDir]
+    includepaths*: seq[AbsDir] ## List of absolute include directoires. `-I` in Cxx compilers
 
   FileIndex* = object
     index*: Table[AbsFile, ParsedFile] ## Index of all parsed files
 
   NimHeaderSpecKind* = enum
-    nhskGlobal
-    nhskAbsolute
-    nhskPNode
+    ## Kind of the nim input header
+    nhskGlobal ## Global header file, must be installed and accessible via `includepath`
+    ## when wrappers are compiled
+    nhskAbsolute ## Absolute path to the base header file
+    nhskPNode ## Unconstrained PNode - can be anything
 
   NimHeaderSpec* = object
+    ## Configuration for `>header.` generation
     case kind*: NimHeaderSpecKind
       of nhskGlobal:
         global*: string ## Global include like `<string>`
@@ -317,8 +321,10 @@ type
         pnode*: PNode ## Anything else
 
   NimImportSpec* = object
-    importPath*: seq[string]
-    case isRelative*: bool
+    ## Configuration for import of the other files
+    importPath*: seq[string] ## Name of the imported file
+    case isRelative*: bool ## Import should be performed using relative paths
+      ## or absolute.
       of true:
         relativeDepth*: int ## `0` means relative to current file, `./`.
         ## Any number greater than `0` is converted to equal number of
@@ -674,6 +680,7 @@ type
 WrapConf.loggerField(logger, doExport = true)
 
 proc newGenEntry*(gen: AnyGenEntry): GenEntry =
+  ## Box any genrated entry
   when gen is GenProc:
     result = GenEntry(kind: gekProc, genProc: gen)
 
@@ -703,9 +710,12 @@ proc newGenEntry*(gen: AnyGenEntry): GenEntry =
 
 
 proc add*(genSeq: var seq[GenEntry], gen: AnyGenEntry) =
+  ## Add any generated entry to @arg{genSeq}, converting it to
+  ## the necessary boxed type.
   genSeq.add newGenEntry(gen)
 
 proc hasCdecl*(gen: GenEntry): bool =
+  ## Check if generated entry has base cursor
   nor(
     (gen.kind in {gekEnum} and gen.genEnum.isMacroEnum),
     (gen.isGenerated),
@@ -721,6 +731,7 @@ proc hasCdecl*(gen: GenEntry): bool =
   # )
 
 proc cdecl*(gen: GenEntry): CDecl =
+  ## Get original cursor for the generated entry
   assert gen.hasCdecl(),
      &"generated: {gen.isGenerated}, kind: {gen.kind}"
 
@@ -736,10 +747,12 @@ proc cdecl*(gen: GenEntry): CDecl =
   assert notNil(result)
 
 proc getSpellingLocation*(entry: GenEntry): AbsFile =
+  ## Get spelling location for original cursor of the generated entry
   entry.cdecl().cursor.getSpellingLocation.get().file
 
 
 proc iinfo*(gen: GenEntry): LineInfo =
+  ## Get declaration info for generated entry
   case gen.kind:
     of gekEnum: result = gen.genEnum.iinfo
     of gekProc: result = gen.genProc.iinfo
@@ -753,6 +766,7 @@ proc iinfo*(gen: GenEntry): LineInfo =
 proc newProcVisit*(
     genProc: var GenProc, conf: WrapConf, cache: var WrapCache
   ): seq[WrappedEntry] =
+  ## Execute new procedure declaration callback.
 
   if not isNil(conf.newProcCb):
     return conf.newProcCb(genProc, conf, cache)
@@ -768,6 +782,10 @@ proc getName*(cn: CName): string =
 proc getSemanticNamespaces*(
     parent: CXCursor, filterInline: bool = true, withType: bool = true
   ): seq[CXCursor] =
+  ## Get list of semantic namespaces enclosing cursor.
+  ##
+  ## - @arg{filterInline} :: Drop inline namespaces if encountered
+  ## - @arg{withType} :: Include original cursor in the declaration list
 
   # info "Semantic namespaces for", parent
 
@@ -781,8 +799,7 @@ proc getSemanticNamespaces*(
   # info parent
 
   while parent.cxKind() in {
-    # TEST might be necessary to add templated namespacess (fuck, why C++
-    # is just so god-awful vomit-inducing garbage?)
+    # TEST might be necessary to add templated namespacess
     ckNamespace, ckStructDecl, ckClassDecl, ckClassTemplate
   }:
     if filterInline and (parent.isInlineNamespace() == 1):
@@ -802,8 +819,9 @@ proc getTypeNamespaces*(
     cxtype: CXType, filterInline: bool = true, withType: bool = true
   ): seq[CXCursor] =
   ## Return list of parent namespaces for given type `cxtype`.
-  ## `filterInline` - remove namespaces that are marked as `inline`.
-  ## `withType` - return type name too, or only namespaces.
+  ##
+  ## - @arg{filterInline} - remove namespaces that are marked as `inline`.
+  ## - @arg{withType} - return type name too, or only namespaces.
 
   var parent = cxtype.getTypeDeclaration()
 
@@ -1459,12 +1477,14 @@ func initCArg*(name: string, nimType: NimType): CArg =
            nimType, if nimType.isMutable: nvdVar else: nvdLet)
 
 func initCArg*(name: string, cursor: CXCursor): CArg =
+  ## Init raw C argument with `name`
   CArg(isRaw: true, name: name, cursor: cursor)
 
 func initGenProc*(cdecl: CDecl, iinfo: LineInfo): GenProc =
   GenProc(cdecl: cdecl, iinfo: iinfo)
 
 func initImportSpec*(path: seq[string]): NimImportSpec =
+  ## Create nim import spec with absolute path
   NimImportSpec(isRelative: false, importPath: path)
 
 func initGenImport*(importPath: seq[string], iinfo: LineInfo): GenImport =
@@ -1481,15 +1501,19 @@ proc declHash*(cursor: CXCursor): Hash =
     hash(loc.column) !& hash(loc.offset))
 
 proc markWrap*(cache: var WrapCache, cursor: CXCursor) =
+  ## Mark cursor as wrapped
   cache.hset.incl cursor.declHash()
 
 proc canWrap*(cache: WrapCache, cursor: CXCursor): bool =
+  ## Check if cursor has already been wrapped
   cursor.declHash() notin cache.hset
 
 proc markSeen*(cache: var WrapCache, cursor: CXCursor) =
+  ## Mark cursor in cache as already visited
   cache.visited.incl cursor.hashCursor()
 
 proc seenCursor*(cache: WrapCache, cursor: CXCursor): bool =
+  ## Cursor has already been recorded in the cache?
   cursor.hashCursor() in cache.visited
 
 proc hash*(cursor: CXCursor): Hash =
@@ -1530,16 +1554,19 @@ proc lastName*(cd: CDecl, conf: WrapConf, dropTemplate: bool = true): string =
 
 
 proc isOperator*(cd: CDecl, conf: WrapConf): bool =
+  ## Check whether C++ declaration is an operator declaration
   cd.kind in {cdkMethod, cdkFunction} and
   cd.lastName(conf).startsWith("operator") and
   (not cd.lastName(conf).validIdentifier())
 
 proc isOperator*(cx: CXCursor): bool =
+  ## Check whether cursor points to operator declaration
   ($cx).startsWith("operator") and
   (not ($cx).validIdentifier())
 
 
 proc classifyOperator*(cd: CDecl, conf: WrapConf): CXOperatorKind =
+  ## Classify C++ operator declaration
   assert cd.isOperator
   let name = cd.lastName(conf).dropPrefix("operator")
   case name:
@@ -1649,6 +1676,7 @@ func toNNode*(nhs: NimHeaderSpec): PNode =
 
 
 proc docCommentFor*(ident: CScopedIdent): string =
+  ## Return haxdoc documentation comment import
   &"@import{{[[code:{ident.toHaxdocIdent()}]]}}"
 
 # proc docCommentFor*(cursor: Ident): string =
@@ -1659,6 +1687,9 @@ proc updateComments*(
     node: WrappedEntry | CDecl, wrapConf: WrapConf,
     cache: var WrapCache
   ) =
+  ## Update nim declaration comment - add information about original Cxx entry
+  ## name, it's spelling location and place where wrapped entry was originally
+  ## constructed in the hcparse wrapper generator.
 
   when node is WrappedEntry:
     if node.generated:
@@ -1688,6 +1719,10 @@ proc allUsedTypes*(
     cxxOnly: bool = true,
     ignoreHead: bool = false
   ): seq[NimType] =
+  ## Recursively get list of all used nim types for a type (generic parameters)
+  ## - @arg{ingoreHead} :: Do not include original type in the resulting list
+  ## - @arg{cxxOnly) :: Only return types that were constructed from existing
+  ##   `CxType`
 
   if not ignoreHead:
     if nimType.fromCXtype or not cxxOnly:
@@ -1712,6 +1747,7 @@ proc allUsedTypes*(
         result.add allUsedTypes(argument.nimType)
 
 proc allGenericParams*(nimType: NimType): seq[NimType] =
+  ## Recursively get list of all the generic parameters for a type
   if nimType.isParam:
     # debug nimType
     result.add nimType

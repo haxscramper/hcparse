@@ -30,7 +30,7 @@ proc wrapOperator*(
     conf: WrapConf,
     cache: var WrapCache
   ): tuple[decl: GenProc, addThis: bool] =
-
+  
   var it = initGenProc(oper, currLInfo())
 
   it.name = oper.getNimName(conf)
