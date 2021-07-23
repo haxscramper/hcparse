@@ -117,6 +117,9 @@ proc toScopedIdent*(name: seq[string]): CScopedIdent =
   for elem in name:
     result.add toCName(elem)
 
+proc toScopedIdent*(sem: seq[CxCursor]): CSCopedIdent =
+  for elem in sem:
+    result.add toCName(elem)
 
 proc toScopedIdent*(name: string): CScopedIdent =
   result.add toCName(name)
@@ -147,6 +150,11 @@ proc namespacedName*(cxtype: CxType, conf: WrapConf): string =
   ## instance.
   cxtype.getTypeNamespaces().namespacedName(conf)
 
+proc newNimType*(
+    conf: WrapConf,
+    semspaces: seq[CxCursor], cxType: CxType): NimType =
+  result = newNimType(semSpaces.namespacedName(conf), cxType)
+  result.fullIdent = some toScopedIdent(semSpaces)
 
 
 proc defaultTypeParameter*(
@@ -186,10 +194,10 @@ proc defaultTypeParameter*(
           def = param.getCursorDefinition()
           semspaces = def.getSemanticNamespaces()
 
-        result = newNimType(semSpaces.namespacedName(conf), cxtype)
-
-        conf.dump def.cxType()
-        conf.dump cxtype, cxtype.getNumTemplateArguments()
+        result = conf.newNimType(semSpaces, cxtype)
+        # result.fullIdent = toScopedIdent(semspaces)
+        # conf.dump def.cxType()
+        # conf.dump cxtype, cxtype.getNumTemplateArguments()
         # conf.trace result
         inc idx
 

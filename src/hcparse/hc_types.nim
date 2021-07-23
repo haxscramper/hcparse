@@ -44,24 +44,28 @@ type
     ## `NType[PNode]`.
     specialKind*: CTypeSpecialKind
     isMutable*: bool ## Original type was mutable (mutable reference)
-    isConst*: bool ## Original type was immutable (const or const reference)
+    isConst*: bool ## Original type was immutable (const or const
+                   ## reference)
     isParam*: bool ## Type is used as generic parameter for other
-    ## types/procedure arguments.
+                   ## types/procedure arguments.
 
-    fullIdent*: Option[CScopedIdent] ## Full identifier to Cxx type declaration.
+    fullIdent*: Option[CScopedIdent] ## Full identifier to Cxx type
+                                     ## declaration.
 
     case fromCXType*: bool
       of true:
         cxType*: CXType
 
       of false:
-        ## Entry was automatically generated or constructed from invalid CxType.
+        ## Entry was automatically generated or constructed from invalid
+        ## CxType.
         discard
 
 
     case kind*: CTypeKind
       of ctkIdent:
-        defaultType*: Option[NimType] ## Default type value. Used in template type parameters
+        defaultType*: Option[NimType] ## Default type value. Used in
+                                      ## template type parameters
         nimName*: string ## Converted nim name
         genericParams*: seq[NimType] ## Optional list of generic parameters
 
@@ -345,7 +349,7 @@ type
     map*: Table[string, Map[int, seq[DoxRefid]]]
 
   WrapConf* = ref object
-    ## Confuration for wrapping. Mostly deals with type renaming
+    ## Confuration for wrapping.
 
     logger*: HLogger
     header*: AbsFile ## Current main translation file (header)

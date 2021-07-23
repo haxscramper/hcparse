@@ -756,6 +756,18 @@ proc registerUse*(
     if cxDecl.kind notin {ckNoDeclFound}:
       used.incl cxDecl
 
+  if nimType.fullIdent.isSome():
+    let last = nimType.fullIdent.get()[^1]
+    if not last.isGenerated:
+      # conf.dump last.cursor.cxKind(), last.cursor.getSpellingLocation()
+      used.incl last.cursor
+
+    for param in last.genParams:
+      if param.len > 0 and param[^1].isGenerated.not():
+        let lastParam = param[^1]
+        if lastParam.cursor.kind notin { ckTemplateTypeParameter }:
+          conf.dump param, lastParam.cursor.cxKind()
+
   case nimType.kind:
     of ctkIdent:
       if nimType.defaultType.isSome():
