@@ -296,15 +296,26 @@ proc getImport*(
     if imp.isSome():
       return imp.get()
 
-  let save = conf.getSavePath(dep, conf)
-  let parts = save.string.split("/")
+  # let save =
+  # let parts = save.string.split("/")
 
   if isExternalImport:
     result = NimImportSpec(
-      isRelative: false, importPath: @[conf.wrapName] & parts)
+      isRelative: false,
+      importPath: @[conf.wrapName] & conf.getSavePath(
+        dep, conf).withoutExt().string.split("/"))
 
   else:
-    result = NimImportSpec(isRelative: true, importPath: parts)
+    let (pDep, pUser) = (conf.getSavePath(dep, conf), conf.getSavePath(user, conf))
+
+    let (depth, parts) = importSplit(
+      conf.nimOutDir / pUser.withoutExt(),
+      conf.nimOutDir / pDep.withoutExt())
+
+    result = NimImportSpec(
+      isRelative: true,
+      importPath: parts,
+      relativeDepth: depth)
 
       # let (dir, name, ext) = dep.splitFile()
       # result = initNimImportSpec(
