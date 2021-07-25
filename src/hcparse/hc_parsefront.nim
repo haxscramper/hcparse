@@ -844,12 +844,13 @@ proc wrapFile*(
   for usedType in usedApis:
     let loc = usedType.getSpellingLocation()
     if loc.isSome():
-      let imp = conf.getImport(
-        loc.get().file, conf.getBaseFile(wrapped), false)
+      let base = conf.getBaseFile(wrapped)
+      let imp = conf.getImport(loc.get().file, base, false)
 
       if not (imp.isRelative and
               imp.relativeDepth == 0 and
-              imp.importPath[0] == wrapped.baseFile.name()):
+              imp.importPath[0] == conf.getSavePath(base, conf).name()):
+
         wrapped.imports.incl imp
 
   var tmpRes: seq[WrappedEntry] = wrapped.entries.toNNode(conf, cache)

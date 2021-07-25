@@ -265,7 +265,7 @@ proc setParamsForType*(
         if default.isSome():
           conf.fixTypeName(default.get(), conf, 0)
           list[idx].defaultType = default
-          conf.debug "Set default type for", idx, "type parameter", key.hshow()
+          # conf.debug "Set default type for", idx, "type parameter", key.hshow()
 
           # conf.debug cache.paramsForType[key][idx]
 
@@ -288,7 +288,7 @@ proc replacePartials*(
         for subnode in mitems(nimType.genericParams):
           aux(subnode)
 
-  conf.dump partials
+  # conf.dump partials
   aux(nimType)
 
 proc getParamsForType*(
@@ -341,7 +341,7 @@ proc getParamsForType*(
         # with concrete type specialization
         item.replacePartials(partials, conf)
 
-      conf.dump result
+      # conf.dump result
 
     # NOTE current solution is a hack and it operates on assumption that
     # template type parameter will match, which is not the case. Specific
