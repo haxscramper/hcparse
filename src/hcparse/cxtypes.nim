@@ -494,7 +494,7 @@ proc getSpellingLocation*(cursor: CXCursor): Option[CxLocation] =
   result = cursor.getCursorLocation().getExpansionLocation()
 
 proc `$`*(loc: CxLocation): string =
-  &[hshow(loc.file), ":", hshow(loc.line), ":", hshow(loc.line)]
+  &[hshow(loc.file), ":", hshow(loc.line), ":", hshow(loc.column)]
 
 proc relSpellingFile*(cursor: CXCursor): RelFile =
   cursor.getSpellingLocation().get().file.splitFile2().file.RelFile()

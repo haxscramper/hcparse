@@ -432,6 +432,12 @@ proc toNimType*(
   ##   simply `E`) specifiers are simply dropped.
   ##
   ## - TODO :: `const&&` parameters /could/ be mapped to `sink` annotations
+
+  if conf.isComplexType(cxtype):
+    result = newNimType("CxxTemplateUndefined", cxType)
+    result.isComplex = true
+    return
+
   var mutable: bool = false
   result = case cxtype.cxKind():
     of tkBool:       newNimType("bool",        cxtype)

@@ -49,6 +49,7 @@ type
     isParam*: bool ## Type is used as generic parameter for other
                    ## types/procedure arguments.
 
+    isComplex*: bool
     fullIdent*: Option[CScopedIdent] ## Full identifier to Cxx type
                                      ## declaration.
 
@@ -1452,6 +1453,61 @@ proc toNType*(nimType: NimType): NType[PNode] =
           nimType.arguments.mapIt((it.name, it.nimType.toNType())),
           nimType.returnType.toNType(),
           newPPragma("cdecl"))
+
+proc isComplexType*(conf: WrapConf, cxType: CxType): bool =
+  result = false
+  case cxType.cxKind():
+    of tkLValueReference:
+      result = conf.isComplexType(cxType[])
+
+    of tkTypedef:
+      let decl = cxType.getTypeDeclaration()
+      let log = "size_type" in $cxType
+
+      let parents = decl.getSemanticNamespaces()
+
+      if anyIt(parents, it.kind in {ckClassDecl, ckClassTemplate}):
+        return true
+
+      if log:
+        conf.dump cxType
+        conf.dump cxType.cxKind()
+        conf.dump decl.getSpellingLocation()
+        conf.dump decl.treeRepr()
+        conf.dump decl.getSemanticNamespaces()
+
+      for part in decl:
+        if part.kind == ckTypeRef:
+          let ptype = part.cxType()
+          let complex = conf.isComplexType(ptype)
+          if log:
+            conf.debug ptype.getTypeDeclaration(), ptype.getTypeDeclaration().cxKind()
+            conf.debug ptype, ptype.cxKind()
+
+          if complex:
+            conf.notice cxType, "has complex type part", part
+
+    of tkUnexposed:
+      let decl = cxType.getTypeDeclaration()
+      if decl.cxKind() notin { ckClassTemplate, ckClassDecl }:
+        conf.debug cxType, cxType.cxKind()
+
+    of tkPodKinds:
+      discard
+
+    else:
+      conf.trace cxType, cxType.cxKind()
+
+proc wrapComplexType*(
+  conf: WrapConf, cxType: CxType, generated: NimType): NimType =
+
+  if conf.isComplexType(cxType):
+    result = newNimType("CxxTemplateUndefined", cxType)
+    result.isComplex = true
+
+  else:
+    result = generated
+
 
 
 

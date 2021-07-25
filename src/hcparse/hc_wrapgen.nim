@@ -305,14 +305,10 @@ proc wrapProcedure*(
           discard
 
   else:
-    # Default handling of return types
-    if "size_type" in $pr.cursor.retType():
-      let re = pr.cursor.retType()
-      conf.dump re
-      conf.dump re.cxKind()
-
-    var returnType = toNimType(pr.cursor.retType(), conf, cache)
-    if parentDecl.isSome() and
+    let re = pr.cursor.retType()
+    var returnType = toNimType(re, conf, cache)
+    if returnType.isComplex.not() and
+       parentDecl.isSome() and
        parent.isSome() and
        pr.cursor.retType().
        getTypeDeclaration().
@@ -744,8 +740,8 @@ proc updateAggregateInit*(
 
 proc updateFieldExport*(
   cd: CDecl, conf: WrapConf, cache: var WrapCache, gen: var GenObject) =
-  # Add getter/setter methods for *all* public fields that are accessible
-  # from this object
+  ## Add getter/setter methods for *all* public fields that are accessible
+  ## from this object
   for fld in cd.publicFields():
     var res = GenField(
       # QUESTION `conf.identNameForScoped()?`
