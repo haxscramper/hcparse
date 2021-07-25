@@ -217,7 +217,6 @@ proc fixTypeName*(ntype: var NimType, conf: WrapConf, idx: int = 0) =
   case ntype.kind:
     of ctkIdent:
       ntype.nimName = fixTypeName(ntype.nimName, idx, conf)
-
       var idx = idx
       for gen in mitems(ntype.genericParams):
         conf.fixTypeName(gen, conf, idx)

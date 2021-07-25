@@ -30,7 +30,7 @@ proc wrapOperator*(
     conf: WrapConf,
     cache: var WrapCache
   ): tuple[decl: GenProc, addThis: bool] =
-  
+
   var it = initGenProc(oper, currLInfo())
 
   it.name = oper.getNimName(conf)
@@ -171,7 +171,7 @@ proc wrapProcedure*(
 
   else:
     it.name = pr.getNimName(conf).fixIdentName()
-    # debug it.name, pr.ident, pr.lastName
+    # conf.debug it.name, pr.ident, pr.lastName(conf)
 
     # FIXME
     # iflet (par = parent):
@@ -288,6 +288,7 @@ proc wrapProcedure*(
 
       it.iinfo = currLInfo()
       it.header = conf.makeHeader(pr.cursor, conf)
+      conf.dump it.name
       case specialProcKind:
         of gpskNewPtrConstructor:
           it.returnType = newNimType("ptr", @[parent.get()])

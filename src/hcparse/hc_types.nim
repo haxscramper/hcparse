@@ -1544,24 +1544,37 @@ proc lastName*(cd: CDecl, conf: WrapConf, dropTemplate: bool = true): string =
   ## `std::vector<int> -> vector`, `int main() -> main` etc.
   result = $cd.ident[^1].cursor
 
+  conf.dump result, dropTemplate
+
   if dropTemplate:
     let old = result
-    if result.len != old.len:
-      # yes, I hate this shit too.
-      result = old[0 ..< old.skipUntil('<')]
-      let other = old[result.high .. ^1]
+    # if result.len != old.len: # QUESTION ?????
+
+    # yes, I hate this shit too.
+    result = old[0 ..< old.skipUntil('<')]
+    var start = result.high
+    if start == old.high:
+      return
+
+    else:
+      inc start
+
+      let other = old[start .. ^1]
+      # conf.dump (old, result, other)
       var
         `<cnt` = 0
         `>cnt` = 0
 
       for ch in old:
         if ch == '<': inc `<cnt`
-        if ch == '>': dec `>cnt`
+        if ch == '>': inc `>cnt`
+
+      # conf.dump (`<cnt`, `>cnt`)
 
       if   `<cnt` + 2 == `>cnt`: result &= tern(other["<<="], "<<=", "<<")
-      elif `<cnt` + 1 == `>cnt`: result &= tern(other["<="], "<=", "<")
+      elif `<cnt` + 1 == `>cnt`: result &= tern(other["<="],  "<=",  "<")
       elif `<cnt`     == `>cnt`: result &= tern(other["<=>"], "<=>", "")
-      elif `<cnt` - 1 == `>cnt`: result &= tern(other[">="], ">=", ">")
+      elif `<cnt` - 1 == `>cnt`: result &= tern(other[">="],  ">=",  ">")
       elif `<cnt` - 2 == `>cnt`: result &= tern(other[">>="], ">>=", ">>")
       else:
         conf.err `<cnt`, `>cnt`, old
