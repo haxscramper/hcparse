@@ -328,7 +328,7 @@ proc getTypeGraph(
                 cdecl.cursor = decl
                 let
                   loc = decl.getSpellingLocation().get()
-                  path = conf.getImport(loc.file, conf, false).importPath
+                  path = conf.getImport(loc.file, conf.getBaseFile(file), false).importPath
                   node = initTypeNode(
                     used.nimName, path,
                     cdecl.cursor, isDef = false)
@@ -349,7 +349,7 @@ proc getTypeGraph(
             initTypeNode(
               entry.genObject.name.nimName,
               conf.getImport(
-                entry.getSpellingLocation(), conf, false).importPath,
+                entry.getSpellingLocation(), conf.getBaseFile(file), false).importPath,
               entry.cdecl.cursor,
               true
           ))
@@ -385,7 +385,8 @@ proc getTypeGraph(
                   let
                     decl = used.cxType.getTypeDeclaration()
                     loc = decl.getSpellingLocation.get()
-                    path = conf.getImport(loc.file, conf, false).importPath
+                    path = conf.getImport(
+                      loc.file, conf.getBaseFile(file), false).importPath
 
                   let node = initTypeNode(
                     used.nimName, path, decl, not isForward(decl))
@@ -405,7 +406,8 @@ proc getTypeGraph(
               initTypeNode(
                 conf.typeNameForScoped(entry.cdecl().ident, conf).nimName,
                 conf.getImport(
-                  entry.getSpellingLocation(), conf, false).importPath,
+                  entry.getSpellingLocation(),
+                  conf.getBaseFile(file), false).importPath,
                 entry.cdecl().cursor,
                 false))
 
@@ -608,12 +610,13 @@ proc patchForward*(
           isGenerated: true,
           # HACK FIXME assuming all files are located in a single directory,
           # which is most likely not the case.
-          relativeTo: file,
+          original: @[ file ],
           newFile: RelFile(newFile & ".nim")
         )
 
         for extern in group.imports:
-          genFile.imports.incl conf.getImport(extern, conf, false)
+          genFile.imports.incl conf.getImport(
+            extern, conf.getBaseFile(genFile), false)
 
         movedForward[newFile] = (cursors, genFile)
 
@@ -720,7 +723,7 @@ proc wrapFiles*(
     # resFile.imports.incl initNimImportSpec(true, @["hcparse", "wraphelp"])
 
     for node in file.explicitDeps.mapIt(
-        conf.getImport(it, conf, false)).
+        conf.getImport(it, conf.getBaseFile(resFile), false)).
         deduplicate():
 
       # Add imports for explicit dependencies
@@ -841,7 +844,9 @@ proc wrapFile*(
   for usedType in usedApis:
     let loc = usedType.getSpellingLocation()
     if loc.isSome():
-      let imp = conf.getImport(loc.get().file, conf, false)
+      let imp = conf.getImport(
+        loc.get().file, conf.getBaseFile(wrapped), false)
+
       if not (imp.isRelative and
               imp.relativeDepth == 0 and
               imp.importPath[0] == wrapped.baseFile.name()):
@@ -1040,21 +1045,7 @@ proc wrapAllFiles*(
 
   var wrapped: seq[seq[WrappedEntry]]
   for file in wrapFiles(parsed, wrapConf, cache, index):
-    let outPath =
-      tern(
-        file.isGenerated,
-        withExt(
-          joinPath(
-            wrapConf.nimOutDir,
-            joinPath(
-              relativePath(file.relativeTo, wrapConf.baseDir).dir(),
-              file.newFile)),
-          "nim"),
-        withExt(
-          joinPath(
-            wrapConf.nimOutDir,
-            relativePath(file.baseFile, wrapConf.baseDir)),
-          "nim"))
+    let outPath = wrapConf.nimOutDir / getSavePath(wrapConf, file)
 
     var codegen: CodegenResult
     for node in wrapFile(file, wrapConf, cache, index):

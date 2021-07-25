@@ -379,16 +379,9 @@ type
     ## path, *relative to project root* (@field{nimOutDir}) where file
     ## generated from `orig` should be saved.
 
-
-    getImport*: proc(dep: AbsFile, conf: WrapConf, isExternalImport: bool):
-      NimImportSpec ## Generate import statement for header file
-    ## dependency. Default implementation is based around `getSavePath`,
-    ## and ideally it should not be touched.
-    ##
-    ## - @arg{isExternalImport} :: Import path is requested for internal
-    ##   use (inter-module project dependencies), or for external use (when
-    ##   @field{isInLibrary} returns true, and file must be imported
-    ##   elsewhere)
+    overrideImport*: proc(
+      dep, user: AbsFile, conf: WrapConf, isExternalImport: bool
+    ): Option[NimImportSpec] ## Override import from @arg{user} to @arg{dep}
 
     ignoreCursor*: proc(curs: CXCursor, conf: WrapConf): bool ## User-defined
     ## predicate for determining whether or not cursor should be
@@ -454,9 +447,7 @@ type
     nimOutDir*: AbsDir ## Root directory to write files to
 
     refidFile*: RelFile
-    wrapName*: Option[string] ## Optional name of the wrapped library. Used
-    ## by default implementation of `getImport` when creating external
-    ## imports.
+    wrapName*: string ## Optional name of the wrapped library.
 
 
   WrapEntryPosition = object
@@ -662,10 +653,12 @@ type
     case isGenerated*: bool ## File was generated from strongly linked
                             ## cluster of forward-declared types.
       of true:
-        relativeTo* {.requiresinit.}: AbsFile ## Absolute path to original
-                                              ## file
-        newFile* {.requiresinit.}: RelFile ## Relative path to newly
-                                           ## generated file
+        original* {.requiresinit.}: seq[AbsFile] ## Original files that
+        ## contained grouped entries. Importing any of these files should
+        ## also give access to the grouped entries as auto-generated files
+        ## are also `export`-ed
+        newFile* {.requiresinit.}: RelFile ## Relative (to the project
+        ## root) path to newly generated file.
 
       of false:
         baseFile* {.requiresinit.}: AbsFile ## Absolute path to original

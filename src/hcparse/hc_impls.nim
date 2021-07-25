@@ -157,6 +157,16 @@ proc asImportFromDir*(
     conf: WrapConf, dir: AbsDir,
     isExternalImport: bool
   ): NimImportSpec =
+  ## Generate import specification for file or cursor with spelling
+  ## location using given configuration.
+  ##
+  ## - @arg{cursor} :: Input entry (cursor or file) to get import for.
+  ##   Cursor must have a valid spelling location.
+  ## - @arg{dir} :: Base directory where input entry is originally located.
+  ##   Import path will be computed based on it.
+  ##
+  ##   # Even if path is relative, @ret{.relativeDepth} is not set to any
+  ##   # value.
 
   result = NimImportSpec(isRelative: not isExternalImport)
 
@@ -250,20 +260,92 @@ proc typeNameForScoped*(
   result = newNimType(resname, genParams)
   conf.fixTypeName(result, conf, 0)
 
+proc getBaseFile*(conf: WrapConf, wrapped: WrappedFile): AbsFile =
+  ## Return base file for generated wrapped one. For generated grouped
+  ## files first original one is returned.
+  if wrapped.isGenerated:
+    # Due to automatically inserted `export` we don't need to perform more
+    # concrete resolution
+    result = wrapped.original[0]
+
+  else:
+    result = wrapped.baseFile
+
+proc getSavePath*(conf: WrapConf, wrapped: WrappedFile): RelFile =
+  ## Get save path for generated file - either using @arg{conf.getSavePath}
+  ## (for real wrapped files), or @arg{wrapped.newFile} (for newly
+  ## generated files.)
+  if wrapped.isGenerated:
+    result = wrapped.newFile
+
+  else:
+    result = conf.getSavePath(wrapped.baseFile, conf)
+
+proc getImport*(
+  conf: WrapConf, dep, user: AbsFile, isExternalImport: bool): NimImportSpec =
+  ## Generate import statement for header file dependency.
+  ##
+  ## - @arg{isExternalImport} :: Import path is requested for internal use
+  ##   (inter-module project dependencies), or for external use
+  ## - @arg{dep} :: Location of the original file entry (in the Cxx library)
+  ## - @arg{user} :: File importer. In case of external import this
+  ##   can be left unspecified as result will be determined solely by
+  ##   @arg{conf.getSavePath} callback and @arg{conf.wrapName}
+  if notNil(conf.overrideImport):
+    let imp = conf.overrideImport(dep, user, conf, isExternalImport)
+    if imp.isSome():
+      return imp.get()
+
+  let save = conf.getSavePath(dep, conf)
+  let parts = save.string.split("/")
+
+  if isExternalImport:
+    result = NimImportSpec(
+      isRelative: false, importPath: @[conf.wrapName] & parts)
+
+  else:
+    result = NimImportSpec(isRelative: true, importPath: parts)
+
+      # let (dir, name, ext) = dep.splitFile()
+      # result = initNimImportSpec(
+      #   isExternalImport,
+      #   @[
+      #     name.splitCamel().
+      #       mapIt(it.toLowerAscii()).join("_").
+      #       fixFileName()])
+
+      # if isExternalImport:
+      #   if conf.wrapName.isSome():
+      #     result.importPath = conf.wrapName.get() & result.importPath
+
+      # else:
+      #   updateForInternalImport(dep, conf, conf.baseDir, result)
+
+
 proc getImportUsingDependencies*(
     conf: WrapConf,
-    dependency: AbsFile,
+    dependency, user: AbsFile,
     wrapConfurations: seq[WrapConf],
     isExternalImport: bool
   ): NimImportSpec =
 
+  ## Get import specification for using wrapper configuration for a project
+  ## and dependencies.
+  ##
+  ## - @arg{wrapConfigurations} :: List of dependency configurations for
+  ##   library. Configurations will be sequentially queried for
+  ##   `isInLibrary` check. First matching one will return it's import.
+  ## - @arg{conf} :: Main project wrap configuration. @arg{isExternalImport}
+  ##   is passed directly to it, so this procedure can also correctly resolve
+  ##   in-project import paths.
+  ## - @arg{dependency} :: Absolute path to the dependency file
+
   if conf.isInLibrary(dependency, conf):
-    return asImportFromDir(
-      dependency, conf, conf.baseDir, isExternalImport)
+    return conf.getImport(dependency, user, isExternalImport)
 
   for config in wrapConfurations:
     if config.isInLibrary(dependency, config):
-      return config.getImport(dependency, config, true)
+      return config.getImport(dependency, user, true)
 
 proc getClangSemVersion*(): string =
   ($getClangVersion()).split(" ")[2] # WARNING
@@ -293,6 +375,9 @@ let baseCParseConf* = ParseConf(
   globalFlags: @[]
 )
 
+proc getSavePathParts*(orig: AbsPath, conf: WrapConf): seq[string] =
+  return relativePath(orig, conf.baseDir).string.split("/").mapIt(it.fixFileName())
+
 
 
 
@@ -311,23 +396,9 @@ let baseCppWrapConf* = WrapConf(
       else:
         NimHeaderSpec(kind: nhskGlobal, global: file)
   ),
-  getImport: (
-    proc(dep: AbsFile, conf: WrapConf, isExternalImport: bool):
-      NimImportSpec {.closure.} =
-      let (dir, name, ext) = dep.splitFile()
-      result = initNimImportSpec(
-        isExternalImport,
-        @[
-          name.splitCamel().
-            mapIt(it.toLowerAscii()).join("_").
-            fixFileName()])
-
-      if isExternalImport:
-        if conf.wrapName.isSome():
-          result.importPath = conf.wrapName.get() & result.importPath
-
-      else:
-        updateForInternalImport(dep, conf, conf.baseDir, result)
+  getSavePath: (
+    proc(orig: AbsFile, conf: WrapConf): RelFile =
+      return RelFile(getSavePathParts(orig, conf).join("/"))
   ),
   typeNameForScoped: (
     proc(ident: CScopedIdent, conf: WrapConf): NimType {.closure} =
