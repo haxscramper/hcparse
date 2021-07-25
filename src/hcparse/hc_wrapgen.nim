@@ -288,7 +288,6 @@ proc wrapProcedure*(
 
       it.iinfo = currLInfo()
       it.header = conf.makeHeader(pr.cursor, conf)
-      conf.dump it.name
       case specialProcKind:
         of gpskNewPtrConstructor:
           it.returnType = newNimType("ptr", @[parent.get()])
@@ -307,6 +306,11 @@ proc wrapProcedure*(
 
   else:
     # Default handling of return types
+    if "size_type" in $pr.cursor.retType():
+      let re = pr.cursor.retType()
+      conf.dump re
+      conf.dump re.cxKind()
+
     var returnType = toNimType(pr.cursor.retType(), conf, cache)
     if parentDecl.isSome() and
        parent.isSome() and
@@ -432,7 +436,11 @@ proc wrapMethods*(
         result.methods.add decl[0].genProc
         result.extra.add decl[1..^1]
 
-  if not hasConstructor:
+  if (not hasConstructor) and
+     (parent.nimName notin cache.generatedConstructors):
+
+    cache.generatedConstructors.incl parent.nimName
+
     let className = cd.ident.toCppNamespace()
     result.extra.add GenProc(
       name: "cnew" & parent.nimName.capitalizeAscii(),
@@ -457,6 +465,7 @@ proc wrapMethods*(
       icpp: &"#.~{className}()",
       header: conf.makeHeader(cd.cursor, conf),
     )
+
 
     result.extra.add GenProc(
       name: "new" & parent.nimName.capitalizeAscii(),

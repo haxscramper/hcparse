@@ -375,13 +375,19 @@ type
     ## _T]`, where both types should be mapped to `T` you can make `T` and
     ## `T1` respectively, using value provided by `idx`
 
+    # overrideType*: proc(ntyped: NimType, conf: WrapConf): Option[NimType]
+    # ## Hard override for generated types. Invoked on each *final,
+    # ## corrected* generated type.
+
+
     getSavePath*: proc(orig: AbsFile, conf: WrapConf): RelFile ## Return
     ## path, *relative to project root* (@field{nimOutDir}) where file
     ## generated from `orig` should be saved.
 
     overrideImport*: proc(
       dep, user: AbsFile, conf: WrapConf, isExternalImport: bool
-    ): Option[NimImportSpec] ## Override import from @arg{user} to @arg{dep}
+    ): Option[NimImportSpec] ## Hard override import generated from
+                             ## @arg{user} to @arg{dep}
 
     ignoreCursor*: proc(curs: CXCursor, conf: WrapConf): bool ## User-defined
     ## predicate for determining whether or not cursor should be
@@ -463,7 +469,8 @@ type
                                 ## duplication)
     identComments*: Table[CScopedIdent, seq[string]] ## Mapping between
     ## fully scoped identifiers and documentation comments
-    identRefidMap*: seq[tuple[cxx: CScopedIdent, position: WrapEntryPosition]] ## list
+    identRefidMap*: seq[tuple[
+      cxx: CScopedIdent, position: WrapEntryPosition]] ## list
     ## of fully scoped identifiers and corresponding wrapped entry
     ## positions. Used by haxdoc&doxygen to link doxygen processed sources
     ## and actual wrapped entries.
@@ -472,6 +479,7 @@ type
     paramsForType*: Table[seq[string], seq[NimType]] ## Generic
     ## parameters for each type. Type is uniquely represented using
     ## `fully::scoped::ident`.
+    generatedConstructors*: HashSet[string]
     # defaultParamsForType*: Table[seq[string], Table[int, NimType]]
 
   GenBase* {.inheritable.} = ref object
@@ -1544,7 +1552,7 @@ proc lastName*(cd: CDecl, conf: WrapConf, dropTemplate: bool = true): string =
   ## `std::vector<int> -> vector`, `int main() -> main` etc.
   result = $cd.ident[^1].cursor
 
-  conf.dump result, dropTemplate
+  # conf.dump result, dropTemplate
 
   if dropTemplate:
     let old = result

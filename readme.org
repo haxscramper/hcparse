@@ -25,7 +25,6 @@ you already have it.
 - [[https://github.com/haxscramper/hcparse][github]]
 - [[https://haxscramper.github.io/hcparse-doc/src/hcparse/libclang.html][libclang API wrapper documentation]]
 - [[https://haxscramper.github.io/hcparse-doc/wrap-examples.html][WIP wrapper examples - generated from unit tests]]
-- [[https://discord.gg/hjfYJCU][discord server]]
 - [[https://nimble.directory/pkg/hcparse][nimble package]]
 
 * Overview
