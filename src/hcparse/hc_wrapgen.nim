@@ -124,6 +124,28 @@ proc wrapOperator*(
     })
 
 
+
+proc initDestroyCall(parent: NimType, args: seq[CArg]): PNode =
+
+  let
+    className = parent.nimName
+    argType = newNType("ref", [parent.toNType()]).toNNode()
+    destroyCall = newPIdent(
+      "destroy" & className.capitalizeAscii())
+    argMixin = args.mapIt("(`" & it.name & "`)").join(", ")
+    emitStr = &"new ((void*)result) {className}({argMixin}); " &
+      "/* Placement new */"
+
+
+  return pquote do:
+    newImportAux() # FIXME This procedure is a necessary hack that provides
+                   # requries `<new>` header import. Maybe this could be
+                   # fixed by somehow grenerating required `header:` pragma
+                   # statements?
+    new(result, proc(self: `argType`) = `destroyCall`(addr self[]))
+    {.emit: `emitStr`.}
+
+
 proc wrapProcedure*(
     pr: CDecl,
     conf: WrapConf,
@@ -315,8 +337,7 @@ proc wrapProcedure*(
       result.canAdd = false
 
     if pr.cursor.cxkind == ckDestructor:
-      # Explicitly calling destructor on object (if someone ever needs
-      # something like that)
+      # Explicitly calling destructor on object
       it.icpp = &"~{it.name}()"
       it.header = conf.makeHeader(pr.cursor, conf)
 
@@ -336,12 +357,7 @@ proc wrapProcedure*(
     it.pragma.add newPIdent("varargs")
 
   if specialProcKind == gpskNewRefConstructor:
-    # pprintStackTrace()
-    let argType = newNType("ref", [parent.get().toNType()]).toNNode()
-    let emitStr = &["`self`->~", parentDecl.get().lastName(conf), "();"]
-    it.impl = some pquote do:
-      # WARNING FAIL experimental
-      new(self, proc(self: `argType`) = {.emit: `emitStr`.})
+    it.impl = some initDestroyCall(parent.get(), it.arguments)
 
   let generated = newProcVisit(it, conf, cache)
   result.decl.add it
@@ -350,9 +366,6 @@ proc wrapProcedure*(
 
 proc fixNames(ppd: var GenProc, conf: WrapConf, parent: NimType) =
   var idx: int = 0
-  # for param in mitems(ppd.genParams):
-  #   conf.fixTypeName(param, conf, 0)
-  #   inc idx
 
   idx = 0
   for arg in mitems(ppd.arguments):
@@ -362,7 +375,6 @@ proc fixNames(ppd: var GenProc, conf: WrapConf, parent: NimType) =
   conf.fixTypeName(ppd.returnType, conf, 0)
 
   ppd.name = ppd.name.fixIdentName()
-
 
 
 
@@ -437,14 +449,8 @@ proc wrapMethods*(
       header: conf.makeHeader(cd.cursor, conf)
     )
 
-    let emitStr = &"new ((void*)result) {className}(); /* Placement new */"
-
-    let
-      ntype = parent.toNTYpe().toNNode()
-      destroyCall = "destroy" & parent.nimName.capitalizeAscii()
-
     result.extra.add GenProc(
-      name: destroyCall,
+      name: "destroy" & parent.nimName.capitalizeAscii(),
       arguments: @[initCArg("obj", newNimType("ptr", @[parent]))],
       cdecl: cd,
       iinfo: currLInfo(),
@@ -459,18 +465,8 @@ proc wrapMethods*(
       cdecl: cd,
       noPragmas: gpcNoPragma,
       iinfo: currLInfo(),
-      impl: some (
-        pquote do:
-          newImportAux()
-          new(
-            result,
-            proc(destr: ref `ntype`) =
-              `newPIdent(destroyCall)`(addr destr[])
-          )
-          {.emit: `emitStr`.}
-      )
+      impl: some initDestroyCall(parent, @[])
     )
-
 
   for gproc in mitems(result.methods):
     fixNames(gproc, conf, parent)
