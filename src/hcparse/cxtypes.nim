@@ -724,9 +724,22 @@ proc toNimDoc*(comment: CXComment): string =
 proc objTreeRepr*(cxtype: CXType): ObjTree =
   case cxtype.cxKind:
     of tkPointer:
-      pptObj("ptr", cxtype[].objTreeRepr())
+      result = pptObj("ptr", cxtype[].objTreeRepr())
+
+    of tkLValueReference:
+      result = pptObj("lvref", cxtype[].objTreeRepr())
+
+    of tkRValueReference:
+      result = pptObj("rvref", cxtype[].objTreeRepr())
+
+    of tkPodKinds:
+      result = pptConst("'" & $cxtype & "'")
+
     else:
-      pptObj($cxtype.cxkind, pptConst($cxtype))
+      result = pptObj($cxtype.cxkind, pptConst("'" & $cxtype & "'"))
+
+  for param in cxType.genParams():
+    result.fldPairs.add ("", objTreeRepr(param))
 
 
 proc lispRepr*(cxtype: CXType): string =

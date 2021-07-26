@@ -549,6 +549,7 @@ proc toNimType*(
         #   conf.dump decl, decl.kind
 
         var res = newNimType(name, cxType)
+        conf.trace cxType.lispRepr()
         # if "initializer_list" in strval:
         #   # let (start, final) = strval.skipUntil('<')
         #   conf.dump cxType[]
