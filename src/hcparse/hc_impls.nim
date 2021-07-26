@@ -1,14 +1,26 @@
 ## Default implementation for user-definable callbacks
-import hc_types, cxcommon, hnimast, cxtypes, hc_docwrap,
-       std/[sequtils, strutils, strformat, tables]
+import
+  ./hc_types,
+  ./cxcommon,
+  ./hnimast,
+  ./cxtypes,
+  ./hc_docwrap,
+  ./hc_depresolve,
+  ./hc_typeconv,
+  ./hc_wrapgen
 
-import hmisc/helpers
-import hmisc/other/[oswrap, hlogger]
-import hmisc/types/colorstring
-import hnimast
-import std/[sets]
+import
+  std/[sequtils, strutils, strformat, tables, sets]
 
-import ./hc_depresolve, ./hc_typeconv, ./hc_wrapgen
+import
+  hmisc/helpers,
+  hmisc/algo/namegen,
+  hmisc/types/colorstring,
+  hmisc/other/[oswrap, hlogger]
+
+import
+  hnimast
+
 
 type
   CErrorCodeKind = enum
@@ -188,16 +200,9 @@ proc fixTypeName*(str: string, idx: int, conf: WrapConf): string =
   if str.len == 0:
     return "T" & $idx
 
-  elif str.normalize() in @[
-    "bool", "cint", "cuint", "ptr", "void", "char",
-    "cuchar", "cstring", "cchar", "uint32", "uint16",
-    "culong", "clong", "cshort", "cushort", "array",
-    "ushort", "cfloat", "cstringarray", "pointer",
-    "culonglong", "clonglong",
-
-    "cwchar", "cchar16", "cchar32"
-  ]:
+  elif str.isReservedNimType():
     return str
+
   else:
     let split = str.split("::")
     var idx = 0

@@ -158,9 +158,7 @@ proc wrapProcedure*(
   if pr.isOperator:
     # HACK temporary workaround for `new` and `delete` operator handing
     if classifyOperator(pr, conf) notin {cxoNewOp, cxoDeleteOp}:
-      # debug classifyOperator(pr, conf), pr.arguments.len
       let (decl, adt) = pr.wrapOperator(conf, cache)
-      # debug adt
       it = decl
       it.iinfo = currLInfo()
       addThis = adt

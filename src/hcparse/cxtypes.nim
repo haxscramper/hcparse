@@ -167,6 +167,9 @@ proc isConstQualifiedDeep*(cxtype: CXType): bool =
     else:
       return cxt.isConstQualified()
 
+proc templateParams*(cxType: CxType): seq[CxType] =
+  for i in 0 ..< getNumTemplateArguments(cxType):
+    result.add cxType.getTemplateArgumentAsType(i.cuint)
 
 
 #*************************************************************************#
