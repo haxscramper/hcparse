@@ -1,12 +1,19 @@
-import libclang_wrap, cxvisitors
-import std/[strformat, strutils, options, sequtils, sugar, deques]
-import packages/docutils/rstast
-import hmisc/other/[oswrap, hlogger]
-import hmisc/algo/[clformat]
-import hmisc/types/colorstring
-import hpprint/hpprint_repr, hpprint
-import hmisc/helpers
-import hnimast
+import
+  ./libclang_wrap, ./cxvisitors
+import
+  std/[strformat, strutils, options, sequtils, sugar, deques, hashes]
+
+import
+  packages/docutils/rstast
+import
+  hmisc/other/[oswrap, hlogger],
+  hmisc/algo/[clformat],
+  hmisc/types/colorstring,
+  hmisc/helpers
+
+
+import
+  hpprint/hpprint_repr, hpprint, hnimast
 
 export libclang_wrap
 
@@ -310,6 +317,8 @@ proc `$`*(cxkind: CXCursorKind): string =
 
     else:
       $getCursorKindSpelling(cxkind)
+
+proc hash*(cursor: CXCursor): Hash = Hash(cursor.hashCursor())
 
 #===========================  Kind/Type acess  ===========================#
 

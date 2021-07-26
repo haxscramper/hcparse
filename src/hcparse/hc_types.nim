@@ -30,6 +30,7 @@ type
     ## Special kind of C++ types that are almost impossbile to correctly
     ## convert to nim and preserve semantics across language barrier
     ctskNone
+    ctskLValueRef
     ctskRvalueRef ## Rvalue reference
     ctskConstLvalueRef ## `const value&` is basically nim's default passing
     ## behavior for 'large enough' types, but it has a different behavior
@@ -376,9 +377,9 @@ type
     ## _T]`, where both types should be mapped to `T` you can make `T` and
     ## `T1` respectively, using value provided by `idx`
 
-    # overrideType*: proc(ntyped: NimType, conf: WrapConf): Option[NimType]
-    # ## Hard override for generated types. Invoked on each *final,
-    # ## corrected* generated type.
+    overrideComplex*: proc(
+      cxType: CxType, conf: WrapConf, cache: WrapCache): Option[NimType]
+    ## Hard override generated complex types
 
 
     getSavePath*: proc(orig: AbsFile, conf: WrapConf): RelFile ## Return
@@ -482,6 +483,7 @@ type
     ## `fully::scoped::ident`.
     generatedConstructors*: HashSet[string]
     # defaultParamsForType*: Table[seq[string], Table[int, NimType]]
+    complexCache*: Table[CxCursor, Option[NimType]]
 
   GenBase* {.inheritable.} = ref object
     ## Common fields for all `GenX` types. Not used for inheritance, only
@@ -856,6 +858,15 @@ proc getTypeNamespaces*(
   result = getSemanticNamespaces(
     parent, filterInline = filterInline, withType = withType)
 
+proc findSemParent*(cxType: CxType, kind: set[CxCursorKind]): CxCursor =
+  rfindByKind(cxType.getTypeNamespaces(), kind)[1]
+
+proc findSemParentFull*(
+    cxType: CxType, kind: set[CxCursorKind]): seq[CxCursor] =
+
+  let names = cxType.getTypeNamespaces()
+  names[0 .. rfindByKind(names, kind)[0]]
+
 proc requiredGenericParams*(cursor: CXCursor): seq[CXCursor] =
   ## Get list of required generic parameters from cursor pointing to
   ## class or struct declaration
@@ -1103,6 +1114,12 @@ proc toHaxdocIdentType*(
     of tkPointer:
       result = "ptr[" & toHaxdocIdentType(cxtype[]) & "]"
 
+    of tkLValueReference:
+      result = "lvref[" & toHaxdocIdentType(cxType[]) & "]"
+
+    of tkRValueReference:
+      result = "rvref[" & toHaxdocIdentType(cxType[]) & "]"
+
     of tkElaborated, tkRecord, tkEnum:
       result = cxtype.getTypeNamespaces().mapIt($it).join("::")
 
@@ -1118,12 +1135,6 @@ proc toHaxdocIdentType*(
 
     else:
       result = $(cxtype.cxKind())
-
-
-
-    # of tkLValueReference:
-    #   mutable = cxType.isMutableRef()
-    #   toNimType(cxType[], conf)
 
     # of tkRValueReference: # WARNING I'm not 100% sure this is correct
     #                       # way to map rvalue references to nim type
@@ -1432,12 +1443,23 @@ func newNimType*(
   result = newNimType(name, cxType, isParam)
   result.genericParams.add genericParams
 
+func newTemplateUndefined*(cxType: CxType): NimType =
+  result = newNimType("CxxTemplateUndefined", cxType)
+  result.isComplex = true
+
+func newTemplateApproximate*(cxType: CxType, nimType: NimType): NimType =
+  result = newNimType("CxxTemplateApproximate", @[nimType], cxType)
+  result.isComplex = true
+
+
+
 func add*(
     nimType: var NimType, genericParam: NimType | seq[NimType]) =
 
+  assert not nimType.isComplex, "Cannot add generic parameters to a complex type"
   nimType.genericParams.add genericParam
 
-proc toNType*(nimType: NimType): NType[PNode] =
+proc toNType*(nimType: NimType, asResult: bool = false): NType[PNode] =
   if isNil(nimType):
     result = newPType("void")
 
@@ -1448,25 +1470,34 @@ proc toNType*(nimType: NimType): NType[PNode] =
         for param in nimType.genericParams:
           result.add toNType(param)
 
+        if asResult and nimType.specialKind == ctskLValueRef:
+          result = newPType("var", @[result])
+
       of ctkProc:
         result = newProcNType(
           nimType.arguments.mapIt((it.name, it.nimType.toNType())),
           nimType.returnType.toNType(),
           newPPragma("cdecl"))
 
-proc isComplexType*(conf: WrapConf, cxType: CxType): bool =
+proc isComplexType*(
+    conf: WrapConf, cxType: CxType, cache: var WrapCache): bool =
+
+  let decl = cxType.getTypeDeclaration()
+  if decl in cache.complexCache:
+    return true
+
   result = false
   case cxType.cxKind():
-    of tkLValueReference:
-      result = conf.isComplexType(cxType[])
+    of tkLValueReference, tkPointer, tkRValueReference:
+      result = conf.isComplexType(cxType[], cache)
 
     of tkTypedef:
-      let decl = cxType.getTypeDeclaration()
       let log = "size_type" in $cxType
 
       let parents = decl.getSemanticNamespaces()
 
       if anyIt(parents, it.kind in {ckClassDecl, ckClassTemplate}):
+        cache.complexCache[decl] = none(NimType)
         return true
 
       if log:
@@ -1479,18 +1510,22 @@ proc isComplexType*(conf: WrapConf, cxType: CxType): bool =
       for part in decl:
         if part.kind == ckTypeRef:
           let ptype = part.cxType()
-          let complex = conf.isComplexType(ptype)
+          let complex = conf.isComplexType(ptype, cache)
           if log:
-            conf.debug ptype.getTypeDeclaration(), ptype.getTypeDeclaration().cxKind()
+            conf.debug(
+              ptype.getTypeDeclaration(),
+              ptype.getTypeDeclaration().cxKind())
+
             conf.debug ptype, ptype.cxKind()
 
           if complex:
             conf.notice cxType, "has complex type part", part
 
     of tkUnexposed:
-      let decl = cxType.getTypeDeclaration()
-      if decl.cxKind() notin { ckClassTemplate, ckClassDecl }:
-        conf.debug cxType, cxType.cxKind()
+      if decl.cxKind() notin {
+        ckClassTemplate, ckClassDecl, ckNoDeclFound
+      }:
+        conf.debug cxType, cxType.cxKind(), decl.cxKind()
 
     of tkPodKinds:
       discard
@@ -1498,18 +1533,19 @@ proc isComplexType*(conf: WrapConf, cxType: CxType): bool =
     else:
       conf.trace cxType, cxType.cxKind()
 
-proc wrapComplexType*(
-  conf: WrapConf, cxType: CxType, generated: NimType): NimType =
+proc newComplexType*(conf: WrapConf, cxType: CxType, cache: var WrapCache): NimType =
+  if notNil(conf.overrideComplex):
+    let decl = cxType.getTypeDeclaration()
+    if decl in cache.complexCache and
+       cache.complexCache[decl].isSome():
+      return cache.complexCache[decl].get()
 
-  if conf.isComplexType(cxType):
-    result = newNimType("CxxTemplateUndefined", cxType)
-    result.isComplex = true
+    let override = conf.overrideComplex(cxType, conf, cache)
+    if override.isSome():
+      cache.complexCache[decl] = override
+      return override.get()
 
-  else:
-    result = generated
-
-
-
+  result = newTemplateUndefined(cxType)
 
 proc `$`*(spec: NimImportSpec): string =
   if spec.isRelative:
@@ -1598,9 +1634,6 @@ proc markSeen*(cache: var WrapCache, cursor: CXCursor) =
 proc seenCursor*(cache: WrapCache, cursor: CXCursor): bool =
   ## Cursor has already been recorded in the cache?
   cursor.hashCursor() in cache.visited
-
-proc hash*(cursor: CXCursor): Hash =
-  Hash(cursor.hashCursor())
 
 proc lastName*(cd: CDecl, conf: WrapConf, dropTemplate: bool = true): string =
   ## Return *last* name for declaration.
@@ -1828,11 +1861,7 @@ proc allUsedTypes*(
   case nimType.kind:
     of ctkIdent:
       for param in nimType.genericParams:
-        result.add allUsedTypes(
-          param,
-          # ignoreHead and nimType.nimName in [
-          #   "ptr", "var", "ref", "sink"]
-        )
+        result.add allUsedTypes(param)
 
     of ctkProc:
       if notNil nimType.returnType:

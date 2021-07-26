@@ -222,9 +222,6 @@ proc wrapProcedure*(
       # Otherwise add `self` for wrapped proc
       addThis = parent.isSome()
 
-  # debug pr.ident
-  # debug pr.cursor.getSpellingLocation()
-  # info pr.arguments.len
   if addThis:
     assert parent.isSome()
     it.arguments.add initCArg(
@@ -233,13 +230,7 @@ proc wrapProcedure*(
     )
 
   for arg in pr.arguments:
-    # debug arg.cursor.cxType().kind, arg.cursor.treeRepr()
-    # debug arg.cursor.getSpellingLocation()
     var argType = arg.cursor.cxType().toNimType(conf, cache)
-    # var params: seq[NimType]
-    # for node in arg.cursor:
-    #   if node.kind == ckTypeRef:
-
 
     if arg.cursor.cxType().isEnum():
       argType.nimName &= conf.rawSuffix()
@@ -251,7 +242,8 @@ proc wrapProcedure*(
         # know how to fix right now.
         result.canAdd = false
 
-      if parentDecl.isSome() and
+      if argType.isComplex.not() and
+         parentDecl.isSome() and
          arg.cursor.inheritsGenParamsOf(parentDecl.get().cursor) and
          parent.isSome() and
          (arg.cursor.cxType().kind notin {tkUnexposed})
@@ -1188,8 +1180,7 @@ proc toNNode*(gen: GenProc, wrapConf: WrapConf): PProcDecl =
     name = gen.name,
     iinfo = gen.iinfo,
     exported = true,
-    returnType = some(gen.returnType.toNType()),
-    # genParams = gen.genParams.mapIt(it.toNType()),
+    returnType = some(gen.returnType.toNType(asResult = true)),
     declType = gen.declType,
     kind = gen.kind
   )
@@ -1211,12 +1202,8 @@ proc toNNode*(gen: GenProc, wrapConf: WrapConf): PProcDecl =
     if t.kind == ctkIdent:
       genParams.incl t.nimName
 
-  # debug genParams
   for gen in genParams:
     result.genParams.add newPType(gen)
-
-
-  # debug result.genParams
 
 
   result.docComment = gen.docComment.join("\n")
@@ -1229,6 +1216,22 @@ proc toNNode*(gen: GenProc, wrapConf: WrapConf): PProcDecl =
         newPIdent(wrapConf.importX()),
         newRStrLit(gen.icpp)
     ))
+
+  # If procedure returns mutable lvalue reference ot the same type as
+  # passed for the first argument we make it discardable. Most likely
+  # original function was returning lvalue ref in order to allow for method
+  # chaining. For example `std::string.append()` returns `std::string&` and
+  # documentation says it has return value of `*this`
+  if notNil(gen.returnType) and
+     gen.returnType.specialKind == ctskLValueRef and
+     gen.arguments.len > 0 and
+     sameNoTy(
+       result.argumentType(0),
+       result.returnType().get(),
+       noParams = true):
+
+    result.signature.pragma.add(newPident("discardable"))
+
 
   if gen.noPragmas notin {gpcNoHeader, gpcNoPragma}:
     result.signature.pragma.add(

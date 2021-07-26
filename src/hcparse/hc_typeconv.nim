@@ -291,6 +291,10 @@ proc replacePartials*(
   # conf.dump partials
   aux(nimType)
 
+proc getParamsForType*(cache: WrapCache, name: seq[string]): seq[NimType] =
+  if name in cache.paramsForType:
+    result = cache.paramsForType[name]
+
 proc getParamsForType*(
     cache: var WrapCache, cxtype: CScopedIdent,
     conf: WrapConf,
@@ -325,9 +329,6 @@ proc getParamsForType*(
       else:
         raise newImplementError(
           &"Type {cxtype} does not have generic parameter indexed {paramIdx}")
-
-
-
 
     # Collect names of the template type parameters that were explicitly
     # specified in the `partial` instantiation
@@ -433,12 +434,13 @@ proc toNimType*(
   ##
   ## - TODO :: `const&&` parameters /could/ be mapped to `sink` annotations
 
-  if conf.isComplexType(cxtype):
-    result = newNimType("CxxTemplateUndefined", cxType)
-    result.isComplex = true
-    return
+  if conf.isComplexType(cxtype, cache):
+    return conf.newComplexType(cxType, cache)
 
-  var mutable: bool = false
+  var
+    mutable: bool = false
+    special: CTypeSpecialKind = ctskNone
+
   result = case cxtype.cxKind():
     of tkBool:       newNimType("bool",        cxtype)
     of tkInt:        newNimType("cint",        cxtype)
@@ -513,12 +515,14 @@ proc toNimType*(
 
     of tkLValueReference:
       mutable = cxType.isMutableRef()
+      special = ctskLValueRef
       toNimType(cxType[], conf, cache)
 
     of tkRValueReference: # WARNING I'm not 100% sure this is correct
                           # way to map rvalue references to nim type
                           # system.
       mutable = cxType.isMutableRef()
+      special = ctskRValueRef
       toNimType(cxType[], conf, cache)
 
     of tkUnexposed:
@@ -594,6 +598,7 @@ proc toNimType*(
       newNimType("!!!", cxtype)
 
   result.isMutable = mutable
+  result.specialKind = special
   conf.fixTypeName(result, conf, 0)
 
 func fixTypeParams*(nt: var NimType, params: seq[NimType]) =
