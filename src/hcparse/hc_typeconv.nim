@@ -533,7 +533,6 @@ proc toNimType*(
         newNimType(strval, cxtype)
 
       else:
-        # pprintStackTrace()
         let
           decl = cxtype.getTypeDeclaration()
           name = cxType.namespacedName(conf)
@@ -543,21 +542,8 @@ proc toNimType*(
             "typename"
           ])
 
-        # let log =
-
-        # if log:
-        #   conf.dump decl, decl.kind
 
         var res = newNimType(name, cxType)
-        conf.trace cxType.lispRepr()
-        # if "initializer_list" in strval:
-        #   # let (start, final) = strval.skipUntil('<')
-        #   conf.dump cxType[]
-        #   conf.dump name
-        #   conf.dump cxType.getTemplateArgumentAsType(0)
-        #   res.add newNimType("I")
-
-        # el
         if decl.cxKind in {
           # HACK list of necessary kinds is determined by trial and error,
           # I'm still not really sure what `tkUnexposed` actually
@@ -566,10 +552,6 @@ proc toNimType*(
         }:
           for arg in cxType.templateParams():
             res.add toNimType(arg, conf, cache)
-
-          # for param in cache.getParamsForType(
-          #   cxType.fullScopedIdent(), conf):
-          #   res.add param
 
         elif startsWith($cxType, typenameParts):
           let unprefix = dropPrefix($cxType, typenameParts)

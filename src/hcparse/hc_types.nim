@@ -1815,19 +1815,17 @@ proc classifyOperator*(cd: CDecl, conf: WrapConf): CXOperatorKind =
 proc getNimName*(
     cd: CDecl, conf: WrapConf, dropTemplate: bool = true): string =
 
-  case cd.kind:
-    of cdkMethod, cdkFunction:
-      if cd.isOperator:
-        if cd.lastName(conf) == "operator=":
-          "setFrom" # REVIEW change name to something different if possible
-        else:
-          cd.lastName(conf).dropPrefix("operator")
+  if cd.kind in { cdkMethod, cdkFunction } and
+     cd.isOperator and
+     cd.lastName(conf) == "operator=":
+    result = "setFrom" # REVIEW change name to something different if
+                       # possible
 
-      else:
-        cd.lastName(conf, dropTemplate)
+  elif cd.cursor.kind in { ckDestructor }:
+    result = cd.lastName(conf, dropTemplate)[1 ..^ 1]
 
-    else:
-      cd.lastName(conf, dropTemplate)
+  else:
+    result = cd.lastName(conf, dropTemplate)
 
 proc initEnFieldVal*(v: BiggestInt): EnFieldVal =
   EnFieldVal(isRefOther: false, value: v)

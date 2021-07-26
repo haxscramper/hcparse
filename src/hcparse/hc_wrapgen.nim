@@ -321,7 +321,7 @@ proc wrapProcedure*(
       it.header = conf.makeHeader(pr.cursor, conf)
 
   if pr.cursor.kind == ckDestructor:
-    it.name = "destroy" & it.name
+    it.name = "destroy" & it.name.capitalizeAscii()
 
   elif pr.cursor.cxkind in {ckConstructor, ckConversionFunction}:
     if not pr.isOperator:
