@@ -744,12 +744,9 @@ proc wrapFiles*(
   result.add genFiles
 
 
+type UsedSet = tuple[cursors: HashSet[CxCursor], libs: HashSet[LibImport]]
 
-proc registerUse*(
-    nimType: NimType,
-    used: var HashSet[CxCursor],
-    conf: WrapConf
-  ) =
+proc registerUse*(nimType: NimType, used: var UsedSet, conf: WrapConf) =
 
   if isNil(nimType):
     return
@@ -757,13 +754,16 @@ proc registerUse*(
   if nimType.fromCxType:
     let cxDecl = nimType.cxType.getTypeDeclaration()
     if cxDecl.kind notin {ckNoDeclFound}:
-      used.incl cxDecl
+      used.cursors.incl cxDecl
+
+  else:
+    used.libs.incl nimType.typeImport
 
   if nimType.fullIdent.isSome():
     let last = nimType.fullIdent.get()[^1]
     if not last.isGenerated:
       # conf.dump last.cursor.cxKind(), last.cursor.getSpellingLocation()
-      used.incl last.cursor
+      used.cursors.incl last.cursor
 
     for param in last.genParams:
       if param.len > 0 and param[^1].isGenerated.not():
@@ -787,17 +787,14 @@ proc registerUse*(
       registerUse(nimType.returnType, used, conf)
 
 
-proc registerUsedTypes*(genProc: GenProc, used: var HashSet[CxCursor], conf: WrapConf) =
+proc registerUsedTypes*(genProc: GenProc, used: var UsedSet, conf: WrapConf) =
   for arg in genProc.arguments:
     if not arg.isRaw:
       registerUse(arg.nimType, used, conf)
 
   registerUse(genProc.returnType, used, conf)
 
-proc registerUsedTypes*(
-    entry: GenEntry,
-    used: var HashSet[CxCursor],
-    conf: WrapConf) =
+proc registerUsedTypes*(entry: GenEntry, used: var UsedSet, conf: WrapConf) =
   case entry.kind:
     of gekEnum:
       discard
@@ -833,25 +830,35 @@ proc wrapFile*(
   # last type encounter will always be it's definition.
   var res: Table[string, WrappedEntry]
 
-  var usedApis: HashSet[CxCursor] # Set of cursors pointing to declarations
-                                  # for different types used in the file
-                                  # entries (procedure argument and return,
-                                  # field, global variable types).
+  var usedApis: UsedSet # Set of cursors pointing to declarations for
+                        # different types used in the file entries
+                        # (procedure argument and return, field, global
+                        # variable types).
 
   for entry in wrapped.entries:
     registerUsedTypes(entry, usedApis, conf)
 
-  for usedType in usedApis:
-    let loc = usedType.getSpellingLocation()
-    if loc.isSome():
-      let base = conf.getBaseFile(wrapped)
-      let imp = conf.getImport(loc.get().file, base, false)
+  block:
+    let base = conf.getBaseFile(wrapped)
+    for usedType in usedApis.cursors:
+      let loc = usedType.getSpellingLocation()
+      if loc.isSome():
+        let imp = conf.getImport(loc.get().file, base, false)
 
-      if not (imp.isRelative and
-              imp.relativeDepth == 0 and
-              imp.importPath[0] == conf.getSavePath(base, conf).name()):
+        if not (imp.isRelative and
+                imp.relativeDepth == 0 and
+                imp.importPath == conf.getSavePath(base, conf).importPath):
 
+          wrapped.imports.incl imp
+
+  block:
+    let base = conf.getSavePath(conf.getBaseFile(wrapped), conf)
+    for usedLib in usedApis.libs:
+      if usedLib.isValid():
+        let imp = conf.getImport(usedLib, base, false)
+        conf.dump imp
         wrapped.imports.incl imp
+
 
   var tmpRes: seq[WrappedEntry] = wrapped.entries.toNNode(conf, cache)
 

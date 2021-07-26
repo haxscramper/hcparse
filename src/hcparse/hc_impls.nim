@@ -283,7 +283,24 @@ proc getSavePath*(conf: WrapConf, wrapped: WrappedFile): RelFile =
     result = wrapped.newFile
 
   else:
-    result = conf.getSavePath(wrapped.baseFile, conf)
+    result = conf.getSavePath(wrapped.baseFile, conf).toRelative()
+
+proc getImport*(
+    conf: WrapConf, dep, user: LibImport,
+    isExternalImport: bool
+  ): NimImportSpec =
+
+  if isExternalImport:
+    result = initImportSpec(dep.library & dep.importPath)
+
+  else:
+    let (pDep, pUser) = (dep.asImport(), user.asImport())
+    let (depth, parts) = importSplit(
+      conf.nimOutDir / pUser,
+      conf.nimOutDir / pDep)
+
+    result = initImportSpec(parts, depth)
+
 
 proc getImport*(
   conf: WrapConf, dep, user: AbsFile, isExternalImport: bool): NimImportSpec =
@@ -300,27 +317,15 @@ proc getImport*(
     if imp.isSome():
       return imp.get()
 
-  # let save =
-  # let parts = save.string.split("/")
-
   if isExternalImport:
-    result = NimImportSpec(
-      isRelative: false,
-      importPath: @[conf.wrapName] & conf.getSavePath(
-        dep, conf).withoutExt().string.split("/"))
+    result = initImportSpec(
+      @[conf.wrapName] & conf.getSavePath(dep, conf).importPath)
 
   else:
-    let (pDep, pUser) = (conf.getSavePath(dep, conf), conf.getSavePath(user, conf))
-
-    let (depth, parts) = importSplit(
-      conf.nimOutDir / pUser.withoutExt(),
-      conf.nimOutDir / pDep.withoutExt())
-
-    result = NimImportSpec(
-      isRelative: true,
-      importPath: parts,
-      relativeDepth: depth)
-
+    result = conf.getImport(
+      conf.getSavePath(dep, conf),
+      conf.getSavePath(user, conf),
+      false)
       # let (dir, name, ext) = dep.splitFile()
       # result = initNimImportSpec(
       #   isExternalImport,
@@ -390,11 +395,6 @@ let baseCParseConf* = ParseConf(
   globalFlags: @[]
 )
 
-proc getSavePathParts*(orig: AbsPath, conf: WrapConf): seq[string] =
-  return relativePath(orig, conf.baseDir).string.split("/").mapIt(it.fixFileName())
-
-
-
 
 let baseCppWrapConf* = WrapConf(
   isImportcpp: true,
@@ -412,9 +412,16 @@ let baseCppWrapConf* = WrapConf(
         NimHeaderSpec(kind: nhskGlobal, global: file)
   ),
   getSavePath: (
-    proc(orig: AbsFile, conf: WrapConf): RelFile =
-      return RelFile(getSavePathParts(orig, conf).join("/"))
+    proc(orig: AbsFile, conf: WrapConf): LibImport =
+      return initLibImport(
+        conf.wrapName,
+        relativePath(orig, conf.baseDir).
+          withoutExt().
+          string.
+          split("/").
+          mapIt(it.fixFileName()))
   ),
+
   typeNameForScoped: (
     proc(ident: CScopedIdent, conf: WrapConf): NimType {.closure} =
       typeNameForScoped(ident, conf)

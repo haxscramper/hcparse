@@ -36,6 +36,9 @@ type
     ## behavior for 'large enough' types, but it has a different behavior
     ## with `{.bycopy.}` objects (which is what any C++ type uses)
 
+  LibImport* = object
+    library*: string
+    importPath*: seq[string]
 
   NimType* = ref object
     ## C++ type converter to nim-/like/ representation. Due to differences
@@ -61,7 +64,7 @@ type
       of false:
         ## Entry was automatically generated or constructed from invalid
         ## CxType.
-        discard
+        typeImport*: LibImport
 
 
     case kind*: CTypeKind
@@ -382,7 +385,7 @@ type
     ## Hard override generated complex types
 
 
-    getSavePath*: proc(orig: AbsFile, conf: WrapConf): RelFile ## Return
+    getSavePath*: proc(orig: AbsFile, conf: WrapConf): LibImport ## Return
     ## path, *relative to project root* (@field{nimOutDir}) where file
     ## generated from `orig` should be saved.
 
@@ -455,7 +458,7 @@ type
     nimOutDir*: AbsDir ## Root directory to write files to
 
     refidFile*: RelFile
-    wrapName*: string ## Optional name of the wrapped library.
+    wrapName*: string ## Name of the wrapped library.
 
 
   WrapEntryPosition = object
@@ -1414,18 +1417,22 @@ func newNimType*(
 func newNimType*(
     name: string,
     genericParams: openarray[NimType] = @[],
+    libImport: LibImport = LibImport(),
     isParam: bool = false
   ): NimType =
 
   result = NimType(
     isParam: isParam,
-    kind: ctkIdent, nimName: name, fromCXtype: false,
+    kind: ctkIdent,
+    nimName: name,
+    fromCXtype: false,
+    typeImport: libImport,
     genericParams: toSeq(genericParams)
   )
 
 func newNimType*(
     arguments: seq[CArg],
-    returnType: NimType = newNimType("void", @[], false)
+    returnType: NimType = newNimType("void", @[], isParam = false)
   ): NimType =
 
   NimType(
@@ -1442,6 +1449,34 @@ func newNimType*(
   # {.warning[Deprecated]:on.}
   result = newNimType(name, cxType, isParam)
   result.genericParams.add genericParams
+
+func initLibImport*(name: string, path: seq[string]): LibImport =
+  LibImport(library: name, importPath: path)
+
+func hash*(lib: LibImport): Hash =
+  !$(hash(lib.library) !& hash(lib.importPath))
+
+func libImport*(conf: WrapConf): LibImport = initLibImport(conf.wrapName, @[])
+func isValid*(lib: LibImport): bool = lib.importPath.len > 0
+
+func toRelative*(lib: LibImport): RelFile =
+  assert lib.importPath.len > 0
+  result = RelFile(lib.importPath.join("/"))
+  result.addExt("nim")
+
+func asImport*(lib: LibImport): RelFile =
+  assert lib.importPath.len > 0
+  result = RelFile(lib.importPath.join("/"))
+
+func `&`*(lib: LibImport, path: openarray[string]): LibImport =
+  result = lib
+  result.importPath &= @path
+
+func addNamePrefix*(lib: var LibImport, prefix: string, idx: IndexTypes = ^1) =
+  lib.importPath[idx] = prefix & lib.importPath[idx]
+
+func addPathPrefix*(lib: var LibImport, prefix: string) =
+  lib.importPath.insert(prefix, 0)
 
 func newTemplateUndefined*(cxType: CxType): NimType =
   result = newNimType("CxxTemplateUndefined", cxType)
@@ -1605,6 +1640,12 @@ func initGenProc*(cdecl: CDecl, iinfo: LineInfo): GenProc =
 func initImportSpec*(path: seq[string]): NimImportSpec =
   ## Create nim import spec with absolute path
   NimImportSpec(isRelative: false, importPath: path)
+
+func initImportSpec*(path: seq[string], depth: int): NimImportSpec =
+  ## Create nim import spec with absolute path
+  NimImportSpec(
+    isRelative: true, importPath: path,
+    relativeDepth: depth)
 
 func initGenImport*(importPath: seq[string], iinfo: LineInfo): GenImport =
   GenImport(iinfo: iinfo, importSpec: initImportSpec(importPath))
