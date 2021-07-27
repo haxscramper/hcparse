@@ -365,11 +365,11 @@ type
     makeHeader*: proc(cursor: CXCursor, conf: WrapConf): NimHeaderSpec ## |
     ## Generate identifier for `{.header: ... .}`
 
-    typeNameForScoped*: proc(
-      ident: CScopedIdent, conf: WrapConf): NimType
-    ## Generate type name for a scoped identifier - type or function
-    ## declaration. The only important things are: `head` name and list of
-    ## generic parameters, so `ntkIdent` is the optimal return kind.
+    # typeNameForScoped*: proc(
+    #   ident: CScopedIdent, conf: WrapConf): NimType
+    # ## Generate type name for a scoped identifier - type or function
+    # ## declaration. The only important things are: `head` name and list of
+    # ## generic parameters, so `ntkIdent` is the optimal return kind.
 
     fixTypeName*: proc(ntype: var NimType, conf: WrapConf, idx: int)
     ## Change type name for `ntype`.
@@ -805,12 +805,40 @@ proc newProcVisit*(
   if not isNil(conf.newProcCb):
     return conf.newProcCb(genProc, conf, cache)
 
+func dropTemplateArgs*(old: string): string =
+  result = old[0 ..< old.skipUntil('<')]
+  var start = result.high
+  if start == old.high:
+    return
+
+  else:
+    inc start
+
+    let other = old[start .. ^1]
+    var
+      `<cnt` = 0
+      `>cnt` = 0
+
+    for ch in old:
+      if ch == '<': inc `<cnt`
+      if ch == '>': inc `>cnt`
+
+
+    if   `<cnt` - 2 == `>cnt`: result &= tern(other["<<="], "<<=", "<<")
+    elif `<cnt` - 1 == `>cnt`: result &= tern(other["<="],  "<=",  "<")
+    elif `<cnt`     == `>cnt`: result &= tern(other["<=>"], "<=>", "")
+    elif `<cnt` + 1 == `>cnt`: result &= tern(other[">="],  ">=",  ">")
+    elif `<cnt` + 2 == `>cnt`: result &= tern(other[">>="], ">>=", ">>")
+    else: assert false
+
+proc getName*(c: CxCursor): string = dropTemplateArgs($c)
+
 proc getName*(cn: CName): string =
   if cn.isGenerated:
     cn.name
 
   else:
-    $cn.cursor
+    getName(cn.cursor)
 
 
 proc getSemanticNamespaces*(
@@ -1092,31 +1120,6 @@ proc toHaxdocJson*(ns: CScopedIdent): JsonNode =
 
     result.add identPart
 
-func dropTemplateArgs*(old: string): string =
-  result = old[0 ..< old.skipUntil('<')]
-  var start = result.high
-  if start == old.high:
-    return
-
-  else:
-    inc start
-
-    let other = old[start .. ^1]
-    var
-      `<cnt` = 0
-      `>cnt` = 0
-
-    for ch in old:
-      if ch == '<': inc `<cnt`
-      if ch == '>': inc `>cnt`
-
-
-    if   `<cnt` - 2 == `>cnt`: result &= tern(other["<<="], "<<=", "<<")
-    elif `<cnt` - 1 == `>cnt`: result &= tern(other["<="],  "<=",  "<")
-    elif `<cnt`     == `>cnt`: result &= tern(other["<=>"], "<=>", "")
-    elif `<cnt` + 1 == `>cnt`: result &= tern(other[">="],  ">=",  ">")
-    elif `<cnt` + 2 == `>cnt`: result &= tern(other[">>="], ">>=", ">>")
-    else: assert false
 
 
 proc declGenParams*(part: CName): seq[CxCursor] =

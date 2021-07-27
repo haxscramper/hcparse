@@ -425,6 +425,8 @@ proc visitClass*(
     cache: var WrapCache
   ): CDecl =
 
+  conf.info "visitor in class name", cursor
+
   ## Convert class under cursor to `CDecl`
   let name =
     if cursor.cxKind == ckStructDecl and len($cursor) == 0:
@@ -552,7 +554,7 @@ proc visitClass*(
             conf.warn "IMPLEMENT class element:", ($subn.cxKind).toRed(), subn
             # debug subn.treeRepr()
 
-
+  conf.dump ident, params
   cache.setParamsForType(conf, ident, params)
 
 
@@ -589,7 +591,13 @@ proc visitCursor*(
     cursor: CXCursor, parent: CScopedIdent,
     conf: WrapConf, lastTypeDecl: var CDecl,
     cache: var WrapCache
-  ): tuple[decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]] =
+  ): tuple[decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]] {.logScope(conf.logger).} =
+
+  conf.logger.enableInScopeIf(
+    "char_traits" in $cursor and cursor.kind in { ckClassTemplate })
+
+  conf.dump cursor.getSpellingLocation
+  conf.dump cursor.treeRepr()
 
   const classDeclKinds = {
     ckClassDecl, ckClassTemplate, ckUnionDecl,
@@ -623,12 +631,7 @@ proc visitCursor*(
 
       of classDeclKinds:
         if not isNil(lastTypeDecl): result.decls.add lastTypeDecl
-
         lastTypeDecl = visitClass(cursor, parent, conf, none(CXCursor), cache)
-        # if "basic_string" in $cursor:
-        #   conf.warn "Visiting basic string declaration", cursor.cxKind()
-        #   conf.debug cursor.getSpellingLocation()
-        #   conf.debug "Last type decl:", isNil(lastTypeDecl)
 
       of ckFunctionDecl, ckFunctionTemplate:
         result.decls.add visitFunction(cursor, parent, conf)

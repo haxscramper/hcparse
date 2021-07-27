@@ -243,26 +243,6 @@ proc fixTypeName*(ntype: var NimType, conf: WrapConf, idx: int = 0) =
         conf.fixtypename(arg.nimType, conf, idx)
 
 
-proc typeNameForScoped*(
-    ident: CScopedIdent, conf: WrapConf): NimType {.deprecated: "getParamsForType".} =
-
-  assert ident.len > 0
-  var resname: string
-  var genParams: seq[NimType]
-  for name in ident:
-    if name.getName() notin conf.collapsibleNamespaces:
-      resname &= capitalizeAscii(name.getName())
-      for genParam in name.genParams:
-        let tmp = conf.typeNameForScoped(genParam, conf)
-        genParams.add tmp
-
-
-  assert resname.len > 0,
-            &"Scoped indent '{ident}' " &
-              "got converted to zero-length nim type"
-
-  result = newNimType(resname, genParams)
-  conf.fixTypeName(result, conf, 0)
 
 proc getBaseFile*(conf: WrapConf, wrapped: WrappedFile): AbsFile =
   ## Return base file for generated wrapped one. For generated grouped
@@ -422,10 +402,10 @@ let baseCppWrapConf* = WrapConf(
           mapIt(it.fixFileName()))
   ),
 
-  typeNameForScoped: (
-    proc(ident: CScopedIdent, conf: WrapConf): NimType {.closure} =
-      typeNameForScoped(ident, conf)
-  ),
+  # typeNameForScoped: (
+  #   proc(ident: CScopedIdent, conf: WrapConf): NimType {.closure} =
+  #     typeNameForScoped(ident, conf)
+  # ),
   isDistinct: (
     proc(ident: CSCopedIdent, conf: WrapConf, cache: var WrapCache):
       bool {.closure.} =

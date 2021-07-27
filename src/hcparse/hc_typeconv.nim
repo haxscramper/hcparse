@@ -304,11 +304,11 @@ proc setParamsForType*(
   ## Set or update default template type parameters for type `ident`
 
   # This procedure is called multiple times and iteratively builds list of
-  # actual default templated parameters based on different type occurencies.
-  # This is necessary becase type /declaration/ is not guaranteed to contain all
-  # the necessary information. Specific example - `std::baisc_string`. It is
-  # defined as regular templated class with not default parameters, which are
-  # specified in completely different file.
+  # actual default templated parameters based on different type
+  # occurencies. This is necessary becase type /declaration/ is not
+  # guaranteed to contain all the necessary information. Specific example -
+  # `std::baisc_string`. It is defined as regular templated class with not
+  # default parameters, which are specified in completely different file.
 
   # #+caption: `basic_string.h`
   # ```cpp
@@ -323,13 +323,16 @@ proc setParamsForType*(
   # class basic_string;
   # ```
 
+  conf.info "Setting parameters for type", ident, params
   if params.len > 0:
     var key: seq[string]
     for part in ident:
-      key.add $part.cursor
+      key.add getName(part)
 
     if key notin cache.paramsForType:
       cache.paramsForType[key] = @[]
+
+    conf.dump key
 
     # Convenience helper to avoid writing `cache.paramsForType[key]`
     # all over the place.
@@ -353,9 +356,6 @@ proc setParamsForType*(
         if default.isSome():
           conf.fixTypeName(default.get(), conf, 0)
           list[idx].defaultType = default
-          # conf.debug "Set default type for", idx, "type parameter", key.hshow()
-
-          # conf.debug cache.paramsForType[key][idx]
 
 
 proc replacePartials*(
@@ -594,6 +594,30 @@ proc getTypeName*(cxtype: CXType, conf: WrapConf): string =
   conf.debug cxtype.getTypeNamespaces()
   conf.debug result
 
+proc typeNameForScoped*(
+    conf: WrapConf, ident: CScopedIdent, cache: var WrapCache
+  ): NimType {.logScope(conf.logger).} =
+
+  conf.logger.enableInScopeIf("char_traits" in $ident)
+  conf.dump ident
+
+  assert ident.len > 0
+  var resname: string
+  var genParams: seq[NimType]
+  for name in ident:
+    if name.getName() notin conf.collapsibleNamespaces:
+      resname &= capitalizeAscii(name.getName())
+
+  assert resname.len > 0,
+            &"Scoped indent '{ident}' " &
+              "got converted to zero-length nim type"
+
+  result = newNimType(resname, genParams)
+  result.genericParams = cache.getParamsForType(ident, conf)
+  conf.fixTypeName(result, conf, 0)
+
+  conf.dump result
+
 proc isMutableRef*(cxtype: CXType): bool =
   case cxType.cxKind:
     of tkLValueReference, tkRValueReference:
@@ -804,9 +828,11 @@ proc genParamsForIdent*(
     cache: var WrapCache
   ): seq[NimType] =
 
-  let log = "char_traits" in $scoped
-
   for part in scoped:
+    # if "char_traits" in $part:
+    #   conf.dump part.cursor.getSpellingLocation()
+    #   conf.trace part.cursor.treeRepr()
+
     for param in part.declGenParams():
       result.add newNimType($param, isParam = true)
 

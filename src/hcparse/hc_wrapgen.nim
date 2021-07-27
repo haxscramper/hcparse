@@ -497,7 +497,7 @@ proc wrapTypeFromNamespace(
   # general case.k
 
   result = PObjectDecl(
-    name: conf.typeNameForScoped(ident, conf).toNType(conf, cache),
+    name: conf.typeNameForScoped(ident, cache).toNType(conf, cache),
     exported: true
   )
 
@@ -556,7 +556,7 @@ proc wrapAlias*(
     let aliasof = al.cursor.cxType().getCanonicalType()
     conf.logger.indented:
       # Create new identifier for aliased type
-      var newAlias = conf.typeNameForScoped(al.ident, conf)
+      var newAlias = conf.typeNameForScoped(al.ident, cache)
     # debug al.ident, " -> ", newAlias
 
     # Identifier for old aliased type
@@ -570,7 +570,7 @@ proc wrapAlias*(
         baseType = toNimType(aliasof, conf, cache) # .ntype # newPType($aliasof)
 
     else:
-      baseType = conf.typeNameForScoped(aliasof.fullScopedIdent(), conf)
+      baseType = conf.typeNameForScoped(aliasof.fullScopedIdent(), cache)
       # WARNING mismatched generic parameters between lhs and rhs parts of
       # alias might result in broken wrappers.
 
@@ -781,7 +781,7 @@ proc wrapObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): GenObject =
   result = GenObject(
     rawName: $cd.cursor,
     iinfo: currLInfo(),
-    name: conf.typeNameForScoped(cd.ident, conf),
+    name: conf.typeNameForScoped(cd.ident, cache),
     cdecl: cd
   )
 
@@ -847,7 +847,7 @@ proc makeGenEnum*(
     conf: WrapConf, cache: var WrapCache
   ): GenEnum =
 
-  var nt = conf.typeNameForScoped(declEn.ident, conf)
+  var nt = conf.typeNameForScoped(declEn.ident, cache)
   result = GenEnum(
     isMacroEnum: false,
     cdecl: declEn,
@@ -1300,8 +1300,12 @@ proc toNNode*(
 proc toNNode*(
     gen: GenObject, conf: WrapConf; cache: var WrapCache
   ): seq[WrappedEntry] =
-  var decl = newPObjectDecl(gen.name.nimName, iinfo = currLInfo())
-  let scoped = conf.typeNameForScoped(gen.cdecl.ident, conf).toNType(conf, cache)
+  var decl = newPObjectDecl(
+    gen.name.nimName, iinfo = currLInfo())
+
+  let scoped = conf.typeNameForScoped(
+    gen.cdecl.ident, cache).toNType(conf, cache)
+
   decl.name = scoped
 
   assert decl.name.kind == ntkIdent, $decl.name.kind

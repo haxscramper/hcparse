@@ -404,7 +404,7 @@ proc getTypeGraph(
           if entry.cdecl().cursor.kind notin {ckClassTemplate}:
             var objectNode = result.addOrGetNode(
               initTypeNode(
-                conf.typeNameForScoped(entry.cdecl().ident, conf).nimName,
+                conf.typeNameForScoped(entry.cdecl().ident, cache).nimName,
                 conf.getImport(
                   entry.getSpellingLocation(),
                   conf.getBaseFile(file), false).importPath,
@@ -867,7 +867,11 @@ proc wrapFile*(
       # Filter out all type declarations.
       of nekObjectDecl:
         let name = elem.decl.objectdecl.name.head
-        res[name] = elem
+        if name in res:
+          conf.warn "not overriding wrap for", name
+
+        else:
+          res[name] = elem
 
       of nekEnumDecl:
         let name = elem.decl.enumdecl.name
