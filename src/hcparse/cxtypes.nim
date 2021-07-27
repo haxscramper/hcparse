@@ -116,7 +116,6 @@ proc genParams*(cxtype: CXType): seq[CXType] =
     for i in 0 ..< args:
       result.add cxtype.getTemplateArgumentAsType(i.cuint)
 
-
 const tkPODKinds* = {
   tkVoid,
   tkBool,
@@ -304,19 +303,20 @@ proc `$`*(cursor: CXCursor): string =
 
 proc `$`*(cxkind: CXCursorKind): string =
   case cxkind:
-    of ckBaseSpecifier: "ckBaseSpecifier"
-    of ckAlignedAttr: "ckAlignedAttr"
-    of ckMacroDefinition: "ckMacroDefinition"
-    of ckMacroExpansion: "ckMacroExpansion"
-    of ckFinalAttr: "ckFinalAttr"
-    of ckAccessSpecifier: "ckAccessSpecifier"
-    of ckNullPtrLiteralExpr: "ckNullPtrLiteralExpr"
-    of ckWarnUnusedAttr: "ckWarnUnusedAttr"
+    of ckBaseSpecifier:        "ckBaseSpecifier"
+    of ckAlignedAttr:          "ckAlignedAttr"
+    of ckMacroDefinition:      "ckMacroDefinition"
+    of ckMacroExpansion:       "ckMacroExpansion"
+    of ckFinalAttr:            "ckFinalAttr"
+    of ckAccessSpecifier:      "ckAccessSpecifier"
+    of ckNullPtrLiteralExpr:   "ckNullPtrLiteralExpr"
+    of ckWarnUnusedAttr:       "ckWarnUnusedAttr"
     of ckWarnUnusedResultAttr: "ckWarnUnusedResultAttr"
-    of ckConversionFunction: "ckConversionFunction"
-    of ckMethod: "ckMethod"
-    of ckConstructor: "ckContructor"
-    of ckDestructor: "ckDestructor"
+    of ckConversionFunction:   "ckConversionFunction"
+    of ckMethod:               "ckMethod"
+    of ckConstructor:          "ckContructor"
+    of ckDestructor:           "ckDestructor"
+    of ckClassTemplate:        "ckClassTemplate"
 
     else:
       $getCursorKindSpelling(cxkind)
@@ -721,6 +721,12 @@ proc toNimDoc*(comment: CXComment): string =
 #***************************  Pretty-printing  ***************************#
 #*************************************************************************#
 
+func add*(tree: var ObjTree, other: ObjTree) =
+  tree.fldPairs.add ("", other)
+
+func add*(tree: var ObjTree, arg: string, other: ObjTree) =
+  tree.fldPairs.add (arg, other)
+
 proc objTreeRepr*(cxtype: CXType): ObjTree =
   case cxtype.cxKind:
     of tkPointer:
@@ -735,15 +741,30 @@ proc objTreeRepr*(cxtype: CXType): ObjTree =
     of tkPodKinds:
       result = pptConst("'" & $cxtype & "'")
 
+    of tkFunctionProto:
+      result = pptObj($cxType.cxKind, { "func": pptConst($cxtype) })
+      result.add("result", objTreeRepr(cxType.getResultType()))
+
+      for idx, arg in argTypes(cxType):
+        result.add($idx, objTreeRepr(arg))
+
     else:
-      result = pptObj($cxtype.cxkind, pptConst("'" & $cxtype & "'"))
+      result = pptObj(
+        $cxtype.cxkind, pptConst("'" & $cxtype & "'", fgRed + bgDefault))
+
+  if cxType.kind notin tkPodKinds:
+    if isConstQualified(cxtype):
+      result.add pptConst("const", fgMagenta + bgDefault)
 
   for param in cxType.genParams():
-    result.fldPairs.add ("", objTreeRepr(param))
+    result.add objTreeRepr(param)
 
 
 proc lispRepr*(cxtype: CXType): string =
   cxtype.objTreeRepr().lispRepr()
+
+proc treeRepr*(cxtype: CXType): string =
+  cxtype.objTreeRepr().treeRepr()
 
 proc neededTemplateArgs*(cxtype: CXType): int =
   ## Get number of necessary generic arguments for a type

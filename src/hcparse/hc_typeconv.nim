@@ -16,6 +16,16 @@ import std/[algorithm, strformat, sequtils, strutils,
 import cxcommon
 
 
+func add*(
+    nimType: var NimType, genericParam: NimType | seq[NimType]) =
+
+  assert not nimType.isComplex,
+     "Cannot add generic parameters to a complex type"
+
+  nimType.genericParams.add genericParam
+
+
+
 proc getTypeName*(cxtype: CXType, conf: WrapConf): string
 
 proc toNimType*(
@@ -156,6 +166,84 @@ proc newNimType*(
   result = newNimType(semSpaces.namespacedName(conf), cxType)
   result.fullIdent = some toScopedIdent(semSpaces)
 
+proc isComplexType*(
+    conf: WrapConf, cxType: CxType, cache: var WrapCache): bool =
+
+  let decl = cxType.getTypeDeclaration()
+  if decl in cache.complexCache:
+    return true
+
+  result = false
+  case cxType.cxKind():
+    of tkLValueReference, tkPointer, tkRValueReference:
+      result = conf.isComplexType(cxType[], cache)
+
+    of tkTypedef:
+      let log = "size_type" in $cxType
+
+      let parents = decl.getSemanticNamespaces()
+
+      if anyIt(parents, it.kind in {ckClassDecl, ckClassTemplate}):
+        cache.complexCache[decl] = none(NimType)
+        return true
+
+      if log:
+        conf.dump cxType
+        conf.dump cxType.cxKind()
+        conf.dump decl.getSpellingLocation()
+        conf.dump decl.treeRepr()
+        conf.dump decl.getSemanticNamespaces()
+
+      for part in decl:
+        if part.kind == ckTypeRef:
+          let ptype = part.cxType()
+          let complex = conf.isComplexType(ptype, cache)
+          if log:
+            conf.debug(
+              ptype.getTypeDeclaration(),
+              ptype.getTypeDeclaration().cxKind())
+
+            conf.debug ptype, ptype.cxKind()
+
+          if complex:
+            conf.notice cxType, "has complex type part", part
+
+    of tkUnexposed:
+      if decl.cxKind() notin {
+        ckClassTemplate, ckClassDecl, ckNoDeclFound
+      }:
+        conf.debug cxType, cxType.cxKind(), decl.cxKind()
+
+    of tkPodKinds:
+      discard
+
+    else:
+      conf.trace cxType, cxType.cxKind()
+
+func newTemplateUndefined*(cxType: CxType): NimType =
+  result = newNimType("CxxTemplateUndefined", cxType)
+  result.isComplex = true
+
+func newTemplateApproximate*(cxType: CxType, nimType: NimType): NimType =
+  result = newNimType("CxxTemplateApproximate", @[nimType], cxType)
+  result.isComplex = true
+
+proc newComplexType*(
+  conf: WrapConf, cxType: CxType, cache: var WrapCache): NimType =
+
+  if notNil(conf.overrideComplex):
+    let decl = cxType.getTypeDeclaration()
+    if decl in cache.complexCache and
+       cache.complexCache[decl].isSome():
+      return cache.complexCache[decl].get()
+
+    let override = conf.overrideComplex(cxType, conf, cache)
+    if override.isSome():
+      cache.complexCache[decl] = override
+      return override.get()
+
+  result = newTemplateUndefined(cxType)
+
 
 proc defaultTypeParameter*(
   cursor: CxCursor, cache: var WrapCache, conf: WrapConf): Option[NimType] =
@@ -294,6 +382,81 @@ proc replacePartials*(
 proc getParamsForType*(cache: WrapCache, name: seq[string]): seq[NimType] =
   if name in cache.paramsForType:
     result = cache.paramsForType[name]
+
+
+proc getDefaultedPartial*(
+    partial: NimType, conf: WrapConf, cache: var WrapCache,
+    noDefaulted: bool = false
+  ): seq[NimType] =
+  ## Return defaulted generic parameters for partially instantiated
+  ## template type
+
+  if partial.fromCxType:
+    let name = partial.cxType.fullScopedIdent().typeName()
+
+    if name in cache.paramsForType:
+      let params = cache.paramsForType[name]
+      for idx, param in params:
+        if partial.genericParams.high < idx:
+          if param.defaultType.isNone() or noDefaulted:
+            # Even though procedure is callsed `getDefaultedPartial`, in
+            # reality I have to substitute parameter without default values
+            # as well. Example of why this is necessary:
+
+            # ```cpp
+            # basic_string
+            # substr(size_type __pos = 0, size_type __n = npos) const
+            # { return basic_string(*this,
+            #     _M_check(__pos, "basic_string::substr"), __n); }
+            # ```
+
+            # Return type of this procedure does not have any explicit
+            # generic parameters. Moreover - /first parameter/ does not
+            # even have correct default value. So `genParams` naturally
+            # returns empty list, and at the time type arrives here (this
+            # procedure is called in the codegen stage mostly) we can't
+            # reverse-track what went into arguments.
+
+            result.add param
+
+          else:
+            assertOption param.defaultType,
+              &"Cannot get default type parameter for a type argument #{idx}. " &
+                &"Partial type was {partial}, parameter to default {param}, " &
+                &"fully scoped type name {name}, simple type name {param.cxType}"
+
+            result.add param.defaultType.get()
+
+
+
+proc toNType*(
+    nimType: NimType,
+    conf: WrapConf, cache: var WrapCache,
+    asResult: bool = false
+  ): NType[PNode] =
+
+  if isNil(nimType):
+    result = newPType("void")
+
+  else:
+    case nimType.kind:
+      of ctkIdent:
+        result = newPType(nimType.nimName)
+        for param in nimType.genericParams:
+          result.add toNType(param, conf, cache)
+
+        for defaulted in nimType.getDefaultedPartial(conf, cache):
+          result.add toNtype(defaulted, conf, cache)
+
+        if asResult and nimType.specialKind == ctskLValueRef:
+          result = newPType("var", @[result])
+
+      of ctkProc:
+        result = newProcNType(
+          nimType.arguments.mapIt((it.name, it.nimType.toNType(conf, cache))),
+          nimType.returnType.toNType(conf, cache),
+          newPPragma("cdecl"))
+
 
 proc getParamsForType*(
     cache: var WrapCache, cxtype: CScopedIdent,
@@ -600,6 +763,31 @@ proc toNimType*(
   result.specialKind = special
   conf.fixTypeName(result, conf, 0)
 
+proc genParamsForIdent*(
+    conf: WrapConf,
+    scoped: CSCopedIdent,
+    cache: var WrapCache
+  ): seq[NimType] =
+
+  let log = "operator==" in $scoped
+
+  if log:
+    conf.dump scoped
+    conf.trace scoped[^1].cursor.getSpellingLocation()
+
+  for part in scoped:
+    for param in part.declGenParams():
+      result.add newNimType($param, isParam = true)
+
+  if log:
+    conf.dump result
+
+  for idx, t in mpairs(result):
+    conf.fixTypeName(t, conf, idx)
+
+
+
+
 func fixTypeParams*(nt: var NimType, params: seq[NimType]) =
   func aux(nt: var NimType, idx: var int) =
     case nt.kind:
@@ -782,9 +970,9 @@ proc toInitCall*(
 
       of ckCStyleCastExpr:
         result = nnkCast.newPTree(
-          cursor[0].cxType().toNimType(conf, cache).toNType().toNNode(),
-          aux(cursor[1], ilist, cache)
-        )
+          cursor[0].cxType().toNimType(conf, cache).toNType(
+            conf, cache).toNNode(),
+          aux(cursor[1], ilist, cache))
 
       else:
         conf.err "Implement for kind", cursor.cxKind()

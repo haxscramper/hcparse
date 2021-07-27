@@ -211,7 +211,7 @@ proc toNNode*(genEntries: seq[GenEntry], conf: WrapConf, cache: var WrapCache):
     case node.kind:
       of gekProc:
         result.add newWrappedEntry(
-          node.genProc.toNNode(conf).toNimDecl(),
+          node.genProc.toNNode(conf, cache).toNimDecl(),
           true,
           node.genProc.iinfo,
           node.genProc.cdecl
@@ -232,7 +232,7 @@ proc toNNode*(genEntries: seq[GenEntry], conf: WrapConf, cache: var WrapCache):
 
       of gekAlias:
         result.add newWrappedEntry(
-          node.genAlias.toNNode(conf).toNimDecl(),
+          node.genAlias.toNNode(conf, cache).toNimDecl(),
           true,
           node.genAlias.iinfo,
           node.genAlias.cdecl

@@ -11,7 +11,7 @@ import
 
 import
   hnimast,
-  hnimast/pprint,
+  hnimast/[pprint, idents_types],
   hmisc/macros/iflet,
   hmisc/algo/[htemplates, hseq_distance, namegen],
   hmisc/[helpers, hexceptions],
@@ -125,15 +125,20 @@ proc wrapOperator*(
 
 
 
-proc initDestroyCall(parent: NimType, args: seq[CArg]): PNode =
+proc initDestroyCall(
+    parent: NimType,
+    args: seq[CArg],
+    constructorCall: string,
+    conf: WrapConf, cache: var WrapCache
+  ): PNode =
 
   let
     className = parent.nimName
-    argType = newNType("ref", [parent.toNType()]).toNNode()
+    argType = newNType("ref", [parent.toNType(conf, cache)]).toNNode()
     destroyCall = newPIdent(
       "destroy" & className.capitalizeAscii())
     argMixin = args.mapIt("(`" & it.name & "`)").join(", ")
-    emitStr = &"new ((void*)result) {className}({argMixin}); " &
+    emitStr = &"new ((void*)result) {constructorCall}({argMixin}); " &
       "/* Placement new */"
 
 
@@ -164,17 +169,15 @@ proc wrapProcedure*(
   ## - @arg{parentDecl} :: Optional parent declaration
   ## - @arg{asNewConstructor} :: Of `pr` is a declaration for constructor
   ##   generate `new` or `init` procedure.
-  ## - TODO :: allow creating placement new constructors that generate
-  ##   nim `ref` types and allow for nim-managed memory.
 
   var it = initGenProc(pr, currLInfo())
 
   var addThis = (
     pr.kind == cdkMethod and
     pr.cursor.cxKind notin {
-      ckConstructor, ckDestructor, ckConversionFunction
-    }
-  )
+      ckConstructor, ckDestructor, ckConversionFunction })
+
+  it.genParams = conf.genParamsForIdent(pr.ident, cache)
 
   result.canAdd = true
   if pr.isOperator:
@@ -191,11 +194,6 @@ proc wrapProcedure*(
 
   else:
     it.name = pr.getNimName(conf).fixIdentName()
-    # conf.debug it.name, pr.ident, pr.lastName(conf)
-
-    # FIXME
-    # iflet (par = parent):
-    #   it.genParams = par.nimname.genParams
 
     let icppName = toCppNamespace(pr.ident)
     if parent.isSome():
@@ -319,6 +317,13 @@ proc wrapProcedure*(
   else:
     let re = pr.cursor.retType()
     var returnType = toNimType(re, conf, cache)
+    # if "basic_string" in $re and returnType.genericParams.len == 0:
+    #   conf.trace returnType
+    #   conf.dump re, re.kind
+    #   conf.dump re[], re[].kind
+    #   conf.dump re.lispRepr()
+    #   conf.dump pr.cursor.getSpellingLocation()
+
     if returnType.isComplex.not() and
        parentDecl.isSome() and
        parent.isSome() and
@@ -357,7 +362,10 @@ proc wrapProcedure*(
     it.pragma.add newPIdent("varargs")
 
   if specialProcKind == gpskNewRefConstructor:
-    it.impl = some initDestroyCall(parent.get(), it.arguments)
+    it.impl = some initDestroyCall(
+      parent.get(), it.arguments,
+      toCppNamespace(parentDecl.get().ident),
+      conf, cache)
 
   let generated = newProcVisit(it, conf, cache)
   result.decl.add it
@@ -465,7 +473,8 @@ proc wrapMethods*(
       cdecl: cd,
       noPragmas: gpcNoPragma,
       iinfo: currLInfo(),
-      impl: some initDestroyCall(parent, @[])
+      impl: some initDestroyCall(
+        parent, @[], className, conf, cache)
     )
 
   for gproc in mitems(result.methods):
@@ -483,7 +492,9 @@ proc wrapFunction*(cd: CDecl, conf: WrapConf, cache: var WrapCache):
 
 
 proc wrapTypeFromNamespace(
-  ident: CScopedIdent, conf: WrapConf, cursor: CXCursor): PObjectDecl =
+    ident: CScopedIdent, conf: WrapConf,
+    cache: var WrapCache, cursor: CXCursor
+  ): PObjectDecl =
   ## `cursor` points to type declaration being wrapped
   # WARNING for now I assume that 'UNEXPOSED' type only occurs in
   # situations like `std::move_iterator<'0>::pointer` where typedef
@@ -492,7 +503,7 @@ proc wrapTypeFromNamespace(
   # general case.k
 
   result = PObjectDecl(
-    name: conf.typeNameForScoped(ident, conf).toNType(),
+    name: conf.typeNameForScoped(ident, conf).toNType(conf, cache),
     exported: true
   )
 
@@ -511,8 +522,8 @@ proc wrapTypeFromNamespace(
 proc wrapObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): GenObject
 
 proc wrapAlias*(
-    al: CDecl, parent: CScopedIdent, conf: WrapConf, cache: var WrapCache):
-  seq[GenEntry] =
+    al: CDecl, parent: CScopedIdent, conf: WrapConf, cache: var WrapCache
+  ): seq[GenEntry] =
   # NOTE returning multiple values because of
   # `typedef struct A {} A, *APtr` shit that can result in multple
   # declarations, nested types (that might recursively contain who-knows-what)
@@ -650,7 +661,7 @@ proc getParentFields*(
 
         result.add newPProcDecl(
           name = fldName,
-          returnType = some(fieldType.toNType()),
+          returnType = some(fieldType.toNType(wrapConf, cache)),
           args = { "self" : obj.name },
           iinfo = currLInfo(),
           pragma = newPPragma(newExprColonExpr(
@@ -667,7 +678,8 @@ proc getParentFields*(
           result.add newPProcDecl(
             name = fldName,
             iinfo = currLInfo(),
-            args = { "self" : obj.name, "val" : fieldType.toNType() },
+            args = { "self" : obj.name, "val" : fieldType.toNType(
+              wrapConf, cache) },
             pragma = newPPragma(newExprColonExpr(
               newPIdent(wrapConf.importX()), newRStrLit(&"(#.{fldName} = @)")))
           )
@@ -719,7 +731,6 @@ proc updateAggregateInit*(
       it.header = conf.makeHeader(cd.cursor, conf)
       it.icpp = &"{toCppNamespace(cd.ident)}({{@}})"
       it.returnType = gen.name
-      # it.genParams = gen.name.genericParams
 
     gen.nestedEntries.add pr
 
@@ -1074,7 +1085,6 @@ proc wrapMacroEnum*(
 
 proc wrapMacros*(
   declMacros: seq[CDecl], conf: WrapConf, cache: var WrapCache): seq[GenEntry] =
-  # info "Wrapping macros"
   var prefix: seq[string]
   var buf: seq[CDecl]
   var lastSplit: seq[string]
@@ -1169,35 +1179,35 @@ proc getNType*(carg: CArg): NimType =
 
 proc toNNode*(gen: GenEntry, conf: WrapConf, cache: var WrapCache): seq[WrappedEntry]
 
-proc toNNode*(gen: GenProc, wrapConf: WrapConf): PProcDecl =
+proc toNNode*(gen: GenProc, wrapConf: WrapConf, cache: var WrapCache): PProcDecl =
   result = newPProcDecl(
     name = gen.name,
     iinfo = gen.iinfo,
     exported = true,
-    returnType = some(gen.returnType.toNType(asResult = true)),
+    returnType = some(gen.returnType.toNType(wrapConf, cache, asResult = true)),
     declType = gen.declType,
     kind = gen.kind
   )
 
-  var used: seq[NimType]
+  # var used: seq[NimType]
 
   for arg in gen.arguments:
     result.signature.arguments.add newNIdentDefs(
       vname = arg.name,
       value = arg.default,
-      vtype = arg.getNTYpe().toNType(),
+      vtype = arg.getNType().toNType(wrapConf, cache),
       kind = arg.varkind
     )
 
-    used.add arg.getNType().allGenericParams()
+    # used.add arg.getNType().allGenericParams()
 
-  var genParams: OrderedSet[string]
-  for t in used:
-    if t.kind == ctkIdent:
-      genParams.incl t.nimName
+  let log = "operator==" in $gen.cdecl.ident
 
-  for gen in genParams:
-    result.genParams.add newPType(gen)
+  for param in wrapConf.genParamsForIdent(gen.cdecl.ident, cache):
+    result.genParams.add newPType(param.nimName)
+
+  if log:
+    wrapConf.dump gen.name, result.signature, result.genParams
 
 
   result.docComment = gen.docComment.join("\n")
@@ -1299,7 +1309,7 @@ proc toNNode*(
     gen: GenObject, conf: WrapConf; cache: var WrapCache
   ): seq[WrappedEntry] =
   var decl = newPObjectDecl(gen.name.nimName, iinfo = currLInfo())
-  let scoped = conf.typeNameForScoped(gen.cdecl.ident, conf).toNType()
+  let scoped = conf.typeNameForScoped(gen.cdecl.ident, conf).toNType(conf, cache)
   decl.name = scoped
 
   assert decl.name.kind == ntkIdent, $decl.name.kind
@@ -1325,9 +1335,9 @@ proc toNNode*(
       block getterImplementation:
         var getImpl = newPProcDecl(field.name)
         with getImpl:
-          returnType = field.fieldType.toNType()
+          returnType = field.fieldType.toNType(conf, cache)
           iinfo = currLInfo()
-          genParams = gen.name.genericParams.mapIt(it.toNType())
+          genParams = gen.name.genericParams.mapIt(it.toNType(conf, cache))
           pragma = newPPragma(
             newPIdent("noinit"),
             # newPIdentColonString(conf.importX(), &"#.{field.rawName}"),
@@ -1341,7 +1351,7 @@ proc toNNode*(
             newPIdentColonString("emit", &"return `self`.{field.rawName};")
           ))
 
-        getImpl.addArgument("self", gen.name.toNType())
+        getImpl.addArgument("self", gen.name.toNType(conf, cache))
 
         result.add newWrappedEntry(
           toNimDecl(getImpl), true, field.iinfo, field.cdecl)
@@ -1357,8 +1367,8 @@ proc toNNode*(
             )
           )
 
-        setImpl.addArgument("self", gen.name.toNtype())
-        setImpl.addArgument("value", field.fieldType.toNType())
+        setImpl.addArgument("self", gen.name.toNtype(conf, cache))
+        setImpl.addArgument("value", field.fieldType.toNType(conf, cache))
 
         result.add newWrappedEntry(
           toNimDecl(setImpl), true, field.iinfo, field.cdecl)
@@ -1372,7 +1382,7 @@ proc toNNode*(
         pragma: some newPPragma(
           newPIdentColonString(
             conf.importX, field.cdecl.lastName(conf))),
-        fldType: field.fieldType.toNType()
+        fldType: field.fieldType.toNType(conf, cache)
       )
 
       updateComments(newField, field.cdecl, conf, cache)
@@ -1388,19 +1398,19 @@ proc toNNode*(
   result.add obj
 
   for meth in gen.memberMethods:
-    result.add toNNode(meth, conf).toNimDecl().newWrappedEntry(
+    result.add toNNode(meth, conf, cache).toNimDecl().newWrappedEntry(
       true, meth.iinfo, meth.cdecl)
 
 
-proc toNNode*(gen: GenAlias, conf: WrapConf): AliasDecl[PNode] =
+proc toNNode*(
+    gen: GenAlias, conf: WrapConf, cache: var WrapCache): AliasDecl[PNode] =
   result = AliasDecl[PNode](
     iinfo: gen.iinfo,
     docComment: gen.docComment.join("\n"),
     isDistinct: gen.isDistinct,
     isExported: true,
-    oldType: gen.baseType.toNType(),
-    newType: gen.newAlias.toNType()
-  )
+    oldType: gen.baseType.toNType(conf, cache),
+    newType: gen.newAlias.toNType(conf, cache))
 
 # func toPath*(importSpec: NimImportSpec): seq[string] =
 #   if importSpec.isRelative:
@@ -1471,7 +1481,7 @@ proc toNNode*(gen: GenEntry, conf: WrapConf, cache: var WrapCache): seq[WrappedE
       result.add gen.genPass.passEntries
 
     of gekAlias:
-      result.add toNNode(gen.genAlias, conf).
+      result.add toNNode(gen.genAlias, conf, cache).
         toNimDecl().
         newWrappedEntry(true, gen.genAlias.iinfo, gen.cdecl)
 
@@ -1479,8 +1489,9 @@ proc toNNode*(gen: GenEntry, conf: WrapConf, cache: var WrapCache): seq[WrappedE
       result.add toNNode(gen.genObject, conf, cache)
 
     of gekProc:
-      result.add toNNode(gen.genProc, conf).toNimDecl().newWrappedEntry(
-        true, gen.genProc.iinfo, gen.cdecl)
+      result.add toNNode(gen.genProc, conf, cache).
+        toNimDecl().
+        newWrappedEntry(true, gen.genProc.iinfo, gen.cdecl)
 
     of gekImport:
       result.add toNNode(gen.genImport, conf)

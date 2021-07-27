@@ -484,6 +484,7 @@ type
     paramsForType*: Table[seq[string], seq[NimType]] ## Generic
     ## parameters for each type. Type is uniquely represented using
     ## `fully::scoped::ident`.
+    nimParamsForType*: Table[string, seq[NimType]]
     generatedConstructors*: HashSet[string]
     # defaultParamsForType*: Table[seq[string], Table[int, NimType]]
     complexCache*: Table[CxCursor, Option[NimType]]
@@ -551,7 +552,7 @@ type
     private*: bool ## Generated proc should be private?
     arguments*: seq[CArg] ## Arguments
     returnType*: NimType
-    # genParams*: seq[NimType] ## Nim generic parameters
+    genParams*: seq[NimType] ## Nim generic parameters
     declType*: ProcDeclType ## Type of proc declaration (iterator,
                             ## converter etc.)
     header*: NimHeaderSpec ## Header specification for `.header:` pragma
@@ -1093,6 +1094,55 @@ proc toHaxdocJson*(ns: CScopedIdent): JsonNode =
 
     result.add identPart
 
+func dropTemplateArgs*(old: string): string =
+  result = old[0 ..< old.skipUntil('<')]
+  var start = result.high
+  if start == old.high:
+    return
+
+  else:
+    inc start
+
+    let other = old[start .. ^1]
+    var
+      `<cnt` = 0
+      `>cnt` = 0
+
+    for ch in old:
+      if ch == '<': inc `<cnt`
+      if ch == '>': inc `>cnt`
+
+
+    if   `<cnt` - 2 == `>cnt`: result &= tern(other["<<="], "<<=", "<<")
+    elif `<cnt` - 1 == `>cnt`: result &= tern(other["<="],  "<=",  "<")
+    elif `<cnt`     == `>cnt`: result &= tern(other["<=>"], "<=>", "")
+    elif `<cnt` + 1 == `>cnt`: result &= tern(other[">="],  ">=",  ">")
+    elif `<cnt` + 2 == `>cnt`: result &= tern(other[">>="], ">>=", ">>")
+    else: assert false
+
+
+proc declGenParams*(part: CName): seq[CxCursor] =
+  case part.cursor.kind:
+    of ckFunctionDecl, ckFunctionTemplate,
+       ckDestructor, ckConstructor, ckMethod,
+       ckClassTemplate, ckStructDecl:
+      for param in part.cursor:
+        if param.kind in { ckTemplateTypeParameter }:
+          result.add param
+
+    else:
+      discard
+
+
+
+
+proc reconst*(cxType: string): string =
+  if cxType.startsWith("const "):
+    result = "const[" & cxType["const ".len .. ^1] & "]"
+
+  else:
+    result = cxType
+
 proc toHaxdocIdentType*(
   cxtype: CXType, procname: string = "proc"): string =
   case cxtype.cxKind():
@@ -1135,6 +1185,19 @@ proc toHaxdocIdentType*(
         cxtype.argTypes.mapIt(toHaxdocIdentType(it)).join(", "),
         "): ", cxtype.getResultType().toHaxdocIdentType()
       ]
+
+    of tkUnexposed:
+      result = dropTemplateArgs($cxtype)
+      let params = cxType.genParams()
+      if params.len > 0:
+        result.add "["
+        for idx, param in params:
+          if idx > 0: result.add ", "
+          result.add toHaxdocIdentType(param)
+
+        result.add "]"
+
+      result = reconst(result)
 
     else:
       result = $(cxtype.cxKind())
@@ -1230,7 +1293,7 @@ proc toHaxdocIdent*(ns: CScopedIdent): string =
         else:
           raise newImplementKindError(part.cursor)
 
-      result &= part.cursor.cxType().toHaxdocIdentType(part.getName())
+      result &= part.cursor.cxType().toHaxdocIdentType()
 
     elif part.cursor.kind in {ckMacroDefinition}:
       result &= &"cmacro!{part.cursor}"
@@ -1478,109 +1541,6 @@ func addNamePrefix*(lib: var LibImport, prefix: string, idx: IndexTypes = ^1) =
 func addPathPrefix*(lib: var LibImport, prefix: string) =
   lib.importPath.insert(prefix, 0)
 
-func newTemplateUndefined*(cxType: CxType): NimType =
-  result = newNimType("CxxTemplateUndefined", cxType)
-  result.isComplex = true
-
-func newTemplateApproximate*(cxType: CxType, nimType: NimType): NimType =
-  result = newNimType("CxxTemplateApproximate", @[nimType], cxType)
-  result.isComplex = true
-
-
-
-func add*(
-    nimType: var NimType, genericParam: NimType | seq[NimType]) =
-
-  assert not nimType.isComplex, "Cannot add generic parameters to a complex type"
-  nimType.genericParams.add genericParam
-
-proc toNType*(nimType: NimType, asResult: bool = false): NType[PNode] =
-  if isNil(nimType):
-    result = newPType("void")
-
-  else:
-    case nimType.kind:
-      of ctkIdent:
-        result = newPType(nimType.nimName)
-        for param in nimType.genericParams:
-          result.add toNType(param)
-
-        if asResult and nimType.specialKind == ctskLValueRef:
-          result = newPType("var", @[result])
-
-      of ctkProc:
-        result = newProcNType(
-          nimType.arguments.mapIt((it.name, it.nimType.toNType())),
-          nimType.returnType.toNType(),
-          newPPragma("cdecl"))
-
-proc isComplexType*(
-    conf: WrapConf, cxType: CxType, cache: var WrapCache): bool =
-
-  let decl = cxType.getTypeDeclaration()
-  if decl in cache.complexCache:
-    return true
-
-  result = false
-  case cxType.cxKind():
-    of tkLValueReference, tkPointer, tkRValueReference:
-      result = conf.isComplexType(cxType[], cache)
-
-    of tkTypedef:
-      let log = "size_type" in $cxType
-
-      let parents = decl.getSemanticNamespaces()
-
-      if anyIt(parents, it.kind in {ckClassDecl, ckClassTemplate}):
-        cache.complexCache[decl] = none(NimType)
-        return true
-
-      if log:
-        conf.dump cxType
-        conf.dump cxType.cxKind()
-        conf.dump decl.getSpellingLocation()
-        conf.dump decl.treeRepr()
-        conf.dump decl.getSemanticNamespaces()
-
-      for part in decl:
-        if part.kind == ckTypeRef:
-          let ptype = part.cxType()
-          let complex = conf.isComplexType(ptype, cache)
-          if log:
-            conf.debug(
-              ptype.getTypeDeclaration(),
-              ptype.getTypeDeclaration().cxKind())
-
-            conf.debug ptype, ptype.cxKind()
-
-          if complex:
-            conf.notice cxType, "has complex type part", part
-
-    of tkUnexposed:
-      if decl.cxKind() notin {
-        ckClassTemplate, ckClassDecl, ckNoDeclFound
-      }:
-        conf.debug cxType, cxType.cxKind(), decl.cxKind()
-
-    of tkPodKinds:
-      discard
-
-    else:
-      conf.trace cxType, cxType.cxKind()
-
-proc newComplexType*(conf: WrapConf, cxType: CxType, cache: var WrapCache): NimType =
-  if notNil(conf.overrideComplex):
-    let decl = cxType.getTypeDeclaration()
-    if decl in cache.complexCache and
-       cache.complexCache[decl].isSome():
-      return cache.complexCache[decl].get()
-
-    let override = conf.overrideComplex(cxType, conf, cache)
-    if override.isSome():
-      cache.complexCache[decl] = override
-      return override.get()
-
-  result = newTemplateUndefined(cxType)
 
 proc `$`*(spec: NimImportSpec): string =
   if spec.isRelative:
@@ -1676,6 +1636,7 @@ proc seenCursor*(cache: WrapCache, cursor: CXCursor): bool =
   ## Cursor has already been recorded in the cache?
   cursor.hashCursor() in cache.visited
 
+
 proc lastName*(cd: CDecl, conf: WrapConf, dropTemplate: bool = true): string =
   ## Return *last* name for declaration.
   ##
@@ -1685,38 +1646,15 @@ proc lastName*(cd: CDecl, conf: WrapConf, dropTemplate: bool = true): string =
   # conf.dump result, dropTemplate
 
   if dropTemplate:
+    result = dropTemplateArgs(result)
     let old = result
-    # if result.len != old.len: # QUESTION ?????
+    # # if result.len != old.len: # QUESTION ?????
 
-    # yes, I hate this shit too.
-    result = old[0 ..< old.skipUntil('<')]
-    var start = result.high
-    if start == old.high:
-      return
+    # # yes, I hate this shit too.
+    #   else:
+    #     conf.err `<cnt`, `>cnt`, old
 
-    else:
-      inc start
-
-      let other = old[start .. ^1]
-      # conf.dump (old, result, other)
-      var
-        `<cnt` = 0
-        `>cnt` = 0
-
-      for ch in old:
-        if ch == '<': inc `<cnt`
-        if ch == '>': inc `>cnt`
-
-      # conf.dump (`<cnt`, `>cnt`)
-
-      if   `<cnt` + 2 == `>cnt`: result &= tern(other["<<="], "<<=", "<<")
-      elif `<cnt` + 1 == `>cnt`: result &= tern(other["<="],  "<=",  "<")
-      elif `<cnt`     == `>cnt`: result &= tern(other["<=>"], "<=>", "")
-      elif `<cnt` - 1 == `>cnt`: result &= tern(other[">="],  ">=",  ">")
-      elif `<cnt` - 2 == `>cnt`: result &= tern(other[">>="], ">>=", ">>")
-      else:
-        conf.err `<cnt`, `>cnt`, old
-
+    #   # conf.dump (`<cnt`, `>cnt`), result
 
 
 #==========================  Operator handling  ==========================#
@@ -1816,10 +1754,14 @@ proc getNimName*(
     cd: CDecl, conf: WrapConf, dropTemplate: bool = true): string =
 
   if cd.kind in { cdkMethod, cdkFunction } and
-     cd.isOperator and
-     cd.lastName(conf) == "operator=":
-    result = "setFrom" # REVIEW change name to something different if
-                       # possible
+     cd.isOperator:
+
+    if cd.lastName(conf) == "operator=":
+      result = "setFrom" # REVIEW change name to something different if
+                         # possible
+
+    else:
+      result = cd.lastName(conf, dropTemplate)[len("operator") ..^ 1]
 
   elif cd.cursor.kind in { ckDestructor }:
     result = cd.lastName(conf, dropTemplate)[1 ..^ 1]
