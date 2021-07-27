@@ -832,10 +832,8 @@ proc getSemanticNamespaces*(
 
   # info parent
 
-  while parent.cxKind() in {
+  while parent.cxKind() in ckTypeDeclKinds + {ckNamespace}:
     # TEST might be necessary to add templated namespacess
-    ckNamespace, ckStructDecl, ckClassDecl, ckClassTemplate
-  }:
     if filterInline and (parent.isInlineNamespace() == 1):
       discard
     else:

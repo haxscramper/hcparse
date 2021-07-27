@@ -43,8 +43,7 @@ proc fromElaboratedPType*(
         # WARNING `template <J, Q> using` is not handled
         result = newNimType(cxtype.getTypeName(conf), cxtype)
 
-      of ckClassDecl, ckStructDecl, ckClassTemplate:
-        # debug "Class decl"
+      of ckTypeDeclKinds:
         let params = cxtype.genParams()
         result = newNimType(cxtype.getTypeName(conf), cxtype)
         for idx, parm in params:
@@ -152,7 +151,7 @@ proc namespacedName*(decl: CxCursor, conf: WrapConf): string =
   ##
   ## - EXAMPLE :: Given `namespace nsp { struct Str{}; }` and cursor that
   ##   points to the `Str` /declaration/ it should return
-  assertKind(decl, {ckClassDecl, ckStructDecl, ckClassTemplate})
+  assertKind(decl, ckTypeDeclKinds)
   decl.getSemanticNamespaces().namespacedName(conf)
 
 proc namespacedName*(cxtype: CxType, conf: WrapConf): string =
@@ -183,7 +182,7 @@ proc isComplexType*(
 
       let parents = decl.getSemanticNamespaces()
 
-      if anyIt(parents, it.kind in {ckClassDecl, ckClassTemplate}):
+      if anyIt(parents, it.kind in ckTypeDeclKinds):
         cache.complexCache[decl] = none(NimType)
         return true
 
@@ -209,13 +208,14 @@ proc isComplexType*(
             conf.notice cxType, "has complex type part", part
 
     of tkUnexposed:
-      if decl.cxKind() notin {
-        ckClassTemplate, ckClassDecl, ckNoDeclFound
-      }:
+      if decl.cxKind() notin ckTypeDeclKinds + { ckNoDeclFound }:
         conf.debug cxType, cxType.cxKind(), decl.cxKind()
 
-    of tkPodKinds:
+    of tkPodKinds, tkRecord, tkEnum:
       discard
+
+    of tkDependentSizedArray:
+      result = true
 
     else:
       conf.trace cxType, cxType.cxKind()
@@ -581,8 +581,7 @@ proc getTypeName*(cxtype: CXType, conf: WrapConf): string =
     of ckTypedefDecl, ckTypeAliasDecl:
       return $curs.cxType()
 
-    of ckClassDecl, ckStructDecl, ckEnumDecl, ckUnionDecl,
-       ckClassTemplate, ckTypeAliasTemplateDecl:
+    of ckTypeDeclKinds, ckTypeAliasTemplateDecl:
       result = $curs
 
     else:
@@ -745,12 +744,10 @@ proc toNimType*(
 
 
         var res = newNimType(name, cxType)
-        if decl.cxKind in {
+        if decl.cxKind in ckTypeDeclKinds:
           # HACK list of necessary kinds is determined by trial and error,
           # I'm still not really sure what `tkUnexposed` actually
           # represents.
-          ckClassTemplate, ckClassDecl
-        }:
           for arg in cxType.templateParams():
             res.add toNimType(arg, conf, cache)
 
@@ -806,6 +803,8 @@ proc genParamsForIdent*(
     scoped: CSCopedIdent,
     cache: var WrapCache
   ): seq[NimType] =
+
+  let log = "char_traits" in $scoped
 
   for part in scoped:
     for param in part.declGenParams():

@@ -215,7 +215,7 @@ proc isAggregateInitable*(
   }:
     return false
 
-  elif cd.cxKind() notin {ckClassDecl, ckStructDecl, ckClassTemplate}:
+  elif cd.cxKind() notin ckTypeDeclKinds:
     assertionFail:
       "Invalid cursor kind of aggregate initalization check."
       "Expected type declaration (union/enum/struct/class),"
@@ -359,7 +359,7 @@ proc visitAlias*(
 
 
 
-  if cursor[0].cxKind() in {ckEnumDecl, ckStructDecl, ckUnionDecl, ckClassDecl}:
+  if cursor[0].cxKind() in ckTypeDeclKinds:
     # libclang represents grouped typedefs using *multiple* nodes, so
     # `typedef struct S1 {} S2, *S3` will appear *three times* in the clang
     # IR. It is not really convenient to work with, as it requires additional

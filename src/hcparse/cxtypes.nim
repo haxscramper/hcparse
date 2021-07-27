@@ -327,6 +327,14 @@ proc `$`*(cursor: CXCursor): string =
     else:
       $getCursorSpelling(cursor)
 
+const
+  ckTypeDeclKinds* = {
+    ckStructDecl,
+    ckClassDecl,
+    ckUnionDecl,
+    ckEnumDecl,
+    ckClassTemplate,
+  }
 
 
 proc hash*(cursor: CXCursor): Hash = Hash(cursor.hashCursor())
