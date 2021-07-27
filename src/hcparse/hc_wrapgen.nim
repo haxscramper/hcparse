@@ -317,12 +317,6 @@ proc wrapProcedure*(
   else:
     let re = pr.cursor.retType()
     var returnType = toNimType(re, conf, cache)
-    # if "basic_string" in $re and returnType.genericParams.len == 0:
-    #   conf.trace returnType
-    #   conf.dump re, re.kind
-    #   conf.dump re[], re[].kind
-    #   conf.dump re.lispRepr()
-    #   conf.dump pr.cursor.getSpellingLocation()
 
     if returnType.isComplex.not() and
        parentDecl.isSome() and
@@ -1179,39 +1173,37 @@ proc getNType*(carg: CArg): NimType =
 
 proc toNNode*(gen: GenEntry, conf: WrapConf, cache: var WrapCache): seq[WrappedEntry]
 
-proc toNNode*(gen: GenProc, wrapConf: WrapConf, cache: var WrapCache): PProcDecl =
+proc toNNode*(
+  gen: GenProc, wrapConf: WrapConf, cache: var WrapCache): PProcDecl =
+
+  var parentClass: seq[CxCursor]
+  for it in items(gen.cdecl.ident):
+    if it.cursor.kind in { ckClassTemplate }:
+      parentClass.add it.cursor
+
   result = newPProcDecl(
     name = gen.name,
     iinfo = gen.iinfo,
     exported = true,
-    returnType = some(gen.returnType.toNType(wrapConf, cache, asResult = true)),
+    returnType = some(
+      gen.returnType.toNType(
+        wrapConf, cache, asResult = true, noDefaulted = parentClass)),
     declType = gen.declType,
     kind = gen.kind
   )
-
-  # var used: seq[NimType]
 
   for arg in gen.arguments:
     result.signature.arguments.add newNIdentDefs(
       vname = arg.name,
       value = arg.default,
-      vtype = arg.getNType().toNType(wrapConf, cache),
-      kind = arg.varkind
-    )
-
-    # used.add arg.getNType().allGenericParams()
-
-  let log = "operator==" in $gen.cdecl.ident
+      vtype = arg.getNType().toNType(
+        wrapConf, cache, noDefaulted = parentClass),
+      kind = arg.varkind)
 
   for param in wrapConf.genParamsForIdent(gen.cdecl.ident, cache):
     result.genParams.add newPType(param.nimName)
 
-  if log:
-    wrapConf.dump gen.name, result.signature, result.genParams
-
-
   result.docComment = gen.docComment.join("\n")
-
   result.signature.pragma = gen.pragma
 
   if gen.noPragmas notin {gpcNoImportcpp, gpcNoPragma}:

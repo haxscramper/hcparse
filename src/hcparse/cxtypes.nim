@@ -298,9 +298,6 @@ proc getTuFile*(cx: CXCursor): AbsFile =
 #*************************************************************************#
 #******************************  CXCursor  *******************************#
 #*************************************************************************#
-proc `$`*(cursor: CXCursor): string =
-  $getCursorSpelling(cursor)
-
 proc `$`*(cxkind: CXCursorKind): string =
   case cxkind:
     of ckBaseSpecifier:        "ckBaseSpecifier"
@@ -317,9 +314,20 @@ proc `$`*(cxkind: CXCursorKind): string =
     of ckConstructor:          "ckContructor"
     of ckDestructor:           "ckDestructor"
     of ckClassTemplate:        "ckClassTemplate"
+    of ckOverloadCandidate:    "ckOverloadCandidate"
 
     else:
       $getCursorKindSpelling(cxkind)
+
+proc `$`*(cursor: CXCursor): string =
+  case cursor.kind:
+    of ckOverloadCandidate:
+      "<OVERLOAD CANDIDATE>"
+
+    else:
+      $getCursorSpelling(cursor)
+
+
 
 proc hash*(cursor: CXCursor): Hash = Hash(cursor.hashCursor())
 

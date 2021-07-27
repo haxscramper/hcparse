@@ -432,7 +432,8 @@ proc getDefaultedPartial*(
 proc toNType*(
     nimType: NimType,
     conf: WrapConf, cache: var WrapCache,
-    asResult: bool = false
+    asResult: bool = false,
+    noDefaulted: seq[CxCursor] = @[]
   ): NType[PNode] =
 
   if isNil(nimType):
@@ -445,7 +446,44 @@ proc toNType*(
         for param in nimType.genericParams:
           result.add toNType(param, conf, cache)
 
-        for defaulted in nimType.getDefaultedPartial(conf, cache):
+
+        var ignoreDefaulted = false
+        if nimType.fromCxType and
+           noDefaulted.len() > 0 and
+           noDefaulted[0].kind in { ckClassTemplate }:
+
+          # I'm not really sure about the necessary heuristics to correctly
+          # determine conditions for `ignoreDefault`, so right now it is
+          # implemented as an edge case based on the stdlib.
+          #
+          # `std::basic_string` has `.substr()` method that returns
+          # `basic_string` - with /no/ template parameters specified. I
+          # tried to find when it is possible to do this (completely omit
+          # template type parameters, even including non-defaulted ones),
+          # but could not find any conclusive answer. Anyway, the return
+          # type is `basic_string`. When I try to convert it to `toNType`
+          # it tries to substitute defaulted template types, namely
+          # `std::char_traits<_CharT>` and allocator. But I actually need
+          # it to use class's template type parameters.
+          #
+          # Right now I just collect all parent classes for a `GenProc` (in
+          # `toNNode(GenProc)`), and pass it down here. If input `nimType`
+          # that is passed here has the same /name/ (things are different
+          # when they are cursors - `ckClassTemplate` and some other kind)
+          # as `noDefaulted`, I consider it to be a valid reason to
+          # `ignoreDefaulted`.
+          #
+          # This worked for `[[code:std::basic_string.substr(_, _, _)]]`,
+          # but in general I don't think this is a fully correct check.
+
+          let decl = nimType.cxType.getTypeDeclaration()
+          ignoreDefaulted = $decl == $noDefaulted[0]
+
+        for defaulted in nimType.getDefaultedPartial(
+          conf, cache,
+          noDefaulted = ignoreDefaulted
+        ):
+
           result.add toNtype(defaulted, conf, cache)
 
         if asResult and nimType.specialKind == ctskLValueRef:
@@ -769,23 +807,12 @@ proc genParamsForIdent*(
     cache: var WrapCache
   ): seq[NimType] =
 
-  let log = "operator==" in $scoped
-
-  if log:
-    conf.dump scoped
-    conf.trace scoped[^1].cursor.getSpellingLocation()
-
   for part in scoped:
     for param in part.declGenParams():
       result.add newNimType($param, isParam = true)
 
-  if log:
-    conf.dump result
-
   for idx, t in mpairs(result):
     conf.fixTypeName(t, conf, idx)
-
-
 
 
 func fixTypeParams*(nt: var NimType, params: seq[NimType]) =
