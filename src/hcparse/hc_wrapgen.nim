@@ -313,7 +313,7 @@ proc wrapProcedure*(
         it.iinfo = currLInfo()
         it.returnType = parent.get()
         it.icpp = &"{toCppNamespace(parentDecl.get().ident)}(@)"
-        endProc(it)
+        result.decl.add it
 
       block newRefConstructor:
         var it = deepCopy(it)
@@ -326,7 +326,9 @@ proc wrapProcedure*(
 
         it.returnType = newNimType("ref", @[parent.get()])
         it.icpp = &"new {toCppNamespace(parentDecl.get().ident)}(@)"
-        endProc(it)
+        it.noPragmas = gpcNoPragma
+
+        result.decl.add it
 
       block newPtrConstructor:
         var it = deepCopy(it)
@@ -334,7 +336,8 @@ proc wrapProcedure*(
         it.iinfo = currLInfo()
         it.returnType = newNimType("ptr", @[parent.get()])
         it.icpp = &"new {toCppNamespace(parentDecl.get().ident)}(@)"
-        endProc(it)
+        result.decl.add it
+
 
     else:
       conf.warn "Discarding wrappers for conversion function"
@@ -365,9 +368,6 @@ proc wrapProcedure*(
     if pr.cursor.cxkind == ckDestructor:
       # Explicitly calling destructor on object
       it.icpp = &"~{it.name}()"
-      it.header = conf.makeHeader(pr.cursor, conf)
-
-    if pr.cursor.kind == ckDestructor:
       it.name = "destroy" & parent.get().nimName
       it.declareForward = true
 
@@ -397,6 +397,7 @@ proc wrapMethods*(
       hasConstructor = true
 
     if canAdd:
+
       for d in decl:
         if d.kind == gekProc:
           result.methods.add d.genProc
@@ -772,6 +773,13 @@ proc wrapObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): GenObject =
     result.memberMethods.add procs
     result.nestedEntries.add extra
 
+    if anyIt(procs, "newStdAllocator" == it.name):
+      conf.dump result.memberMethods.len()
+      for m in result.memberMethods:
+        conf.trace m.name
+
+
+
 proc cEnumName(
     str: string, nt: NimType, conf: WrapConf, cache: var WrapCache): string =
   ## Generate name for C enum. QUESTION: enum names don't need to be
@@ -872,7 +880,7 @@ proc makeEnumConverters(gen: GenEnum, conf: WrapConf, cache: var WrapCache):
 
   let
     enName = newPIdent(gen.name)
-    arrName = newPIdent("arr" & gen.name.fixIdentName() & "mapping")
+    arrName = newPIdent("arr" & gen.name & "mapping")
     reverseConvName = newPident("to" & gen.rawName)
     convName = newPIdent("to" & gen.name)
     implName = newPIdent(gen.rawName)
@@ -1167,7 +1175,7 @@ proc toNNode*(
   result.docComment = gen.docComment.join("\n")
   result.signature.pragma = gen.pragma
 
-  if gen.noPragmas notin {gpcNoImportcpp, gpcNoPragma}:
+  if gpcNoImportcpp notin gen.noPragmas:
     result.signature.pragma.add(
       newExprColonExpr(
         newPIdent(wrapConf.importX()),
@@ -1189,7 +1197,7 @@ proc toNNode*(
     result.signature.pragma.add(newPident("discardable"))
 
 
-  if gen.noPragmas notin {gpcNoHeader, gpcNoPragma}:
+  if gpcNoHeader notin gen.noPragmas:
     result.signature.pragma.add(
       newExprColonExpr(newPIdent "header", gen.header.toNNode()))
 
@@ -1272,10 +1280,11 @@ proc addProcDecl*(
     wrapped.add toNNode(gen, conf, cache).toNimDecl().newWrappedEntry(
       wepInProcs, gen.iinfo, gen.cdecl)
 
-    wrapped.add toNNode(gen, conf, cache).
-      copyForward().
-      toNimDecl().
-      newWrappedEntry(wepAfterTypesBeforeProcs, gen.iinfo, gen.cdecl)
+    if gen.declareForward:
+      wrapped.add toNNode(gen, conf, cache).
+        copyForward().
+        toNimDecl().
+        newWrappedEntry(wepAfterTypesBeforeProcs, currLInfo(), gen.cdecl)
 
 
 proc toNNode*(

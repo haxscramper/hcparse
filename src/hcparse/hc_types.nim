@@ -533,8 +533,6 @@ type
     ## types or procedures)
 
   GenPragmaConf* = enum
-    gpcAllPragma
-    gpcNoPragma
     gpcNoImportcpp
     gpcNoHeader
 
@@ -553,7 +551,7 @@ type
     kind*: ProcKind ## Kind of generated nim proc (operator, field setter,
                     ## regular proc etc.)
     impl*: Option[PNode] ## Optional implementation body
-    noPragmas*: GenPragmaConf ## Do not add default C wrapper pragamas.
+    noPragmas*: set[GenPragmaConf] ## Do not add default C wrapper pragamas.
     ## Used for pure nim enums
     declareForward*: bool
 
@@ -713,6 +711,7 @@ type
 
 
 WrapConf.loggerField(logger, doExport = true)
+const gpcNoPragma* = { gpcNoHeader, gpcNoImportcpp }
 
 proc newGenEntry*(gen: AnyGenEntry): GenEntry =
   ## Box any genrated entry
