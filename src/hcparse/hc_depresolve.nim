@@ -14,7 +14,7 @@ proc isDependency*(cursor: CXCursor, conf: WrapConf): bool =
 
 proc getDepFiles*(cxtype: CXType, conf: WrapConf): seq[AbsFile] =
   let decl = cxtype.getTypeDeclaration()
-  for parm in cxtype.genParams():
+  for parm in cxtype.templateParams():
     if parm.cxKind != tkInvalid:
       for file in getDepFiles(parm, conf):
         result.add file
@@ -77,7 +77,7 @@ proc getDepFiles*(deps: seq[CXCursor], conf: WrapConf): seq[AbsFile] =
 
 
         if not typeRef and (cxt.cxKind() notin {tkInt}):
-          for parm in cxt.genParams():
+          for parm in cxt.templateParams():
             if parm.cxKind != tkInvalid:
               result.add getDepFiles(parm, conf).withIt do:
                 for file in it:

@@ -595,16 +595,12 @@ proc wrapAlias*(
       return @[]
 
     var maxIdx = 0
-    for idx, param in al.cursor.cxType().genParams():
+    for idx, param in al.cursor.cxType().templateParams():
       baseType.genericParams.add param.toNimType(conf, cache)
       maxIdx = idx
 
-    baseType.genericParams.add cache.getParamsForType(
-      aliasof.fullScopedIdent(), conf,
-      maxIdx + 1 .. high(int),
-      default = true,
-      partial = baseType
-    )
+    baseType.genericParams.add baseType.getPartialParams(
+      conf, cache, defaulted = true)
 
     if false: # TEMP need to find a real-world use-case to correctly handle
               # this, disabled for now.

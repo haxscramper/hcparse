@@ -107,15 +107,6 @@ proc argTypes*(cursor: CXType): seq[CXType] =
   for i in 0 ..< cursor.getNumArgTypes():
     result.add cursor.getArgType(cuint i)
 
-proc genParams*(cxtype: CXType): seq[CXType] =
-  ## Get list of generic parameters for a type
-  # DOC just any type or only generic instantiation?
-  # TODO maybe mark generated parameters as defaulted/non-defaulted?
-  let args = cxtype.getNumTemplateArguments()
-  if args > 0:
-    for i in 0 ..< args:
-      result.add cxtype.getTemplateArgumentAsType(i.cuint)
-
 const tkPODKinds* = {
   tkVoid,
   tkBool,
@@ -772,7 +763,7 @@ proc objTreeRepr*(cxtype: CXType): ObjTree =
     if isConstQualified(cxtype):
       result.add pptConst("const", fgMagenta + bgDefault)
 
-  for param in cxType.genParams():
+  for param in cxType.templateParams():
     result.add objTreeRepr(param)
 
 

@@ -44,7 +44,7 @@ proc fromElaboratedPType*(
         result = newNimType(cxtype.getTypeName(conf), cxtype)
 
       of ckTypeDeclKinds:
-        let params = cxtype.genParams()
+        let params = cxtype.templateParams()
         result = newNimType(cxtype.getTypeName(conf), cxtype)
         for idx, parm in params:
           if parm.cxKind != tkInvalid:
@@ -106,6 +106,14 @@ proc fullScopedIdent*(
 
   for cursor in getTypeNamespaces(cxtype, filterInline, withType):
     result.add toCName(cursor)
+
+proc fullScopedIdent*(nimType: NimType): CSCopedIdent =
+  if nimType.fullIdent.isSome():
+    nimType.fullIdent.get()
+
+  else:
+    nimType.cxType.fullScopedIdent()
+
 
 
 proc toCName*(cursor: CXCursor): CName =
@@ -323,7 +331,6 @@ proc setParamsForType*(
   # class basic_string;
   # ```
 
-  conf.info "Setting parameters for type", ident, params
   if params.len > 0:
     var key: seq[string]
     for part in ident:
@@ -384,21 +391,21 @@ proc getParamsForType*(cache: WrapCache, name: seq[string]): seq[NimType] =
     result = cache.paramsForType[name]
 
 
-proc getDefaultedPartial*(
+proc getPartialParams*(
     partial: NimType, conf: WrapConf, cache: var WrapCache,
-    noDefaulted: bool = false
+    defaulted: bool = true
   ): seq[NimType] =
   ## Return defaulted generic parameters for partially instantiated
   ## template type
 
-  if partial.fromCxType:
-    let name = partial.cxType.fullScopedIdent().typeName()
+  if partial.fromCxType or partial.fullIdent.isSome():
+    let name = partial.fullScopedIdent().typeName()
 
     if name in cache.paramsForType:
       let params = cache.paramsForType[name]
       for idx, param in params:
         if partial.genericParams.high < idx:
-          if param.defaultType.isNone() or noDefaulted:
+          if param.defaultType.isNone() or not defaulted:
             # Even though procedure is callsed `getDefaultedPartial`, in
             # reality I have to substitute parameter without default values
             # as well. Example of why this is necessary:
@@ -423,7 +430,7 @@ proc getDefaultedPartial*(
             assertOption param.defaultType,
               &"Cannot get default type parameter for a type argument #{idx}. " &
                 &"Partial type was {partial}, parameter to default {param}, " &
-                &"fully scoped type name {name}, simple type name {param.cxType}"
+                &"fully scoped type name {name}"
 
             result.add param.defaultType.get()
 
@@ -479,9 +486,9 @@ proc toNType*(
           let decl = nimType.cxType.getTypeDeclaration()
           ignoreDefaulted = $decl == $noDefaulted[0]
 
-        for defaulted in nimType.getDefaultedPartial(
+        for defaulted in nimType.getPartialParams(
           conf, cache,
-          noDefaulted = ignoreDefaulted
+          defaulted = not ignoreDefaulted
         ):
 
           result.add toNtype(defaulted, conf, cache)
@@ -494,86 +501,6 @@ proc toNType*(
           nimType.arguments.mapIt((it.name, it.nimType.toNType(conf, cache))),
           nimType.returnType.toNType(conf, cache),
           newPPragma("cdecl"))
-
-
-proc getParamsForType*(
-    cache: var WrapCache, cxtype: CScopedIdent,
-    conf: WrapConf,
-    paramRange: Slice[int] = 0 .. high(int),
-    default: bool = false,
-    partial: NimType = NimType(kind: ctkIdent)
-  ): seq[NimType] =
-  ## One or more (potentially defaulted) generic type parameters for type
-  ## `cxtype`. Parameter range starts at first requested parameter /index/.
-  ## If end of range equal to `high(int)` return all template parameters.
-
-  let name = cxtype.typeName()
-
-  if name in cache.paramsForType:
-    var params {.byaddr1.} = cache.paramsForType[name]
-    var partials: Table[string, NimType]
-
-    for paramIdx in paramRange:
-      if paramIdx < params.len:
-        var res =
-          if params[paramIdx].defaultType.isSome() and default:
-            params[paramIdx].defaultType.get()
-
-          else:
-            params[paramIdx]
-
-        result.add res
-
-      elif paramRange.b == high(int):
-        break
-
-      else:
-        raise newImplementError(
-          &"Type {cxtype} does not have generic parameter indexed {paramIdx}")
-
-    # Collect names of the template type parameters that were explicitly
-    # specified in the `partial` instantiation
-    let minVal = min(paramRange.a, partial.genericParams.len)
-    for partialIdx in 0 ..< minVal:
-      partials[params[partialIdx].nimName] = partial.genericParams[partialIdx]
-
-    if partials.len > 0:
-      for item in mitems(result):
-        # For each element in result replace partial template type parameter
-        # with concrete type specialization
-        item.replacePartials(partials, conf)
-
-      # conf.dump result
-
-    # NOTE current solution is a hack and it operates on assumption that
-    # template type parameter will match, which is not the case. Specific
-    # example that works right now due to that assumption:
-
-    # ```cpp
-    # template<typename _CharT, typename _Traits = char_traits<_CharT>,
-    #        typename _Alloc = allocator<_CharT> >
-    # class basic_string;
-    # ```
-
-    # When `basic_string` is instantiated it needs to fill default template
-    # parameters as well - `_Traits` and `_Alloc` part. First type parameter for
-    # basic string was called `_CharT` and (if we instantiated `std::string =
-    # basic_string<char>`) it would be mapped to `cchar`. It is a lucky
-    # coincidence that `std::char_traits` also uses template parameter called
-    # `_CharT` - because of this simple replace `_CharT -> cchar` would give me
-    # fully correct instantiation of the std string. In general more
-    # sophisticated mechanism must be provided to deal with cases that don't
-    # magically agree on template type parameter names.
-
-    # ```
-    # Type1[C]
-    # Type2[A, B = Type1[A]] // Must keep track of multistep renames `C -> A` (or `A -> C`)
-    #                        // most likely this would mean recursive calls to replace partials.
-    # ```
-
-    # TODO update this comment when new algorithm is implemented
-
-
 
 proc getTypeName*(cxtype: CXType, conf: WrapConf): string =
   let curs = cxtype.getTypeDeclaration()
@@ -595,15 +522,10 @@ proc getTypeName*(cxtype: CXType, conf: WrapConf): string =
   conf.debug result
 
 proc typeNameForScoped*(
-    conf: WrapConf, ident: CScopedIdent, cache: var WrapCache
-  ): NimType {.logScope(conf.logger).} =
-
-  conf.logger.enableInScopeIf("char_traits" in $ident)
-  conf.dump ident
+    conf: WrapConf, ident: CScopedIdent, cache: var WrapCache): NimType =
 
   assert ident.len > 0
   var resname: string
-  var genParams: seq[NimType]
   for name in ident:
     if name.getName() notin conf.collapsibleNamespaces:
       resname &= capitalizeAscii(name.getName())
@@ -612,21 +534,22 @@ proc typeNameForScoped*(
             &"Scoped indent '{ident}' " &
               "got converted to zero-length nim type"
 
-  result = newNimType(resname, genParams)
-  result.genericParams = cache.getParamsForType(ident, conf)
+  result = newNimType(resname).addIdent(ident)
+  result.genericParams = result.getPartialParams(
+    conf, cache, defaulted = false)
   conf.fixTypeName(result, conf, 0)
-
-  conf.dump result
 
 proc isMutableRef*(cxtype: CXType): bool =
   case cxType.cxKind:
     of tkLValueReference, tkRValueReference:
       return not (cxType.isConstQualifiedType() == 0)
+
     of tkTypeDef:
       # TODO implement mutability checking
       let decl = cxtype.getTypeDeclaration()
       if decl.len == 1 and decl[0].cxKind == ckTypeRef:
         discard
+
     else:
       raiseAssert(&"#[ IMPLEMENT Is {cxtype.cxKind} a mutable ref? ]#")
 
@@ -828,11 +751,12 @@ proc genParamsForIdent*(
     cache: var WrapCache
   ): seq[NimType] =
 
-  for part in scoped:
-    # if "char_traits" in $part:
-    #   conf.dump part.cursor.getSpellingLocation()
-    #   conf.trace part.cursor.treeRepr()
+  ## Return list of genric parameters for fully scoped identifier.
+  ## Procedure returns full list of generic parameters starting from the
+  ## start of the identifier. So for `std::basic_string<_CharT, ...>::stol`
+  ## it would return `_CharT`
 
+  for part in scoped:
     for param in part.declGenParams():
       result.add newNimType($param, isParam = true)
 

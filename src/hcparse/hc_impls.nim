@@ -242,8 +242,6 @@ proc fixTypeName*(ntype: var NimType, conf: WrapConf, idx: int = 0) =
 
         conf.fixtypename(arg.nimType, conf, idx)
 
-
-
 proc getBaseFile*(conf: WrapConf, wrapped: WrappedFile): AbsFile =
   ## Return base file for generated wrapped one. For generated grouped
   ## files first original one is returned.

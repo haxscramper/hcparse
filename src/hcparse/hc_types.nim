@@ -1189,7 +1189,7 @@ proc toHaxdocIdentType*(
 
     of tkUnexposed:
       result = dropTemplateArgs($cxtype)
-      let params = cxType.genParams()
+      let params = cxType.templateParams()
       if params.len > 0:
         result.add "["
         for idx, param in params:
@@ -1513,6 +1513,10 @@ func newNimType*(
   # {.warning[Deprecated]:on.}
   result = newNimType(name, cxType, isParam)
   result.genericParams.add genericParams
+
+func addIdent*(nimType: sink NimType, id: CScopedIdent): NimType =
+  result = nimType
+  result.fullIdent = some id
 
 func initLibImport*(name: string, path: seq[string]): LibImport =
   LibImport(library: name, importPath: path)
