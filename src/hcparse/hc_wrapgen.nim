@@ -386,7 +386,10 @@ proc wrapMethods*(
   assert cd.kind in {cdkClass, cdkStruct, cdkUnion},
      $cd.kind & $cd.cursor.getSpellingLocation()
 
-  var hasConstructor = false
+  var
+    hasConstructor = false
+    hasDestructor = false
+
   for meth in cd.members:
     if meth.kind != cdkMethod: continue
 
@@ -395,6 +398,9 @@ proc wrapMethods*(
 
     if meth.cursor.kind in { ckConstructor, ckConversionFunction }:
       hasConstructor = true
+
+    elif meth.cursor.kind in { ckDestructor }:
+      hasDestructor = true
 
     if canAdd:
 
@@ -405,41 +411,47 @@ proc wrapMethods*(
         else:
           result.extra.add d
 
-  if (not hasConstructor) and
-     (parent.nimName notin cache.generatedConstructors):
-
+  if (parent.nimName notin cache.generatedConstructors):
     cache.generatedConstructors.incl parent.nimName
-
+    var returnType = parent
+    returnType.genericParams = conf.genParamsForIdent(cd.ident, cache)
     let className = cd.ident.toCppNamespace()
-    result.extra.add GenProc(
-      name: "cnew" & parent.nimName.capitalizeAscii(),
-      returnType: newNimType("ptr", @[parent]),
-      icpp: &"new {className}()",
-      cdecl: cd,
-      iinfo: currLInfo(),
-      header: conf.makeHeader(cd.cursor, conf)
-    )
 
-    result.extra.add GenProc(
-      name: "destroy" & parent.nimName.capitalizeAscii(),
-      arguments: @[initCArg("obj", newNimType("ptr", @[parent]))],
-      cdecl: cd,
-      iinfo: currLInfo(),
-      icpp: &"#.~{className}()",
-      header: conf.makeHeader(cd.cursor, conf),
-      declareForward: true
-    )
+    if not hasDestructor:
+      result.extra.add GenProc(
+        name: "destroy" & parent.nimName.capitalizeAscii(),
+        arguments: @[initCArg("obj", newNimType("ptr", @[returnType]))],
+        cdecl: cd,
+        iinfo: currLInfo(),
+        icpp: &"#.~{className}()",
+        header: conf.makeHeader(cd.cursor, conf),
+        declareForward: true)
 
+    if (not hasConstructor):
+      result.extra.add GenProc(
+        name: "cnew" & parent.nimName.capitalizeAscii(),
+        returnType: newNimType("ptr", @[returnType]),
+        icpp: &"new {className}()",
+        cdecl: cd,
+        iinfo: currLInfo(),
+        header: conf.makeHeader(cd.cursor, conf))
 
-    result.extra.add GenProc(
-      name: "new" & parent.nimName.capitalizeAscii(),
-      returnType: newNimType("ref", @[parent]),
-      cdecl: cd,
-      noPragmas: gpcNoPragma,
-      iinfo: currLInfo(),
-      impl: some initDestroyCall(
-        parent, @[], className, conf, cache)
-    )
+      result.extra.add GenProc(
+        name: "new" & parent.nimName.capitalizeAscii(),
+        returnType: newNimType("ref", @[returnType]),
+        cdecl: cd,
+        noPragmas: gpcNoPragma,
+        iinfo: currLInfo(),
+        impl: some initDestroyCall(
+          parent, @[], className, conf, cache))
+
+      result.extra.add GenProc(
+        name: "init" & parent.nimName.capitalizeAscii(),
+        returnType: returnType,
+        cdecl: cd,
+        icpp: "{className}()",
+        header: conf.makeHeader(cd.cursor, conf),
+        iinfo: currLInfo())
 
 
 proc wrapFunction*(cd: CDecl, conf: WrapConf, cache: var WrapCache):
@@ -772,12 +784,6 @@ proc wrapObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): GenObject =
     let (procs, extra) = wrapMethods(cd, conf, result.name, cache)
     result.memberMethods.add procs
     result.nestedEntries.add extra
-
-    if anyIt(procs, "newStdAllocator" == it.name):
-      conf.dump result.memberMethods.len()
-      for m in result.memberMethods:
-        conf.trace m.name
-
 
 
 proc cEnumName(
