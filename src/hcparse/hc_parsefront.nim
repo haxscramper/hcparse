@@ -204,18 +204,14 @@ proc getExports*(
     if conf.isInternal(dep, conf, index):
       result.add dep
 
-proc toNNode*(genEntries: seq[GenEntry], conf: WrapConf, cache: var WrapCache):
+proc toNNode*(
+    genEntries: seq[GenEntry], conf: WrapConf, cache: var WrapCache):
   seq[WrappedEntry] =
 
   for node in genEntries:
     case node.kind:
       of gekProc:
-        result.add newWrappedEntry(
-          node.genProc.toNNode(conf, cache).toNimDecl(),
-          true,
-          node.genProc.iinfo,
-          node.genProc.cdecl
-        )
+        result.addProcDecl(node.genProc, conf, cache)
 
       of gekImport:
         result.add node.genImport.toNNode(conf)
@@ -227,16 +223,14 @@ proc toNNode*(genEntries: seq[GenEntry], conf: WrapConf, cache: var WrapCache):
           "by forward declaration patch stage. This code should",
           "not be reached..\n",
           "- Entry created in", node.genForward.iinfo, "\n",
-          "- CDecl is", node.genForward.cdecl.cursor
-        )
+          "- CDecl is", node.genForward.cdecl.cursor)
 
       of gekAlias:
         result.add newWrappedEntry(
           node.genAlias.toNNode(conf, cache).toNimDecl(),
-          true,
+          wepInTypes,
           node.genAlias.iinfo,
-          node.genAlias.cdecl
-        )
+          node.genAlias.cdecl)
 
       of gekObject:
         result.add node.genObject.toNNode(conf, cache)
@@ -823,13 +817,11 @@ proc wrapFile*(
     wrapped: WrappedFile, conf: WrapConf,
     cache: var WrapCache, index: hc_types.FileIndex
   ): seq[WrappedEntry] =
-  # Coollect all types into single wrapped entry type block. All duplicate
+  # Collect all types into single wrapped entry type block. All duplicate
   # types (caused by forward declarations which is not really possible to
   # differentiated) will be overwritten. This should be fine I guess,
   # because you can't declare type again after defining it (I hope), so all
   # last type encounter will always be it's definition.
-  var res: Table[string, WrappedEntry]
-
   var usedApis: UsedSet # Set of cursors pointing to declarations for
                         # different types used in the file entries
                         # (procedure argument and return, field, global
@@ -845,9 +837,11 @@ proc wrapFile*(
       if loc.isSome():
         let imp = conf.getImport(loc.get().file, base, false)
 
-        if not (imp.isRelative and
-                imp.relativeDepth == 0 and
-                imp.importPath == conf.getSavePath(base, conf).importPath):
+        if not (
+          imp.isRelative and
+          imp.relativeDepth == 0 and
+          imp.importPath[^1] == conf.getSavePath(base, conf).importPath[^1]
+        ):
 
           wrapped.imports.incl imp
 
@@ -860,29 +854,56 @@ proc wrapFile*(
         wrapped.imports.incl imp
 
 
-  var tmpRes: seq[WrappedEntry] = wrapped.entries.toNNode(conf, cache)
+  wrapped.imports.incl initNimImportSpec(true, @["std", "bitops"])
+  wrapped.imports.incl initNimImportSpec(true, @[
+    "hmisc", "wrappers", "wraphelp"])
 
-  for elem in tmpRes:
+  wrapped.exports.incl "wraphelp"
+
+  var sections: tuple[
+    inTypes: Table[string, WrappedEntry],
+    other: array[WrappedEntryPos, seq[WrappedEntry]],
+  ]
+
+  let push = pquote do:
+    {.push warning[UnusedImport]: off.}
+
+  sections.other[wepBeforeAll].add(
+    push.toNimDecl().newWrappedEntry(wepBeforeAll, currLInfo()))
+
+  sections.other[wepBeforeAll].add(
+    wrapped.imports.
+      toNNode().
+      toNimDecl().
+      newWrappedEntry(wepBeforeAll, currLInfo()))
+
+  sections.other[wepBeforeAll].add(
+    nnkExportStmt.newTree(
+      wrapped.exports.mapIt(newPIdent(it))).
+    toNimDecl().
+    newWrappedEntry(wepBeforeAll, currLInfo()))
+
+
+  for elem in wrapped.entries.toNNode(conf, cache):
     case elem.decl.kind:
-      # Filter out all type declarations.
       of nekObjectDecl:
         let name = elem.decl.objectdecl.name.head
-        if name in res:
+        if name in sections.inTypes:
           conf.warn "not overriding wrap for", name
 
         else:
-          res[name] = elem
+          sections.inTypes[name] = elem
 
       of nekEnumDecl:
         let name = elem.decl.enumdecl.name
-        res[name] = elem
+        sections.inTypes[name] = elem
 
       of nekAliasDecl:
         let name = elem.decl.aliasdecl.newType.head
-        if name in res:
+        if name in sections.inTypes:
           conf.warn "Override type alias for ", name
 
-        res[name] = elem
+        sections.inTypes[name] = elem
 
       of nekFieldDecl:
         raise newUnexpectedKindError(
@@ -891,71 +912,39 @@ proc wrapFile*(
           "This code cannot be reached."
         )
 
-      of nekPassthroughCode:
-        if not elem.postTypes:
-          result.add elem
-
-      of nekProcDecl, nekMultitype:
-        discard
-
-  wrapped.imports.incl initNimImportSpec(true, @["std", "bitops"])
-  wrapped.imports.incl initNimImportSpec(true, @[
-    "hmisc", "wrappers", "wraphelp"])
-
-  wrapped.exports.incl "wraphelp"
-
-  let push = pquote do:
-    {.push warning[UnusedImport]: off.}
-
-  result.add push.toNimDecl().newWrappedEntry(false, currLInfo())
-
-
-  result.add wrapped.imports.toNNode().
-    toNimDecl().newWrappedEntry(false, currLInfo())
-
-  if wrapped.exports.len > 0:
-    result.add nnkExportStmt.newTree(
-      wrapped.exports.mapIt(newPIdent(it))).
-      toNimDecl().newWrappedEntry(false, currLInfo())
-
-  # Insert user-supplied code elements
-  var addPost: seq[WrappedEntry]
-  if not isNil(conf.userCode):
-    let (node, post) = conf.userCode(wrapped)
-    let entry = newWrappedEntry(toNimDecl(node), post, currLInfo())
-    if not isNil(node):
-      if post:
-        addPost.add entry
-
       else:
-        result.add entry
+        sections.other[elem.position].add elem
+
+  if not isNil(conf.userCode):
+    let (node, position) = conf.userCode(wrapped)
+    sections.other[position].add(
+      newWrappedEntry(toNimDecl(node), position, currLInfo()))
 
   block:
     let elems = collect(newSeq):
-      for _, wrapEntry in mpairs(res):
+      for _, wrapEntry in mpairs(sections.inTypes):
         updateComments(wrapEntry.decl, wrapEntry, conf, cache)
         wrapEntry.decl.toNimTypeDecl()
 
-    result.add(newWrappedEntry(
-      toNimDecl(elems), false, currLInfo()))
+    sections.other[wepInTypes].add(
+      newWrappedEntry(toNimDecl(elems), wepInTypes, currLInfo()))
 
-  result.add addPost
-
-  for elem in mitems(tmpRes):
-    case elem.decl.kind:
-      of nekProcDecl:
-        updateComments(elem.decl, elem, conf, cache)
-        result.add elem
-
-      of nekMultitype:
-        result.add elem
-
-      of nekPassthroughCode:
-        if elem.postTypes:
+  for position in [
+    wepBeforeAll,
+    wepInTypes,
+    wepAfterTypesBeforeProcs,
+    wepInProcs,
+    wepAfterAll
+  ]:
+    for elem in mitems(sections.other[position]):
+      case elem.decl.kind:
+        of nekProcDecl:
+          updateComments(elem.decl, elem, conf, cache)
           result.add elem
 
-      else:
-        discard
+        else:
+          result.add elem
+
 
 func wrapName*(res: WrapResult): string =
   res.importName.importPath.join("/") & ".nim"
@@ -1063,7 +1052,6 @@ proc wrapAllFiles*(
     for node in wrapFile(file, wrapConf, cache, index):
       codegen.decls.add node.decl
 
-    wrapConf.debug outPath
     codegen.writeWrapped(outPath, @[], wrapConf)
 
   CodegenResult(cache: cache).writeWrapped(

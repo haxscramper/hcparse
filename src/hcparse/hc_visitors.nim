@@ -421,8 +421,6 @@ proc visitClass*(
     cache: var WrapCache
   ): CDecl =
 
-  conf.info "visitor in class name", cursor
-
   ## Convert class under cursor to `CDecl`
   let name =
     if cursor.cxKind == ckStructDecl and len($cursor) == 0:
@@ -550,7 +548,6 @@ proc visitClass*(
             conf.warn "IMPLEMENT class element:", ($subn.cxKind).toRed(), subn
             # debug subn.treeRepr()
 
-  conf.dump ident, params
   cache.setParamsForType(conf, ident, params)
 
 
@@ -587,13 +584,7 @@ proc visitCursor*(
     cursor: CXCursor, parent: CScopedIdent,
     conf: WrapConf, lastTypeDecl: var CDecl,
     cache: var WrapCache
-  ): tuple[decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]] {.logScope(conf.logger).} =
-
-  conf.logger.enableInScopeIf(
-    "char_traits" in $cursor and cursor.kind in { ckClassTemplate })
-
-  conf.dump cursor.getSpellingLocation
-  conf.dump cursor.treeRepr()
+  ): tuple[decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]] =
 
   const classDeclKinds = {
     ckClassDecl, ckClassTemplate, ckUnionDecl,
@@ -604,12 +595,10 @@ proc visitCursor*(
   if cursor.isForward() and
      cursor.cxKind() in (classDeclKinds + {ckEnumDecl}):
     # Early return for method forward declarations.
-    # TODO register forward declaration encounter
     result.decls.add CDecl(
       kind: cdkForward,
       cursor: cursor,
-      ident: parent & toCName(cursor)
-    )
+      ident: parent & toCName(cursor))
 
   if conf.ignoreCursor(cursor, conf):
     if cursor.cxKind() in {ckNamespace}:
@@ -617,8 +606,6 @@ proc visitCursor*(
       conf.logger.indented:
         for entry in cursor:
           conf.debug entry
-
-    # if ["_GLIBCXX", "__cplusplus", "__distance"] notin $cursor:
 
   else:
     case cursor.cxKind:
@@ -665,86 +652,6 @@ proc visitCursor*(
       else:
         result.recurse = true
 
-# proc getPublicApi*(cursor: CXcursor, conf: WrapConf): seq[CxCursor] =
-#   case cursor.kind:
-#     of ckTypedefDecl:
-#       result.add cursor[0]
-
-#     of ckTypeRef:
-#       result.add cursor
-
-#     of ckTemplateRef:
-#       if cursor.cxType().kind == tkInvalid:
-#         discard
-
-#       else:
-#         raise newImplementKindError(cursor.cxType(), cursor.treeRepr())
-
-#     of ckBaseSpecifier:
-#       for node in cursor:
-#         result.add getPublicApi(node, conf)
-
-#     of ckTemplateTypeParameter:
-#       conf.debug cursor.treeRepr()
-
-#     else:
-#       raise newImplementKindError(
-#         cursor, cursor.treeRepr())
-
-# proc getPublicAPI*(cd: CDecl, conf: WrapConf): seq[CXCursor] =
-#   ## Get list of cursors referring to parts of the public API for a
-#   ## declaration: return and argument types for functions and methods,
-#   ## public fields for objects.
-#   case cd.kind:
-#     of cdkClass, cdkStruct, cdkUnion:
-#       # for node in cd.cursor:
-#       #   case node.kind:
-#       #     of ckTypeRef, ckTemplateRef, ckBaseSpecifier,
-#       #        ckTemplateTypeParameter:
-#       #       result.add getPublicApi(node, conf)
-
-#       #     of ckMethod, ckFieldDecl:
-#       #       discard
-
-#       #     else:
-#       #       conf.warn node.kind, node
-#       #       conf.debug node.treeRepr()
-
-#       for member in cd.members:
-#         result.add member.getPublicAPI(conf)
-
-#     of cdkField:
-#       if cd.access == asPublic:
-#         return @[ cd.cursor ]
-
-#       else:
-#         return @[]
-
-#     of cdkFunction, cdkMethod:
-#       let exportd: bool = (cd.kind == cdkFunction) or
-#         (cd.access == asPublic)
-
-#       if exportd:
-#         result.add cd.cursor
-#         for arg in cd.arguments:
-#           result.add arg.cursor
-
-#     of cdkAlias:
-#       result = @[cd.cursor]
-#       # result.add getPublicApi(cd.cursor, conf)
-
-#     of cdkForward, cdkEnum:
-#       return @[]
-
-#     of cdkMacro:
-#       # While macro can /technically/ be a major source of pain when
-#       # wrapping API it is not realistically possible to correctly infer
-#       # all API dependencies, let alone map them to entries in translation
-#       # unit.
-#       return @[]
-
-
-
 proc splitDeclarations*(
   tu: CXTranslationUnit, conf: WrapConf, cache: var WrapCache): CApiUnit =
   ## Convert main file of translation unit into flattened sequence of
@@ -760,8 +667,6 @@ proc splitDeclarations*(
       if resolve == drkWrapDirectly:
         let (decls, rec, incls) = visitCursor(
           cursor, @[], conf, lastTypeDecl, cache)
-        # if not isNil(lastTypeDecl):
-        #   debug "Last type decl from cursor"
         res.includes.add incls
         if rec:
           return cvrRecurse
@@ -770,7 +675,6 @@ proc splitDeclarations*(
           res.decls.add decls
           for decl in decls:
             assert not isNil(decl)
-            # res.publicAPI.add decl.getPublicAPI(conf)
 
           return cvrContinue
 

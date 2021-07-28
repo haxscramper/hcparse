@@ -14,6 +14,7 @@ func toCamelCase*(str: string): string =
 proc fixIdentName*(str: string): string =
   var str = str
   str = str[str.skipWhile({'_'}) .. ^1]
+  str = str.replace("::", "_")
 
   case str:
     of "set": "cxSet"

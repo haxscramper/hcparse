@@ -206,11 +206,20 @@ proc isComplexType*(
       if decl.cxKind() notin ckTypeDeclKinds + { ckNoDeclFound }:
         conf.debug cxType, cxType.cxKind(), decl.cxKind()
 
-    of tkPodKinds, tkRecord, tkEnum:
+    of tkPodKinds, tkRecord, tkEnum, tkElaborated:
       discard
 
     of tkDependentSizedArray:
       result = true
+
+    of tkFunctionProto:
+      if conf.isComplexType(cxType.getResultType(), cache):
+        return true
+
+      for arg in cxType.argTypes():
+        if conf.isComplexType(arg, cache):
+          return true
+
 
     else:
       conf.trace cxType, cxType.cxKind()
@@ -318,8 +327,6 @@ proc setParamsForType*(
 
     if key notin cache.paramsForType:
       cache.paramsForType[key] = @[]
-
-    conf.dump key
 
     # Convenience helper to avoid writing `cache.paramsForType[key]`
     # all over the place.
@@ -521,6 +528,8 @@ proc typeNameForScoped*(
   result = newNimType(buf.join("::")).addIdent(ident)
   result.genericParams = result.getPartialParams(
     conf, cache, defaulted = false)
+
+  conf.fixTypeName(result, conf, 0)
 
 proc isMutableRef*(cxtype: CXType): bool =
   case cxType.cxKind:

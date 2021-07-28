@@ -432,7 +432,8 @@ type
     # ## `cursor`. `id` is a fully qualified/namespaced path for definition
     # ## (like `std::vector`)
 
-    userCode*: proc(file: WrappedFile): tuple[node: PNode, postTypes: bool] ## Add
+    userCode*: proc(file: WrappedFile):
+      tuple[node: PNode, position: WrappedEntryPos] ## Add
     ## arbitarry user-defined code at the start of generated wrapper for
     ## `source` file.
 
@@ -531,13 +532,6 @@ type
     ## (subtypes, nested struct/union/enum declarations, auto-generated
     ## types or procedures)
 
-  GenProcSpecialKind* = enum
-    gpskDefault
-    gpskNewRefConstructor
-    gpskNewPtrConstructor
-    gpskInitConstructor
-
-
   GenPragmaConf* = enum
     gpcAllPragma
     gpcNoPragma
@@ -546,7 +540,6 @@ type
 
   GenProc* = ref object of GenBase
     ## Generated wrapped proc
-    specialKind*: GenProcSpecialKind
     name*: string ## Name of the generated proc on nim side
     icpp*: string ## `importcpp` pattern string
     private*: bool ## Generated proc should be private?
@@ -562,6 +555,7 @@ type
     impl*: Option[PNode] ## Optional implementation body
     noPragmas*: GenPragmaConf ## Do not add default C wrapper pragamas.
     ## Used for pure nim enums
+    declareForward*: bool
 
 
 
@@ -654,10 +648,17 @@ type
         genForward*: GenForward
 
 
+  WrappedEntryPos* = enum
+    wepInProcs
+    wepInTypes
+    wepAfterTypesBeforeProcs
+    wepBeforeAll
+    wepAfterAll
+
   WrappedEntry* = object
     decl*: PNimDecl
     ident*: CSCopedIdent
-    postTypes*: bool
+    position*: WrappedEntryPos
     cursor* {.requiresinit.}: CXCursor
     generated*: bool
 
@@ -1250,25 +1251,26 @@ func `==`*(a, b: CArg): bool =
   ))
 
 func newWrappedEntry*(
-    nimDecl: PNimDecl, postTypes: bool,
+    nimDecl: PNimDecl, position: WrappedEntryPos,
     iinfo: LineInfo, cdecl: CDecl
   ): WrappedEntry =
 
   result = WrappedEntry(
     generated: false,
-    postTypes: postTypes, decl: nimDecl,
+    position: position, decl: nimDecl,
     cursor: cdecl.cursor, ident: cdecl.ident
   )
 
   result.decl.iinfo = iinfo
 
 func newWrappedEntry*(
-    nimDecl: PNimDecl, postTypes: bool, iinfo: LineInfo
+    nimDecl: PNimDecl, position: WrappedEntryPos, iinfo: LineInfo
   ): WrappedEntry =
 
   result = WrappedEntry(
-    generated: true,
-    postTypes: postTypes, decl: nimDecl, cursor: CXCursor())
+    generated: true, position: position,
+    decl: nimDecl, cursor: CXCursor())
+
   result.decl.iinfo = iinfo
 
 #======================  Accessing CDecl elements  =======================#
