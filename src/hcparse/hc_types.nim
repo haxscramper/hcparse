@@ -806,7 +806,10 @@ proc newProcVisit*(
     return conf.newProcCb(genProc, conf, cache)
 
 func dropTemplateArgs*(old: string): string =
-  result = old[0 ..< old.skipUntil('<')]
+  result = old[
+    old.skip1(toStrPart(["const ", "enum ", "struct ", "union "])) ..<
+    old.skipUntil('<')]
+
   var start = result.high
   if start == old.high:
     return

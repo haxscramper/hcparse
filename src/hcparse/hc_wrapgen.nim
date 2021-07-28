@@ -471,8 +471,8 @@ proc wrapMethods*(
         parent, @[], className, conf, cache)
     )
 
-  for gproc in mitems(result.methods):
-    fixNames(gproc, conf, parent)
+  # for gproc in mitems(result.methods):
+  #   fixNames(gproc, conf, parent)
 
 
 proc wrapFunction*(cd: CDecl, conf: WrapConf, cache: var WrapCache):

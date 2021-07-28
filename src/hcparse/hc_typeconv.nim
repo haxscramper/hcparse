@@ -34,10 +34,9 @@ proc toNimType*(
 
 proc fromElaboratedPType*(
     cxtype: CXType, conf: WrapConf, cache: var WrapCache): NimType =
-  # debug cxtype
-  let genParams = cxtype.getNumTemplateArguments()
+
   let decl = cxtype.getTypeDeclaration()
-  if genParams > 0:
+  if cxtype.getNumTemplateArguments() > 0:
     case decl.cxKind:
       of ckTypedefDecl, ckTypeAliasDecl, ckTypeAliasTemplateDecl:
         # WARNING `template <J, Q> using` is not handled
@@ -54,7 +53,7 @@ proc fromElaboratedPType*(
         conf.warn "Conversion from elaborated type: ", decl
         conf.debug "  ", decl.cxKind(), " in ", decl.getSpellingLocation()
 
-    conf.fixTypeName(result, conf, 0)
+    # conf.fixTypeName(result, conf, 0)
 
   else:
     result = newNimType(getTypeName(cxtype, conf), cxtype)
@@ -148,11 +147,11 @@ proc sameNoGeneric*(ident1, ident2: CScopedIdent): bool =
       if a.getName() != b.getName():
         return false
 
-proc typeName*(ident: CScopedIdent): seq[string] = ident.mapIt($it.cursor)
+proc typeName*(ident: CScopedIdent): seq[string] =
+  ident.mapIt($it.cursor)
 
 proc namespacedName*(name: seq[CxCursor], conf: WrapConf): string =
-  name.mapIt(dropPrefix(
-    $it, toStrPart(["const ", "enum ", "struct ", "union "]))).join("::")
+  name.mapIt(getName(it)).join("::")
 
 proc namespacedName*(decl: CxCursor, conf: WrapConf): string =
   ## Create /raw/ identifier from fully namespaces Cxx declaration entry.
@@ -354,14 +353,14 @@ proc setParamsForType*(
       if list[idx].defaultType.isNone():
         # Only assign if default template type parameter is none - current type
         # conversion is likely to have at least as much information (or more).
-        conf.fixTypeName(nimType, conf, 0)
+        # conf.fixTypeName(nimType, conf, 0)
         list[idx] = nimType
 
       if param.len() > 0:
         var default = defaultTypeParameter(param, cache, conf)
 
         if default.isSome():
-          conf.fixTypeName(default.get(), conf, 0)
+          # conf.fixTypeName(default.get(), conf, 0)
           list[idx].defaultType = default
 
 
@@ -509,7 +508,7 @@ proc getTypeName*(cxtype: CXType, conf: WrapConf): string =
       return $curs.cxType()
 
     of ckTypeDeclKinds, ckTypeAliasTemplateDecl:
-      result = $curs
+      result = getName(curs)
 
     else:
       conf.err $curs
@@ -518,26 +517,23 @@ proc getTypeName*(cxtype: CXType, conf: WrapConf): string =
         &"Cannot convert cursor of kind {curs.cxKind} to type")
 
   result = namespacedName(cxtype, conf)
-  conf.debug cxtype.getTypeNamespaces()
-  conf.debug result
 
 proc typeNameForScoped*(
     conf: WrapConf, ident: CScopedIdent, cache: var WrapCache): NimType =
 
   assert ident.len > 0
-  var resname: string
+  var buf: seq[string]
   for name in ident:
     if name.getName() notin conf.collapsibleNamespaces:
-      resname &= capitalizeAscii(name.getName())
+      buf.add name.getName()
 
-  assert resname.len > 0,
-            &"Scoped indent '{ident}' " &
-              "got converted to zero-length nim type"
+  assert buf.len > 0,
+    &"Scoped indent '{ident}' got converted to zero-length nim type"
 
-  result = newNimType(resname).addIdent(ident)
+  result = newNimType(buf.join("::")).addIdent(ident)
   result.genericParams = result.getPartialParams(
     conf, cache, defaulted = false)
-  conf.fixTypeName(result, conf, 0)
+  # conf.fixTypeName(result, conf, 0)
 
 proc isMutableRef*(cxtype: CXType): bool =
   case cxType.cxKind:
@@ -743,7 +739,7 @@ proc toNimType*(
 
   result.isMutable = mutable
   result.specialKind = special
-  conf.fixTypeName(result, conf, 0)
+  # conf.fixTypeName(result, conf, 0)
 
 proc genParamsForIdent*(
     conf: WrapConf,
@@ -760,8 +756,8 @@ proc genParamsForIdent*(
     for param in part.declGenParams():
       result.add newNimType($param, isParam = true)
 
-  for idx, t in mpairs(result):
-    conf.fixTypeName(t, conf, idx)
+  # for idx, t in mpairs(result):
+  #   conf.fixTypeName(t, conf, idx)
 
 
 func fixTypeParams*(nt: var NimType, params: seq[NimType]) =
