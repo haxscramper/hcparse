@@ -294,13 +294,9 @@ proc isAggregateInitable*(
   for entry in cd:
     case entry.cxKind():
       of ckFieldDecl:
-        # debug entry.treeRepr()
         if aux(entry):
           var arg = initCArg(
-            fixIdentName($entry),
-            entry.cxType().toNimType(conf, cache),
-            nvdLet
-          )
+            $entry, entry.cxType().toNimType(conf, cache), nvdLet)
 
           setDefaultForArg(arg, entry, conf, cache)
           initArgs.add arg

@@ -981,11 +981,6 @@ proc toHaxdocType*(cxtype: CXType): JsonNode =
           %{"kind": %"Value", "value": %cxtype.getNumElements()},
           toHaxdocType(cxtype.getElementType())]}
 
-    # of tkIncompleteArray:
-    #   # QUESTION maybe convert to `ptr UncheckedArray?` or add user-defined
-    #   # callback for switching between different behaviors.
-    #   newNimType("ptr", [toNimType(cxtype.getElementType(), conf)], cxType)
-
     of tkFunctionProto:
       result = %{
         "kind": %"Proc",
@@ -998,87 +993,6 @@ proc toHaxdocType*(cxtype: CXType): JsonNode =
 
     else:
       result = %($(cxtype.cxKind()))
-
-
-
-    # of tkLValueReference:
-    #   mutable = cxType.isMutableRef()
-    #   toNimType(cxType[], conf)
-
-    # of tkRValueReference: # WARNING I'm not 100% sure this is correct
-    #                       # way to map rvalue references to nim type
-    #                       # system.
-    #   mutable = cxType.isMutableRef()
-    #   toNimType(cxType[], conf)
-
-    # of tkUnexposed:
-    #   let strval = ($cxType).dropPrefix("const ") # WARNING
-    #   if strval.validCxxIdentifier():
-    #     newNimType(strval, cxtype)
-
-    #   else:
-    #     # pprintStackTrace()
-    #     let decl = cxtype.getTypeDeclaration()
-    #     var res = newNimType($decl, cxType)
-    #     let typenameParts = toStrPart(@[
-    #       "type-parameter", "typename type-parameter",
-    #       "typename rebind<type-parameter",
-    #       "typename"
-    #     ])
-    #     if decl.cxKind in {
-    #       # HACK list of necessary kinds is determined by trial and error,
-    #       # I'm still not really sure what `tkUnexposed` actually
-    #       # represents.
-    #       ckClassTemplate, ckClassDecl
-    #     }:
-    #       for elem in decl:
-    #         if elem.cxKind() in {ckTemplateTypeParameter}:
-    #           res.add elem.cxType().toNimType(conf)
-
-    #     elif startsWith($cxType, typenameParts):
-    #       let unprefix = dropPrefix($cxType, typenameParts)
-    #       if allIt(unprefix, it in {'0' .. '9', '-'}):
-    #         res = newNimType("TYPE_PARAM " & unprefix, cxtype)
-
-    #       else:
-    #         res = newNimType("COMPLEX_PARAM", cxtype)
-
-    #     else:
-    #       res = newNimType("UNEXPOSED", cxtype)
-    #       if decl.cxKind() notin {ckNoDeclFound}:
-    #         warn "No decl found for type"
-    #         logIndented:
-    #           info cxtype.lispRepr()
-    #           debug decl.getSpellingLocation()
-    #           debug decl.cxKind()
-    #           debug decl.treeRepr()
-
-
-    #     res
-
-    # of tkDependent:
-    #   newNimType("DEPENDENT", cxType)
-
-    # of tkMemberPointer:
-    #   # WARNING Member pointer
-    #   newNimType("!!!", cxType)
-
-    # of tkDependentSizedArray:
-    #   warn cxtype
-    #   newNimType("array", @[
-    #     newNimType("???????????????????????"),
-    #     toNimType(cxtype.getElementType(), conf)
-    #   ], cxType)
-
-    # else:
-    #   err "CANT CONVERT: ".toRed({styleItalic}),
-    #     cxtype.kind, " ", ($cxtype).toGreen(), " ",
-    #     cxtype[]
-
-    #   newNimType("!!!", cxtype)
-
-  # result.isMutable = mutable
-  # conf.fixTypeName(result, conf, 0)
 
 const ckProcEntryKinds* = {
   ckMethod, ckFunctionDecl, ckConstructor,
@@ -1206,81 +1120,6 @@ proc toHaxdocIdentType*(
     else:
       result = $(cxtype.cxKind())
 
-    # of tkRValueReference: # WARNING I'm not 100% sure this is correct
-    #                       # way to map rvalue references to nim type
-    #                       # system.
-    #   mutable = cxType.isMutableRef()
-    #   toNimType(cxType[], conf)
-
-    # of tkUnexposed:
-    #   let strval = ($cxType).dropPrefix("const ") # WARNING
-    #   if strval.validCxxIdentifier():
-    #     newNimType(strval, cxtype)
-
-    #   else:
-    #     # pprintStackTrace()
-    #     let decl = cxtype.getTypeDeclaration()
-    #     var res = newNimType($decl, cxType)
-    #     let typenameParts = toStrPart(@[
-    #       "type-parameter", "typename type-parameter",
-    #       "typename rebind<type-parameter",
-    #       "typename"
-    #     ])
-    #     if decl.cxKind in {
-    #       # HACK list of necessary kinds is determined by trial and error,
-    #       # I'm still not really sure what `tkUnexposed` actually
-    #       # represents.
-    #       ckClassTemplate, ckClassDecl
-    #     }:
-    #       for elem in decl:
-    #         if elem.cxKind() in {ckTemplateTypeParameter}:
-    #           res.add elem.cxType().toNimType(conf)
-
-    #     elif startsWith($cxType, typenameParts):
-    #       let unprefix = dropPrefix($cxType, typenameParts)
-    #       if allIt(unprefix, it in {'0' .. '9', '-'}):
-    #         res = newNimType("TYPE_PARAM " & unprefix, cxtype)
-
-    #       else:
-    #         res = newNimType("COMPLEX_PARAM", cxtype)
-
-    #     else:
-    #       res = newNimType("UNEXPOSED", cxtype)
-    #       if decl.cxKind() notin {ckNoDeclFound}:
-    #         warn "No decl found for type"
-    #         logIndented:
-    #           info cxtype.lispRepr()
-    #           debug decl.getSpellingLocation()
-    #           debug decl.cxKind()
-    #           debug decl.treeRepr()
-
-
-    #     res
-
-    # of tkDependent:
-    #   newNimType("DEPENDENT", cxType)
-
-    # of tkMemberPointer:
-    #   # WARNING Member pointer
-    #   newNimType("!!!", cxType)
-
-    # of tkDependentSizedArray:
-    #   warn cxtype
-    #   newNimType("array", @[
-    #     newNimType("???????????????????????"),
-    #     toNimType(cxtype.getElementType(), conf)
-    #   ], cxType)
-
-    # else:
-    #   err "CANT CONVERT: ".toRed({styleItalic}),
-    #     cxtype.kind, " ", ($cxtype).toGreen(), " ",
-    #     cxtype[]
-
-    #   newNimType("!!!", cxtype)
-
-  # result.isMutable = mutable
-  # conf.fixTypeName(result, conf, 0)
-
 
 proc toHaxdocIdent*(ns: CScopedIdent): string =
   for part in ns:
@@ -1384,17 +1223,6 @@ proc initHeaderSpec*(global: string): NimHeaderSpec =
 
 proc initHeaderSpec*(pnode: PNode): NimHeaderSpec =
   NimHeaderSpec(kind: nhskPNode, pnode: pnode)
-
-
-
-# func cdecl*(gen: GenEntry): CDecl =
-#   case gen.kind:
-#     of gekEnum: gen.genEnum.cdecl
-#     of gekProc: gen.genProc.cdecl
-#     of gekObject: gen.genObject.cdecl
-#     of gekAlias: gen.genAlias.cdecl
-#     of gekForward: gen.genForward.cdecl
-#     of gekPass, gekImport: raiseUnexpectedKindError(gen)
 
 func `$`*(we: WrappedEntry): string = $we.decl
 func `$`*(we: seq[WrappedEntry]): string =
@@ -1595,8 +1423,7 @@ func initCArg*(
 
 
 func initCArg*(name: string, nimType: NimType): CArg =
-  initCArg(name.fixIdentName(),
-           nimType, if nimType.isMutable: nvdVar else: nvdLet)
+  initCArg(name, nimType, if nimType.isMutable: nvdVar else: nvdLet)
 
 func initCArg*(name: string, cursor: CXCursor): CArg =
   ## Init raw C argument with `name`
@@ -1651,18 +1478,8 @@ proc lastName*(cd: CDecl, conf: WrapConf, dropTemplate: bool = true): string =
   ## `std::vector<int> -> vector`, `int main() -> main` etc.
   result = $cd.ident[^1].cursor
 
-  # conf.dump result, dropTemplate
-
   if dropTemplate:
     result = dropTemplateArgs(result)
-    let old = result
-    # # if result.len != old.len: # QUESTION ?????
-
-    # # yes, I hate this shit too.
-    #   else:
-    #     conf.err `<cnt`, `>cnt`, old
-
-    #   # conf.dump (`<cnt`, `>cnt`), result
 
 
 #==========================  Operator handling  ==========================#
@@ -1797,9 +1614,6 @@ proc docCommentFor*(ident: CScopedIdent): string =
   ## Return haxdoc documentation comment import
   &"@import{{[[code:{ident.toHaxdocIdent()}]]}}"
 
-# proc docCommentFor*(cursor: Ident): string =
-#   &"@import{{[[code:{cursor.toHaxdocIdent()}]]}}"
-
 proc updateComments*(
     decl: var AnyNimDecl[PNode],
     node: WrappedEntry | CDecl, wrapConf: WrapConf,
@@ -1863,7 +1677,6 @@ proc allUsedTypes*(
 proc allGenericParams*(nimType: NimType): seq[NimType] =
   ## Recursively get list of all the generic parameters for a type
   if nimType.isParam:
-    # debug nimType
     result.add nimType
 
 

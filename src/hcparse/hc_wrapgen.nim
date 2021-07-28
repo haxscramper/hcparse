@@ -193,7 +193,7 @@ proc wrapProcedure*(
       result.canAdd = false
 
   else:
-    it.name = pr.getNimName(conf).fixIdentName()
+    it.name = pr.getNimName(conf)
 
     let icppName = toCppNamespace(pr.ident)
     if parent.isSome():
@@ -364,21 +364,6 @@ proc wrapProcedure*(
   let generated = newProcVisit(it, conf, cache)
   result.decl.add it
   result.decl.add GenPass(iinfo: currLInfo(), passEntries: generated)
-
-
-proc fixNames(ppd: var GenProc, conf: WrapConf, parent: NimType) =
-  var idx: int = 0
-
-  idx = 0
-  for arg in mitems(ppd.arguments):
-    conf.fixTypeName(arg.nimType, conf, idx)
-    inc idx
-
-  conf.fixTypeName(ppd.returnType, conf, 0)
-
-  ppd.name = ppd.name.fixIdentName()
-
-
 
 
 proc wrapMethods*(
@@ -732,7 +717,7 @@ proc updateFieldExport*(
   for fld in cd.publicFields():
     var res = GenField(
       # QUESTION `conf.identNameForScoped()?`
-      name: fixIdentName(fld.lastName(conf)),
+      name: fld.lastName(conf),
       rawName: fld.lastName(conf),
       iinfo: currLInfo(),
       cdecl: fld,
@@ -1178,7 +1163,7 @@ proc toNNode*(
       parentClass.add it.cursor
 
   result = newPProcDecl(
-    name = gen.name,
+    name = gen.name.fixIdentName(),
     iinfo = gen.iinfo,
     exported = true,
     returnType = some(
@@ -1190,14 +1175,14 @@ proc toNNode*(
 
   for arg in gen.arguments:
     result.signature.arguments.add newNIdentDefs(
-      vname = arg.name,
+      vname = arg.name.fixIdentName(),
       value = arg.default,
       vtype = arg.getNType().toNType(
         wrapConf, cache, noDefaulted = parentClass),
       kind = arg.varkind)
 
   for param in wrapConf.genParamsForIdent(gen.cdecl.ident, cache):
-    result.genParams.add newPType(param.nimName)
+    result.genParams.add toNType(param, wrapConf, cache)
 
   result.docComment = gen.docComment.join("\n")
   result.signature.pragma = gen.pragma
@@ -1206,8 +1191,7 @@ proc toNNode*(
     result.signature.pragma.add(
       newExprColonExpr(
         newPIdent(wrapConf.importX()),
-        newRStrLit(gen.icpp)
-    ))
+        newRStrLit(gen.icpp)))
 
   # If procedure returns mutable lvalue reference ot the same type as
   # passed for the first argument we make it discardable. Most likely
@@ -1240,10 +1224,9 @@ proc toNNode*(
 
     for value in gen.values:
       rawEnum.addField(
-        value.resNimName,
+        value.resNimName.fixIdentName(),
         some newPLit(value.resVal),
-        docComment = value.cdecl.ident.docCommentFor()
-      )
+        docComment = value.cdecl.ident.docCommentFor())
 
     result.add newWrappedEntry(
       rawEnum.toNimDecl(), true, currLInfo())

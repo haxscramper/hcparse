@@ -53,8 +53,6 @@ proc fromElaboratedPType*(
         conf.warn "Conversion from elaborated type: ", decl
         conf.debug "  ", decl.cxKind(), " in ", decl.getSpellingLocation()
 
-    # conf.fixTypeName(result, conf, 0)
-
   else:
     result = newNimType(getTypeName(cxtype, conf), cxtype)
 
@@ -78,19 +76,9 @@ proc toCArg*(cursor: CXCursor, conf: WrapConf, cache: var WrapCache): CArg =
   if varname.len == 0:
     varname = "arg" & $cursor.cxType().dropPOD(conf, cache)
 
-  varname = varname.fixIdentName()
   let argType = cursor.cxType().toNimType(conf, cache)
   return initCArg(varname, argType)
 
-
-
-  # if cursor.cxKind() == ckClassTemplate:
-  #   logDefer info, "Required generic for", cursor
-  #   debug cursor.getSpellingLocation()
-  #   debug result.len
-  #   debug result
-  #   debug cursor.cxKind()
-    # debug cursor.treeRepr()
 
 
 proc toCName*(cursor: CXCursor): CName
@@ -273,9 +261,6 @@ proc defaultTypeParameter*(
 
   let params = toSeq(cursor)
 
-  # conf.info cursor.treeRepr()
-  # conf.dump cursor.getSpellingLocation()
-
   proc foldTypes(idx: var int, cache: var WrapCache): NimType =
     let param = params[idx]
     case param.kind:
@@ -290,10 +275,6 @@ proc defaultTypeParameter*(
           semspaces = def.getSemanticNamespaces()
 
         result = conf.newNimType(semSpaces, cxtype)
-        # result.fullIdent = toScopedIdent(semspaces)
-        # conf.dump def.cxType()
-        # conf.dump cxtype, cxtype.getNumTemplateArguments()
-        # conf.trace result
         inc idx
 
         result.genericParams.add foldTypes(idx, cache)
@@ -353,14 +334,12 @@ proc setParamsForType*(
       if list[idx].defaultType.isNone():
         # Only assign if default template type parameter is none - current type
         # conversion is likely to have at least as much information (or more).
-        # conf.fixTypeName(nimType, conf, 0)
         list[idx] = nimType
 
       if param.len() > 0:
         var default = defaultTypeParameter(param, cache, conf)
 
         if default.isSome():
-          # conf.fixTypeName(default.get(), conf, 0)
           list[idx].defaultType = default
 
 
@@ -382,7 +361,6 @@ proc replacePartials*(
         for subnode in mitems(nimType.genericParams):
           aux(subnode)
 
-  # conf.dump partials
   aux(nimType)
 
 proc getParamsForType*(cache: WrapCache, name: seq[string]): seq[NimType] =
@@ -442,64 +420,74 @@ proc toNType*(
     noDefaulted: seq[CxCursor] = @[]
   ): NType[PNode] =
 
+  proc aux(nimType: NimType, cache: var WrapCache): NType[PNode] =
+    if isNil(nimType):
+      result = newPType("void")
+
+    else:
+      case nimType.kind:
+        of ctkIdent:
+          result = newPType(nimType.nimName)
+          for param in nimType.genericParams:
+            result.add aux(param, cache)
+
+
+          var ignoreDefaulted = false
+          if nimType.fromCxType and
+             noDefaulted.len() > 0 and
+             noDefaulted[0].kind in { ckClassTemplate }:
+
+            # I'm not really sure about the necessary heuristics to correctly
+            # determine conditions for `ignoreDefault`, so right now it is
+            # implemented as an edge case based on the stdlib.
+            #
+            # `std::basic_string` has `.substr()` method that returns
+            # `basic_string` - with /no/ template parameters specified. I
+            # tried to find when it is possible to do this (completely omit
+            # template type parameters, even including non-defaulted ones),
+            # but could not find any conclusive answer. Anyway, the return
+            # type is `basic_string`. When I try to convert it to `toNType`
+            # it tries to substitute defaulted template types, namely
+            # `std::char_traits<_CharT>` and allocator. But I actually need
+            # it to use class's template type parameters.
+            #
+            # Right now I just collect all parent classes for a `GenProc` (in
+            # `toNNode(GenProc)`), and pass it down here. If input `nimType`
+            # that is passed here has the same /name/ (things are different
+            # when they are cursors - `ckClassTemplate` and some other kind)
+            # as `noDefaulted`, I consider it to be a valid reason to
+            # `ignoreDefaulted`.
+            #
+            # This worked for `[[code:std::basic_string.substr(_, _, _)]]`,
+            # but in general I don't think this is a fully correct check.
+
+            let decl = nimType.cxType.getTypeDeclaration()
+            ignoreDefaulted = $decl == $noDefaulted[0]
+
+          for defaulted in nimType.getPartialParams(
+            conf, cache,
+            defaulted = not ignoreDefaulted
+          ):
+
+            result.add aux(defaulted, cache)
+
+          if asResult and nimType.specialKind == ctskLValueRef:
+            result = newPType("var", @[result])
+
+        of ctkProc:
+          result = newProcNType(
+            nimType.arguments.mapIt((it.name, it.nimType.aux(cache))),
+            nimType.returnType.aux(cache),
+            newPPragma("cdecl"))
+
+
   if isNil(nimType):
-    result = newPType("void")
+    return newPType("void")
 
   else:
-    case nimType.kind:
-      of ctkIdent:
-        result = newPType(nimType.nimName)
-        for param in nimType.genericParams:
-          result.add toNType(param, conf, cache)
-
-
-        var ignoreDefaulted = false
-        if nimType.fromCxType and
-           noDefaulted.len() > 0 and
-           noDefaulted[0].kind in { ckClassTemplate }:
-
-          # I'm not really sure about the necessary heuristics to correctly
-          # determine conditions for `ignoreDefault`, so right now it is
-          # implemented as an edge case based on the stdlib.
-          #
-          # `std::basic_string` has `.substr()` method that returns
-          # `basic_string` - with /no/ template parameters specified. I
-          # tried to find when it is possible to do this (completely omit
-          # template type parameters, even including non-defaulted ones),
-          # but could not find any conclusive answer. Anyway, the return
-          # type is `basic_string`. When I try to convert it to `toNType`
-          # it tries to substitute defaulted template types, namely
-          # `std::char_traits<_CharT>` and allocator. But I actually need
-          # it to use class's template type parameters.
-          #
-          # Right now I just collect all parent classes for a `GenProc` (in
-          # `toNNode(GenProc)`), and pass it down here. If input `nimType`
-          # that is passed here has the same /name/ (things are different
-          # when they are cursors - `ckClassTemplate` and some other kind)
-          # as `noDefaulted`, I consider it to be a valid reason to
-          # `ignoreDefaulted`.
-          #
-          # This worked for `[[code:std::basic_string.substr(_, _, _)]]`,
-          # but in general I don't think this is a fully correct check.
-
-          let decl = nimType.cxType.getTypeDeclaration()
-          ignoreDefaulted = $decl == $noDefaulted[0]
-
-        for defaulted in nimType.getPartialParams(
-          conf, cache,
-          defaulted = not ignoreDefaulted
-        ):
-
-          result.add toNtype(defaulted, conf, cache)
-
-        if asResult and nimType.specialKind == ctskLValueRef:
-          result = newPType("var", @[result])
-
-      of ctkProc:
-        result = newProcNType(
-          nimType.arguments.mapIt((it.name, it.nimType.toNType(conf, cache))),
-          nimType.returnType.toNType(conf, cache),
-          newPPragma("cdecl"))
+    var tmp = nimType
+    conf.fixTypeName(tmp, conf, 0)
+    return aux(tmp, cache)
 
 proc getTypeName*(cxtype: CXType, conf: WrapConf): string =
   let curs = cxtype.getTypeDeclaration()
@@ -533,7 +521,6 @@ proc typeNameForScoped*(
   result = newNimType(buf.join("::")).addIdent(ident)
   result.genericParams = result.getPartialParams(
     conf, cache, defaulted = false)
-  # conf.fixTypeName(result, conf, 0)
 
 proc isMutableRef*(cxtype: CXType): bool =
   case cxType.cxKind:
@@ -739,7 +726,6 @@ proc toNimType*(
 
   result.isMutable = mutable
   result.specialKind = special
-  # conf.fixTypeName(result, conf, 0)
 
 proc genParamsForIdent*(
     conf: WrapConf,
@@ -755,9 +741,6 @@ proc genParamsForIdent*(
   for part in scoped:
     for param in part.declGenParams():
       result.add newNimType($param, isParam = true)
-
-  # for idx, t in mpairs(result):
-  #   conf.fixTypeName(t, conf, idx)
 
 
 func fixTypeParams*(nt: var NimType, params: seq[NimType]) =
@@ -818,9 +801,7 @@ proc toInitCall*(
   proc aux(cursor: CXCursor, ilist: bool, cache: var WrapCache): PNode =
     case cursor.cxKind():
       of ckUnexposedExpr:
-        # info $cursor.cxType()
         if startsWith($cursor.cxType(), "std::initializer_list"):
-          # info "Found init list"
           result = aux(cursor[0], true, cache)
 
         else:
@@ -838,29 +819,11 @@ proc toInitCall*(
           of ckTypeRef:
             # First found in `clang/Rewriter.h/getRangeSize()`
             result = newPCall(str)
-            # assert cursor.len == 1, &[
-            #   $cursor.getSpellingLocation(),
-            #   "\n",
-            #   cursor.treeRepr()
-            # ]
-
-          # TEMP
-          # of ckCallExpr:
-          #   let cType = cursor[0].cxType()
-          #   case cType.cxKind():
-          #     of tkTypedef:
-          #       result = aux(cType.getTypeDeclaration(), ilist)
-          #       for arg in cursor[0]:
-          #         result.add aux(arg, ilist)
-
-          #     else:
-          #       raiseImplementKindError(cType)
 
           else:
             conf.err cursor[0].cxKind()
             conf.debug "\n" & cursor.treeRepr(conf.unit)
             conf.debug cursor.getSpellingLocation()
-            # raiseAssert("#[ IMPLEMENT ]#")
 
         if isNil(result):
           return
@@ -900,9 +863,6 @@ proc toInitCall*(
         result = newPLit(nil)
 
       of ckInitListExpr:
-        # debug "Creating initList"
-        # debug ilist
-        # raiseAssert("#[ IMPLEMENT ]#")
         if ilist:
           result = newPCall("cxxInitList")
 
@@ -950,8 +910,6 @@ proc toInitCall*(
         conf.err "Implement for kind", cursor.cxKind()
         conf.debug cursor.getSpellingLocation()
         conf.debug cursor.tokenStrings(conf.unit)
-        # debug cursor.treeRepr(conf.unit)
-        # raiseAssert("#[ IMPLEMENT ]#")
 
   return aux(cursor, false, cache)
 
@@ -963,11 +921,8 @@ proc setDefaultForArg*(
   ## - @arg{cursor} :: original cursor for argument declaration
   ## - @arg{conf} :: Default wrap configuration
 
-  # info cursor.len
   if cursor.len == 2 and
      cursor[1].cxKind() in {ckUnexposedExpr, ckInitListExpr}:
-    # debug cursor.treeRepr(conf.unit)
     let default = toInitCall(cursor[1], conf, cache)
     if not isNil(default):
       arg.default = some(default)
-    # debug arg.default

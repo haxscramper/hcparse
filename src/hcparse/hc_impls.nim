@@ -238,7 +238,7 @@ proc fixTypeName*(ntype: var NimType, conf: WrapConf, idx: int = 0) =
             "a" & $idx
 
           else:
-            fixIdentName(arg.name)
+            arg.name
 
         conf.fixtypename(arg.nimType, conf, idx)
 
