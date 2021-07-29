@@ -8,7 +8,7 @@ import
   hpprint,
   hmisc/[hexceptions, helpers],
   hmisc/other/[oswrap, hlogger, hjson],
-  hmisc/types/[hmap],
+  hmisc/types/[hmap, hgraph],
   hnimast, hnimast/pprint,
   hmisc/algo/[
     hseq_mapping, hstring_algo, hseq_distance, namegen, halgorithm]
@@ -650,7 +650,7 @@ type
         genForward*: GenForward
 
       of gekEmpty:
-        discard
+        genEmptyIInfo*: LineInfo
 
 
   WrappedEntryPos* = enum
@@ -782,7 +782,7 @@ proc cdecl*(gen: GenEntry): CDecl =
     of gekObject: result = gen.genObject.cdecl
     of gekAlias: result = gen.genAlias.cdecl
     of gekForward: result = gen.genForward.cdecl
-    of gekPass, gekImport:
+    of gekPass, gekImport, gekEmpty:
       discard
 
   assert notNil(result)
@@ -802,6 +802,7 @@ proc iinfo*(gen: GenEntry): LineInfo =
     of gekForward: result = gen.genForward.iinfo
     of gekPass: result = gen.genPass.iinfo
     of gekImport: result = gen.genImport.iinfo
+    of gekEmpty: result = gen.genEmptyIInfo
 
 
 proc newProcVisit*(
@@ -1766,23 +1767,23 @@ proc fragmentType*(entry: var GenEntry):
   case entry.kind:
     of gekAlias, gekEnum:
       result.newDecl.add entry
-      entry = GekEntry(kind: gekEmpty)
+      entry = GenEntry(kind: gekEmpty)
 
     of gekObject:
-      result.extras.add entry.memberMethods
-      entry.memberMethods.clear()
+      for e in entry.genObject.memberMethods: result.extras.add e
+      entry.genObject.memberMethods = @[]
       result.newDecl.add entry
 
-      for nested in mitems(entry.nestedEntries):
+      for nested in mitems(entry.genObject.nestedEntries):
         if nested.kind in { gekEnum, gekObject, gekAlias }:
-          let (newDecls, extras) = nested.fragmentType(nested)
-          result.newdecl.add newDecl
+          let (newDecls, extras) = fragmentType(nested)
+          result.newdecl.add newDecls
           result.extras.add extras
 
         else:
           result.extras.add nested
 
-      entry.nestedEntries.clear()
+      entry.genObject.nestedEntries = @[]
 
 
     else:

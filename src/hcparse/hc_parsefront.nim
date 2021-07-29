@@ -241,6 +241,9 @@ proc toNNode*(
       of gekPass:
         result.add node.genPass.passEntries
 
+      of gekEmpty:
+        discard
+
 
 
 type
@@ -699,148 +702,9 @@ proc patchForward*(
               entry[] = newGenEntry(GenPass(iinfo: currLInfo()))[]
 
 
-iterator items*[T](s1, s2: var seq[T]): var T =
+iterator mitems*[T](s1, s2: var seq[T]): var T =
   for it in mitems(s1): yield it
   for it in mitems(s2): yield it
-
-proc updateImports*(
-    wrapped: var seq[WrappedFile],
-    conf: WrapConf, cache: var WrapCache): seq[WrappedFile] =
-
-  # Collect all types into single wrapped entry type block. All duplicate
-  # types (caused by forward declarations which is not really possible to
-  # differentiated) will be overwritten. This should be fine I guess,
-  # because you can't declare type again after defining it (I hope), so all
-  # last type encounter will always be it's definition.
-
-  var usedApis: UsedSet # Set of cursors pointing to declarations for
-  # different types used in the file entries (procedure argument and
-  # return, field, global variable types).
-
-  for entry in wrapped.entries:
-    registerUsedTypes(entry, usedApis, conf)
-
-  var
-    importGraph = newHGraph[LibImport, NimType]()
-    fileMap: Table[LibImport, WrappedFile]
-
-  for file in wrapped:
-    fileMap[conf.getSavePath(conf.getBaseFile(file))] = file
-
-  block registerImports:
-    for file in wrapped:
-      block cursorBasedImportrs:
-        let
-          base = conf.getBaseFile(wrapped)
-          user = conf.getSavePath(base, conf)
-
-        for typeCursor, typeSet in usedApis.cursors:
-          let loc = typeCursor.getSpellingLocation()
-          if loc.isSome():
-            let
-              dep = conf.getSavePath(loc.get().file, conf)
-              imp = conf.getImport(loc.get().file, base, false)
-
-            if not (
-              imp.isRelative and
-              imp.relativeDepth == 0 and
-              imp.importPath[^1] == conf.getSavePath(base, conf).importPath[^1]
-            ):
-              for item in typeSet:
-                importGraph.addEdge(
-                  importGraph.addOrGetNode(user),
-                  importGraph.addOrGetNode(dep),
-                  item)
-
-      block libraryOverrideImports:
-        let base = conf.getSavePath(conf.getBaseFile(wrapped), conf)
-        for usedLib, typeSet in usedApis.libs:
-          if usedLib.isValid():
-            let imp = conf.getImport(usedLib, base, false)
-            for usedType in typeSet:
-              importGraph.addEdge(
-                importGraph.addOrGetEdge(base),
-                importGraph.addOrGetEdge(usedLib),
-                usedType)
-
-
-  let groups = importGraph.findCycles(ignoreSelf = true).mergeCycleSets()
-
-  var
-    allNodes = importGraph.nodeSet()
-
-  for group in groups:
-    allNodes.excl group
-    var
-      mergedTypes: seq[GenEntry]
-      extraEntries: seq[GenEntry]
-
-    for item in group:
-      let lib = importGraph[item]
-      for entry in mitems(fileMap[lib].entiries):
-        let (newDecl, extras) entry.fragmentType()
-        mergedTypes.add newDecl
-        extraEntries.add extras
-
-      fileMap[lib].entries.add extraEntries
-
-
-
-  for path, file in mpairs(fileMap):
-    for group in groups:
-      let groupedNodes = toHashSet importGraph[group]
-
-
-  cache.importGraph = importGraph
-
-  for file in mitems(wrapped, result):
-    file.imports.incl initNimImportSpec(true, @["std", "bitops"])
-    file.imports.incl initNimImportSpec(true, @[
-      "hmisc", "wrappers", "wraphelp"])
-
-    file.exports.incl "wraphelp"
-
-
-
-proc wrapFiles*(
-    parsed: seq[ParsedFile], conf: WrapConf,
-    cache: var WrapCache, index: hc_types.FileIndex): seq[WrappedFile] =
-
-  var genFiles: seq[WrappedFile]
-  for file in parsed:
-    var resFile = WrappedFile(
-      isGenerated: false, baseFile: file.filename)
-
-    for node in file.explicitDeps.mapIt(
-        conf.getImport(it, conf.getBaseFile(resFile), false)).
-        deduplicate():
-
-      # Add imports for explicit dependencies
-      resFile.imports.incl node
-
-
-    conf.unit = file.unit
-    # Add wrapper for main API unit
-    resFile.entries.add file.api.wrapApiUnit(conf, cache, index)
-    genFiles.add resFile
-
-  # Patch *all* wrapped file entries at once, replacing `GenForward`
-  # entries with imports and returning list of additional files (for
-  # strongly connected type clusters that span multiple files)
-  result.add patchForward(genFiles, conf, cache)
-
-  # Correct potential circular imports that resulted from incorrectly
-  # written import converters.
-  #
-  # - WHY :: Things like this are almost un-debuggable, and it is easier to
-  #   just perform additional cycle detection, rather than make user deal
-  #   with strange failures that were caused by complicated internal
-  #   machinery.
-  result.add updateImports(genFiles, conf, cache)
-
-  # Add generated wrapper files themselves
-  result.add genFiles
-
 
 type
   UsedSet = object
@@ -852,6 +716,8 @@ func mgetOrDefault*[K, V](table: var Table[K, V], key: K): var V =
     table[key] = default(V)
 
   return table[key]
+
+
 
 proc registerUse*(nimType: NimType, used: var UsedSet, conf: WrapConf) =
 
@@ -921,8 +787,148 @@ proc registerUsedTypes*(entry: GenEntry, used: var UsedSet, conf: WrapConf) =
     of gekAlias:
       registerUse(entry.genAlias.baseType, used, conf)
 
-    of gekPass, gekImport, gekForward:
+    of gekPass, gekImport, gekForward, gekEmpty:
       discard
+
+
+proc updateImports*(
+    wrapped: var seq[WrappedFile],
+    conf: WrapConf, cache: var WrapCache): seq[WrappedFile] =
+
+  # Collect all types into single wrapped entry type block. All duplicate
+  # types (caused by forward declarations which is not really possible to
+  # differentiated) will be overwritten. This should be fine I guess,
+  # because you can't declare type again after defining it (I hope), so all
+  # last type encounter will always be it's definition.
+
+  var usedApis: UsedSet # Set of cursors pointing to declarations for
+  # different types used in the file entries (procedure argument and
+  # return, field, global variable types).
+
+  for file in wrapped:
+    for entry in file.entries:
+      registerUsedTypes(entry, usedApis, conf)
+
+  var
+    importGraph = newHGraph[LibImport, NimType]()
+    fileMap: Table[LibImport, WrappedFile]
+
+  for file in wrapped:
+    fileMap[conf.getSavePath(conf.getBaseFile(file), conf)] = file
+
+  block registerImports:
+    for file in wrapped:
+      block cursorBasedImportrs:
+        let
+          base = conf.getBaseFile(file)
+          user = conf.getSavePath(base, conf)
+
+        for typeCursor, typeSet in usedApis.cursors:
+          let loc = typeCursor.getSpellingLocation()
+          if loc.isSome():
+            let
+              dep = conf.getSavePath(loc.get().file, conf)
+              imp = conf.getImport(loc.get().file, base, false)
+
+            if not (
+              imp.isRelative and
+              imp.relativeDepth == 0 and
+              imp.importPath[^1] == conf.getSavePath(base, conf).importPath[^1]
+            ):
+              for item in typeSet:
+                importGraph.addEdge(
+                  importGraph.addOrGetNode(user),
+                  importGraph.addOrGetNode(dep),
+                  item)
+
+      block libraryOverrideImports:
+        let base = conf.getSavePath(conf.getBaseFile(file), conf)
+        for usedLib, typeSet in usedApis.libs:
+          if usedLib.isValid():
+            let imp = conf.getImport(usedLib, base, false)
+            for usedType in typeSet:
+              importGraph.addEdge(
+                importGraph.addOrGetNode(base),
+                importGraph.addOrGetNode(usedLib),
+                usedType)
+
+
+  let groups = importGraph.findCycles(ignoreSelf = true).mergeCycleSets()
+
+  var
+    allNodes = importGraph.nodeSet()
+
+  for group in groups:
+    allNodes.excl group
+    var
+      mergedTypes: seq[GenEntry]
+      extraEntries: seq[GenEntry]
+
+    for item in group:
+      let lib = importGraph[item]
+      for entry in mitems(fileMap[lib].entries):
+        let (newDecl, extras) = entry.fragmentType()
+        mergedTypes.add newDecl
+        extraEntries.add extras
+
+      fileMap[lib].entries.add extraEntries
+
+
+
+  for path, file in mpairs(fileMap):
+    for group in groups:
+      let groupedNodes = toHashSet importGraph[group]
+
+
+  cache.importGraph = importGraph
+
+  for file in mitems(wrapped, result):
+    file.imports.incl initNimImportSpec(true, @["std", "bitops"])
+    file.imports.incl initNimImportSpec(true, @[
+      "hmisc", "wrappers", "wraphelp"])
+
+    file.exports.incl "wraphelp"
+
+
+
+proc wrapFiles*(
+    parsed: seq[ParsedFile], conf: WrapConf,
+    cache: var WrapCache, index: hc_types.FileIndex): seq[WrappedFile] =
+
+  var genFiles: seq[WrappedFile]
+  for file in parsed:
+    var resFile = WrappedFile(
+      isGenerated: false, baseFile: file.filename)
+
+    for node in file.explicitDeps.mapIt(
+        conf.getImport(it, conf.getBaseFile(resFile), false)).
+        deduplicate():
+
+      # Add imports for explicit dependencies
+      resFile.imports.incl node
+
+
+    conf.unit = file.unit
+    # Add wrapper for main API unit
+    resFile.entries.add file.api.wrapApiUnit(conf, cache, index)
+    genFiles.add resFile
+
+  # Patch *all* wrapped file entries at once, replacing `GenForward`
+  # entries with imports and returning list of additional files (for
+  # strongly connected type clusters that span multiple files)
+  result.add patchForward(genFiles, conf, cache)
+
+  # Correct potential circular imports that resulted from incorrectly
+  # written import converters.
+  #
+  # - WHY :: Things like this are almost un-debuggable, and it is easier to
+  #   just perform additional cycle detection, rather than make user deal
+  #   with strange failures that were caused by complicated internal
+  #   machinery.
+  result.add updateImports(genFiles, conf, cache)
+
+  # Add generated wrapper files themselves
+  result.add genFiles
 
 
 proc wrapFile*(

@@ -1456,6 +1456,9 @@ proc toNNode*(
     of gekPass:
       result.add gen.genPass.passEntries
 
+    of gekEmpty:
+      discard
+
     of gekAlias:
       result.add toNNode(gen.genAlias, conf, cache).
         toNimDecl().
