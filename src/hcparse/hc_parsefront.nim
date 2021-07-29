@@ -738,7 +738,16 @@ proc wrapFiles*(
   result.add genFiles
 
 
-type UsedSet = tuple[cursors: HashSet[CxCursor], libs: HashSet[LibImport]]
+type
+  UsedSet = object
+    cursors: Table[CxCursor, HashSet[NimType]]
+    libs: Table[LibImport, HashSet[NimType]]
+
+func mgetOrDefault*[K, V](table: var Table[K, V], key: K): var V =
+  if key notin table:
+    table[key] = default(V)
+
+  return table[key]
 
 proc registerUse*(nimType: NimType, used: var UsedSet, conf: WrapConf) =
 
@@ -748,16 +757,15 @@ proc registerUse*(nimType: NimType, used: var UsedSet, conf: WrapConf) =
   if nimType.fromCxType:
     let cxDecl = nimType.cxType.getTypeDeclaration()
     if cxDecl.kind notin {ckNoDeclFound}:
-      used.cursors.incl cxDecl
+      used.cursors.mgetOrDefault(cxDecl).incl nimType
 
   else:
-    used.libs.incl nimType.typeImport
+    used.libs.mgetOrDefault(nimType.typeImport).incl nimType
 
   if nimType.fullIdent.isSome():
     let last = nimType.fullIdent.get()[^1]
     if not last.isGenerated:
-      # conf.dump last.cursor.cxKind(), last.cursor.getSpellingLocation()
-      used.cursors.incl last.cursor
+      used.cursors.mgetOrDefault(last.cursor).incl nimType
 
     for param in last.genParams:
       if param.len > 0 and param[^1].isGenerated.not():
@@ -831,11 +839,16 @@ proc wrapFile*(
     registerUsedTypes(entry, usedApis, conf)
 
   block:
-    let base = conf.getBaseFile(wrapped)
-    for usedType in usedApis.cursors:
-      let loc = usedType.getSpellingLocation()
+    let
+      base = conf.getBaseFile(wrapped)
+      user = conf.getSavePath(base, conf)
+
+    for typeCursor, typeSet in usedApis.cursors:
+      let loc = typeCursor.getSpellingLocation()
       if loc.isSome():
-        let imp = conf.getImport(loc.get().file, base, false)
+        let
+          dep = conf.getSavePath(loc.get().file, conf)
+          imp = conf.getImport(loc.get().file, base, false)
 
         if not (
           imp.isRelative and
@@ -843,14 +856,19 @@ proc wrapFile*(
           imp.importPath[^1] == conf.getSavePath(base, conf).importPath[^1]
         ):
 
+          for item in typeSet:
+            cache.importMap.mgetOrDefault((user, dep)).incl (item, false)
+
           wrapped.imports.incl imp
 
   block:
     let base = conf.getSavePath(conf.getBaseFile(wrapped), conf)
-    for usedLib in usedApis.libs:
+    for usedLib, typeSet in usedApis.libs:
       if usedLib.isValid():
         let imp = conf.getImport(usedLib, base, false)
-        conf.dump imp
+        for usedType in typeSet:
+          cache.importMap.mgetOrDefault((base, usedLib)).incl (usedType, true)
+
         wrapped.imports.incl imp
 
 
@@ -1025,7 +1043,10 @@ proc wrapSingleFile*(
 
 
 proc wrapAllFiles*(
-    files: seq[AbsFile], wrapConf: WrapConf, parseConf: ParseConf) =
+    files: seq[AbsFile],
+    wrapConf: WrapConf,
+    parseConf: ParseConf
+  ): WrapCache =
   ## Generate and write wrappers for all `files`
 
   var
@@ -1057,11 +1078,13 @@ proc wrapAllFiles*(
   CodegenResult(cache: cache).writeWrapped(
     AbsFile(""), @[], wrapConf)
 
+  return cache
+
 
 proc wrapWithConf*(
     files: seq[AbsFile], wrapConf: WrapConf,
     parseConf: ParseConf
-  ) = wrapAllFiles(files, wrapConf, parseConf)
+  ): WrapCache = wrapAllFiles(files, wrapConf, parseConf)
 
 proc wrapWithConf*(
     infile, outfile: FsFile, wrapConf: WrapConf,

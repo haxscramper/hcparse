@@ -16,7 +16,8 @@ import
   hmisc/helpers,
   hmisc/algo/namegen,
   hmisc/types/colorstring,
-  hmisc/other/[oswrap, hlogger]
+  hmisc/other/[oswrap, hlogger],
+  hmisc/macros/argpass
 
 import
   hnimast
@@ -500,3 +501,29 @@ let baseCppWrapConf* = WrapConf(
 
 let baseCWrapConf* = baseCPPWrapConf.withDeepIt do:
   it.isImportcpp = false
+
+import
+  hmisc/types/hgraph,
+  hmisc/hasts/graphviz_ast
+
+
+proc dotDepImports*(
+    cache: WrapCache, conf: WrapConf, outFile: AbsFile) =
+
+  var graph = newHGraph[LibImport, (NimType, bool)]()
+  for pair, types in cache.importMap:
+    for imported in types:
+      graph.addEdge(
+        graph.addOrGetNode(pair.dep),
+        graph.addOrGetNode(pair.user),
+        imported)
+
+  var dot = graph.dotRepr(
+    proc(node: LibImport, _: HNode): DotNode = makeDotNode(0, $node),
+    proc(edge: (NimType, bool), _: HEdge): DotEdge =
+      makeDotEdge(0, 0, $edge[0]).withFields(
+        color = tern(edge[1], colRed, colGreen)))
+
+
+  dot.rankdir = grdLeftRight
+  dot.toPng(outFile)

@@ -490,6 +490,10 @@ type
     # defaultParamsForType*: Table[seq[string], Table[int, NimType]]
     complexCache*: Table[CxCursor, Option[NimType]]
 
+    importMap*: Table[
+      tuple[user, dep: LibImport],
+      HashSet[tuple[depType: NimType, overrideComplex: bool]]]
+
   GenBase* {.inheritable.} = ref object
     ## Common fields for all `GenX` types. Not used for inheritance, only
     ## to avoud code duplication.
@@ -1353,8 +1357,57 @@ func addIdent*(nimType: sink NimType, id: CScopedIdent): NimType =
 func initLibImport*(name: string, path: seq[string]): LibImport =
   LibImport(library: name, importPath: path)
 
+func hash*(nt: NimType): Hash =
+  case nt.kind:
+    of ctkIdent:
+      result = hash(nt.nimName)
+
+      for param in nt.genericParams:
+        result = result !& hash(param)
+
+      return !$(result)
+
+    of ctkProc:
+      result = hash(nt.returnType)
+      for arg in nt.arguments:
+        if arg.isRaw:
+          result = result !& hash(arg.cursor)
+
+        else:
+          result = result !& hash(arg.nimType)
+
+      return !$(result)
+
+func `==`*(t1, t2: NimType): bool =
+  if t1.kind == t2.kind:
+    case t1.kind:
+      of ctkIdent:
+        if t1.nimName == t2.nimName and
+           t1.genericParams == t2.genericParams:
+          for (p1, p2) in zip(t1.genericParams, t2.genericParams):
+            if p1 != p2:
+              return false
+
+          return true
+
+      of ctkProc:
+        if t1.returnType == t2.returnType:
+          for (a1, a2) in zip(t1.arguments, t2.arguments):
+            if a1.nimType != a2.nimType:
+              return false
+
+          return true
+
+
 func hash*(lib: LibImport): Hash =
   !$(hash(lib.library) !& hash(lib.importPath))
+
+func `$`*(lib: LibImport): string =
+  if lib.library.len > 0:
+    result &= lib.library
+    result &= "@"
+
+  result &= lib.importPath.join("/")
 
 func libImport*(conf: WrapConf): LibImport = initLibImport(conf.wrapName, @[])
 func isValid*(lib: LibImport): bool = lib.importPath.len > 0
