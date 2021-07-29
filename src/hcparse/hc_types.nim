@@ -491,9 +491,7 @@ type
     # defaultParamsForType*: Table[seq[string], Table[int, NimType]]
     complexCache*: Table[CxCursor, Option[NimType]]
 
-    importMap*: Table[
-      tuple[user, dep: LibImport],
-      HashSet[tuple[depType: NimType, overrideComplex: bool]]]
+    importGraph*: HGraph[LibImport, NimType]
 
   GenBase* {.inheritable.} = ref object
     ## Common fields for all `GenX` types. Not used for inheritance, only
@@ -618,6 +616,7 @@ type
 
     gekForward ## Forward declaration for struct/union/class/enum
     gekImport ## Import statement
+    gekEmpty
 
   AnyGenEntry = GenProc | GenObject | GenEnum |
     GenAlias | GenPass | GenImport | GenForward
@@ -649,6 +648,9 @@ type
 
       of gekForward:
         genForward*: GenForward
+
+      of gekEmpty:
+        discard
 
 
   WrappedEntryPos* = enum
@@ -1753,3 +1755,35 @@ proc allGenericParams*(nimType: NimType): seq[NimType] =
 
       for argument in nimType.arguments:
         result.add allGenericParams(argument.nimType)
+
+proc fragmentType*(entry: var GenEntry):
+  tuple[newDecl: seq[GenEntry], extras: seq[GenEntry]] =
+
+  ## Separate type definition into multiple type declarations and 'other'
+  ## elements. This does modify original entry as well, replacing it with
+  ## empty pass.
+
+  case entry.kind:
+    of gekAlias, gekEnum:
+      result.newDecl.add entry
+      entry = GekEntry(kind: gekEmpty)
+
+    of gekObject:
+      result.extras.add entry.memberMethods
+      entry.memberMethods.clear()
+      result.newDecl.add entry
+
+      for nested in mitems(entry.nestedEntries):
+        if nested.kind in { gekEnum, gekObject, gekAlias }:
+          let (newDecls, extras) = nested.fragmentType(nested)
+          result.newdecl.add newDecl
+          result.extras.add extras
+
+        else:
+          result.extras.add nested
+
+      entry.nestedEntries.clear()
+
+
+    else:
+      discard

@@ -510,15 +510,7 @@ import
 proc dotDepImports*(
     cache: WrapCache, conf: WrapConf, outFile: AbsFile) =
 
-  var graph = newHGraph[LibImport, (NimType, bool)]()
-  for pair, types in cache.importMap:
-    for imported in types:
-      graph.addEdge(
-        graph.addOrGetNode(pair.dep),
-        graph.addOrGetNode(pair.user),
-        imported)
-
-  var dot = graph.dotRepr(
+  var dot = cache.importGraph.dotRepr(
     proc(node: LibImport, _: HNode): DotNode = makeDotNode(0, $node),
     proc(edge: (NimType, bool), _: HEdge): DotEdge =
       makeDotEdge(0, 0, $edge[0]).withFields(

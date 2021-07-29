@@ -720,11 +720,78 @@ proc updateImports*(
   for entry in wrapped.entries:
     registerUsedTypes(entry, usedApis, conf)
 
-  var importGraph = newHGraph[LibImport, WrappedFile]()
+  var
+    importGraph = newHGraph[LibImport, NimType]()
+    fileMap: Table[LibImport, WrappedFile]
+
+  for file in wrapped:
+    fileMap[conf.getSavePath(conf.getBaseFile(file))] = file
 
   block registerImports:
     for file in wrapped:
+      block cursorBasedImportrs:
+        let
+          base = conf.getBaseFile(wrapped)
+          user = conf.getSavePath(base, conf)
 
+        for typeCursor, typeSet in usedApis.cursors:
+          let loc = typeCursor.getSpellingLocation()
+          if loc.isSome():
+            let
+              dep = conf.getSavePath(loc.get().file, conf)
+              imp = conf.getImport(loc.get().file, base, false)
+
+            if not (
+              imp.isRelative and
+              imp.relativeDepth == 0 and
+              imp.importPath[^1] == conf.getSavePath(base, conf).importPath[^1]
+            ):
+              for item in typeSet:
+                importGraph.addEdge(
+                  importGraph.addOrGetNode(user),
+                  importGraph.addOrGetNode(dep),
+                  item)
+
+      block libraryOverrideImports:
+        let base = conf.getSavePath(conf.getBaseFile(wrapped), conf)
+        for usedLib, typeSet in usedApis.libs:
+          if usedLib.isValid():
+            let imp = conf.getImport(usedLib, base, false)
+            for usedType in typeSet:
+              importGraph.addEdge(
+                importGraph.addOrGetEdge(base),
+                importGraph.addOrGetEdge(usedLib),
+                usedType)
+
+
+  let groups = importGraph.findCycles(ignoreSelf = true).mergeCycleSets()
+
+  var
+    allNodes = importGraph.nodeSet()
+
+  for group in groups:
+    allNodes.excl group
+    var
+      mergedTypes: seq[GenEntry]
+      extraEntries: seq[GenEntry]
+
+    for item in group:
+      let lib = importGraph[item]
+      for entry in mitems(fileMap[lib].entiries):
+        let (newDecl, extras) entry.fragmentType()
+        mergedTypes.add newDecl
+        extraEntries.add extras
+
+      fileMap[lib].entries.add extraEntries
+
+
+
+  for path, file in mpairs(fileMap):
+    for group in groups:
+      let groupedNodes = toHashSet importGraph[group]
+
+
+  cache.importGraph = importGraph
 
   for file in mitems(wrapped, result):
     file.imports.incl initNimImportSpec(true, @["std", "bitops"])
@@ -863,38 +930,6 @@ proc wrapFile*(
     cache: var WrapCache, index: hc_types.FileIndex
   ): seq[WrappedEntry] =
 
-  block:
-    let
-      base = conf.getBaseFile(wrapped)
-      user = conf.getSavePath(base, conf)
-
-    for typeCursor, typeSet in usedApis.cursors:
-      let loc = typeCursor.getSpellingLocation()
-      if loc.isSome():
-        let
-          dep = conf.getSavePath(loc.get().file, conf)
-          imp = conf.getImport(loc.get().file, base, false)
-
-        if not (
-          imp.isRelative and
-          imp.relativeDepth == 0 and
-          imp.importPath[^1] == conf.getSavePath(base, conf).importPath[^1]
-        ):
-
-          for item in typeSet:
-            cache.importMap.mgetOrDefault((user, dep)).incl (item, false)
-
-          wrapped.imports.incl imp
-
-  block:
-    let base = conf.getSavePath(conf.getBaseFile(wrapped), conf)
-    for usedLib, typeSet in usedApis.libs:
-      if usedLib.isValid():
-        let imp = conf.getImport(usedLib, base, false)
-        for usedType in typeSet:
-          cache.importMap.mgetOrDefault((base, usedLib)).incl (usedType, true)
-
-        wrapped.imports.incl imp
 
 
 
