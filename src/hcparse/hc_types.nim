@@ -65,6 +65,7 @@ type
         ## Entry was automatically generated or constructed from invalid
         ## CxType.
         typeImport*: LibImport
+        original*: Option[CxType]
 
 
     case kind*: CTypeKind
@@ -1307,7 +1308,8 @@ func isBuiltinGeneric*(str: string): bool =
 {.warning[Deprecated]:on.}
 
 func newNimType*(
-    name: string, cxType: CXType,
+    name: string,
+    cxType: CXType,
     isParam: bool = false
   ): NimType =
 
@@ -1318,6 +1320,7 @@ func newNimType*(
     name: string,
     genericParams: openarray[NimType] = @[],
     libImport: LibImport = LibImport(),
+    original: Option[Cxtype] = none(CxType),
     isParam: bool = false
   ): NimType =
 
@@ -1327,6 +1330,7 @@ func newNimType*(
     nimName: name,
     fromCXtype: false,
     typeImport: libImport,
+    original: original,
     genericParams: toSeq(genericParams)
   )
 
@@ -1455,6 +1459,9 @@ proc `$`*(nimType: NimType): string =
           result &= "["
           result &= nimType.genericParams.mapIt($it).join(", ")
           result &= "]"
+
+        if not nimType.fromCxType and nimType.original.isSome():
+          result &= " (from '" & $nimType.original.get() & "')"
 
       of ctkProc:
         result = "proc "

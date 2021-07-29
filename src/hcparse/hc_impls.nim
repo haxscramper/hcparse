@@ -522,7 +522,10 @@ proc dotDepImports*(
     proc(node: LibImport, _: HNode): DotNode = makeDotNode(0, $node),
     proc(edge: (NimType, bool), _: HEdge): DotEdge =
       makeDotEdge(0, 0, $edge[0]).withFields(
-        color = tern(edge[1], colRed, colGreen)))
+        color = tern(edge[1], colRed, colGreen)),
+    clusters = mapIt(
+      graph.findCycles(ignoreSelf = true).mergeCycleSets(),
+      (it, "")))
 
 
   dot.rankdir = grdLeftRight

@@ -510,8 +510,6 @@ proc dependentComponents(graph: TypeGraph): seq[TypeGroup] =
 
   dot.toPng(getAppTempFile("intergroup.png"))
 
-  # return groups
-
   for cluster in clusters:
     var mergedGroup: TypeGroup
 
@@ -570,9 +568,16 @@ proc patchForward*(
 
 
   var
+    # Mapping between new file name and pair of (cursors that were moved to
+    # the file)+(wrapped file object)
     movedForward: Table[string, tuple[cursors: Hashset[CXCursor], file: WrappedFile]]
+    # Set of cursors that were forward-declared and defined in the same
+    # file. These ones are simply dropped
     droppedForward: HashSet[CXCursor]
 
+  # `find/store` phase of the patching - determine mapping between elements
+  # that need to be moved forward, and ones that should be dropped, or kept
+  # in place.
   for group in components:
     if group.files.len == 1:
       # All parts of the forward-declare graph are located in the same file.
@@ -617,6 +622,8 @@ proc patchForward*(
       else:
         movedForward[newFile].cursors.incl cursors
 
+  # Move entries to generated files and replace them with corresponding
+  # imports. `copy/import` phase of the patching.
   for wrappedFile in mitems(wrapped):
     for entry in mitems(wrappedFile.entries):
       if entry.hasCDecl():
@@ -626,16 +633,15 @@ proc patchForward*(
             if entry.kind notin {gekForward}:
               file.entries.add entry
 
-  # drop/move phrase of the patching - all cursors that participate in type
-  # groups are either droppped (forward declaration is simply replaced with
-  # empty entry in case of group consisting of a single file) *or*
+  # `drop/move` phrase of the patching - all cursors that participate in
+  # type groups are either droppped (forward declaration is simply replaced
+  # with empty entry in case of group consisting of a single file) *or*
   # import-export pair (via modification of the `.imports` and `.exports`
   # sets for wrapped file)
   var addedRel: HashSet[RelFile]
   for wrappedFile in mitems(wrapped):
     for entry in mitems(wrappedFile.entries):
       if entry.hasCDecl():
-        # info "processing", entry.cdecl().ident
         if entry.cdecl().cursor in droppedForward:
           conf.notice "Dropped forward declaration", entry.cdecl().ident
           entry[] = newGenEntry(GenPass(iinfo: currLInfo()))[]
@@ -670,7 +676,6 @@ proc patchForward*(
               # this type of object, so it can only be created using
               # pointer (i.e. used as in opaque handler)
               let cd = entry.cdecl()
-              # warn "Dropping not moved entry", cd.ident
               var cdecl =
                 case cd.cursor.cxKind():
                   of ckStructDecl: CDecl(kind: cdkStruct, ident: cd.ident)
@@ -679,7 +684,6 @@ proc patchForward*(
                   else:
                     raise newUnexpectedKindError(cd.cursor)
 
-              # debug cd.ident
               cdecl.cursor = cd.cursor
               cdecl.icpp = cd.ident.toCppNamespace()
               if not conf.isImportCpp:
@@ -695,11 +699,39 @@ proc patchForward*(
               entry[] = newGenEntry(GenPass(iinfo: currLInfo()))[]
 
 
+iterator items*[T](s1, s2: var seq[T]): var T =
+  for it in mitems(s1): yield it
+  for it in mitems(s2): yield it
+
+proc updateImports*(
+    wrapped: var seq[WrappedFile],
+    conf: WrapConf, cache: var WrapCache): seq[WrappedFile] =
+
+  # Collect all types into single wrapped entry type block. All duplicate
+  # types (caused by forward declarations which is not really possible to
+  # differentiated) will be overwritten. This should be fine I guess,
+  # because you can't declare type again after defining it (I hope), so all
+  # last type encounter will always be it's definition.
+
+  var usedApis: UsedSet # Set of cursors pointing to declarations for
+  # different types used in the file entries (procedure argument and
+  # return, field, global variable types).
+
+  for entry in wrapped.entries:
+    registerUsedTypes(entry, usedApis, conf)
+
+  var importGraph = newHGraph[LibImport, WrappedFile]()
+
+  block registerImports:
+    for file in wrapped:
 
 
+  for file in mitems(wrapped, result):
+    file.imports.incl initNimImportSpec(true, @["std", "bitops"])
+    file.imports.incl initNimImportSpec(true, @[
+      "hmisc", "wrappers", "wraphelp"])
 
-
-
+    file.exports.incl "wraphelp"
 
 
 
@@ -711,10 +743,6 @@ proc wrapFiles*(
   for file in parsed:
     var resFile = WrappedFile(
       isGenerated: false, baseFile: file.filename)
-
-    # Generate necessary default imports for all files
-    # resFile.imports.incl initNimImportSpec(true, @["bitops"])
-    # resFile.imports.incl initNimImportSpec(true, @["hcparse", "wraphelp"])
 
     for node in file.explicitDeps.mapIt(
         conf.getImport(it, conf.getBaseFile(resFile), false)).
@@ -733,6 +761,15 @@ proc wrapFiles*(
   # entries with imports and returning list of additional files (for
   # strongly connected type clusters that span multiple files)
   result.add patchForward(genFiles, conf, cache)
+
+  # Correct potential circular imports that resulted from incorrectly
+  # written import converters.
+  #
+  # - WHY :: Things like this are almost un-debuggable, and it is easier to
+  #   just perform additional cycle detection, rather than make user deal
+  #   with strange failures that were caused by complicated internal
+  #   machinery.
+  result.add updateImports(genFiles, conf, cache)
 
   # Add generated wrapper files themselves
   result.add genFiles
@@ -825,18 +862,6 @@ proc wrapFile*(
     wrapped: WrappedFile, conf: WrapConf,
     cache: var WrapCache, index: hc_types.FileIndex
   ): seq[WrappedEntry] =
-  # Collect all types into single wrapped entry type block. All duplicate
-  # types (caused by forward declarations which is not really possible to
-  # differentiated) will be overwritten. This should be fine I guess,
-  # because you can't declare type again after defining it (I hope), so all
-  # last type encounter will always be it's definition.
-  var usedApis: UsedSet # Set of cursors pointing to declarations for
-                        # different types used in the file entries
-                        # (procedure argument and return, field, global
-                        # variable types).
-
-  for entry in wrapped.entries:
-    registerUsedTypes(entry, usedApis, conf)
 
   block:
     let
@@ -872,11 +897,6 @@ proc wrapFile*(
         wrapped.imports.incl imp
 
 
-  wrapped.imports.incl initNimImportSpec(true, @["std", "bitops"])
-  wrapped.imports.incl initNimImportSpec(true, @[
-    "hmisc", "wrappers", "wraphelp"])
-
-  wrapped.exports.incl "wraphelp"
 
   var sections: tuple[
     inTypes: Table[string, WrappedEntry],
