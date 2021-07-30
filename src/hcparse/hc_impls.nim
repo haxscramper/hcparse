@@ -512,8 +512,8 @@ proc dotDepImports*(
 
   var dot = cache.importGraph.dotRepr(
     proc(node: LibImport, _: HNode): DotNode = makeDotNode(0, $node),
-    proc(edges: seq[(NimType, HEdge)]): DotEdge =
-      makeDotEdge(0, 0, mapIt(edges, $it[0]).deduplicate().join("\n")),
+    # proc(edges: seq[(NimType, HEdge)]): DotEdge =
+    #   makeDotEdge(0, 0, mapIt(edges, $it[0]).deduplicate().join("\n")),
     clusters = mapIt(
       cache.importGraph.findCycles(ignoreSelf = true).mergeCycleSets(),
       (it, "")))

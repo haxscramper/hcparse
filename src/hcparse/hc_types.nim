@@ -469,6 +469,10 @@ type
     line*: int
     column*: int
 
+  TypeUseKind* = enum
+    tukInProcs
+    tukInTypes
+
   WrapCache* = object
     hset*: HashSet[Hash]
     visited*: HashSet[cuint]

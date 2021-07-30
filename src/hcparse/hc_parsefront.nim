@@ -711,6 +711,10 @@ type
     cursors: Table[CxCursor, HashSet[NimType]]
     libs: Table[LibImport, HashSet[NimType]]
 
+  UsedGroups = object
+    inProcs: UsedSet
+    inTypes: UsedSet
+
 func mgetOrDefault*[K, V](table: var Table[K, V], key: K): var V =
   if key notin table:
     table[key] = default(V)
@@ -759,33 +763,37 @@ proc registerUse*(nimType: NimType, used: var UsedSet, conf: WrapConf) =
       registerUse(nimType.returnType, used, conf)
 
 
-proc registerUsedTypes*(genProc: GenProc, used: var UsedSet, conf: WrapConf) =
+proc registerUsedTypes*(
+    genProc: GenProc, used: var UsedSet, conf: WrapConf) =
+
   for arg in genProc.arguments:
     if not arg.isRaw:
       registerUse(arg.nimType, used, conf)
 
   registerUse(genProc.returnType, used, conf)
 
-proc registerUsedTypes*(entry: GenEntry, used: var UsedSet, conf: WrapConf) =
+proc registerUsedTypes*(
+    entry: GenEntry, used: var UsedGroups, conf: WrapConf) =
+
   case entry.kind:
     of gekEnum:
       discard
 
     of gekProc:
-      registerUsedTypes(entry.genProc, used, conf)
+      registerUsedTypes(entry.genProc, used.inProcs, conf)
 
     of gekObject:
       for field in entry.genObject.memberFields:
-        registerUse(field.fieldType, used, conf)
+        registerUse(field.fieldType, used.inTypes, conf)
 
       for meth in entry.genObject.memberMethods:
-        registerUsedTypes(meth, used, conf)
+        registerUsedTypes(meth, used.inProcs, conf)
 
       for nested in entry.genObject.nestedEntries:
         registerUsedTypes(nested, used, conf)
 
     of gekAlias:
-      registerUse(entry.genAlias.baseType, used, conf)
+      registerUse(entry.genAlias.baseType, used.inTypes, conf)
 
     of gekPass, gekImport, gekForward, gekEmpty:
       discard
@@ -801,7 +809,7 @@ proc updateImports*(
   # because you can't declare type again after defining it (I hope), so all
   # last type encounter will always be it's definition.
 
-  var usedApis: UsedSet # Set of cursors pointing to declarations for
+  var usedApis: UsedGroups # Set of cursors pointing to declarations for
   # different types used in the file entries (procedure argument and
   # return, field, global variable types).
 
@@ -814,7 +822,9 @@ proc updateImports*(
     fileMap: Table[LibImport, WrappedFile]
 
   for file in wrapped:
-    fileMap[conf.getSavePath(conf.getBaseFile(file), conf)] = file
+    let lib = conf.getSavePath(conf.getBaseFile(file), conf)
+    conf.dump lib
+    fileMap[lib] = file
 
   block registerImports:
     for file in wrapped:
@@ -823,7 +833,7 @@ proc updateImports*(
           base = conf.getBaseFile(file)
           user = conf.getSavePath(base, conf)
 
-        for typeCursor, typeSet in usedApis.cursors:
+        for typeCursor, typeSet in usedApis.inTypes.cursors: # usedApis.inTypes.cursors:
           let loc = typeCursor.getSpellingLocation()
           if loc.isSome():
             let
@@ -843,7 +853,7 @@ proc updateImports*(
 
       block libraryOverrideImports:
         let base = conf.getSavePath(conf.getBaseFile(file), conf)
-        for usedLib, typeSet in usedApis.libs:
+        for usedLib, typeSet in usedApis.inTypes.libs:
           if usedLib.isValid():
             let imp = conf.getImport(usedLib, base, false)
             for usedType in typeSet:
@@ -853,7 +863,9 @@ proc updateImports*(
                 usedType)
 
 
-  let groups = importGraph.findCycles(ignoreSelf = true).mergeCycleSets()
+  let groups = importGraph.findCycles().mergeCycleSets()
+
+  conf.dump groups.len()
 
   var
     allNodes = importGraph.nodeSet()
@@ -864,14 +876,21 @@ proc updateImports*(
       mergedTypes: seq[GenEntry]
       extraEntries: seq[GenEntry]
 
+    conf.info "---"
     for item in group:
       let lib = importGraph[item]
-      for entry in mitems(fileMap[lib].entries):
-        let (newDecl, extras) = entry.fragmentType()
-        mergedTypes.add newDecl
-        extraEntries.add extras
+      conf.debug lib
+      if lib in fileMap:
+        for entry in mitems(fileMap[lib].entries):
+          let (newDecl, extras) = entry.fragmentType()
+          mergedTypes.add newDecl
+          extraEntries.add extras
 
-      fileMap[lib].entries.add extraEntries
+        fileMap[lib].entries.add extraEntries
+
+      else:
+        conf.warn "Missing wrappers for", lib
+
 
 
 
