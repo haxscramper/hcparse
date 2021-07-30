@@ -46,12 +46,14 @@ proc wrapOperator*(
       it.name = "setFrom"
       it.icpp = &"(# = #)"
       it.kind = pkRegular
+      it.iinfo = currLInfo()
 
     of cxoNewOp, cxoDeleteOp:
       discard
 
     of cxoAsgnOp:
       it.icpp = &"(# {it.name} #)"
+      it.iinfo = currLInfo()
 
     of cxoArrayOp:
       let rtype = oper.cursor.retType()
@@ -66,8 +68,9 @@ proc wrapOperator*(
 
     of cxoInfixOp:
       it.icpp = &"({toCppNamespace(oper.ident)}(#, #))"
+      it.iinfo = currLInfo()
 
-      if oper.arguments.len == 1:
+      if oper.arguments.len < 2:
         result.addThis = true
 
     of cxoArrowOp:
@@ -81,21 +84,26 @@ proc wrapOperator*(
       it.name = "call"
       it.kind = pkRegular
       it.icpp = &"#(@)"
+      it.iinfo = currLInfo()
 
     of cxoDerefOp:
       it.name = "[]"
       it.icpp = &"(*#)"
+      it.iinfo = currLInfo()
 
     of cxoPrefixOp:
       it.icpp = &"({it.name}#)" # FIXME use scoped ident
+      it.iinfo = currLInfo()
 
     of cxoPostfixOp:
       it.icpp = &"(#{it.name})" # FIXME use scoped ident
+      it.iinfo = currLInfo()
 
     of cxoCommaOp:
       it.name = "commaOp"
       it.icpp = &"commaOp(@)"
       it.kind = pkRegular
+      it.iinfo = currLInfo()
 
     of cxoConvertOp:
       let restype = oper.cursor.retType().toNimType(conf, cache)
@@ -107,6 +115,9 @@ proc wrapOperator*(
         declType = ptkConverter
         kind = pkRegular
 
+
+      it.iinfo = currLInfo()
+
     of cxoUserLitOp:
       let restype = oper.cursor.retType().toNimType(conf, cache)
 
@@ -115,6 +126,9 @@ proc wrapOperator*(
         icpp = &"({oper.cursor}(@))"
         returnType = restype
         kind = pkRegular
+
+
+      it.iinfo = currLInfo()
 
   it.header = conf.makeHeader(oper.cursor, conf)
   result.decl = it
@@ -190,7 +204,6 @@ proc wrapProcedure*(
     if classifyOperator(pr, conf) notin {cxoNewOp, cxoDeleteOp}:
       let (decl, adt) = pr.wrapOperator(conf, cache)
       it = decl
-      it.iinfo = currLInfo()
       addThis = adt
 
     else:

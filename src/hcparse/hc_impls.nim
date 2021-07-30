@@ -131,6 +131,45 @@ proc contains*(dir: AbsDir, file: AbsFile): bool =
   else:
     return file[0 .. dir.high] == dir
 
+proc skip(cx: CxType): CxType =
+  result = cx
+  while true:
+    case result.kind:
+      of tkLValueReference, tkRValueReference, tkPointer:
+        result = result[]
+
+      else:
+        return
+
+proc ignoreTypeDecl*(conf: WrapConf, cxType: CxType): bool =
+  var decl = cxType.skip().getTypeDeclaration()
+  # conf.trace cxType, cxType.cxKind, decl, decl.kind
+  while decl.kind in ckTypeDeclKinds + { ckNamespace }:
+    result = conf.ignoreCursor(decl, conf)
+    # conf.info "Ignore decl ", decl, result
+    if result:
+      break
+
+    else:
+      decl = decl.getCursorSemanticParent()
+
+
+proc ignoreProcCursor*(
+  conf: WrapConf, cursor: CxCursor): bool {.logScope(conf.logger).} =
+  # conf.logger.enableInScopeIf("operator==" in $cursor)
+  # conf.dump cursor, cursor.kind
+  # conf.dump cursor.getSpellingLocation()
+
+  if cursor.kind in { ckFunctionDecl, ckMethod, ckFunctionTemplate }:
+    for argType in cursor.argTypes():
+      if conf.ignoreTypeDecl(argType):
+        return true
+
+    if conf.ignoreTypeDecl(cursor.retType()):
+      return true
+
+
+
 proc asIncludeFromDir*(
   cursor: CXCursor | AbsFile, conf: WrapConf, dir: AbsDir): string =
 
@@ -382,7 +421,6 @@ let baseCParseConf* = ParseConf(
   includePaths: getBuiltinHeaders(),
   globalFlags: @[]
 )
-
 
 let baseCppWrapConf* = WrapConf(
   isImportcpp: true,

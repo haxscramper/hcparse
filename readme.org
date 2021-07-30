@@ -1,166 +1,47 @@
-#+title: readme
+First of all - this project is not a finished command-line application like
+c2nim or nimterop, but rather a /framework/ for implementing custom wrapper
+scripts. It can be used as one-off tool that you can tweak manually, but it
+is mainly designed to provide *fully automatic* wrapper generators for
+cases where it is not realistically possible to do it by hand. Re-wrap
+whole Qt library on each patch release? Whole posix API? That's what this
+project tries to give you. Sophisiticated tool for tackling complex
+wrapping problems, with built-in support for documentation, nep-1 style
+guide and comprehensive collection of automatic code generation tools.
 
-Higher-level bindings for libclang in nim.
+It is an open secret that C and C++ libraries lack consistent styling, code
+policies and more. Sometimes exception are completely banned (or even
+simply unaccessible as in C case), different naming styles. Heavy reliance
+on the templates or OOP-style C++. All of that forces nim wrapper authors
+to spend more time in order to provide higher-level interfaces that take
+advantage of the rich nim features (~distinct~ types, exceptions, side
+effect tracking and ~enums~).
 
-** Installation
+Hcparse provides framework for adressing this problems in automated way,
+using user-provided or built-in tools, that allow you to
 
-#+begin_src bash
-nimble install hcparse
-#+end_src
-
-This package also requires libclang library installed. On most linux
-systems it comes with installation of clang compiler, so most likely
-you already have it.
-
-** Usage
-
-#+begin_src nim
-  import hcparse/libclang
-
-  # ...
-#+end_src
-
-** Links
-
-- [[https://github.com/haxscramper/hcparse][github]]
-- [[https://haxscramper.github.io/hcparse-doc/src/hcparse/libclang.html][libclang API wrapper documentation]]
-- [[https://haxscramper.github.io/hcparse-doc/wrap-examples.html][WIP wrapper examples - generated from unit tests]]
-- [[https://nimble.directory/pkg/hcparse][nimble package]]
-
-* Overview
-
-
-This readme provides high-level overview of libclang library and
-several helper functions. For comprehensive list of all available
-functions with documentation see [[https://haxscramper.github.io/hcparse-doc/src/hcparse/libclang.html][libclang API wrapper documentation]]
-and [[https://haxscramper.github.io/hcparse-doc/src/hcparse/libclang_utils.html][utils documentation]]
-
-# Documentation for helper functions <here> provided on top of raw libclang bindings.
-
-Libclang is a stable high-level C interface to clang. It provides
-facilities for parsing and introspection of C++ code - iterating
-through all AST elements, determining type of particular node, getting
-associated documentation comments and so on.
-
-For interaction with AST libclang mostly uses /visitors/ - C callback
-function (~{.cdecl.}~ annotation in nim) that don't provide a way to
-easily interact with surrounding scope (e.g. no closure or variable
-capture). In order to make creating visitors easier helper macro
-~makeVisitor~ was introduced - it takes care of all low-level details
-of creating callback functions itself and passing user data to
-callback via ~pointer~ type. It allows to capture external variables
-by reference.
-
-* As a C++ code wrapper tool
-
-This part of the readme is subject to change, and only provides high-level
-overview of the intended workflow.
-
-C/C++ library is wrapped as single nimble package with following structure
-
-#+begin_src text
-  <project>/
-    <project.nimble>
-    src/
-      <submodule 1> # submodules
-      ...
-      <submodule n>
-
-      <project.nim> # Main project file
-      <project>/
-        make_wrap.nim # Wrapper generator script
-        make_build.nim # Build script
-
-        <wrapped-file 1.nim> # generated wrapper files
-        ...
-        <wrapped-file n.nim>
-#+end_src
-
-~<project.nimble>~ contains optional ~after install~ task that performs
-build of the necessary C/C++ submodules. In it's simplest form task looks
-like this:
-
-#+begin_src nim
-after install:
-  exec("nim c -r <project>/src/build.nim")
-#+end_src
-
-* As a library for working with C++ code
-
-#+begin_src nim :exports both
-{.define(plainStdout).}
-import std/[decls], hmisc/other/[oswrap], hcparse
-
-let outfile = AbsFile("/tmp/example.cpp")
-outfile.writeFile """
-#include <iostream>
-
-/// Documentation comments for class
-/// Multiline comment
-class MyClass
-{
-public:
-  int field; ///< Field documentation
-  virtual void method() const = 0;
-  static const int static_field;
-  static int static_method();
-};
-
-/** This is a main function documenation comment */
-int main() {
-  std::cout << "Hello world\n";
-}
-"""
-
-let
-  unit = parseFile(outfile, opts = {})
-  topCursor = unit.getTranslationUnitCursor()
-
-echo unit.isNil
-echo topCursor.cxKind
-
-var functionNames: seq[string]
-topCursor.visitMainFile do: # Visit all ast elements from main translation unit
-  makeVisitor [unit, functionNames]: # Create visitor callback. All
-    # captured variables have to be explicitly declared in capture
-    # list. Two variables are implicitly injected into callback scope
-    # - `cursor` (current AST element being visited) and `parent` -
-    # parent node for cursor.
-    echo cursor.treeRepr(unit)
-    if cursor.cxKind == ckFunctionDecl:
-      functionNames.add $cursor
-
-    return cvrContinue
-
-echo "found functions: ", functionNames
-#+end_src
-
-#+RESULTS:
+- Convert 'out' arguments for C functions to nim ~tuple[]~ returns
+- Wrap 'raw' C procedures that return exit codes to raising ones
+- Declare callback-based override for C++ classes. No more need to inherit
+  from ~DelegatePainter~ just to override single method - you can just set
+  callback for it.
+- Naming fully compilant with nep-1 style guide. No more awkward
+  ~XMapRaised~ that can be confused with type name or ~unordered_set~
+- Declare overloads for all constructors, including aggregate
+  initialization and 'placement new', that makes it possible to reuse nim
+  memory management for C++ objects.
+- Convert 'macro enum groups' into full nim enums (~#define PAPI_OK 0~,
+  ~#define PAPI_EINVAL -1~)
+- Detect and solve import cycles caused by forward declarations and badly
+  structured header dependencies.
+- Support for default template parameters
+- Partial support with varying degree of control for complex C++ 'inner
+  typedefs'. Provide graceful fallback for some C++ templating features
+  that nim is unable to handle.
+- Extensive interoperability with [[https://github.com/haxscramper/haxdoc][haxdoc]] - adapt original documentation to
+  your wrappers. No longer user would have to dig through C++ docs in order
+  to make sense of what part of the wrapper they need.
 
 
-* Contribution & development
-
-Must-have todo things
-
-- [X] Add destructors/finalizers for clang objects - right now none of
-  the ~dispose*()~ functions are called. - works on nim devel, fails
-  on 1.2.6
-- [ ] Support additional annotations for generated documentation - you
-  should be able to add own footnotes for any function argument, enum
-  value, class etc.
-
-Future plans/goals
-
-- [ ] Provide convenient and stable API for interacting with libclang.
-  C API for clang is stable so it is safe to spend more time improving
-  user experience with the library without worrying about possible API
-  breakage.
-- [ ] Create /fully automatic/ binding generator for libtooling - it
-  has unstable, but much richer API, enabling full access to all
-  internal representation of C++ code, rewriting etc.
-- [ ] Maybe adopt some workarounds from [[https://github.com/foonathan/cppast][cppast]]?
-- [ ] Create bindings for libtooling
-- [ ] Use [[https://github.com/haxscramper/nimtrs][nimtrs]] to generate matcher API calls
-  http://clang.llvm.org/docs/LibASTMatchers.html
-- [ ] Use nimtrs to provide pattern-based rewriting rules for types.
-  Requires implementation of rewriting for differently-typed AST.
+NOTE: the project is still considered work-in-progress, but all of the
+features mentioned above have already been implemeneted at least in
+proof-of-concept quality.
