@@ -264,6 +264,15 @@ proc getSavePath*(conf: WrapConf, wrapped: WrappedFile): RelFile =
   else:
     result = conf.getSavePath(wrapped.baseFile, conf).toRelative()
 
+
+proc getLibSavePath*(conf: WrapConf, wrapped: WrappedFile): LibImport =
+  if wrapped.isGenerated:
+    result = conf.initLibImport(
+      wrapped.newFile.withoutExt().getstr().split("/"))
+
+  else:
+    result = conf.getSavePath(wrapped.baseFile, conf)
+
 proc getImport*(
     conf: WrapConf, dep, user: LibImport,
     isExternalImport: bool

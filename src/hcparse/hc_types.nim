@@ -1368,6 +1368,9 @@ func addIdent*(nimType: sink NimType, id: CScopedIdent): NimType =
 func initLibImport*(name: string, path: seq[string]): LibImport =
   LibImport(library: name, importPath: path)
 
+func initLibImport*(conf: WrapConf, path: seq[string]): LibImport =
+  LibImport(library: conf.wrapName, importPath: path)
+
 func hash*(nt: NimType): Hash =
   case nt.kind:
     of ctkIdent:

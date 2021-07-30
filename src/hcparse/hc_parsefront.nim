@@ -798,6 +798,9 @@ proc registerUsedTypes*(
     of gekPass, gekImport, gekForward, gekEmpty:
       discard
 
+proc getUsedTypes*(file: WrappedFile, conf: WrapConf): UsedGroups =
+  for e in file.entries:
+    e.registerUsedTypes(result, conf)
 
 proc updateImports*(
     wrapped: seq[WrappedFile],
@@ -835,7 +838,7 @@ proc updateImports*(
           base = conf.getBaseFile(file)
           user = conf.getSavePath(base, conf)
 
-        for typeCursor, typeSet in usedApis.inTypes.cursors: # usedApis.inTypes.cursors:
+        for typeCursor, typeSet in usedApis.inTypes.cursors:
           let loc = typeCursor.getSpellingLocation()
           if loc.isSome():
             let
@@ -877,7 +880,7 @@ proc updateImports*(
   for group in groups:
     var
       mergedFiles: seq[WrappedFile] = mapIt(group, fileMap[importGraph[it]])
-      mergedPaths: seq[LibImport] = mapIt(group, importGraph[it])
+      mergedPaths: string = mapIt(group, importGraph[it].importPath[^1]).sorted().join("_")
       mergedTypes: seq[GenEntry]
 
     conf.dump mergedPaths
@@ -892,13 +895,59 @@ proc updateImports*(
 
       file.entries.add recycle
 
+      block getProcImports:
+        let usedGroup = file.getUsedTypes(conf)
+        let base = conf.getBaseFile(file)
+        for typeCursor, _ in usedGroup.inProcs.cursors:
+          if typeCursor.getSpellingLocation().getSome(loc):
+            file.imports.incl conf.getImport(
+              dep = loc.file, user = base, false)
+
+        file.imports.incl conf.getImport(
+          dep = conf.initLibImport(@[mergedPaths]),
+          user = conf.getSavePath(base, conf),
+          false)
+
+        file.exports.incl mergedPaths
+
+        for usedLib, _ in usedGroup.inProcs.libs:
+          if usedLib.isValid():
+            file.imports.incl conf.getImport(
+              dep = usedLib, user = conf.getSavePath(base, conf), false)
+
+
     result.add mergedFiles
 
-    result.add WrappedFile(
-      entries: mergedTypes,
-      isGenerated: true,
-      newFile: RelFile("zzzz.nim"),
-      original: @[])
+    block fillMergedFile:
+      var merged =
+        WrappedFile(
+          entries: mergedTypes,
+          isGenerated: true,
+          newFile: RelFile(mergedPaths & ".nim"),
+          original: @[conf.getBaseFile(mergedFiles[0])])
+
+      var typeImports: HashSet[LibImport]
+      block getTypeImports:
+        let usedGroup = merged.getUsedTypes(conf)
+        for typeCursor, _ in usedGroup.inTypes.cursors:
+          if typeCursor.getSpellingLocation().getSome(loc):
+            typeImports.incl conf.getSavePath(loc.file, conf)
+
+        for usedLib, _ in usedGroup.inTypes.libs:
+          if usedLib.isValid():
+            typeImports.incl usedLib
+
+      let mergedLibs = group.mapIt(importGraph[it]).toHashSet()
+      for imp in typeImports:
+        if imp notin mergedLibs:
+          merged.imports.incl conf.getImport(
+            dep = imp,
+            user = getLibSavePath(conf, merged),
+            false)
+
+          merged.exports.incl imp.importPath[^1]
+
+      result.add merged
 
 
 
