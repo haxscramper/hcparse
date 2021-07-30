@@ -1776,7 +1776,6 @@ proc fragmentType*(entry: var GenEntry):
     of gekObject:
       for e in entry.genObject.memberMethods: result.extras.add e
       entry.genObject.memberMethods = @[]
-      result.newDecl.add entry
 
       for nested in mitems(entry.genObject.nestedEntries):
         if nested.kind in { gekEnum, gekObject, gekAlias }:
@@ -1788,7 +1787,8 @@ proc fragmentType*(entry: var GenEntry):
           result.extras.add nested
 
       entry.genObject.nestedEntries = @[]
-
+      result.newDecl.add entry
+      entry = GenEntry(kind: gekEmpty)
 
     else:
       discard

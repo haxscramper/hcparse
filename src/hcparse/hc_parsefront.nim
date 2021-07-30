@@ -800,8 +800,10 @@ proc registerUsedTypes*(
 
 
 proc updateImports*(
-    wrapped: var seq[WrappedFile],
-    conf: WrapConf, cache: var WrapCache): seq[WrappedFile] =
+    wrapped: seq[WrappedFile],
+    conf: WrapConf,
+    cache: var WrapCache
+  ): seq[WrappedFile] =
 
   # Collect all types into single wrapped entry type block. All duplicate
   # types (caused by forward declarations which is not really possible to
@@ -864,44 +866,76 @@ proc updateImports*(
 
 
   let groups = importGraph.findCycles().mergeCycleSets()
+  let clusteredNodes = groups.mapIt(toHashSet(importGraph[it])).foldl(union(a, b))
 
-  conf.dump groups.len()
+  # Pass files that were not directly affected
+  for file, wrapped in fileMap:
+    if file notin clusteredNodes:
+      result.add wrapped
 
-  var
-    allNodes = importGraph.nodeSet()
-
+  # Process all groups that formed circular imports
   for group in groups:
-    allNodes.excl group
     var
+      mergedFiles: seq[WrappedFile] = mapIt(group, fileMap[importGraph[it]])
+      mergedPaths: seq[LibImport] = mapIt(group, importGraph[it])
       mergedTypes: seq[GenEntry]
-      extraEntries: seq[GenEntry]
 
-    conf.info "---"
-    for item in group:
-      let lib = importGraph[item]
-      conf.debug lib
-      if lib in fileMap:
-        for entry in mitems(fileMap[lib].entries):
-          let (newDecl, extras) = entry.fragmentType()
-          mergedTypes.add newDecl
-          extraEntries.add extras
+    conf.dump mergedPaths
+    for file in mitems(mergedFiles):
+      var recycle: seq[GenEntry]
+      for entry in mitems(file.entries):
+        # Split all type declarations in the each file. Re-add procedure
+        # declarations back, add type declarations to the global list.
+        let (newDecl, extras) = entry.fragmentType()
+        recycle.add extras
+        mergedTypes.add newDecl
 
-        fileMap[lib].entries.add extraEntries
+      file.entries.add recycle
 
-      else:
-        conf.warn "Missing wrappers for", lib
+    result.add mergedFiles
+
+    result.add WrappedFile(
+      entries: mergedTypes,
+      isGenerated: true,
+      newFile: RelFile("zzzz.nim"),
+      original: @[])
 
 
 
+  when false:
+    conf.dump groups.len()
 
-  for path, file in mpairs(fileMap):
+    var
+      allNodes = importGraph.nodeSet()
+
     for group in groups:
-      let groupedNodes = toHashSet importGraph[group]
+      allNodes.excl group
+      var
+        mergedTypes: seq[GenEntry]
+        extraEntries: seq[GenEntry]
+
+      for item in group:
+        let lib = importGraph[item]
+        conf.debug lib
+        if lib in fileMap:
+          # for entry in mitems(fileMap[lib].entries):
+
+          fileMap[lib].entries.add extraEntries
+
+        else:
+          conf.warn "Missing wrappers for", lib
+
+
+
+
+    for path, file in mpairs(fileMap):
+      for group in groups:
+        let groupedNodes = toHashSet importGraph[group]
 
 
   cache.importGraph = importGraph
 
-  for file in mitems(wrapped, result):
+  for file in mitems(result):
     file.imports.incl initNimImportSpec(true, @["std", "bitops"])
     file.imports.incl initNimImportSpec(true, @[
       "hmisc", "wrappers", "wraphelp"])
@@ -938,16 +972,14 @@ proc wrapFiles*(
   result.add patchForward(genFiles, conf, cache)
 
   # Correct potential circular imports that resulted from incorrectly
-  # written import converters.
+  # written import converters. This stage processes all of the files, and
+  # returns new list (with some passthrough elements)
   #
   # - WHY :: Things like this are almost un-debuggable, and it is easier to
   #   just perform additional cycle detection, rather than make user deal
   #   with strange failures that were caused by complicated internal
   #   machinery.
-  result.add updateImports(genFiles, conf, cache)
-
-  # Add generated wrapper files themselves
-  result.add genFiles
+  result = updateImports(genFiles, conf, cache)
 
 
 proc wrapFile*(
