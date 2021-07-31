@@ -1056,9 +1056,23 @@ proc declGenParams*(part: CName): seq[CxCursor] =
     of ckFunctionDecl, ckFunctionTemplate,
        ckDestructor, ckConstructor, ckMethod,
        ckClassTemplate, ckStructDecl:
+
       for param in part.cursor:
         if param.kind in { ckTemplateTypeParameter }:
           result.add param
+
+        elif param.kind in {
+          ckTypedefDecl, ckTypeAliasDecl,
+          ckBaseSpecifier, ckAccessSpecifier,
+          ckMethod, ckFunctionTemplate,
+          ckConstructor, ckDestructor,
+          ckVarDecl, ckFieldDecl,
+          ckNamespaceRef
+        }:
+          discard
+
+        else:
+          discard
 
     else:
       discard
@@ -1361,6 +1375,10 @@ func newNimType*(
   result = newNimType(name, cxType, isParam)
   result.genericParams.add genericParams
 
+func withLib*(ntype: sink NimType, libImport: LibImport): NimType =
+  result = ntype
+  result.typeImport = libImport
+
 func addIdent*(nimType: sink NimType, id: CScopedIdent): NimType =
   result = nimType
   result.fullIdent = some id
@@ -1423,7 +1441,9 @@ func `$`*(lib: LibImport): string =
 
   result &= lib.importPath.join("/")
 
-func libImport*(conf: WrapConf): LibImport = initLibImport(conf.wrapName, @[])
+func libImport*(conf: WrapConf, path: seq[string]): LibImport =
+  initLibImport(conf.wrapName, path)
+
 func isValid*(lib: LibImport): bool = lib.importPath.len > 0
 
 func toRelative*(lib: LibImport): RelFile =
@@ -1569,9 +1589,29 @@ proc isOperator*(cx: CXCursor): bool =
   (not ($cx).validIdentifier())
 
 
+proc cxType*(arg: CArg): CxType =
+  if arg.isRaw:
+    result = arg.cursor.cxType()
+
+  else:
+    if arg.nimType.fromCxType:
+      result = arg.nimType.cxType
+
+    elif arg.nimType.original.isSome():
+      result = arg.nimType.original.get()
+
+    else:
+      raise newArgumentError(
+        "Cannot get argument type - it is not raw,",
+        "it's type is not `fromNimType`,",
+        "`original` type is not set")
+
 proc classifyOperator*(cd: CDecl, conf: WrapConf): CXOperatorKind =
   ## Classify C++ operator declaration
   assert cd.isOperator
+  let inType = cd.cursor.
+    getCursorSemanticParent().cxKind() in ckTypeDeclKinds
+
   let name = cd.lastName(conf).dropPrefix("operator")
   case name:
     of "=":
@@ -1586,19 +1626,25 @@ proc classifyOperator*(cd: CDecl, conf: WrapConf): CXOperatorKind =
       cxoArrayOp
 
     of "-", "+":
-      if cd.arguments.len == 1:
-        cxoPrefixOp
-
-      else:
+      if cd.arguments.len >= 2 or (cd.arguments.len == 1 and inType):
         cxoInfixOp
 
+      else:
+        cxoPrefixOp
+
+    of "++", "--":
+      # NOTE this is an operator implementation, so we are not (i hope)
+      # dropping information about prefi/postfix calls
+      if cd.arguments.len == 1 and
+         $cd.arguments[0].cxType() == "int":
+        cxoPostfixOp
+
+      else:
+        cxoPrefixOp
+
     of "/",
-       "++", "--", # NOTE this is an operator implementation, so we are
-                  # not (i hope) dropping information about
-                  # prefi/postfix calls
        "<<", ">>", "==", "!=", "&&", "||",
-       "%", "^", "&", "|", "<", ">", "<=", ">="
-         :
+       "%", "^", "&", "|", "<", ">", "<=", ">=":
       cxoInfixOp
 
     of "*": # NOTE this heuristics might not be valid in all cases.

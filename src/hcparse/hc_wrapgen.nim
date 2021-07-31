@@ -94,10 +94,15 @@ proc wrapOperator*(
     of cxoPrefixOp:
       it.icpp = &"({it.name}#)" # FIXME use scoped ident
       it.iinfo = currLInfo()
+      if oper.arguments.len == 0:
+        result.addThis = true
 
     of cxoPostfixOp:
       it.icpp = &"(#{it.name})" # FIXME use scoped ident
       it.iinfo = currLInfo()
+
+      if oper.arguments.len == 1:
+        result.addThis = true
 
     of cxoCommaOp:
       it.name = "commaOp"
@@ -198,10 +203,12 @@ proc wrapProcedure*(
 
   it.genParams = conf.genParamsForIdent(pr.ident, cache)
 
+  var opKind: CxOperatorKind
   result.canAdd = true
   if pr.isOperator:
     # HACK temporary workaround for `new` and `delete` operator handing
-    if classifyOperator(pr, conf) notin {cxoNewOp, cxoDeleteOp}:
+    var opKind = classifyOperator(pr, conf)
+    if opKind notin {cxoNewOp, cxoDeleteOp}:
       let (decl, adt) = pr.wrapOperator(conf, cache)
       it = decl
       addThis = adt
@@ -265,7 +272,7 @@ proc wrapProcedure*(
       pr.cursor.isConstMethod.tern(nvdVar, nvdLet)
     )
 
-  for arg in pr.arguments:
+  for argIdx, arg in pr.arguments:
     var argType = arg.cursor.cxType().toNimType(conf, cache)
 
     if arg.cursor.cxType().isEnum():
@@ -296,12 +303,13 @@ proc wrapProcedure*(
     else:
       # FIXME determine and implement edge case handling for procvar
       # arguments
-      discard
+      conf.warn "Temporarily droppping procvar arguemtn handling"
 
 
-    var newArg = initCArg(arg.name, argType)
-    setDefaultForArg(newArg, arg.cursor, conf, cache)
-    it.arguments.add newArg
+    if not (opKind == cxoPostfixOp and argIdx > 0):
+      var newArg = initCArg(arg.name, argType)
+      setDefaultForArg(newArg, arg.cursor, conf, cache)
+      it.arguments.add newArg
 
   if pr.cursor.isVariadic() == 1:
     it.pragma.add newPIdent("varargs")

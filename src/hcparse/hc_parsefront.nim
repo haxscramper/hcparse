@@ -672,8 +672,7 @@ proc patchForward*(
             # Forward declarations that were never defined in any of the
             # header files (pointer to implementation, opaque handlers
             # etc.)
-            if entry.cdecl().cursor.cxKind() in {
-              ckStructDecl, ckClassDecl, ckUnionDecl}:
+            if entry.cdecl().cursor.cxKind() in ckTypeDeclKinds:
               # Creating new wrapped entry for forward declaration.
               # `wrapObject` won't create any constructor procedures for
               # this type of object, so it can only be created using
@@ -682,13 +681,17 @@ proc patchForward*(
               var cdecl =
                 case cd.cursor.cxKind():
                   of ckStructDecl: CDecl(kind: cdkStruct, ident: cd.ident)
-                  of ckClassDecl: CDecl(kind: cdkClass, ident: cd.ident)
                   of ckUnionDecl: CDecl(kind: cdkUnion, ident: cd.ident)
+                  of ckClassDecl, ckClassTemplate:
+                    CDecl(kind: cdkClass, ident: cd.ident)
                   else:
                     raise newUnexpectedKindError(cd.cursor)
 
               cdecl.cursor = cd.cursor
               cdecl.icpp = cd.ident.toCppNamespace()
+              cache.setParamsForType(
+                conf, cd.ident, conf.genParamsForIdent(cd.ident, cache))
+              # cdecl.genParams = conf.genParamsForIdent(cd.ident, cache)
               if not conf.isImportCpp:
                 case cdecl.kind:
                   of cdkUnion: cdecl.icpp = "union " & cdecl.icpp

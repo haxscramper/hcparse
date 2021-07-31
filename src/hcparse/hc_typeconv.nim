@@ -296,6 +296,14 @@ proc defaultTypeParameter*(
 
 proc setParamsForType*(
     cache: var WrapCache, conf: WrapConf,
+    ident: CScopedIdent, params: seq[NimType]
+  ) =
+
+  if params.len > 0:
+    cache.paramsForType[ident.mapIt(getName(it))] = params
+
+proc setParamsForType*(
+    cache: var WrapCache, conf: WrapConf,
     ident: CScopedIdent, params: seq[CxCursor]
   ) =
   ## Set or update default template type parameters for type `ident`
@@ -321,10 +329,7 @@ proc setParamsForType*(
   # ```
 
   if params.len > 0:
-    var key: seq[string]
-    for part in ident:
-      key.add getName(part)
-
+    let key: seq[string] = ident.mapIt(getName(it))
     if key notin cache.paramsForType:
       cache.paramsForType[key] = @[]
 
@@ -348,6 +353,7 @@ proc setParamsForType*(
 
         if default.isSome():
           list[idx].defaultType = default
+
 
 
 proc replacePartials*(
@@ -381,6 +387,8 @@ proc getPartialParams*(
   ): seq[NimType] =
   ## Return defaulted generic parameters for partially instantiated
   ## template type
+
+  # let log = $partial.nimName in ["_List_iterator", "StdListIterator"]
 
   if partial.fromCxType or partial.fullIdent.isSome():
     let name = partial.fullScopedIdent().typeName()
@@ -427,6 +435,7 @@ proc toNType*(
     noDefaulted: seq[CxCursor] = @[]
   ): NType[PNode] =
 
+
   proc aux(nimType: NimType, cache: var WrapCache): NType[PNode] =
     if isNil(nimType):
       result = newPType("void")
@@ -434,6 +443,7 @@ proc toNType*(
     else:
       case nimType.kind:
         of ctkIdent:
+          assert nimType.nimName.len > 0
           result = newPType(nimType.nimName)
           for param in nimType.genericParams:
             result.add aux(param, cache)
@@ -747,9 +757,17 @@ proc genParamsForIdent*(
   ## start of the identifier. So for `std::basic_string<_CharT, ...>::stol`
   ## it would return `_CharT`
 
+  let log = "_List_iterator" in $scoped
+  if log: conf.info scoped
+
   for part in scoped:
     for param in part.declGenParams():
-      result.add newNimType($param, isParam = true)
+      let newt = newNimType($param, isParam = true)
+      result.add newt
+      if log: conf.dump newt
+
+  if log:
+    conf.dump result
 
 
 func fixTypeParams*(nt: var NimType, params: seq[NimType]) =

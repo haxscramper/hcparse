@@ -584,7 +584,17 @@ proc visitCursor*(
     cursor: CXCursor, parent: CScopedIdent,
     conf: WrapConf, lastTypeDecl: var CDecl,
     cache: var WrapCache
-  ): tuple[decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]] =
+  ): tuple[decls: seq[CDecl],
+           recurse: bool,
+           includes: seq[IncludeDep]] =
+# {.logScope(conf.logger).} =
+
+  # conf.logger.enableInScopeIf("valarray" in $cursor)
+
+  # conf.dump cursor, cursor.kind
+  # conf.dump cursor.getSpellingLocation()
+  # conf.dump cursor.isForward()
+  # conf.trace cursor.treeRepr()
 
   const classDeclKinds = {
     ckClassDecl, ckClassTemplate, ckUnionDecl,
