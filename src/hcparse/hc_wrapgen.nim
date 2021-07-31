@@ -596,46 +596,41 @@ proc wrapAlias*(
 
     var maxIdx = 0
     for idx, param in al.cursor.cxType().templateParams():
-      baseType.genericParams.add param.toNimType(conf, cache)
+      baseType.genericParams[idx] = param.toNimType(conf, cache)
       maxIdx = idx
 
-    baseType.genericParams.add baseType.getPartialParams(
-      conf, cache, defaulted = true)
+    for idx in (maxIdx + 1) ..< baseType.genericParams.len:
+      newAlias.genericParams.add baseType.genericParams[idx]
 
-    if false: # TEMP need to find a real-world use-case to correctly handle
-              # this, disabled for now.
-      if aliasof.getNumTemplateArguments() > 0:
-        let required =
-          aliasof.getTypeDeclaration().
-          getSpecializedCursorTemplate().
-          requiredGenericParams()
+    conf.dump baseType
+    baseType.genericParams.add baseType.getPartialParams(conf, cache, defaulted = true)
+    conf.dump baseType
 
-        # WARNING HACK - ignore all template parameters that /might/ be
-        # defaulted - i.e. only ones that *must* be specified (not defaulted in
-        # declaration) are included. Better alias handling is necessary, for
-        # now I just drop 'unnecessary' parts.
-        baseType.genericParams = baseType.genericParams[
-          0 ..< min(required.len(), baseType.genericParams.len())]
+    # if aliasof.getNumTemplateArguments() > 0:
+    #   let required =
+    #     aliasof.getTypeDeclaration().
+    #     getSpecializedCursorTemplate().
+    #     requiredGenericParams()
 
-        for param in mitems(baseType.genericParams):
-          param.isParam = true
+    #   # WARNING HACK - ignore all template parameters that /might/ be
+    #   # defaulted - i.e. only ones that *must* be specified (not defaulted in
+    #   # declaration) are included. Better alias handling is necessary, for
+    #   # now I just drop 'unnecessary' parts.
+    #   baseType.genericParams = baseType.genericParams[
+    #     0 ..< min(required.len(), baseType.genericParams.len())]
+
+    #   for param in mitems(baseType.genericParams):
+    #     param.isParam = true
 
     fixTypeParams(baseType, newAlias.genericParams)
 
-    if baseType.hasUnexposed():
-      conf.debug al.cursor.treeRepr()
-      conf.debug aliasof.lispRepr()
-
-      raiseImplementError("Found unexposed type")
-
-    else:
-      # NOTE ignore `typedef struct` in C
-      result.add GenAlias(
-        iinfo: currLInfo(),
-        isDistinct: conf.isDistinct(al.ident, conf, cache),
-        newAlias: newAlias,
-        baseType: baseType,
-        cdecl: al)
+    # NOTE ignore `typedef struct` in C
+    result.add GenAlias(
+      iinfo: currLInfo(),
+      isDistinct: conf.isDistinct(al.ident, conf, cache),
+      newAlias: newAlias,
+      baseType: baseType,
+      cdecl: al)
 
 proc getParentFields*(
     inCursor: CXCursor, obj: PObjectDecl,
@@ -1416,6 +1411,7 @@ proc toNNode*(
 
 proc toNNode*(
     gen: GenAlias, conf: WrapConf, cache: var WrapCache): AliasDecl[PNode] =
+
   result = AliasDecl[PNode](
     iinfo: gen.iinfo,
     docComment: gen.docComment.join("\n"),

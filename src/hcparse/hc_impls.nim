@@ -321,12 +321,17 @@ proc getImport*(
     result = initImportSpec(dep.library & dep.importPath)
 
   else:
-    let (pDep, pUser) = (dep.asImport(), user.asImport())
-    let (depth, parts) = importSplit(
-      conf.nimOutDir / pUser,
-      conf.nimOutDir / pDep)
+    if dep.library == conf.wrapName or
+       dep.library.len == 0:
+      let (pDep, pUser) = (dep.asImport(), user.asImport())
+      let (depth, parts) = importSplit(
+        conf.nimOutDir / pUser,
+        conf.nimOutDir / pDep)
 
-    result = initImportSpec(parts, depth)
+      result = initImportSpec(parts, depth)
+
+    else:
+      result = initImportSpec(dep.importPath)
 
 
 proc getImport*(

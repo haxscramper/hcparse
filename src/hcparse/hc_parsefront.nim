@@ -834,6 +834,13 @@ proc updateImports*(
     conf.dump lib
     fileMap[lib] = file
 
+  proc isSelfImport(save: LibImport, imp: NimImportSpec): bool =
+    imp.isRelative and
+    imp.relativeDepth == 0 and
+    imp.importPath.len == 1 and
+    imp.importPath[^1] == save.importPath[^1]
+
+
   block registerImports:
     for file in wrapped:
       block cursorBasedImportrs:
@@ -848,11 +855,7 @@ proc updateImports*(
               dep = conf.getSavePath(loc.get().file, conf)
               imp = conf.getImport(loc.get().file, base, false)
 
-            if not (
-              imp.isRelative and
-              imp.relativeDepth == 0 and
-              imp.importPath[^1] == conf.getSavePath(base, conf).importPath[^1]
-            ):
+            if not isSelfImport(user, imp):
               for item in typeSet:
                 importGraph.addEdge(
                   importGraph.addOrGetNode(user),
@@ -874,10 +877,33 @@ proc updateImports*(
   let groups = importGraph.findCycles().mergeCycleSets()
   let clusteredNodes = groups.mapIt(toHashSet(importGraph[it])).foldl(union(a, b))
 
+
+  proc addImports(file: var WrappedFile, usedGroup: UsedSet) =
+    let
+      base = conf.getBaseFile(file)
+      save = conf.getSavePath(base, conf)
+
+    for typeCursor, _ in usedGroup.cursors:
+      if typeCursor.getSpellingLocation().getSome(loc):
+        let imp = conf.getImport(dep = loc.file, user = base, false)
+        if not isSelfImport(save, imp):
+          file.imports.incl imp
+
+    for usedLib, _ in usedGroup.libs:
+      if usedLib.isValid():
+        let imp = conf.getImport(
+          dep = usedLib, user = conf.getSavePath(base, conf), false)
+        if not isSelfImport(save, imp):
+          file.imports.incl imp
+
   # Pass files that were not directly affected
-  for file, wrapped in fileMap:
+  for file, wrapped in mpairs(fileMap):
     if file notin clusteredNodes:
+      let used = wrapped.getUsedTypes(conf)
+      wrapped.addImports used.inProcs
+      wrapped.addImports used.inTypes
       result.add wrapped
+
 
   # Process all groups that formed circular imports
   for group in groups:
@@ -901,10 +927,8 @@ proc updateImports*(
       block getProcImports:
         let usedGroup = file.getUsedTypes(conf)
         let base = conf.getBaseFile(file)
-        for typeCursor, _ in usedGroup.inProcs.cursors:
-          if typeCursor.getSpellingLocation().getSome(loc):
-            file.imports.incl conf.getImport(
-              dep = loc.file, user = base, false)
+
+        file.addImports usedGroup.inProcs
 
         file.imports.incl conf.getImport(
           dep = conf.initLibImport(@[mergedPaths]),
@@ -912,11 +936,6 @@ proc updateImports*(
           false)
 
         file.exports.incl mergedPaths
-
-        for usedLib, _ in usedGroup.inProcs.libs:
-          if usedLib.isValid():
-            file.imports.incl conf.getImport(
-              dep = usedLib, user = conf.getSavePath(base, conf), false)
 
 
     result.add mergedFiles
@@ -951,39 +970,6 @@ proc updateImports*(
           merged.exports.incl imp.importPath[^1]
 
       result.add merged
-
-
-
-  when false:
-    conf.dump groups.len()
-
-    var
-      allNodes = importGraph.nodeSet()
-
-    for group in groups:
-      allNodes.excl group
-      var
-        mergedTypes: seq[GenEntry]
-        extraEntries: seq[GenEntry]
-
-      for item in group:
-        let lib = importGraph[item]
-        conf.debug lib
-        if lib in fileMap:
-          # for entry in mitems(fileMap[lib].entries):
-
-          fileMap[lib].entries.add extraEntries
-
-        else:
-          conf.warn "Missing wrappers for", lib
-
-
-
-
-    for path, file in mpairs(fileMap):
-      for group in groups:
-        let groupedNodes = toHashSet importGraph[group]
-
 
   cache.importGraph = importGraph
 
