@@ -88,18 +88,19 @@ proc toScopedIdent*(cursor: CXCursor): CScopedIdent =
 
 
 proc fullScopedIdent*(
+    conf: WrapConf,
     cxtype: CXType, filterInline: bool = true, withType: bool = true):
   CScopedIdent =
 
-  for cursor in getTypeNamespaces(cxtype, filterInline, withType):
+  for cursor in conf.getTypeNamespaces(cxtype, filterInline, withType):
     result.add toCName(cursor)
 
-proc fullScopedIdent*(nimType: NimType): CSCopedIdent =
+proc fullScopedIdent*(conf: WrapConf, nimType: NimType): CSCopedIdent =
   if nimType.fullIdent.isSome():
     nimType.fullIdent.get()
 
   else:
-    nimType.cxType.fullScopedIdent()
+    conf.fullScopedIdent(nimType.cxType)
 
 
 
@@ -147,12 +148,12 @@ proc namespacedName*(decl: CxCursor, conf: WrapConf): string =
   ## - EXAMPLE :: Given `namespace nsp { struct Str{}; }` and cursor that
   ##   points to the `Str` /declaration/ it should return
   assertKind(decl, ckTypeDeclKinds)
-  decl.getSemanticNamespaces().namespacedName(conf)
+  conf.getSemanticNamespaces(decl).namespacedName(conf)
 
 proc namespacedName*(cxtype: CxType, conf: WrapConf): string =
   ## Return fully qualified namespaced name for a type based on the type
   ## instance.
-  cxtype.getTypeNamespaces().namespacedName(conf)
+  conf.getTypeNamespaces(cxtype).namespacedName(conf)
 
 proc newNimType*(
     conf: WrapConf,
@@ -169,36 +170,17 @@ proc isComplexType*(
 
   result = false
   case cxType.cxKind():
-    of tkLValueReference, tkPointer, tkRValueReference:
-      result = conf.isComplexType(cxType[], cache)
-
     of tkTypedef:
-      let log = "size_type" in $cxType
-
-      let parents = decl.getSemanticNamespaces()
+      let parents = conf.getSemanticNamespaces(decl)
 
       if anyIt(parents, it.kind in ckTypeDeclKinds):
         cache.complexCache[decl] = none(NimType)
         return true
 
-      if log:
-        conf.dump cxType
-        conf.dump cxType.cxKind()
-        conf.dump decl.getSpellingLocation()
-        conf.dump decl.treeRepr()
-        conf.dump decl.getSemanticNamespaces()
-
       for part in decl:
         if part.kind == ckTypeRef:
           let ptype = part.cxType()
           let complex = conf.isComplexType(ptype, cache)
-          if log:
-            conf.debug(
-              ptype.getTypeDeclaration(),
-              ptype.getTypeDeclaration().cxKind())
-
-            conf.debug ptype, ptype.cxKind()
-
           if complex:
             conf.notice cxType, "has complex type part", part
 
@@ -206,7 +188,11 @@ proc isComplexType*(
       if decl.cxKind() notin ckTypeDeclKinds + { ckNoDeclFound }:
         conf.debug cxType, cxType.cxKind(), decl.cxKind()
 
-    of tkPodKinds, tkRecord, tkEnum, tkElaborated:
+    of tkPodKinds, tkRecord, tkEnum, tkElaborated,
+       # Can't be complx
+       tkLValueReference, tkPointer, tkRValueReference:
+       # Pointee can be complex, but that's a problem for `toNimType`
+
       discard
 
     of tkDependentSizedArray:
@@ -281,7 +267,7 @@ proc defaultTypeParameter*(
         let
           cxtype = param.cxType()
           def = param.getCursorDefinition()
-          semspaces = def.getSemanticNamespaces()
+          semspaces = conf.getSemanticNamespaces(def)
 
         result = conf.newNimType(semSpaces, cxtype)
         inc idx
@@ -388,10 +374,8 @@ proc getPartialParams*(
   ## Return defaulted generic parameters for partially instantiated
   ## template type
 
-  # let log = $partial.nimName in ["_List_iterator", "StdListIterator"]
-
   if partial.fromCxType or partial.fullIdent.isSome():
-    let name = partial.fullScopedIdent().typeName()
+    let name = conf.fullScopedIdent(partial).typeName()
 
     if name in cache.paramsForType:
       let params = cache.paramsForType[name]
@@ -544,7 +528,8 @@ proc typeNameForScoped*(
 proc isMutableRef*(cxtype: CXType): bool =
   case cxType.cxKind:
     of tkLValueReference, tkRValueReference:
-      return not (cxType.isConstQualifiedType() == 0)
+      return not cxType.isConstQualified()
+
 
     of tkTypeDef:
       # TODO implement mutability checking
@@ -663,8 +648,13 @@ proc toNimType*(
       )
 
     of tkLValueReference:
-      mutable = cxType.isMutableRef()
+      # NOTE this implementation does not work as expected, becuase `const
+      # T&` is not a const-qulified type.
+      #
+      # mutable = not cxType.isConstQualified()
+      mutable = not startsWith($cxType, "const")
       special = ctskLValueRef
+
       toNimType(cxType[], conf, cache)
 
     of tkRValueReference: # WARNING I'm not 100% sure this is correct
@@ -757,17 +747,10 @@ proc genParamsForIdent*(
   ## start of the identifier. So for `std::basic_string<_CharT, ...>::stol`
   ## it would return `_CharT`
 
-  let log = "_List_iterator" in $scoped
-  if log: conf.info scoped
-
   for part in scoped:
     for param in part.declGenParams():
       let newt = newNimType($param, isParam = true)
       result.add newt
-      if log: conf.dump newt
-
-  if log:
-    conf.dump result
 
 
 func fixTypeParams*(nt: var NimType, params: seq[NimType]) =

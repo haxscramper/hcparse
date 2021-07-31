@@ -857,41 +857,37 @@ proc getName*(cn: CName): string =
 
 
 proc getSemanticNamespaces*(
-    parent: CXCursor, filterInline: bool = true, withType: bool = true
+    conf: WrapConf, parent: CXCursor, filterInline: bool = true, withType: bool = true
   ): seq[CXCursor] =
   ## Get list of semantic namespaces enclosing cursor.
   ##
   ## - @arg{filterInline} :: Drop inline namespaces if encountered
   ## - @arg{withType} :: Include original cursor in the declaration list
 
-  # info "Semantic namespaces for", parent
-
-  var parent = parent
-
   if withType:
     result.add parent
 
-  parent = parent.getCursorSemanticParent()
-
-  # info parent
-
-  while parent.cxKind() in ckTypeDeclKinds + {ckNamespace}:
-    # TEST might be necessary to add templated namespacess
-    if filterInline and (parent.isInlineNamespace() == 1):
-      discard
-    else:
-      result.add parent
-
+  if parent.cxKind != ckNoDeclFound:
+    var parent = parent
     parent = parent.getCursorSemanticParent()
-    # info parent.cxKind()
 
-  reverse(result)
+    while parent.cxKind() in ckTypeDeclKinds + {ckNamespace}:
+      # TEST might be necessary to add templated namespacess
+      if filterInline and (parent.isInlineNamespace() == 1):
+        discard
+
+      else:
+        result.add parent
+
+      parent = parent.getCursorSemanticParent()
+
+    reverse(result)
 
 
 
 
 proc getTypeNamespaces*(
-    cxtype: CXType, filterInline: bool = true, withType: bool = true
+    conf: WrapConf, cxtype: CXType, filterInline: bool = true, withType: bool = true
   ): seq[CXCursor] =
   ## Return list of parent namespaces for given type `cxtype`.
   ##
@@ -900,16 +896,17 @@ proc getTypeNamespaces*(
 
   var parent = cxtype.getTypeDeclaration()
 
-  result = getSemanticNamespaces(
+  result = conf.getSemanticNamespaces(
     parent, filterInline = filterInline, withType = withType)
 
-proc findSemParent*(cxType: CxType, kind: set[CxCursorKind]): CxCursor =
-  rfindByKind(cxType.getTypeNamespaces(), kind)[1]
+proc findSemParent*(conf: WrapConf, cxType: CxType, kind: set[CxCursorKind]): CxCursor =
+  rfindByKind(conf.getTypeNamespaces(cxType), kind)[1]
 
 proc findSemParentFull*(
+    conf: WrapConf,
     cxType: CxType, kind: set[CxCursorKind]): seq[CxCursor] =
 
-  let names = cxType.getTypeNamespaces()
+  let names = conf.getTypeNamespaces(cxType)
   names[0 .. rfindByKind(names, kind)[0]]
 
 proc requiredGenericParams*(cursor: CXCursor): seq[CXCursor] =
@@ -957,7 +954,7 @@ proc toCppNamespace*(
 
   result = buf.join("::")
 
-proc toHaxdocType*(cxtype: CXType): JsonNode =
+proc toHaxdocType*(conf: WrapConf, cxtype: CXType): JsonNode =
   case cxtype.cxKind():
     of tkBool, tkInt, tkVoid, tkUInt, tkLongLong, tkULongLong,
        tkDouble, tkULong, tkUChar, tkChar16, tkChar32, tkWChar,
@@ -969,12 +966,12 @@ proc toHaxdocType*(cxtype: CXType): JsonNode =
       result = %{
         "kind": %"Ident",
         "name": %"ptr",
-        "genParms": %[toHaxdocType(cxtype[])]
+        "genParms": %[conf.toHaxdocType(cxtype[])]
       }
 
     of tkElaborated, tkRecord, tkEnum:
       var spaces = newJArray()
-      for name in cxtype.getTypeNamespaces(withType = false):
+      for name in conf.getTypeNamespaces(cxType, withType = false):
         spaces.add %($name)
 
       result = %{
@@ -991,15 +988,15 @@ proc toHaxdocType*(cxtype: CXType): JsonNode =
         "name": %"array",
         "genParms": %[
           %{"kind": %"Value", "value": %cxtype.getNumElements()},
-          toHaxdocType(cxtype.getElementType())]}
+          conf.toHaxdocType(cxtype.getElementType())]}
 
     of tkFunctionProto:
       result = %{
         "kind": %"Proc",
-        "returnType": cxtype.getResultType().toHaxdocType(),
+        "returnType": conf.toHaxdocType(cxtype.getResultType()),
         "arguments": %cxtype.argTypes.mapIt(%{
           "ident": %"",
-          "identType": toHaxdocType(it)
+          "identType": conf.toHaxdocType(it)
         })
       }
 
@@ -1012,7 +1009,7 @@ const ckProcEntryKinds* = {
   ckConversionFunction
 }
 
-proc toHaxdocJson*(ns: CScopedIdent): JsonNode =
+proc toHaxdocJson*(conf: WrapConf, ns: CScopedIdent): JsonNode =
   result = newJArray()
 
   for part in ns:
@@ -1045,7 +1042,7 @@ proc toHaxdocJson*(ns: CScopedIdent): JsonNode =
     identPart["kind"] = kind
 
     if part.cursor.kind in ckProcEntryKinds:
-      identPart["procType"] = part.cursor.cxType().toHaxdocType()
+      identPart["procType"] = conf.toHaxdocType(part.cursor.cxType())
 
     result.add identPart
 
@@ -1088,7 +1085,9 @@ proc reconst*(cxType: string): string =
     result = cxType
 
 proc toHaxdocIdentType*(
-  cxtype: CXType, procname: string = "proc"): string =
+    conf: WrapConf,
+    cxtype: CXType, procname: string = "proc"): string =
+
   case cxtype.cxKind():
     of tkBool, tkInt, tkVoid, tkUInt, tkLongLong, tkULongLong,
        tkDouble, tkULong, tkUChar, tkChar16, tkChar32, tkWChar,
@@ -1109,25 +1108,25 @@ proc toHaxdocIdentType*(
         result = "const[" & result & "]"
 
     of tkPointer:
-      result = "ptr[" & toHaxdocIdentType(cxtype[]) & "]"
+      result = "ptr[" & conf.toHaxdocIdentType(cxtype[]) & "]"
 
     of tkLValueReference:
-      result = "lvref[" & toHaxdocIdentType(cxType[]) & "]"
+      result = "lvref[" & conf.toHaxdocIdentType(cxType[]) & "]"
 
     of tkRValueReference:
-      result = "rvref[" & toHaxdocIdentType(cxType[]) & "]"
+      result = "rvref[" & conf.toHaxdocIdentType(cxType[]) & "]"
 
     of tkElaborated, tkRecord, tkEnum:
-      result = cxtype.getTypeNamespaces().mapIt($it).join("::")
+      result = conf.getTypeNamespaces(cxType).mapIt($it).join("::")
 
     of tkConstantArray:
-      result = &"array[{cxtype.getNumElements()}, {toHaxdocIdentType(cxtype.getElementType())}]"
+      result = &"array[{cxtype.getNumElements()}, {conf.toHaxdocIdentType(cxtype.getElementType())}]"
 
     of tkFunctionProto:
       result = &[
         procname, "(",
-        cxtype.argTypes.mapIt(toHaxdocIdentType(it)).join(", "),
-        "): ", cxtype.getResultType().toHaxdocIdentType()
+        cxtype.argTypes.mapIt(conf.toHaxdocIdentType(it)).join(", "),
+        "): ", conf.toHaxdocIdentType(cxtype.getResultType())
       ]
 
     of tkUnexposed:
@@ -1137,7 +1136,7 @@ proc toHaxdocIdentType*(
         result.add "["
         for idx, param in params:
           if idx > 0: result.add ", "
-          result.add toHaxdocIdentType(param)
+          result.add conf.toHaxdocIdentType(param)
 
         result.add "]"
 
@@ -1147,7 +1146,7 @@ proc toHaxdocIdentType*(
       result = $(cxtype.cxKind())
 
 
-proc toHaxdocIdent*(ns: CScopedIdent): string =
+proc toHaxdocIdent*(conf: WrapConf, ns: CScopedIdent): string =
   for part in ns:
     if part.cursor.kind in ckProcEntryKinds:
       if result.len > 0: result &= "."
@@ -1162,7 +1161,7 @@ proc toHaxdocIdent*(ns: CScopedIdent): string =
         else:
           raise newImplementKindError(part.cursor)
 
-      result &= part.cursor.cxType().toHaxdocIdentType()
+      result &= conf.toHaxdocIdentType(part.cursor.cxType())
 
     elif part.cursor.kind in {ckMacroDefinition}:
       result &= &"cmacro!{part.cursor}"
@@ -1727,9 +1726,9 @@ func toNNode*(nhs: NimHeaderSpec): PNode =
 
 
 
-proc docCommentFor*(ident: CScopedIdent): string =
+proc docCommentFor*(conf: WrapConf, ident: CScopedIdent): string =
   ## Return haxdoc documentation comment import
-  &"@import{{[[code:{ident.toHaxdocIdent()}]]}}"
+  &"@import{{[[code:{conf.toHaxdocIdent(ident)}]]}}"
 
 proc updateComments*(
     decl: var AnyNimDecl[PNode],
@@ -1761,7 +1760,7 @@ proc updateComments*(
     )))
 
 
-  decl.addDocComment(node.ident.docCommentFor())
+  decl.addDocComment(wrapConf.docCommentFor(node.ident))
 
 proc allUsedTypes*(
     nimType: NimType,

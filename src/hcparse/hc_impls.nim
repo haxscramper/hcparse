@@ -131,7 +131,7 @@ proc contains*(dir: AbsDir, file: AbsFile): bool =
   else:
     return file[0 .. dir.high] == dir
 
-proc skip(cx: CxType): CxType =
+proc skip*(cx: CxType): CxType =
   result = cx
   while true:
     case result.kind:

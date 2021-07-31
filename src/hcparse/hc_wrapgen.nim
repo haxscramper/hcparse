@@ -238,7 +238,7 @@ proc wrapProcedure*(
 
     else:
       if conf.isImportcpp:
-        it.iinfo = currLInfo()
+        it.iinfo = currLinfo()
         it.icpp = &"({icppName}(@))"
 
       else:
@@ -570,7 +570,7 @@ proc wrapAlias*(
         baseType = toNimType(aliasof, conf, cache) # .ntype # newPType($aliasof)
 
     else:
-      baseType = conf.typeNameForScoped(aliasof.fullScopedIdent(), cache)
+      baseType = conf.typeNameForScoped(conf.fullScopedIdent(aliasof), cache)
       # WARNING mismatched generic parameters between lhs and rhs parts of
       # alias might result in broken wrappers.
 
@@ -868,7 +868,7 @@ proc makeGenEnum*(
       prev = val
       result.values.add GenEnumValue(
         cdecl: CDecl(cursor: name, kind: cdkField, ident: @[]),
-        docComment: @[docCommentFor(declEn.ident & toCName(name))],
+        docComment: @[conf.docCommentFor(declEn.ident & toCName(name))],
         iinfo: currLInfo(),
         baseName: $name,
         resCName: cEnumName($name, nt, conf, cache),
@@ -1241,7 +1241,7 @@ proc toNNode*(
       rawEnum.addField(
         value.resNimName.fixIdentName(),
         some newPLit(value.resVal),
-        docComment = value.cdecl.ident.docCommentFor())
+        docComment = conf.docCommentFor(value.cdecl.ident))
 
     result.add newWrappedEntry(
       rawEnum.toNimDecl(), wepInTypes, currLInfo())
@@ -1557,7 +1557,7 @@ Write generated wrappers to single file
         "column": %loc.column
       }
 
-      content.add %[ident.toHaxdocJson(), loc]
+      content.add %[wrapConf.toHaxdocJson(ident), loc]
 
     writeFile(dir / wrapConf.refidFile, pretty(content))
 
