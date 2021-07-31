@@ -788,9 +788,6 @@ func hasUnexposed*(nt: NimType): bool =
   nt.hasSpecial(@[ "UNEXPOSED", "DEPENDENT" ])
 
 
-func hasComplexParam*(nt: NimType): bool =
-  nt.hasSpecial(@[ "COMPLEX_PARAM" ])
-
 proc isEnum*(cxtype: CXType): bool =
   case cxtype.cxKind():
     of tkEnum:

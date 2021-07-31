@@ -524,7 +524,7 @@ proc wrapAlias*(
 
 
   if al.isNewType:
-    conf.info "typdef with new type declaration"
+    # typdef with new type declaration
     var baseType: NimType
 
     if al.aliasNewType.kind in {cdkClass, cdkStruct}:
@@ -548,8 +548,7 @@ proc wrapAlias*(
           iinfo: currLInfo(),
           cdecl: al,
           baseType: baseType,
-          newAlias: newType
-        )
+          newAlias: newType)
 
   else:
     # Get underlying type for alias
@@ -557,7 +556,6 @@ proc wrapAlias*(
     conf.logger.indented:
       # Create new identifier for aliased type
       var newAlias = conf.typeNameForScoped(al.ident, cache)
-    # debug al.ident, " -> ", newAlias
 
     # Identifier for old aliased type
     var baseType: NimType
@@ -574,26 +572,6 @@ proc wrapAlias*(
       # WARNING mismatched generic parameters between lhs and rhs parts of
       # alias might result in broken wrappers.
 
-    if baseType.hasComplexParam():
-      #[
-      Type alias is declared in terms of sub-alias for some of the
-      parameter types. For example std::string has following sub-alias declared:
-
-      ```c++
-        template<typename _CharT, typename _Traits, typename _Alloc>
-
-        // ...
-
-        typedef _Traits					traits_type; // Regular alias on the argument
-        typedef typename _Traits::char_type		value_type;
-        // type-name-0-1::char_type.
-      ```
-
-      Nim does not have a way to model type relations like this.
-
-      ]#
-      return @[]
-
     var maxIdx = 0
     for idx, param in al.cursor.cxType().templateParams():
       baseType.genericParams[idx] = param.toNimType(conf, cache)
@@ -602,25 +580,8 @@ proc wrapAlias*(
     for idx in (maxIdx + 1) ..< baseType.genericParams.len:
       newAlias.genericParams.add baseType.genericParams[idx]
 
-    conf.dump baseType
-    baseType.genericParams.add baseType.getPartialParams(conf, cache, defaulted = true)
-    conf.dump baseType
-
-    # if aliasof.getNumTemplateArguments() > 0:
-    #   let required =
-    #     aliasof.getTypeDeclaration().
-    #     getSpecializedCursorTemplate().
-    #     requiredGenericParams()
-
-    #   # WARNING HACK - ignore all template parameters that /might/ be
-    #   # defaulted - i.e. only ones that *must* be specified (not defaulted in
-    #   # declaration) are included. Better alias handling is necessary, for
-    #   # now I just drop 'unnecessary' parts.
-    #   baseType.genericParams = baseType.genericParams[
-    #     0 ..< min(required.len(), baseType.genericParams.len())]
-
-    #   for param in mitems(baseType.genericParams):
-    #     param.isParam = true
+    # QUESTION is it necessary?
+    # baseType.genericParams.add baseType.getPartialParams(conf, cache, defaulted = true)
 
     fixTypeParams(baseType, newAlias.genericParams)
 
