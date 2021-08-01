@@ -443,8 +443,27 @@ proc visitClass*(
         raiseUnexpectedKindError(cursor)
 
   var initArgs: seq[CArg]
-  let ident = parent & toCName(
-    if typedef.isSome(): typedef.get() else: cursor)
+  var ident = parent
+  case cursor[0].kind:
+    of ckTypeRef:
+      # `class locale::id` is parsed as, so I need to get semantic
+      # namespaces directly. Maybe it would be better to switch for that
+      # altogether?
+      #
+      # ```
+      # kind: ClassDecl id:
+      #     +-> type: std::locale::id
+      #     +-> TypeRef:
+      #     |   +-> type: std::locale
+      #     |   +-> class std::locale
+      # ```
+      ident = conf.getSemanticNamespaces(cursor).mapIt(toCName(it))
+
+    else:
+      ident.add toCName(if typedef.isSome(): typedef.get() else: cursor)
+
+
+
   result = CDecl(
     isAnonymous: $cursor == "",
     kind: cdkClass,

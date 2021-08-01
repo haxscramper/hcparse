@@ -21,6 +21,15 @@ import
 import htsparse/cpp/cpp
 import fusion/matching except addPrefix
 
+
+func incl*[I](s1: var OrderedSet[I], other: OrderedSet[I]) =
+  for item in other:
+    incl(s1, item)
+
+func excl*[I](s1: var OrderedSet[I], other: OrderedSet[I]) =
+  for item in other:
+    excl(s1, item)
+
 proc wrapEnum*(declEn: CDecl, conf: WrapConf, cache: var WrapCache):
   seq[GenEntry]
 
@@ -274,11 +283,12 @@ proc wrapProcedure*(
 
   for argIdx, arg in pr.arguments:
     var argType = arg.cursor.cxType().toNimType(conf, cache)
-
     if arg.cursor.cxType().isEnum():
       argType.nimName &= conf.rawSuffix()
 
     if argType.kind in {ctkIdent}:
+      argType.genericParams.add argType.getPartialParams(conf, cache, false)
+
       if argType.nimName == "UNEXPOSED":
         # WARNING currently parameters which contain `tkUnexposed`
         # types are not handled but are skipped instead. I don't
@@ -388,6 +398,7 @@ proc wrapProcedure*(
 
     if pr.cursor.cxkind == ckDestructor:
       # Explicitly calling destructor on object
+      it.arguments.add initCArg("self", newNimType("ptr", @[parent.get()]))
       it.icpp = &"~{it.name}()"
       it.name = "destroy" & parent.get().nimName
       it.declareForward = true
@@ -595,23 +606,23 @@ proc wrapAlias*(
 
 proc getParentFields*(
     inCursor: CXCursor, obj: PObjectDecl,
-    wrapConf: WrapConf, cache: var WrapCache
+    conf: WrapConf, cache: var WrapCache
   ): seq[PProcDecl] = # FIXME return `GenProc` declarations instead of nested cursors
 
   for class in inCUrsor.getClassBaseCursors():
     for entry in class:
       if entry.kind in {ckFieldDecl}:
         let
-          fieldType = entry.cxType().toNimType(wrapConf, cache)
+          fieldType = entry.cxType().toNimType(conf, cache)
           fldname = $entry
 
         result.add newPProcDecl(
           name = fldName,
-          returnType = some(fieldType.toNType(wrapConf, cache)),
+          returnType = some(fieldType.toNType(conf, cache)),
           args = { "self" : obj.name },
           iinfo = currLInfo(),
           pragma = newPPragma(newExprColonExpr(
-            newPIdent(wrapConf.importX()), newRStrLit(&"(#.{fldName})")))
+            newPIdent(conf.importX()), newRStrLit(&"(#.{fldName})")))
         )
 
         result[^1].genParams.add(obj.name.genParams)
@@ -625,9 +636,9 @@ proc getParentFields*(
             name = fldName,
             iinfo = currLInfo(),
             args = { "self" : obj.name, "val" : fieldType.toNType(
-              wrapConf, cache) },
+              conf, cache) },
             pragma = newPPragma(newExprColonExpr(
-              newPIdent(wrapConf.importX()), newRStrLit(&"(#.{fldName} = @)")))
+              newPIdent(conf.importX()), newRStrLit(&"(#.{fldName} = @)")))
           )
 
           result[^1].genParams.add(obj.name.genParams)
@@ -693,8 +704,7 @@ proc updateFieldExport*(
       iinfo: currLInfo(),
       cdecl: fld,
       fieldType: fld.cursor.cxType().toNimType(conf, cache),
-      isConst: fld.isConst
-    )
+      isConst: fld.isConst)
 
     if fld.fieldTypeDecl.getSome(newFieldType):
       var newType = newFieldType
@@ -718,8 +728,6 @@ proc updateFieldExport*(
           discard
 
     if fld.cursor.cxType().isEnum():
-      # Proxy enum wrapper generator changes enum names, meaning all C/C++
-      # enum fields should be renamed too.
       res.fieldType.nimName &= conf.rawSuffix()
 
     gen.memberFields.add res
@@ -1126,7 +1134,7 @@ proc getNType*(carg: CArg): NimType =
 proc toNNode*(gen: GenEntry, conf: WrapConf, cache: var WrapCache): seq[WrappedEntry]
 
 proc toNNode*(
-  gen: GenProc, wrapConf: WrapConf, cache: var WrapCache): PProcDecl =
+  gen: GenProc, conf: WrapConf, cache: var WrapCache): PProcDecl =
 
   var parentClass: seq[CxCursor]
   for it in items(gen.cdecl.ident):
@@ -1139,21 +1147,31 @@ proc toNNode*(
     exported = true,
     returnType = some(
       gen.returnType.toNType(
-        wrapConf, cache, asResult = true, noDefaulted = parentClass)),
+        conf, cache, asResult = true, noDefaulted = parentClass)),
     declType = gen.declType,
     kind = gen.kind
   )
 
+  var allParams: OrderedSet[string]
+
   for arg in gen.arguments:
+    allParams.incl arg.nimType.
+      allGenericParams().mapIt(it.toNType(conf, cache).head).toOrderedSet()
+
     result.signature.arguments.add newNIdentDefs(
       vname = arg.name.fixIdentName(),
       value = arg.default,
       vtype = arg.getNType().toNType(
-        wrapConf, cache, noDefaulted = parentClass),
+        conf, cache, noDefaulted = parentClass),
       kind = arg.varkind)
 
-  for param in wrapConf.genParamsForIdent(gen.cdecl.ident, cache):
-    result.genParams.add toNType(param, wrapConf, cache)
+  for param in conf.genParamsForIdent(gen.cdecl.ident, cache):
+    result.genParams.add toNType(param, conf, cache)
+
+  allParams.excl result.genParams.mapIt(it.head).toOrderedSet()
+
+  for param in allParams:
+    result.genParams.add newPType(param)
 
   result.docComment = gen.docComment.join("\n")
   result.signature.pragma = gen.pragma
@@ -1161,7 +1179,7 @@ proc toNNode*(
   if gpcNoImportcpp notin gen.noPragmas:
     result.signature.pragma.add(
       newExprColonExpr(
-        newPIdent(wrapConf.importX()),
+        newPIdent(conf.importX()),
         newRStrLit(gen.icpp)))
 
   # If procedure returns mutable lvalue reference ot the same type as
@@ -1323,16 +1341,17 @@ proc toNNode*(
         getImpl.addArgument("self", gen.name.toNType(conf, cache))
 
         result.add newWrappedEntry(
-          toNimDecl(getImpl), wepInProcs, field.iinfo, field.cdecl)
+          toNimDecl(getImpl), wepInProcs, currLInfo(), field.cdecl)
 
       block setterImplementation:
         var setImpl = newPProcDecl(field.name, kind = pkAssgn)
         with setImpl:
           iinfo = currLInfo()
+          genParams = gen.name.genericParams.mapIt(it.toNType(conf, cache))
           pragma = newPPragma(
             newPIdentColonString(
               "error",
-              &"Cannot assign to field {field.name} - declared `const` in {field.cdecl.ident}"
+              &"Cannot assign to field '{field.name}' - declared `const` in '{field.cdecl.ident}'"
             )
           )
 
@@ -1340,7 +1359,7 @@ proc toNNode*(
         setImpl.addArgument("value", field.fieldType.toNType(conf, cache))
 
         result.add newWrappedEntry(
-          toNimDecl(setImpl), wepInProcs, field.iinfo, field.cdecl)
+          toNimDecl(setImpl), wepInProcs, currLInfo(), field.cdecl)
 
     else:
       var newField = PObjectField(
@@ -1461,7 +1480,7 @@ proc writeWrapped*(
     res: CodegenResult,
     outFile: FsFile,
     compile: seq[FsFile],
-    wrapConf: WrapConf
+    conf: WrapConf
   ) =
 
   ##[
@@ -1473,7 +1492,7 @@ Write generated wrappers to single file
 - @arg{outFile} :: target file to write generated nim code to
 - @arg{codegens} :: directory for saving codegen files
 - @arg{compile} :: Additional list of files to add as `{.compile.}`
-- @arg{wrapConf} :: Wrap configuration state object
+- @arg{conf} :: Wrap configuration state object
 
 ]##
 
@@ -1494,8 +1513,8 @@ Write generated wrappers to single file
 
   var resFiles: Table[string, File]
 
-  if wrapConf.codegenDir.isSome():
-    let dir = wrapConf.codegenDir.get()
+  if conf.codegenDir.isSome():
+    let dir = conf.codegenDir.get()
     for gen in res.codegen:
       let target = dir /. gen.filename
       let res = target.withBasePrefix("gen_")
@@ -1514,9 +1533,9 @@ Write generated wrappers to single file
         "column": %loc.column
       }
 
-      content.add %[wrapConf.toHaxdocJson(ident), loc]
+      content.add %[conf.toHaxdocJson(ident), loc]
 
-    writeFile(dir / wrapConf.refidFile, pretty(content))
+    writeFile(dir / conf.refidFile, pretty(content))
 
   for _, file in pairs(resFiles):
     file.close()

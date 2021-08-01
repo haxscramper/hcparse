@@ -144,21 +144,21 @@ proc parseFile*(
 proc parseFile*(
     file: AbsFile,
     config: ParseConf,
-    wrapConf: WrapConf,
+    conf: WrapConf,
     cache: var WrapCache,
     reparseOnNil: bool = true
   ): ParsedFile =
 
 
   file.assertExists()
-  wrapConf.logger.thisScope("Parse file")
+  conf.logger.thisScope("Parse file")
   # info "Parsing file", file
 
   let flags = config.getFlags(file)
   result.filename = file
   result.index = createIndex()
 
-  var wrapConf = wrapConf
+  var conf = conf
   try:
     result.unit = parseTranslationUnit(
       result.index, file, flags, {
@@ -166,27 +166,27 @@ proc parseFile*(
       reparseOnNil = reparseOnNil
     )
 
-    wrapConf.unit = result.unit
+    conf.unit = result.unit
 
   except:
-    wrapConf.err file.realpath
-    wrapConf.debug config.getFlags(file).joinl()
+    conf.err file.realpath
+    conf.debug config.getFlags(file).joinl()
     raise
 
-  result.api = result.unit.splitDeclarations(wrapConf, cache)
+  result.api = result.unit.splitDeclarations(conf, cache)
   result.explicitDeps = result.api.publicApi.
-    getDepFiles(wrapConf).filterIt(it != file)
+    getDepFiles(conf).filterIt(it != file)
 
   result.isExplicitlyAdded = true
 
 
 proc parseAll*(
-    files: seq[AbsFile], conf: ParseConf, wrapConf: WrapConf,
+    files: seq[AbsFile], parseConf: ParseConf, conf: WrapConf,
     cache: var WrapCache
   ): hc_types.FileIndex =
   for file in files:
     result.index[file] = parseFile(
-      file, conf, wrapConf, cache)
+      file, parseConf, conf, cache)
 
 import hasts/graphviz_ast
 export toPng, toXDot, AbsFile
@@ -709,6 +709,14 @@ iterator mitems*[T](s1, s2: var seq[T]): var T =
   for it in mitems(s1): yield it
   for it in mitems(s2): yield it
 
+iterator items*[T](s1, s2: seq[T]): T =
+  for it in items(s1): yield it
+  for it in items(s2): yield it
+
+iterator pairs*[K, V](s1, s2: Table[K, V]): (K, V) =
+  for it in pairs(s1): yield it
+  for it in pairs(s2): yield it
+
 type
   UsedSet = object
     cursors: Table[CxCursor, HashSet[NimType]]
@@ -831,7 +839,6 @@ proc updateImports*(
 
   for file in wrapped:
     let lib = conf.getSavePath(conf.getBaseFile(file), conf)
-    conf.dump lib
     fileMap[lib] = file
 
   proc isSelfImport(save: LibImport, imp: NimImportSpec): bool =
@@ -840,57 +847,95 @@ proc updateImports*(
     imp.importPath.len == 1 and
     imp.importPath[^1] == save.importPath[^1]
 
+  proc addImports(graph: var HGraph[LibImport, NimType], file: WrappedFile, used: UsedSet) =
+    block cursorBasedImportrs:
+      let
+        base = conf.getBaseFile(file)
+        user = conf.getSavePath(base, conf)
+
+      for typeCursor, typeSet in used.cursors:
+        let loc = typeCursor.getSpellingLocation()
+        if loc.isSome():
+          let
+            dep = conf.getSavePath(loc.get().file, conf)
+            imp = conf.getImport(loc.get().file, base, false)
+
+          if not isSelfImport(user, imp):
+            for item in typeSet:
+              graph.addEdge(
+                graph.addOrGetNode(user),
+                graph.addOrGetNode(dep),
+                item)
+
+    block libraryOverrideImports:
+      let base = conf.getSavePath(conf.getBaseFile(file), conf)
+      for usedLib, typeSet in used.libs:
+        if usedLib.isValid():
+          let imp = conf.getImport(usedLib, base, false)
+          for usedType in typeSet:
+            graph.addEdge(
+              graph.addOrGetNode(base),
+              graph.addOrGetNode(usedLib),
+              usedType)
 
   block registerImports:
+    var
+      onlyTypes = newHGraph[LibImport, NimType]()
+      onlyProcs = newHGraph[LibImport, NimType]()
+
     for file in wrapped:
-      block cursorBasedImportrs:
-        let
-          base = conf.getBaseFile(file)
-          user = conf.getSavePath(base, conf)
+      onlyTypes.addImports file, usedApis.inTypes
+      onlyProcs.addImports file, usedApis.inProcs
 
-        for typeCursor, typeSet in usedApis.inTypes.cursors:
-          let loc = typeCursor.getSpellingLocation()
-          if loc.isSome():
-            let
-              dep = conf.getSavePath(loc.get().file, conf)
-              imp = conf.getImport(loc.get().file, base, false)
+      importGraph.addImports file, usedApis.inTypes
+      importGraph.addImports file, usedApis.inProcs
 
-            if not isSelfImport(user, imp):
-              for item in typeSet:
-                importGraph.addEdge(
-                  importGraph.addOrGetNode(user),
-                  importGraph.addOrGetNode(dep),
-                  item)
+    onlyTypes.
+      dotRepr(
+        dotReprDollarNode[LibImport],
+        dotReprCollapseEdgesNoLabel[NimType],
+        clusters = onlyTypes.findCycles(ignoreSelf = true).
+      mergeCycleSets().mapIt((it, ""))).withResIt do:
+        it.rankdir = grdLeftRight
+        it.toPng(getAppTempFile("onlyTypes.png"))
 
-      block libraryOverrideImports:
-        let base = conf.getSavePath(conf.getBaseFile(file), conf)
-        for usedLib, typeSet in usedApis.inTypes.libs:
-          if usedLib.isValid():
-            let imp = conf.getImport(usedLib, base, false)
-            for usedType in typeSet:
-              importGraph.addEdge(
-                importGraph.addOrGetNode(base),
-                importGraph.addOrGetNode(usedLib),
-                usedType)
+    onlyProcs.
+      dotRepr(
+        dotReprDollarNode[LibImport],
+        dotReprCollapseEdgesNoLabel[NimType],
+        clusters = onlyTypes.findCycles(ignoreSelf = true).
+      mergeCycleSets().mapIt((it, ""))).withResIt do:
+        it.rankdir = grdLeftRight
+        it.toPng(getAppTempFile("onlyProcs.png"))
+
 
 
   let groups = importGraph.findCycles().mergeCycleSets()
   let clusteredNodes = groups.mapIt(toHashSet(importGraph[it])).foldl(union(a, b))
 
 
-  proc addImports(file: var WrappedFile, usedGroup: UsedSet) =
+  proc addImports(
+      file: var WrappedFile,
+      usedGroup: UsedSet,
+      ignoreImport: HashSet[LibImport] = default(HashSet[LibImport])
+    ) =
     let
       base = conf.getBaseFile(file)
       save = conf.getSavePath(base, conf)
 
     for typeCursor, _ in usedGroup.cursors:
       if typeCursor.getSpellingLocation().getSome(loc):
-        let imp = conf.getImport(dep = loc.file, user = base, false)
-        if not isSelfImport(save, imp):
-          file.imports.incl imp
+        let usedLib = conf.getSavePath(loc.file, conf)
+        if usedLib notin ignoreImport:
+          let imp = conf.getImport(
+            dep = usedLib,
+            user = conf.getSavePath(base, conf), false)
+
+          if not isSelfImport(save, imp):
+            file.imports.incl imp
 
     for usedLib, _ in usedGroup.libs:
-      if usedLib.isValid():
+      if usedLib.isValid() and usedLib notin ignoreImport:
         let imp = conf.getImport(
           dep = usedLib, user = conf.getSavePath(base, conf), false)
         if not isSelfImport(save, imp):
@@ -910,9 +955,10 @@ proc updateImports*(
     var
       mergedFiles: seq[WrappedFile] = mapIt(group, fileMap[importGraph[it]])
       mergedPaths: string = mapIt(group, importGraph[it].importPath[^1]).sorted().join("_")
+      ignoreImports: HashSet[LibImport] = mapIt(group, importGraph[it]).toHashSet()
       mergedTypes: seq[GenEntry]
 
-    conf.dump mergedPaths
+    # conf.dump mergedPaths
     for file in mitems(mergedFiles):
       var recycle: seq[GenEntry]
       for entry in mitems(file.entries):
@@ -928,7 +974,7 @@ proc updateImports*(
         let usedGroup = file.getUsedTypes(conf)
         let base = conf.getBaseFile(file)
 
-        file.addImports usedGroup.inProcs
+        file.addImports(usedGroup.inProcs, ignoreImports)
 
         file.imports.incl conf.getImport(
           dep = conf.initLibImport(@[mergedPaths]),
@@ -1057,7 +1103,8 @@ proc wrapFile*(
       of nekObjectDecl:
         let name = elem.decl.objectdecl.name.head
         if name in sections.inTypes:
-          conf.warn "not overriding wrap for", name
+          discard
+          # conf.warn "not overriding wrap for", name
 
         else:
           sections.inTypes[name] = elem
@@ -1134,7 +1181,7 @@ proc getExpanded*(file: AbsFile, parseConf: ParseConf): string =
 proc wrapSingleFile*(
     file: FsFile,
     errorReparseVerbose: bool = false,
-    wrapConf: WrapConf = baseCppWrapConf,
+    conf: WrapConf = baseCppWrapConf,
     parseConf: ParseConf = baseCppParseConf,
   ): CodegenResult =
   ## Generate wrapper for a single file.
@@ -1143,7 +1190,7 @@ proc wrapSingleFile*(
   ##  generated delarations, before they are converter to sequence of
   ##  `NimDecl`
   ##
-  ## `wrapConf` provide user-defined implementation heuristics for
+  ## `conf` provide user-defined implementation heuristics for
   ## necessary edge cases (see `WrapConf` type documentation).
   ## `postprocess` is a sequence of postprocessing actions that will be run
   ## on generated `WrappedEntry` structures and then added to final
@@ -1159,7 +1206,7 @@ proc wrapSingleFile*(
   ## (instantiation info in codegen callback, comments etc.) and list of
   ## C++ codegen files.
 
-  if wrapConf.baseDir.len == 0:
+  if conf.baseDir.len == 0:
     raiseArgumentError(
       "Base director is not set for wrapper configuration. " &
         "Set configuration .baseDir to the root directory of C(++) " &
@@ -1171,20 +1218,20 @@ proc wrapSingleFile*(
     index: hc_types.FileIndex
 
   let parsed = parseFile(
-    file.toAbsFile(), parseConf, wrapConf,
+    file.toAbsFile(), parseConf, conf,
     cache,
     reparseOnNil = errorReparseVerbose
   )
 
-  if wrapConf.showParsed:
-    wrapConf.debug parsed.unit.getTranslationUnitCursor().treeRepr(parsed.unit)
+  if conf.showParsed:
+    conf.debug parsed.unit.getTranslationUnitCursor().treeRepr(parsed.unit)
 
-  var wrapConf = wrapConf
+  var conf = conf
 
-  wrapConf.unit = parsed.unit
+  conf.unit = parsed.unit
 
-  let wrapped = wrapFiles(@[parsed], wrapConf, cache, index)[0].
-    wrapFile(wrapConf, cache, index)
+  let wrapped = wrapFiles(@[parsed], conf, cache, index)[0].
+    wrapFile(conf, cache, index)
 
   for node in wrapped:
     result.decls.add node.decl
@@ -1194,7 +1241,7 @@ proc wrapSingleFile*(
 
 proc wrapAllFiles*(
     files: seq[AbsFile],
-    wrapConf: WrapConf,
+    conf: WrapConf,
     parseConf: ParseConf
   ): WrapCache =
   ## Generate and write wrappers for all `files`
@@ -1203,41 +1250,41 @@ proc wrapAllFiles*(
     cache: WrapCache # Global cache for all parsed files
     index: hc_types.FileIndex
     parsed: seq[ParsedFile] # Full list of all parsed files
-    wrapConf = wrapConf # Global wrapper configuration
+    conf = conf # Global wrapper configuration
 
   assertValid(
-    wrapConf.nimOutDir,
+    conf.nimOutDir,
     ". Output directory for generated nim files.")
 
   for file in files:
-    var parsedFile = parseFile(file, parseConf, wrapConf, cache)
-    wrapConf.unit = parsedFile.unit
+    var parsedFile = parseFile(file, parseConf, conf, cache)
+    conf.unit = parsedFile.unit
 
     parsed.add parsedFile
 
   var wrapped: seq[seq[WrappedEntry]]
-  for file in wrapFiles(parsed, wrapConf, cache, index):
-    let outPath = wrapConf.nimOutDir / getSavePath(wrapConf, file)
+  for file in wrapFiles(parsed, conf, cache, index):
+    let outPath = conf.nimOutDir / getSavePath(conf, file)
 
     var codegen: CodegenResult
-    for node in wrapFile(file, wrapConf, cache, index):
+    for node in wrapFile(file, conf, cache, index):
       codegen.decls.add node.decl
 
-    codegen.writeWrapped(outPath, @[], wrapConf)
+    codegen.writeWrapped(outPath, @[], conf)
 
   CodegenResult(cache: cache).writeWrapped(
-    AbsFile(""), @[], wrapConf)
+    AbsFile(""), @[], conf)
 
   return cache
 
 
 proc wrapWithConf*(
-    files: seq[AbsFile], wrapConf: WrapConf,
+    files: seq[AbsFile], conf: WrapConf,
     parseConf: ParseConf
-  ): WrapCache = wrapAllFiles(files, wrapConf, parseConf)
+  ): WrapCache = wrapAllFiles(files, conf, parseConf)
 
 proc wrapWithConf*(
-    infile, outfile: FsFile, wrapConf: WrapConf,
+    infile, outfile: FsFile, conf: WrapConf,
     parseConf: ParseConf
   ) =
 
@@ -1245,10 +1292,10 @@ proc wrapWithConf*(
     wrapSingleFile(
       infile,
       errorReparseVerbose = false,
-      wrapConf = wrapConf,
+      conf = conf,
       parseConf = parseConf
     ),
     outFile = outfile,
     compile = @[],
-    wrapConf = wrapConf
+    conf = conf
   )

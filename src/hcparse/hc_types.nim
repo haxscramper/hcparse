@@ -385,15 +385,9 @@ type
       cxType: CxType, conf: WrapConf, cache: WrapCache): Option[NimType]
     ## Hard override generated complex types
 
-
     getSavePath*: proc(orig: AbsFile, conf: WrapConf): LibImport ## Return
     ## path, *relative to project root* (@field{nimOutDir}) where file
     ## generated from `orig` should be saved.
-
-    overrideImport*: proc(
-      dep, user: AbsFile, conf: WrapConf, isExternalImport: bool
-    ): Option[NimImportSpec] ## Hard override import generated from
-                             ## @arg{user} to @arg{dep}
 
     ignoreCursor*: proc(curs: CXCursor, conf: WrapConf): bool ## User-defined
     ## predicate for determining whether or not cursor should be
@@ -1483,7 +1477,10 @@ proc `$`*(nimType: NimType): string =
   else:
     case nimType.kind:
       of ctkIdent:
-        result = nimType.nimName
+        if nimType.isParam:
+          result = "p!"
+
+        result &= nimType.nimName
         if nimType.genericParams.len > 0:
           result &= "["
           result &= nimType.genericParams.mapIt($it).join(", ")
@@ -1493,7 +1490,7 @@ proc `$`*(nimType: NimType): string =
           result &= " (from '" & $nimType.original.get() & "')"
 
       of ctkProc:
-        result = "proc "
+        result &= "proc "
         result &= nimType.arguments.mapIt(it.name & ": " & $it.nimType).join(", ")
         result &= ": "
         result &= $nimType.returnType

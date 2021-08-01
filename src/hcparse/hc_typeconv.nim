@@ -401,6 +401,7 @@ proc getPartialParams*(
             # reverse-track what went into arguments.
 
             result.add param
+            result[^1].isParam = true
 
           else:
             assertOption param.defaultType,
@@ -689,6 +690,7 @@ proc toNimType*(
           # represents.
           for arg in cxType.templateParams():
             res.add toNimType(arg, conf, cache)
+            res.genericParams[^1].isParam = true
 
         elif startsWith($cxType, typenameParts):
           let unprefix = dropPrefix($cxType, typenameParts)
@@ -805,14 +807,17 @@ proc isEnum*(cxtype: CXType): bool =
 
 proc toInitCall*(
     cursor: CXCursor, conf: WrapConf, cache: var WrapCache): PNode =
-  proc aux(cursor: CXCursor, ilist: bool, cache: var WrapCache): PNode =
+  proc aux(
+      cursor: CXCursor, ilist: bool, cache: var WrapCache,
+      expected: Option[CxType] = none(CxType)
+    ): PNode =
     case cursor.cxKind():
       of ckUnexposedExpr:
         if startsWith($cursor.cxType(), "std::initializer_list"):
           result = aux(cursor[0], true, cache)
 
         else:
-          result = aux(cursor[0], ilist, cache)
+          result = aux(cursor[0], ilist, cache, some cursor.cxType())
 
       of ckCallExpr:
         let str = "init" & $cursor.cxType()
@@ -885,7 +890,14 @@ proc toInitCall*(
 
         case cursor.cxKind():
           of ckIntegerLiteral:
-            result = newPCall("cint", newPLit(parseInt(tokens[0])))
+            let i = newPLit(parseInt(tokens[0]))
+            if expected.isSome():
+              var expected = expected.get().toNimType(conf, cache)
+              conf.fixTypeName(expected, conf, 0)
+              result = newPCall(expected.nimName, i)
+
+            else:
+              result = newPCall("cint", i)
 
           of ckStringLiteral:
             result = newPCall("cstring", newPLit(tokens[0]))

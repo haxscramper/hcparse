@@ -344,11 +344,6 @@ proc getImport*(
   ## - @arg{user} :: File importer. In case of external import this
   ##   can be left unspecified as result will be determined solely by
   ##   @arg{conf.getSavePath} callback and @arg{conf.wrapName}
-  if notNil(conf.overrideImport):
-    let imp = conf.overrideImport(dep, user, conf, isExternalImport)
-    if imp.isSome():
-      return imp.get()
-
   if isExternalImport:
     result = initImportSpec(
       @[conf.wrapName] & conf.getSavePath(dep, conf).importPath)
@@ -564,8 +559,6 @@ proc dotDepImports*(
 
   var dot = cache.importGraph.dotRepr(
     proc(node: LibImport, _: HNode): DotNode = makeDotNode(0, $node),
-    # proc(edges: seq[(NimType, HEdge)]): DotEdge =
-    #   makeDotEdge(0, 0, mapIt(edges, $it[0]).deduplicate().join("\n")),
     clusters = mapIt(
       cache.importGraph.findCycles(ignoreSelf = true).mergeCycleSets(),
       (it, "")))
