@@ -22,7 +22,7 @@ func add*(
   assert not nimType.isComplex,
      "Cannot add generic parameters to a complex type"
 
-  nimType.genericParams.add genericParam
+  nimType.genParams.add genericParam
 
 
 
@@ -272,7 +272,7 @@ proc defaultTypeParameter*(
         result = conf.newNimType(semSpaces, cxtype)
         inc idx
 
-        result.genericParams.add foldTypes(idx, cache)
+        result.genParams.add foldTypes(idx, cache)
 
       else:
         raise newUnexpectedKindError(params[idx])
@@ -357,7 +357,7 @@ proc replacePartials*(
         nimType = partials[nimType.nimName]
 
       else:
-        for subnode in mitems(nimType.genericParams):
+        for subnode in mitems(nimType.genParams):
           aux(subnode)
 
   aux(nimType)
@@ -365,6 +365,41 @@ proc replacePartials*(
 proc getParamsForType*(cache: WrapCache, name: seq[string]): seq[NimType] =
   if name in cache.paramsForType:
     result = cache.paramsForType[name]
+
+proc getPartialParams*(
+    name: seq[string], partialMax: int,
+    conf: WrapConf, cache: var WrapCache,
+    defaulted: bool = true
+  ): seq[NimType] =
+
+  if name in cache.paramsForType:
+    let params = cache.paramsForType[name]
+    for idx, param in params:
+      if partialMax < idx:
+        if param.defaultType.isNone() or not defaulted:
+          # Even though procedure is callsed `getDefaultedPartial`, in
+          # reality I have to substitute parameter without default values
+          # as well. Example of why this is necessary:
+
+          # ```cpp
+          # basic_string
+          # substr(size_type __pos = 0, size_type __n = npos) const
+          # { return basic_string(*this,
+          #     _M_check(__pos, "basic_string::substr"), __n); }
+          # ```
+
+          # Return type of this procedure does not have any explicit
+          # generic parameters. Moreover - /first parameter/ does not
+          # even have correct default value. So `genParams` naturally
+          # returns empty list, and at the time type arrives here (this
+          # procedure is called in the codegen stage mostly) we can't
+          # reverse-track what went into arguments.
+
+          result.add param
+          result[^1].isParam = true
+
+        else:
+          result.add param.defaultType.get()
 
 
 proc getPartialParams*(
@@ -376,40 +411,8 @@ proc getPartialParams*(
 
   if partial.fromCxType or partial.fullIdent.isSome():
     let name = conf.fullScopedIdent(partial).typeName()
-
-    if name in cache.paramsForType:
-      let params = cache.paramsForType[name]
-      for idx, param in params:
-        if partial.genericParams.high < idx:
-          if param.defaultType.isNone() or not defaulted:
-            # Even though procedure is callsed `getDefaultedPartial`, in
-            # reality I have to substitute parameter without default values
-            # as well. Example of why this is necessary:
-
-            # ```cpp
-            # basic_string
-            # substr(size_type __pos = 0, size_type __n = npos) const
-            # { return basic_string(*this,
-            #     _M_check(__pos, "basic_string::substr"), __n); }
-            # ```
-
-            # Return type of this procedure does not have any explicit
-            # generic parameters. Moreover - /first parameter/ does not
-            # even have correct default value. So `genParams` naturally
-            # returns empty list, and at the time type arrives here (this
-            # procedure is called in the codegen stage mostly) we can't
-            # reverse-track what went into arguments.
-
-            result.add param
-            result[^1].isParam = true
-
-          else:
-            assertOption param.defaultType,
-              &"Cannot get default type parameter for a type argument #{idx}. " &
-                &"Partial type was {partial}, parameter to default {param}, " &
-                &"fully scoped type name {name}"
-
-            result.add param.defaultType.get()
+    result = getPartialParams(
+      name, partial.genParams.high, conf, cache, defaulted)
 
 
 
@@ -430,7 +433,7 @@ proc toNType*(
         of ctkIdent:
           assert nimType.nimName.len > 0
           result = newPType(nimType.nimName)
-          for param in nimType.genericParams:
+          for param in nimType.genParams:
             result.add aux(param, cache)
 
 
@@ -521,7 +524,7 @@ proc typeNameForScoped*(
     &"Scoped indent '{ident}' got converted to zero-length nim type"
 
   result = newNimType(buf.join("::")).addIdent(ident)
-  result.genericParams = result.getPartialParams(
+  result.genParams = result.getPartialParams(
     conf, cache, defaulted = false)
 
   conf.fixTypeName(result, conf, 0)
@@ -690,7 +693,7 @@ proc toNimType*(
           # represents.
           for arg in cxType.templateParams():
             res.add toNimType(arg, conf, cache)
-            res.genericParams[^1].isParam = true
+            res.genParams[^1].isParam = true
 
         elif startsWith($cxType, typenameParts):
           let unprefix = dropPrefix($cxType, typenameParts)
@@ -763,7 +766,7 @@ func fixTypeParams*(nt: var NimType, params: seq[NimType]) =
           nt.nimName = params[idx].nimName
           inc idx
 
-        for sub in mitems(nt.genericParams):
+        for sub in mitems(nt.genParams):
           aux(sub, idx)
 
       of ctkProc:
@@ -780,7 +783,7 @@ func hasSpecial*(nt: NimType, special: seq[string]): bool =
   case nt.kind:
     of ctkIdent:
       nt.nimName in special or
-      nt.genericParams.anyOfIt(it.hasSpecial(special))
+      nt.genParams.anyOfIt(it.hasSpecial(special))
 
     of ctkProc:
       nt.arguments.anyOfIt(it.nimType.hasSpecial(special))

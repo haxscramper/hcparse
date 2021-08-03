@@ -287,7 +287,7 @@ proc wrapProcedure*(
       argType.nimName &= conf.rawSuffix()
 
     if argType.kind in {ctkIdent}:
-      argType.genericParams.add argType.getPartialParams(conf, cache, false)
+      argType.genParams.add argType.getPartialParams(conf, cache, false)
 
       if argType.nimName == "UNEXPOSED":
         # WARNING currently parameters which contain `tkUnexposed`
@@ -306,7 +306,7 @@ proc wrapProcedure*(
         # code like
         # `<Ta> struct A { <Tb> struct B {void func(); }; };`
         # and only add `Tb` as template parameter for `func()`.
-        for param in parent.get().genericParams:
+        for param in parent.get().genParams:
           argType.add param
         # FAIL most likely broken with recent refactoring
 
@@ -386,7 +386,7 @@ proc wrapProcedure*(
        getTypeDeclaration().
        inheritsGenParamsOf(parentDecl.get().cursor):
 
-      returnType.genericParams = parent.get().genericParams
+      returnType.genParams = parent.get().genParams
       # WARNING(refactor)
 
     it.returnType = returnType
@@ -446,7 +446,7 @@ proc wrapMethods*(
   if (parent.nimName notin cache.generatedConstructors):
     cache.generatedConstructors.incl parent.nimName
     var returnType = parent
-    returnType.genericParams = conf.genParamsForIdent(cd.ident, cache)
+    returnType.genParams = conf.genParamsForIdent(cd.ident, cache)
     let className = cd.ident.toCppNamespace()
 
     if not hasDestructor:
@@ -552,7 +552,7 @@ proc wrapAlias*(
 
     for newName in al.newTypes:
       var newType = newNimType($newName)
-      newType.genericParams = baseType.genericParams
+      newType.genParams = baseType.genParams
       if newType.nimName != baseType.nimName:
         # Alias names might be the same for `typedef struct St {} St;`
         result.add GenAlias(
@@ -585,16 +585,16 @@ proc wrapAlias*(
 
     var maxIdx = 0
     for idx, param in al.cursor.cxType().templateParams():
-      baseType.genericParams[idx] = param.toNimType(conf, cache)
+      baseType.genParams[idx] = param.toNimType(conf, cache)
       maxIdx = idx
 
-    for idx in (maxIdx + 1) ..< baseType.genericParams.len:
-      newAlias.genericParams.add baseType.genericParams[idx]
+    for idx in (maxIdx + 1) ..< baseType.genParams.len:
+      newAlias.genParams.add baseType.genParams[idx]
 
     # QUESTION is it necessary?
-    # baseType.genericParams.add baseType.getPartialParams(conf, cache, defaulted = true)
+    # baseType.genParams.add baseType.getPartialParams(conf, cache, defaulted = true)
 
-    fixTypeParams(baseType, newAlias.genericParams)
+    fixTypeParams(baseType, newAlias.genParams)
 
     # NOTE ignore `typedef struct` in C
     result.add GenAlias(
@@ -1324,7 +1324,7 @@ proc toNNode*(
         with getImpl:
           returnType = field.fieldType.toNType(conf, cache)
           iinfo = currLInfo()
-          genParams = gen.name.genericParams.mapIt(it.toNType(conf, cache))
+          genParams = gen.name.genParams.mapIt(it.toNType(conf, cache))
           pragma = newPPragma(
             newPIdent("noinit"),
             # newPIdentColonString(conf.importX(), &"#.{field.rawName}"),
@@ -1347,7 +1347,7 @@ proc toNNode*(
         var setImpl = newPProcDecl(field.name, kind = pkAssgn)
         with setImpl:
           iinfo = currLInfo()
-          genParams = gen.name.genericParams.mapIt(it.toNType(conf, cache))
+          genParams = gen.name.genParams.mapIt(it.toNType(conf, cache))
           pragma = newPPragma(
             newPIdentColonString(
               "error",
@@ -1404,6 +1404,13 @@ func hash*(spec: NimImportSpec): Hash =
   !$(hash(spec.importPath) !&
      hash(spec.isRelative) !&
      tern(spec.isRelative, hash(spec.relativeDepth), hash(true)))
+
+proc addImport*(wrapped: var WrappedFile, imp: NimImportSpec) =
+  if "include" in $imp:
+    pprintStackTrace()
+
+  wrapped.imports.incl imp
+
 
 func toNNode*(names: NimImportSpec): PNode =
   var elements: seq[PNode]

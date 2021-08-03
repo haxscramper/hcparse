@@ -763,7 +763,7 @@ proc registerUse*(nimType: NimType, used: var UsedSet, conf: WrapConf) =
       if nimType.defaultType.isSome():
         registerUse(nimType.defaultType.get(), used, conf)
 
-      for param in nimType.genericParams:
+      for param in nimType.genParams:
         registerUse(param, used, conf)
 
     of ctkProc:
@@ -838,7 +838,7 @@ proc updateImports*(
     fileMap: Table[LibImport, WrappedFile]
 
   for file in wrapped:
-    let lib = conf.getSavePath(conf.getBaseFile(file), conf)
+    let lib = conf.getSavePath(conf.getBaseFile(file))
     fileMap[lib] = file
 
   proc isSelfImport(save: LibImport, imp: NimImportSpec): bool =
@@ -851,13 +851,13 @@ proc updateImports*(
     block cursorBasedImportrs:
       let
         base = conf.getBaseFile(file)
-        user = conf.getSavePath(base, conf)
+        user = conf.getSavePath(base)
 
       for typeCursor, typeSet in used.cursors:
         let loc = typeCursor.getSpellingLocation()
         if loc.isSome():
           let
-            dep = conf.getSavePath(loc.get().file, conf)
+            dep = conf.getSavePath(loc.get().file)
             imp = conf.getImport(loc.get().file, base, false)
 
           if not isSelfImport(user, imp):
@@ -868,7 +868,7 @@ proc updateImports*(
                 item)
 
     block libraryOverrideImports:
-      let base = conf.getSavePath(conf.getBaseFile(file), conf)
+      let base = conf.getSavePath(conf.getBaseFile(file))
       for usedLib, typeSet in used.libs:
         if usedLib.isValid():
           let imp = conf.getImport(usedLib, base, false)
@@ -921,25 +921,25 @@ proc updateImports*(
     ) =
     let
       base = conf.getBaseFile(file)
-      save = conf.getSavePath(base, conf)
+      save = conf.getSavePath(base)
 
     for typeCursor, _ in usedGroup.cursors:
       if typeCursor.getSpellingLocation().getSome(loc):
-        let usedLib = conf.getSavePath(loc.file, conf)
+        let usedLib = conf.getSavePath(loc.file)
         if usedLib notin ignoreImport:
           let imp = conf.getImport(
             dep = usedLib,
-            user = conf.getSavePath(base, conf), false)
+            user = conf.getSavePath(base), false)
 
           if not isSelfImport(save, imp):
-            file.imports.incl imp
+            file.addImport imp
 
     for usedLib, _ in usedGroup.libs:
       if usedLib.isValid() and usedLib notin ignoreImport:
         let imp = conf.getImport(
-          dep = usedLib, user = conf.getSavePath(base, conf), false)
+          dep = usedLib, user = conf.getSavePath(base), false)
         if not isSelfImport(save, imp):
-          file.imports.incl imp
+          file.addImport imp
 
   # Pass files that were not directly affected
   for file, wrapped in mpairs(fileMap):
@@ -976,9 +976,9 @@ proc updateImports*(
 
         file.addImports(usedGroup.inProcs, ignoreImports)
 
-        file.imports.incl conf.getImport(
+        file.addImport conf.getImport(
           dep = conf.initLibImport(@[mergedPaths]),
-          user = conf.getSavePath(base, conf),
+          user = conf.getSavePath(base),
           false)
 
         file.exports.incl mergedPaths
@@ -999,7 +999,7 @@ proc updateImports*(
         let usedGroup = merged.getUsedTypes(conf)
         for typeCursor, _ in usedGroup.inTypes.cursors:
           if typeCursor.getSpellingLocation().getSome(loc):
-            typeImports.incl conf.getSavePath(loc.file, conf)
+            typeImports.incl conf.getSavePath(loc.file)
 
         for usedLib, _ in usedGroup.inTypes.libs:
           if usedLib.isValid():
@@ -1008,7 +1008,7 @@ proc updateImports*(
       let mergedLibs = group.mapIt(importGraph[it]).toHashSet()
       for imp in typeImports:
         if imp notin mergedLibs:
-          merged.imports.incl conf.getImport(
+          merged.addImport conf.getImport(
             dep = imp,
             user = getLibSavePath(conf, merged),
             false)
@@ -1020,8 +1020,8 @@ proc updateImports*(
   cache.importGraph = importGraph
 
   for file in mitems(result):
-    file.imports.incl initNimImportSpec(true, @["std", "bitops"])
-    file.imports.incl initNimImportSpec(true, @[
+    file.addImport initNimImportSpec(true, @["std", "bitops"])
+    file.addImport initNimImportSpec(true, @[
       "hmisc", "wrappers", "wraphelp"])
 
     file.exports.incl "wraphelp"
@@ -1066,13 +1066,79 @@ proc wrapFiles*(
   result = updateImports(genFiles, conf, cache)
 
 
+
+proc mergeSfinae*(
+    decls: seq[WrappedEntry],
+    conf: WrapConf, cache: var WrapCache): seq[WrappedEntry] =
+
+  var byArglen: OrderedTable[int, seq[WrappedEntry]]
+  for decl in decls:
+    byArgLen.mgetOrPut(decl.decl.procDecl.arguments.len(), @[]).add decl
+
+  for arglen, decls in byArgLen:
+    if decls.len == 1:
+      result.add decls
+
+    else:
+      # Multiple buckets with equal overloads
+      var unifyEq: seq[seq[WrappedEntry]]
+      # For each declaration in input list
+
+      for decl in decls:
+        # For each group in unification buckets
+        let gen1 = decl.decl.procDecl.genTable()
+        for group in mitems(unifyEq):
+          # For each item in bucket
+          var foundBucket: bool = false
+          for item in group:
+            # If it is equal with any of the elements in bucket, add it to
+            # the list
+            let (sig1, sig2) = (decl.decl.procDecl.signature, item.decl.procDecl.signature)
+            conf.dump sig1, sig2
+            let gen2 = item.decl.procDecl.genTable()
+            var types1, types2: seq[NType[PNode]]
+
+            # Only consider argument types
+            types1.add sig1.argumentTypes()
+            types2.add sig2.argumentTypes()
+            if types1.len == types2.len:
+              var allOk = true
+              for (t1, t2) in zip(types1, types2):
+                if not unify(t1, t2, gen1, gen2):
+                  allOk = false
+                  break
+
+              if allOk:
+                foundBucket = true
+                group.add item
+                break
+
+          # Otherwise create new bucket
+          if not foundBucket:
+            unifyEq.add @[decl]
+
+      for group in unifyEq:
+        if group.len == 1:
+          result.add group[0]
+
+        else:
+          raise newImplementError()
+
+proc mergeSfinae*(
+    decls: OrderedTable[string, seq[WrappedEntry]],
+    conf: WrapConf, cache: var WrapCache): seq[WrappedEntry] =
+
+  for name, grouped in pairs(decls):
+    if grouped.len == 1:
+      result.add grouped
+
+    else:
+      result.add mergeSfinae(grouped, conf, cache)
+
 proc wrapFile*(
     wrapped: WrappedFile, conf: WrapConf,
     cache: var WrapCache, index: hc_types.FileIndex
   ): seq[WrappedEntry] =
-
-
-
 
   var sections: tuple[
     inTypes: Table[string, WrappedEntry],
@@ -1081,6 +1147,8 @@ proc wrapFile*(
 
   let push = pquote do:
     {.push warning[UnusedImport]: off.}
+
+  var procDecls: OrderedTable[string, seq[WrappedEntry]]
 
   sections.other[wepBeforeAll].add(
     push.toNimDecl().newWrappedEntry(wepBeforeAll, currLInfo()))
@@ -1124,11 +1192,16 @@ proc wrapFile*(
         raise newUnexpectedKindError(
           elem.decl,
           "Field declarations cannot be encountered at toplevel.",
-          "This code cannot be reached."
-        )
+          "This code cannot be reached.")
+
+      of nekProcDecl:
+        procDecls.mgetOrPut(elem.decl.procDecl.name, @[]).add elem
 
       else:
         sections.other[elem.position].add elem
+
+  for decl in mergeSfinae(procDecls, conf, cache):
+    sections.other[decl.position].add decl
 
   if not isNil(conf.userCode):
     let (node, position) = conf.userCode(wrapped)
@@ -1246,6 +1319,9 @@ proc wrapAllFiles*(
   ): WrapCache =
   ## Generate and write wrappers for all `files`
 
+  for dep in conf.depsConf:
+    dep.logger = conf.logger
+
   var
     cache: WrapCache # Global cache for all parsed files
     index: hc_types.FileIndex
@@ -1264,7 +1340,7 @@ proc wrapAllFiles*(
 
   var wrapped: seq[seq[WrappedEntry]]
   for file in wrapFiles(parsed, conf, cache, index):
-    let outPath = conf.nimOutDir / getSavePath(conf, file)
+    let outPath = conf.nimOutDir / conf.getSavePath(file)
 
     var codegen: CodegenResult
     for node in wrapFile(file, conf, cache, index):

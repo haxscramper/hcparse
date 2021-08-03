@@ -263,7 +263,7 @@ proc fixTypeName*(ntype: var NimType, conf: WrapConf, idx: int = 0) =
     of ctkIdent:
       ntype.nimName = fixTypeName(ntype.nimName, idx, conf)
       var idx = idx
-      for gen in mitems(ntype.genericParams):
+      for gen in mitems(ntype.genParams):
         conf.fixTypeName(gen, conf, idx)
         inc idx
 
@@ -293,6 +293,17 @@ proc getBaseFile*(conf: WrapConf, wrapped: WrappedFile): AbsFile =
   else:
     result = wrapped.baseFile
 
+
+proc getSavePath*(conf: WrapConf, path: AbsFile): LibImport =
+  if conf.isInLibrary(path, conf):
+    return conf.getSavePathImpl(path, conf)
+
+  else:
+    for conf in conf.depsConf:
+      if conf.isInLibrary(path, conf):
+        return conf.getSavePathImpl(path, conf)
+
+
 proc getSavePath*(conf: WrapConf, wrapped: WrappedFile): RelFile =
   ## Get save path for generated file - either using @arg{conf.getSavePath}
   ## (for real wrapped files), or @arg{wrapped.newFile} (for newly
@@ -301,7 +312,7 @@ proc getSavePath*(conf: WrapConf, wrapped: WrappedFile): RelFile =
     result = wrapped.newFile
 
   else:
-    result = conf.getSavePath(wrapped.baseFile, conf).toRelative()
+    result = conf.getSavePath(wrapped.baseFile).toRelative()
 
 
 proc getLibSavePath*(conf: WrapConf, wrapped: WrappedFile): LibImport =
@@ -310,7 +321,7 @@ proc getLibSavePath*(conf: WrapConf, wrapped: WrappedFile): LibImport =
       wrapped.newFile.withoutExt().getstr().split("/"))
 
   else:
-    result = conf.getSavePath(wrapped.baseFile, conf)
+    result = conf.getSavePath(wrapped.baseFile)
 
 proc getImport*(
     conf: WrapConf, dep, user: LibImport,
@@ -333,7 +344,6 @@ proc getImport*(
     else:
       result = initImportSpec(dep.importPath)
 
-
 proc getImport*(
   conf: WrapConf, dep, user: AbsFile, isExternalImport: bool): NimImportSpec =
   ## Generate import statement for header file dependency.
@@ -345,29 +355,21 @@ proc getImport*(
   ##   can be left unspecified as result will be determined solely by
   ##   @arg{conf.getSavePath} callback and @arg{conf.wrapName}
   if isExternalImport:
-    result = initImportSpec(
-      @[conf.wrapName] & conf.getSavePath(dep, conf).importPath)
+    let save = conf.getSavePath(dep)
+    result = initImportSpec(@[save.library] & save.importPath)
 
   else:
-    result = conf.getImport(
-      conf.getSavePath(dep, conf),
-      conf.getSavePath(user, conf),
-      false)
-      # let (dir, name, ext) = dep.splitFile()
-      # result = initNimImportSpec(
-      #   isExternalImport,
-      #   @[
-      #     name.splitCamel().
-      #       mapIt(it.toLowerAscii()).join("_").
-      #       fixFileName()])
+    if conf.isInLibrary(dep, conf):
+      result = conf.getImport(
+        conf.getSavePath(dep),
+        conf.getSavePath(user),
+        false)
 
-      # if isExternalImport:
-      #   if conf.wrapName.isSome():
-      #     result.importPath = conf.wrapName.get() & result.importPath
-
-      # else:
-      #   updateForInternalImport(dep, conf, conf.baseDir, result)
-
+    else:
+      for config in conf.depsConf:
+        if config.isInLibrary(dep, config):
+          result = config.getImport(dep, user, true)
+          break
 
 proc getImportUsingDependencies*(
     conf: WrapConf,
@@ -437,11 +439,12 @@ let baseCppWrapConf* = WrapConf(
       else:
         NimHeaderSpec(kind: nhskGlobal, global: file)
   ),
-  getSavePath: (
+  getSavePathImpl: (
     proc(orig: AbsFile, conf: WrapConf): LibImport =
+      let rel = relativePath(orig, conf.baseDir)
       return initLibImport(
         conf.wrapName,
-        relativePath(orig, conf.baseDir).
+          rel.
           withoutExt().
           string.
           split("/").
@@ -548,6 +551,7 @@ let baseCppWrapConf* = WrapConf(
 
 let baseCWrapConf* = baseCPPWrapConf.withDeepIt do:
   it.isImportcpp = false
+  it.wrapName = "base-c-wrap-conf"
 
 import
   hmisc/types/hgraph,

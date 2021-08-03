@@ -73,7 +73,7 @@ type
         defaultType*: Option[NimType] ## Default type value. Used in
                                       ## template type parameters
         nimName*: string ## Converted nim name
-        genericParams*: seq[NimType] ## Optional list of generic parameters
+        genParams*: seq[NimType] ## Optional list of generic parameters
 
       of ctkProc:
         arguments*: seq[CArg]
@@ -382,10 +382,10 @@ type
     ## `T1` respectively, using value provided by `idx`
 
     overrideComplex*: proc(
-      cxType: CxType, conf: WrapConf, cache: WrapCache): Option[NimType]
+      cxType: CxType, conf: WrapConf, cache: var WrapCache): Option[NimType]
     ## Hard override generated complex types
 
-    getSavePath*: proc(orig: AbsFile, conf: WrapConf): LibImport ## Return
+    getSavePathImpl*: proc(orig: AbsFile, conf: WrapConf): LibImport ## Return
     ## path, *relative to project root* (@field{nimOutDir}) where file
     ## generated from `orig` should be saved.
 
@@ -452,6 +452,7 @@ type
     baseDir*: AbsDir ## Root directory for Cxx sources being wrapped. Used
                      ## for debug comments in generated sources
     nimOutDir*: AbsDir ## Root directory to write files to
+    depsConf*: seq[WrapConf]
 
     refidFile*: RelFile
     wrapName*: string ## Name of the wrapped library.
@@ -1332,7 +1333,7 @@ func newNimType*(
 
 func newNimType*(
     name: string,
-    genericParams: openarray[NimType] = @[],
+    genParams: openarray[NimType] = @[],
     libImport: LibImport = LibImport(),
     original: Option[Cxtype] = none(CxType),
     isParam: bool = false
@@ -1345,7 +1346,7 @@ func newNimType*(
     fromCXtype: false,
     typeImport: libImport,
     original: original,
-    genericParams: toSeq(genericParams)
+    genParams: toSeq(genParams)
   )
 
 func newNimType*(
@@ -1359,14 +1360,14 @@ func newNimType*(
 
 func newNimType*(
     name: string,
-    genericParams: openarray[NimType],
+    genParams: openarray[NimType],
     cxType: CXType,
     isParam: bool = false
   ): NimType =
 
   # {.warning[Deprecated]:on.}
   result = newNimType(name, cxType, isParam)
-  result.genericParams.add genericParams
+  result.genParams.add genParams
 
 func withLib*(ntype: sink NimType, libImport: LibImport): NimType =
   result = ntype
@@ -1387,7 +1388,7 @@ func hash*(nt: NimType): Hash =
     of ctkIdent:
       result = hash(nt.nimName)
 
-      for param in nt.genericParams:
+      for param in nt.genParams:
         result = result !& hash(param)
 
       return !$(result)
@@ -1408,8 +1409,8 @@ func `==`*(t1, t2: NimType): bool =
     case t1.kind:
       of ctkIdent:
         if t1.nimName == t2.nimName and
-           t1.genericParams == t2.genericParams:
-          for (p1, p2) in zip(t1.genericParams, t2.genericParams):
+           t1.genParams == t2.genParams:
+          for (p1, p2) in zip(t1.genParams, t2.genParams):
             if p1 != p2:
               return false
 
@@ -1436,6 +1437,11 @@ func `$`*(lib: LibImport): string =
 
 func libImport*(conf: WrapConf, path: seq[string]): LibImport =
   initLibImport(conf.wrapName, path)
+
+func libImport*(conf: WrapConf, file: RelFile): LibImport =
+  initLibImport(
+    conf.wrapName,
+    file.withoutExt().getStr().split("/"))
 
 func isValid*(lib: LibImport): bool = lib.importPath.len > 0
 
@@ -1481,9 +1487,9 @@ proc `$`*(nimType: NimType): string =
           result = "p!"
 
         result &= nimType.nimName
-        if nimType.genericParams.len > 0:
+        if nimType.genParams.len > 0:
           result &= "["
-          result &= nimType.genericParams.mapIt($it).join(", ")
+          result &= nimType.genParams.mapIt($it).join(", ")
           result &= "]"
 
         if not nimType.fromCxType and nimType.original.isSome():
@@ -1776,7 +1782,7 @@ proc allUsedTypes*(
 
   case nimType.kind:
     of ctkIdent:
-      for param in nimType.genericParams:
+      for param in nimType.genParams:
         result.add allUsedTypes(param)
 
     of ctkProc:
@@ -1795,7 +1801,7 @@ proc allGenericParams*(nimType: NimType): seq[NimType] =
 
   case nimType.kind:
     of ctkIdent:
-      for param in nimType.genericParams:
+      for param in nimType.genParams:
         result.add allGenericParams(param)
 
     of ctkProc:
