@@ -295,6 +295,9 @@ proc getBaseFile*(conf: WrapConf, wrapped: WrappedFile): AbsFile =
 
 
 proc getSavePath*(conf: WrapConf, path: AbsFile): LibImport =
+  ## Get save path for an input file. If path is not in current library
+  ## it's dependencies from [[code:WrapConf.depsConf]] would be queried as
+  ## well (using [[code:WrapCOnf.isInLibrary]]).
   if conf.isInLibrary(path, conf):
     return conf.getSavePathImpl(path, conf)
 
@@ -307,7 +310,10 @@ proc getSavePath*(conf: WrapConf, path: AbsFile): LibImport =
 proc getSavePath*(conf: WrapConf, wrapped: WrappedFile): RelFile =
   ## Get save path for generated file - either using @arg{conf.getSavePath}
   ## (for real wrapped files), or @arg{wrapped.newFile} (for newly
-  ## generated files.)
+  ## generated files.). Generated save files reuse
+  ## [[code:WrappedFile.newFile]], non-generated (based on the existing
+  ## files) resolve correct relative path based on dependencies and
+  ## [[code:WrapConf.getSavePathImpl]])
   if wrapped.isGenerated:
     result = wrapped.newFile
 
@@ -330,6 +336,7 @@ proc getImport*(
 
   if isExternalImport:
     result = initImportSpec(dep.library & dep.importPath)
+    conf.dump result, dep
 
   else:
     if dep.library == conf.wrapName or
@@ -342,7 +349,7 @@ proc getImport*(
       result = initImportSpec(parts, depth)
 
     else:
-      result = initImportSpec(dep.importPath)
+      result = initImportSpec(dep.library & dep.importPath)
 
 proc getImport*(
   conf: WrapConf, dep, user: AbsFile, isExternalImport: bool): NimImportSpec =
@@ -355,8 +362,7 @@ proc getImport*(
   ##   can be left unspecified as result will be determined solely by
   ##   @arg{conf.getSavePath} callback and @arg{conf.wrapName}
   if isExternalImport:
-    let save = conf.getSavePath(dep)
-    result = initImportSpec(@[save.library] & save.importPath)
+    result = conf.getImport(conf.getSavePath(dep), LibImport(), true)
 
   else:
     if conf.isInLibrary(dep, conf):

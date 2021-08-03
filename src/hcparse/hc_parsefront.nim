@@ -325,7 +325,8 @@ proc getTypeGraph(
                 cdecl.cursor = decl
                 let
                   loc = decl.getSpellingLocation().get()
-                  path = conf.getImport(loc.file, conf.getBaseFile(file), false).importPath
+                  path = conf.getImport(
+                    loc.file, conf.getBaseFile(file), false).importPath
                   node = initTypeNode(
                     used.nimName, path,
                     cdecl.cursor, isDef = false)
