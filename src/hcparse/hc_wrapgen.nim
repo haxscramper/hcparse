@@ -1699,7 +1699,8 @@ proc toSave*(
 
   result = SaveArg(
     haxdocIdent: conf.getHaxdoc(@[]),
-    nimName: entry.name,
+    nimName: fixIdentName(entry.name),
+    cxxName: @[entry.name],
     nimType: conf.toSave(entry.nimType, cache)
   )
 
@@ -1707,6 +1708,7 @@ proc toSave*(
     conf: WrapConf, entry: GenProc, cache: var WrapCache): SaveProc =
 
   result = SaveProc(
+    icpp: entry.icpp,
     header: some conf.toSave(entry.header),
     spellingLocation: conf.getSaveSpelling(entry.cdecl.cursor),
     haxdocIdent: conf.getHaxdoc(entry.cdecl.ident),
@@ -1770,7 +1772,9 @@ proc toSave*(
     result.methods.add conf.toSave(meth, cache)
 
   for nested in entry.nestedEntries:
-    result.nested.add conf.toSave(nested, cache)
+    let save = conf.toSave(nested, cache)
+    if save.kind != gekEmpty:
+      result.nested.add save
 
 proc toSave*(
     conf: WrapConf, entry: GenEntry, cache: var WrapCache): SaveEntry =
@@ -1798,4 +1802,6 @@ proc toSave*(
     conf: WrapConf, file: WrappedFile, cache: var WrapCache): SaveFile  =
 
   for entry in file.entries:
-    result.entries.add conf.toSave(entry, cache)
+    let save = conf.toSave(entry, cache)
+    if save.kind != gekEmpty:
+      result.entries.add save
