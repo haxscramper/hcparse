@@ -1063,7 +1063,6 @@ proc wrapFiles*(
       ensureDir(file)
       conf.dump file
       let j = conf.toSave(resFile, cache).toJson()
-      conf.dump j
       writeFile(file, j)
 
 

@@ -457,6 +457,7 @@ type
 
     refidFile*: RelFile
     wrapName*: string ## Name of the wrapped library.
+    withSpellingLocation*: bool
 
 
   WrapEntryPosition = object
@@ -652,29 +653,39 @@ type
       of gekEmpty:
         genEmptyIInfo*: LineInfo
 
-  CxxSpellingLocation = object
+  CxxSpellingLocation* = object
     file*: AbsFile
     line*, column*: int
 
+  SaveHeader* = object
+    case kind*: NimHeaderSpecKind
+      of nhskGlobal:
+        global*: string
+
+      of nhskAbsolute:
+        file*: AbsFile
+
+      of nhskPNode:
+        other*: string
+
   SaveBase* = object of RootObj
     iinfo*: LineInfo
-    spellingLocation*: CxxSpellingLocation
+    spellingLocation*: Option[CxxSpellingLocation]
     nimName*: string
     cxxName*: seq[string]
     icpp*: string
     private*: bool
-    haxdocIdent*: JsonNode
-    # haxdocIdent* {.requiresinit.}: JsonNode
+    header*: Option[SaveHeader]
+    haxdocIdent* {.requiresinit.}: JsonNode
 
   SaveType* = ref object
-    isConst*: bool
-    isMutable*: bool
-    isParam*: bool
-    isComplex*: bool
-    typeImport*: LibImport
-
     case kind*: CTypeKind
       of ctkIdent:
+        isConst*: bool
+        isMutable*: bool
+        isComplex*: bool
+
+        typeImport*: LibImport
         nimName*: string
         cxxName*: seq[string]
         genParams*: seq[SaveType]
@@ -1937,3 +1948,15 @@ proc fragmentType*(entry: var GenEntry):
 
     else:
       discard
+
+proc getSavePath*(conf: WrapConf, path: AbsFile): LibImport =
+  ## Get save path for an input file. If path is not in current library
+  ## it's dependencies from [[code:WrapConf.depsConf]] would be queried as
+  ## well (using [[code:WrapCOnf.isInLibrary]]).
+  if conf.isInLibrary(path, conf):
+    return conf.getSavePathImpl(path, conf)
+
+  else:
+    for conf in conf.depsConf:
+      if conf.isInLibrary(path, conf):
+        return conf.getSavePathImpl(path, conf)

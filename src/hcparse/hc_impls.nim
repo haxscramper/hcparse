@@ -294,17 +294,6 @@ proc getBaseFile*(conf: WrapConf, wrapped: WrappedFile): AbsFile =
     result = wrapped.baseFile
 
 
-proc getSavePath*(conf: WrapConf, path: AbsFile): LibImport =
-  ## Get save path for an input file. If path is not in current library
-  ## it's dependencies from [[code:WrapConf.depsConf]] would be queried as
-  ## well (using [[code:WrapCOnf.isInLibrary]]).
-  if conf.isInLibrary(path, conf):
-    return conf.getSavePathImpl(path, conf)
-
-  else:
-    for conf in conf.depsConf:
-      if conf.isInLibrary(path, conf):
-        return conf.getSavePathImpl(path, conf)
 
 
 proc getSavePath*(conf: WrapConf, wrapped: WrappedFile): RelFile =

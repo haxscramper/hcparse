@@ -2,12 +2,16 @@ import
   std/[
     strutils, sequtils, strformat, tables,
     lenientops, parseutils, bitops, with, sets,
-    hashes
+    hashes, json
   ]
 
 import
-  ./hc_types, ./cxtypes, ./cxcommon, ./hc_visitors,
-  ./libclang_wrap, ./hc_typeconv
+  ./hc_types,
+  ./cxtypes,
+  ./cxcommon,
+  ./hc_visitors,
+  ./libclang_wrap,
+  ./hc_typeconv
 
 import
   hnimast,
@@ -15,8 +19,10 @@ import
   hmisc/macros/iflet,
   hmisc/algo/[htemplates, hseq_distance, namegen],
   hmisc/[helpers, hexceptions],
-  hmisc/other/[hlogger, oswrap, hjson],
+  hmisc/other/[hlogger, oswrap],
   hmisc/types/colorstring
+
+import jsony
 
 import htsparse/cpp/cpp
 import fusion/matching except addPrefix
@@ -1568,31 +1574,97 @@ proc getCxxName*(conf: WrapConf, decl: CDecl): seq[string] =
   conf.getSemanticNamespaces(decl.cursor).mapIt(getName(it))
 
 
+proc getSaveSpelling*(conf: WrapConf, cursor: CxCursor): Option[CxxSpellingLocation] =
+  if conf.withSpellingLocation:
+    let loc = cursor.getSpellingLocation()
+    if loc.isSome():
+      let (file, line, column, offset) = loc.get()
+      result = some CxxSpellingLocation(
+        file: file, line: line, column: column)
+
+proc getSaveSpeling*(conf: WrapConf, cdecl: CDecl): Option[CxxSpellingLocation] =
+  conf.getSaveSpelling(cdecl.cursor)
+
+proc getCxxName*(conf: WrapConf, cxType: CxType): seq[string] =
+  conf.getTypeNamespaces(cxType).mapIt(getName(it))
+
 proc toSave*(
     conf: WrapConf, entry: CArg, cache: var WrapCache): SaveArg
+
+
+proc dumpHook*(s: var string, v: LibImport) =
+  var tmp: string
+  tmp.add "{"
+  tmp.add &"\"library\": \"{v.library}\", "
+  tmp.add "\"typeImport\": "
+  tmp.dumpHook(v.importPath)
+  tmp.add "}"
+  # echo v, tmp
+  s.add tmp
+
+proc getTypeImport*(conf: WrapConf, nimType: NimType): LibImport =
+  if nimType.fromCxType or nimType.original.isSome():
+    let cxType =
+      if nimType.fromCxType:
+        nimType.cxType
+
+      else:
+        nimType.original.get()
+
+    let decl = getTypeDeclaration(cxType)
+    if decl.kind != ckNoDeclFound:
+      result = conf.getSavePath(
+        decl.getSpellingLocation().get().file)
+
+  else:
+    result = nimType.typeImport
+
+  if result.library.len == 0:
+    result.library = conf.wrapName
+
+
+proc toSave*(conf: WrapConf, header: NimHeaderSpec): SaveHeader =
+  result = SaveHeader(kind: header.kind)
+  case header.kind:
+    of nhskGlobal: result.global = header.global
+    of nhskAbsolute: result.file = header.file
+    of nhskPNode: result.other = $header.pnode
+
 
 proc toSave*(
   conf: WrapConf, nimType: NimType, cache: var WrapCache): SaveType =
   assertRef nimType
-  result = SaveType(
-    kind: nimType.kind,
-    isMutable: nimType.isMutable,
-    isConst: nimType.isParam,
-  )
+  var nimType = nimType
+  conf.fixTypeName(nimType, conf, 0)
+  result = SaveType(kind: nimType.kind)
 
   case nimType.kind:
     of ctkIdent:
       if nimType.defaultType.isSome():
         result.default = some conf.toSave(nimType.defaultType.get(), cache)
 
-      result.nimName = nimType.nimName
-      result.genParams = mapIt(nimType.genParams, conf.toSave(it, cache))
+      with result:
+        isMutable = nimType.isMutable
+        isConst = nimType.isParam
+        nimName = nimType.nimName
+        genParams = mapIt(nimType.genParams, conf.toSave(it, cache))
+        typeImport = conf.getTypeImport(nimType)
+        isComplex = nimType.isComplex
+
+      if nimType.fromCxType:
+        result.cxxName = conf.getCxxName(nimType.cxType)
+
+      elif nimType.original.isSome():
+        result.cxxName = conf.getCxxName(nimType.original.get())
 
     of ctkProc:
       result.returnType = conf.toSave(nimType.returnType, cache)
       result.arguments = mapIt(nimType.arguments, conf.toSave(it, cache))
 
 
+
+proc getHaxdoc*(conf: WrapConf, ident: CScopedIdent): JsonNode =
+  newJNull()
 
 proc toSave*(
     conf: WrapConf, entry: GenEnumValue, cache: var WrapCache
@@ -1607,6 +1679,8 @@ proc toSave*(
     conf: WrapConf, entry: GenEnum, cache: var WrapCache): SaveEnum =
 
   result = SaveEnum(
+    spellingLocation: conf.getSaveSpelling(entry.cdecl.cursor),
+    haxdocIdent: conf.getHaxdoc(entry.cdecl.ident),
     nimName: entry.name,
     cxxName: conf.getCxxName(entry.cdecl),
     iinfo: entry.iinfo
@@ -1624,6 +1698,7 @@ proc toSave*(
     conf: WrapConf, entry: CArg, cache: var WrapCache): SaveArg =
 
   result = SaveArg(
+    haxdocIdent: conf.getHaxdoc(@[]),
     nimName: entry.name,
     nimType: conf.toSave(entry.nimType, cache)
   )
@@ -1632,6 +1707,9 @@ proc toSave*(
     conf: WrapConf, entry: GenProc, cache: var WrapCache): SaveProc =
 
   result = SaveProc(
+    header: some conf.toSave(entry.header),
+    spellingLocation: conf.getSaveSpelling(entry.cdecl.cursor),
+    haxdocIdent: conf.getHaxdoc(entry.cdecl.ident),
     nimName: entry.name,
     genParams: entry.genParams.mapIt(conf.toSave(it, cache))
   )
@@ -1644,6 +1722,8 @@ proc toSave*(
     conf: WrapConf, entry: GenField, cache: var WrapCache): SaveField =
 
   result = SaveField(
+    spellingLocation: conf.getSaveSpelling(entry.cdecl.cursor),
+    haxdocIdent: conf.getHaxdoc(entry.cdecl.ident),
     nimName: entry.name,
     nimType: conf.toSave(entry.fieldType, cache)
   )
@@ -1652,6 +1732,8 @@ proc toSave*(
     conf: WrapConf, entry: GenAlias, cache: var WrapCache): SaveAlias =
 
   result = SaveAlias(
+    spellingLocation: conf.getSaveSpelling(entry.cdecl.cursor),
+    haxdocIdent: conf.getHaxdoc(entry.cdecl.ident),
     newAlias: conf.toSave(entry.newAlias, cache),
     baseType: conf.toSave(entry.baseType, cache)
   )
@@ -1660,16 +1742,25 @@ proc toSave*(
 proc toSave*(
     conf: WrapConf, entry: GenForward, cache: var WrapCache): SaveForward =
 
-  raise newImplementError()
+  result = SaveForward(
+    spellingLocation: conf.getSaveSpelling(entry.cdecl.cursor),
+    nimName: getName(entry.cdecl.cursor),
+    cxxName: conf.getCxxName(entry.cdecl),
+    haxdocIdent: conf.getHaxdoc(entry.cdecl.ident),
+    iinfo: entry.iinfo
+  )
 
 proc toSave*(
     conf: WrapConf, entry: GenObject, cache: var WrapCache): SaveObject =
 
   result = SaveObject(
+    spellingLocation: conf.getSaveSpelling(entry.cdecl.cursor),
     nimName: entry.name.nimName,
     cxxName: conf.getCxxName(entry.cdecl),
+    haxdocIdent: conf.getHaxdoc(entry.cdecl.ident),
     iinfo: entry.iinfo,
-    genParams: entry.name.genParams.mapIt(conf.toSave(it, cache))
+    genParams: entry.name.genParams.mapIt(conf.toSave(it, cache)),
+    kind: entry.kind
   )
 
   for field in entry.memberFields:
