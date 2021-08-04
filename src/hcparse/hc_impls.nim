@@ -336,7 +336,6 @@ proc getImport*(
 
   if isExternalImport:
     result = initImportSpec(dep.library & dep.importPath)
-    conf.dump result, dep
 
   else:
     if dep.library == conf.wrapName or

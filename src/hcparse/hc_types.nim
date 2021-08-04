@@ -453,6 +453,7 @@ type
                      ## for debug comments in generated sources
     nimOutDir*: AbsDir ## Root directory to write files to
     depsConf*: seq[WrapConf]
+    serializeTo*: Option[AbsDir]
 
     refidFile*: RelFile
     wrapName*: string ## Name of the wrapped library.
@@ -651,6 +652,99 @@ type
       of gekEmpty:
         genEmptyIInfo*: LineInfo
 
+  CxxSpellingLocation = object
+    file*: AbsFile
+    line*, column*: int
+
+  SaveBase* = object of RootObj
+    iinfo*: LineInfo
+    spellingLocation*: CxxSpellingLocation
+    nimName*: string
+    cxxName*: seq[string]
+    icpp*: string
+    private*: bool
+    haxdocIdent*: JsonNode
+    # haxdocIdent* {.requiresinit.}: JsonNode
+
+  SaveType* = ref object
+    isConst*: bool
+    isMutable*: bool
+    isParam*: bool
+    isComplex*: bool
+    typeImport*: LibImport
+
+    case kind*: CTypeKind
+      of ctkIdent:
+        nimName*: string
+        cxxName*: seq[string]
+        genParams*: seq[SaveType]
+        default*: Option[SaveType]
+
+      of ctkProc:
+        arguments*: seq[SaveArg]
+        returnType*: SaveType
+
+
+  SaveProc* = object of SaveBase
+    arguments*: seq[SaveArg]
+    returnType*: SaveType
+    genParams*: seq[SaveType]
+    kind*: ProcKind
+
+  SaveArg* = object of SaveBase
+    nimType*: SaveType
+    default*: Option[string] # ???
+
+  SaveField* = object of SaveBase
+    nimType*: SaveType
+    isStatic*: bool
+
+  SaveEnumValue* = object
+    baseName*: string
+    cxxName*: seq[string]
+    nimName*: string
+    value*: BiggestInt
+
+  SaveAlias* = object of SaveBase
+    isDistinct*: bool
+    newAlias*: SaveType
+    baseType*: SaveType
+
+  SaveEnum* = object of SaveBase
+    values*: seq[SaveEnumValue]
+
+  SaveObject* = object of SaveBase
+    kind*: GenObjectKind
+    genParams*: seq[SaveType]
+    mfields*: seq[SaveField]
+    methods*: seq[SaveProc]
+    nested*: seq[SaveEntry]
+
+  SaveForward* = object of SaveBase
+
+  SaveEntry* = ref object
+    case kind*: GenEntryKind
+      of gekEnum:
+        saveEnum*: SaveEnum
+
+      of gekProc:
+        saveProc*: SaveProc
+
+      of gekObject:
+        saveObject*: SaveObject
+
+      of gekAlias:
+        saveAlias*: SaveAlias
+
+      of gekForward:
+        saveForward*: SaveForward
+
+      else:
+        discard
+
+  SaveFile* = object
+    entries*: seq[SaveEntry]
+    savePath*: LibImport
 
   WrappedEntryPos* = enum
     wepInProcs

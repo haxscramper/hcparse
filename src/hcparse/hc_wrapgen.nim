@@ -443,7 +443,8 @@ proc wrapMethods*(
         else:
           result.extra.add d
 
-  if (parent.nimName notin cache.generatedConstructors):
+  if conf.isImportcpp and
+     (parent.nimName notin cache.generatedConstructors):
     cache.generatedConstructors.incl parent.nimName
     var returnType = parent
     returnType.genParams = conf.genParamsForIdent(cd.ident, cache)
@@ -1546,3 +1547,164 @@ Write generated wrappers to single file
 
   for _, file in pairs(resFiles):
     file.close()
+
+proc box*(en: SaveEnum): SaveEntry =
+  SaveEntry(kind: gekEnum, saveEnum: en)
+
+proc box*(en: SaveForward): SaveEntry =
+  SaveEntry(kind: gekForward, saveForward: en)
+
+proc box*(ob: SaveObject): SaveEntry =
+  SaveEntry(kind: gekObject, saveObject: ob)
+
+proc box*(en: SaveProc): SaveEntry =
+  SaveEntry(kind: gekProc, saveProc: en)
+
+proc box*(en: SaveAlias): SaveEntry =
+  SaveEntry(kind: gekAlias, saveAlias: en)
+
+
+proc getCxxName*(conf: WrapConf, decl: CDecl): seq[string] =
+  conf.getSemanticNamespaces(decl.cursor).mapIt(getName(it))
+
+
+proc toSave*(
+    conf: WrapConf, entry: CArg, cache: var WrapCache): SaveArg
+
+proc toSave*(
+  conf: WrapConf, nimType: NimType, cache: var WrapCache): SaveType =
+  assertRef nimType
+  result = SaveType(
+    kind: nimType.kind,
+    isMutable: nimType.isMutable,
+    isConst: nimType.isParam,
+  )
+
+  case nimType.kind:
+    of ctkIdent:
+      if nimType.defaultType.isSome():
+        result.default = some conf.toSave(nimType.defaultType.get(), cache)
+
+      result.nimName = nimType.nimName
+      result.genParams = mapIt(nimType.genParams, conf.toSave(it, cache))
+
+    of ctkProc:
+      result.returnType = conf.toSave(nimType.returnType, cache)
+      result.arguments = mapIt(nimType.arguments, conf.toSave(it, cache))
+
+
+
+proc toSave*(
+    conf: WrapConf, entry: GenEnumValue, cache: var WrapCache
+  ): SaveEnumValue =
+
+  result = SaveEnumValue(
+    baseName: entry.baseName,
+    value: entry.resVal
+  )
+
+proc toSave*(
+    conf: WrapConf, entry: GenEnum, cache: var WrapCache): SaveEnum =
+
+  result = SaveEnum(
+    nimName: entry.name,
+    cxxName: conf.getCxxName(entry.cdecl),
+    iinfo: entry.iinfo
+  )
+
+  for value in entry.values:
+    result.values.add conf.toSave(value, cache)
+
+
+proc toSave*(
+    conf: WrapConf, entry: GenEntry, cache: var WrapCache): SaveEntry
+
+
+proc toSave*(
+    conf: WrapConf, entry: CArg, cache: var WrapCache): SaveArg =
+
+  result = SaveArg(
+    nimName: entry.name,
+    nimType: conf.toSave(entry.nimType, cache)
+  )
+
+proc toSave*(
+    conf: WrapConf, entry: GenProc, cache: var WrapCache): SaveProc =
+
+  result = SaveProc(
+    nimName: entry.name,
+    genParams: entry.genParams.mapIt(conf.toSave(it, cache))
+  )
+
+  for arg in entry.arguments:
+    result.arguments.add conf.toSave(arg, cache)
+
+
+proc toSave*(
+    conf: WrapConf, entry: GenField, cache: var WrapCache): SaveField =
+
+  result = SaveField(
+    nimName: entry.name,
+    nimType: conf.toSave(entry.fieldType, cache)
+  )
+
+proc toSave*(
+    conf: WrapConf, entry: GenAlias, cache: var WrapCache): SaveAlias =
+
+  result = SaveAlias(
+    newAlias: conf.toSave(entry.newAlias, cache),
+    baseType: conf.toSave(entry.baseType, cache)
+  )
+
+
+proc toSave*(
+    conf: WrapConf, entry: GenForward, cache: var WrapCache): SaveForward =
+
+  raise newImplementError()
+
+proc toSave*(
+    conf: WrapConf, entry: GenObject, cache: var WrapCache): SaveObject =
+
+  result = SaveObject(
+    nimName: entry.name.nimName,
+    cxxName: conf.getCxxName(entry.cdecl),
+    iinfo: entry.iinfo,
+    genParams: entry.name.genParams.mapIt(conf.toSave(it, cache))
+  )
+
+  for field in entry.memberFields:
+    result.mfields.add conf.toSave(field, cache)
+
+  for meth in entry.memberMethods:
+    result.methods.add conf.toSave(meth, cache)
+
+  for nested in entry.nestedEntries:
+    result.nested.add conf.toSave(nested, cache)
+
+proc toSave*(
+    conf: WrapConf, entry: GenEntry, cache: var WrapCache): SaveEntry =
+
+  case entry.kind:
+    of gekEnum:
+      result = conf.toSave(entry.genEnum, cache).box()
+
+    of gekObject:
+      result = conf.toSave(entry.genObject, cache).box()
+
+    of gekAlias:
+      result = conf.toSave(entry.genAlias, cache).box()
+
+    of gekForward:
+      result = conf.toSave(entry.genForward, cache).box()
+
+    of gekProc:
+      result = conf.toSave(entry.genProc, cache).box()
+
+    of gekEmpty, gekImport, gekPass:
+      result = SaveEntry(kind: gekEmpty)
+
+proc toSave*(
+    conf: WrapConf, file: WrappedFile, cache: var WrapCache): SaveFile  =
+
+  for entry in file.entries:
+    result.entries.add conf.toSave(entry, cache)

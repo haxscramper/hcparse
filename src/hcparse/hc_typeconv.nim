@@ -206,6 +206,8 @@ proc isComplexType*(
         if conf.isComplexType(arg, cache):
           return true
 
+    of tkIncompleteArray:
+      result = false
 
     else:
       conf.trace cxType, cxType.cxKind()

@@ -3,14 +3,18 @@ import std/[
   hashes, sequtils, bitops, sugar, deques, sets
 ]
 
-import hnimast
+import
+  hnimast
 
 import
   hmisc/[helpers, hexceptions],
   hmisc/algo/[hstring_algo, clformat],
   hmisc/other/[oswrap, hlogger, hshell],
-  hmisc/types/[colorstring, hgraph]
+  hmisc/types/[colorstring, hgraph],
+  hmisc/macros/argpass
 
+import
+  jsony
 
 import
   ./cxtypes,
@@ -568,7 +572,9 @@ proc patchForward*(
 
   var typeGraph = getTypeGraph(wrapped, conf, cache)
   let components = typeGraph.dependentComponents()
-  typeGraph.dotRepr(components).toPng(getAppTempFile("forwardComponents.png"))
+  typeGraph.
+    dotRepr(components).
+    toPng(getAppTempFile("forwardComponents.png"))
 
 
   var
@@ -894,7 +900,7 @@ proc updateImports*(
     onlyTypes.
       dotRepr(
         dotReprDollarNode[LibImport],
-        dotReprCollapseEdgesNoLabel[NimType],
+        dotReprCollapseEdgesJoin[NimType],
         clusters = onlyTypes.findCycles(ignoreSelf = true).
       mergeCycleSets().mapIt((it, ""))).withResIt do:
         it.rankdir = grdLeftRight
@@ -903,7 +909,7 @@ proc updateImports*(
     onlyProcs.
       dotRepr(
         dotReprDollarNode[LibImport],
-        dotReprCollapseEdgesNoLabel[NimType],
+        dotReprCollapseEdgesJoin[NimType],
         clusters = onlyTypes.findCycles(ignoreSelf = true).
       mergeCycleSets().mapIt((it, ""))).withResIt do:
         it.rankdir = grdLeftRight
@@ -1028,7 +1034,6 @@ proc updateImports*(
     file.exports.incl "wraphelp"
 
 
-
 proc wrapFiles*(
     parsed: seq[ParsedFile], conf: WrapConf,
     cache: var WrapCache, index: hc_types.FileIndex): seq[WrappedFile] =
@@ -1051,6 +1056,19 @@ proc wrapFiles*(
     resFile.entries.add file.api.wrapApiUnit(conf, cache, index)
     genFiles.add resFile
 
+    if conf.serializeTo.isSome():
+      let file = withExt(
+        conf.serializeTo.get() / conf.getSavePath(resFile), "json")
+
+      ensureDir(file)
+      conf.dump file
+      let j = conf.toSave(resFile, cache).toJson()
+      conf.dump j
+      writeFile(file, j)
+
+
+
+
   # Patch *all* wrapped file entries at once, replacing `GenForward`
   # entries with imports and returning list of additional files (for
   # strongly connected type clusters that span multiple files)
@@ -1064,7 +1082,20 @@ proc wrapFiles*(
   #   just perform additional cycle detection, rather than make user deal
   #   with strange failures that were caused by complicated internal
   #   machinery.
-  result = updateImports(genFiles, conf, cache)
+
+  if false:
+    result.add genFiles
+    for file in mitems(result):
+      file.addImport initNimImportSpec(
+        true, @["std", "bitops"])
+
+      file.addImport initNimImportSpec(
+        true, @["hmisc", "wrappers", "wraphelp"])
+
+      file.exports.incl "wraphelp"
+
+  else:
+    result = updateImports(genFiles, conf, cache)
 
 
 
