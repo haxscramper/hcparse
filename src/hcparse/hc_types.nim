@@ -7,7 +7,7 @@ import std/[
 import
   hpprint,
   hmisc/[hexceptions, helpers],
-  hmisc/other/[oswrap, hlogger, hjson],
+  hmisc/other/[oswrap, hlogger, hjson, hshell],
   hmisc/types/[hmap, hgraph],
   hnimast, hnimast/pprint,
   hmisc/algo/[
@@ -454,6 +454,7 @@ type
     nimOutDir*: AbsDir ## Root directory to write files to
     depsConf*: seq[WrapConf]
     serializeTo*: Option[AbsDir]
+    onlySerial*: bool
 
     refidFile*: RelFile
     wrapName*: string ## Name of the wrapped library.
@@ -506,7 +507,7 @@ type
                        ## it corresponds to some existing Cxx entry
 
 
-  GenObjectKind = enum
+  GenObjectKind* = enum
     gokUnion
     gokStruct
     gokClass
@@ -619,6 +620,9 @@ type
     gekImport ## Import statement
     gekEmpty
 
+    gekMacro
+    gekComment
+
   AnyGenEntry = GenProc | GenObject | GenEnum |
     GenAlias | GenPass | GenImport | GenForward
 
@@ -653,109 +657,12 @@ type
       of gekEmpty:
         genEmptyIInfo*: LineInfo
 
-  CxxSpellingLocation* = object
-    file*: AbsFile
-    line*, column*: int
+      of gekMacro:
+        discard # TODO
 
-  SaveHeader* = object
-    case kind*: NimHeaderSpecKind
-      of nhskGlobal:
-        global*: string
+      of gekComment:
+        comment*: string
 
-      of nhskAbsolute:
-        file*: AbsFile
-
-      of nhskPNode:
-        other*: string
-
-  SaveBase* = object of RootObj
-    iinfo*: LineInfo
-    spellingLocation*: Option[CxxSpellingLocation]
-    nimName*: string
-    cxxName*: seq[string]
-    icpp*: string
-    private*: bool
-    header*: Option[SaveHeader]
-    haxdocIdent* {.requiresinit.}: JsonNode
-
-  SaveType* = ref object
-    case kind*: CTypeKind
-      of ctkIdent:
-        isConst*: bool
-        isMutable*: bool
-        isComplex*: bool
-
-        typeImport*: LibImport
-        nimName*: string
-        cxxName*: seq[string]
-        genParams*: seq[SaveType]
-        default*: Option[SaveType]
-
-      of ctkProc:
-        arguments*: seq[SaveArg]
-        returnType*: SaveType
-
-
-  SaveProc* = object of SaveBase
-    arguments*: seq[SaveArg]
-    returnType*: SaveType
-    genParams*: seq[SaveType]
-    kind*: ProcKind
-
-  SaveArg* = object of SaveBase
-    nimType*: SaveType
-    default*: Option[string] # ???
-
-  SaveField* = object of SaveBase
-    nimType*: SaveType
-    isStatic*: bool
-
-  SaveEnumValue* = object
-    baseName*: string
-    cxxName*: seq[string]
-    nimName*: string
-    value*: BiggestInt
-
-  SaveAlias* = object of SaveBase
-    isDistinct*: bool
-    newAlias*: SaveType
-    baseType*: SaveType
-
-  SaveEnum* = object of SaveBase
-    values*: seq[SaveEnumValue]
-
-  SaveObject* = object of SaveBase
-    kind*: GenObjectKind
-    genParams*: seq[SaveType]
-    mfields*: seq[SaveField]
-    methods*: seq[SaveProc]
-    nested*: seq[SaveEntry]
-
-  SaveForward* = object of SaveBase
-
-  SaveEntry* = ref object
-    case kind*: GenEntryKind
-      of gekEnum:
-        saveEnum*: SaveEnum
-
-      of gekProc:
-        saveProc*: SaveProc
-
-      of gekObject:
-        saveObject*: SaveObject
-
-      of gekAlias:
-        saveAlias*: SaveAlias
-
-      of gekForward:
-        saveForward*: SaveForward
-
-      else:
-        discard
-
-  SaveFile* = object
-    entries*: seq[SaveEntry]
-    savePath*: LibImport
 
   WrappedEntryPos* = enum
     wepInProcs
@@ -886,7 +793,7 @@ proc cdecl*(gen: GenEntry): CDecl =
     of gekObject: result = gen.genObject.cdecl
     of gekAlias: result = gen.genAlias.cdecl
     of gekForward: result = gen.genForward.cdecl
-    of gekPass, gekImport, gekEmpty:
+    of gekPass, gekImport, gekEmpty, gekComment, gekMacro:
       discard
 
   assert notNil(result)
@@ -906,7 +813,7 @@ proc iinfo*(gen: GenEntry): LineInfo =
     of gekForward: result = gen.genForward.iinfo
     of gekPass: result = gen.genPass.iinfo
     of gekImport: result = gen.genImport.iinfo
-    of gekEmpty: result = gen.genEmptyIInfo
+    of gekEmpty, gekComment, gekMacro: result = gen.genEmptyIInfo
 
 
 proc newProcVisit*(
@@ -1960,3 +1867,25 @@ proc getSavePath*(conf: WrapConf, path: AbsFile): LibImport =
     for conf in conf.depsConf:
       if conf.isInLibrary(path, conf):
         return conf.getSavePathImpl(path, conf)
+
+
+proc getFlags*(config: ParseConf, file: AbsFile): seq[string] =
+  ## Get list of command-line flags for partigular `file`. This includes
+  ## both global flags, and file-specific ones
+  result.add config.includepaths.toIncludes()
+  result.add config.globalFlags
+  result.add config.fileFlags.getOrDefault(file)
+
+
+proc getExpanded*(file: AbsFile, parseConf: ParseConf): string =
+  ## Return expanded content of the @arg{file} using @sh{clang}. Uses
+  ## include paths and other flags from @arg{parseConf}. Expanded form does
+  ## not contain `#line` directives, but preserves comments.
+  let flags = getFlags(parseConf, file)
+  var cmd = shellCmd(clang, -C, -E, -P)
+  for flag in flags:
+    cmd.raw flag
+
+  cmd.arg file
+
+  result = evalShellStdout(cmd)

@@ -25,7 +25,8 @@ import
   ./hc_depresolve,
   ./hc_wrapgen,
   ./hc_impls,
-  ./hc_docwrap
+  ./hc_docwrap,
+  ./hc_save
 
 
 proc parseTranslationUnit*(
@@ -127,13 +128,6 @@ proc parseTranslationUnit*(
     reparseOnNIl = reparseOnNil
   )
 
-
-proc getFlags*(config: ParseConf, file: AbsFile): seq[string] =
-  ## Get list of command-line flags for partigular `file`. This includes
-  ## both global flags, and file-specific ones
-  result.add config.includepaths.toIncludes()
-  result.add config.globalFlags
-  result.add config.fileFlags.getOrDefault(file)
 
 proc parseFile*(
     file: AbsFile,
@@ -244,6 +238,9 @@ proc toNNode*(
 
       of gekPass:
         result.add node.genPass.passEntries
+
+      of gekMacro, gekComment:
+        raise newImplementKindError(node)
 
       of gekEmpty:
         discard
@@ -794,7 +791,7 @@ proc registerUsedTypes*(
     entry: GenEntry, used: var UsedGroups, conf: WrapConf) =
 
   case entry.kind:
-    of gekEnum:
+    of gekEnum, gekMacro, gekComment:
       discard
 
     of gekProc:
@@ -1068,33 +1065,34 @@ proc wrapFiles*(
 
 
 
-  # Patch *all* wrapped file entries at once, replacing `GenForward`
-  # entries with imports and returning list of additional files (for
-  # strongly connected type clusters that span multiple files)
-  result.add patchForward(genFiles, conf, cache)
+  if conf.onlySerial:
+    # Patch *all* wrapped file entries at once, replacing `GenForward`
+    # entries with imports and returning list of additional files (for
+    # strongly connected type clusters that span multiple files)
+    result.add patchForward(genFiles, conf, cache)
 
-  # Correct potential circular imports that resulted from incorrectly
-  # written import converters. This stage processes all of the files, and
-  # returns new list (with some passthrough elements)
-  #
-  # - WHY :: Things like this are almost un-debuggable, and it is easier to
-  #   just perform additional cycle detection, rather than make user deal
-  #   with strange failures that were caused by complicated internal
-  #   machinery.
+    # Correct potential circular imports that resulted from incorrectly
+    # written import converters. This stage processes all of the files, and
+    # returns new list (with some passthrough elements)
+    #
+    # - WHY :: Things like this are almost un-debuggable, and it is easier to
+    #   just perform additional cycle detection, rather than make user deal
+    #   with strange failures that were caused by complicated internal
+    #   machinery.
 
-  if false:
-    result.add genFiles
-    for file in mitems(result):
-      file.addImport initNimImportSpec(
-        true, @["std", "bitops"])
+    if false:
+      result.add genFiles
+      for file in mitems(result):
+        file.addImport initNimImportSpec(
+          true, @["std", "bitops"])
 
-      file.addImport initNimImportSpec(
-        true, @["hmisc", "wrappers", "wraphelp"])
+        file.addImport initNimImportSpec(
+          true, @["hmisc", "wrappers", "wraphelp"])
 
-      file.exports.incl "wraphelp"
+        file.exports.incl "wraphelp"
 
-  else:
-    result = updateImports(genFiles, conf, cache)
+    else:
+      result = updateImports(genFiles, conf, cache)
 
 
 
@@ -1268,20 +1266,6 @@ proc wrapFile*(
 func wrapName*(res: WrapResult): string =
   res.importName.importPath.join("/") & ".nim"
 
-proc getExpanded*(file: AbsFile, parseConf: ParseConf): string =
-  ## Return expanded content of the @arg{file} using @sh{clang}. Uses
-  ## include paths and other flags from @arg{parseConf}. Expanded form does
-  ## not contain `#line` directives, but preserves comments.
-  let flags = getFlags(parseConf, file)
-  var cmd = shellCmd(clang, -C, -E, -P)
-  for flag in flags:
-    cmd.raw flag
-
-  cmd.arg file
-
-  result = evalShellStdout(cmd)
-
-
 proc wrapSingleFile*(
     file: FsFile,
     errorReparseVerbose: bool = false,
@@ -1349,6 +1333,8 @@ proc wrapAllFiles*(
     parseConf: ParseConf
   ): WrapCache =
   ## Generate and write wrappers for all `files`
+
+  assertRef conf.logger
 
   for dep in conf.depsConf:
     dep.logger = conf.logger
