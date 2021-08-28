@@ -1,4 +1,33 @@
-First of all - this project is not a finished command-line application like
+note: work in progress
+
+This project provides two types of wrapper generators -
+
+1. Command-line application for rough translation of the C and C++ code to
+   nim, including actual code translation (implementation).
+2. Fully automatic for handling extermely large libraries (like Qt), where
+   any sort of manual editing is completely infeasible
+
+First type of wrapper generator is based on simple translation using
+[[https://github.com/tree-sitter/tree-sitter][tree-sitter]] for parsing and [[https://www.boost.org/doc/libs/1_76_0/libs/wave/doc/preface.html][boost wave]] for macro expansion. Second type is
+based on libclang and has full understanding of the code, but requires more
+sophisticated setup.
+
+In addition to conversion of the C and C++ code to nim ~hcparse~ also
+supports generation of the ~.json~ files that contain all available
+information about processed headers, which makes it possible to create own
+wrapper generation tooling.
+
+** Tree-sitter & boost wave
+
+Command-line tool to either generate wrappers for C(++) code, or do full
+convesion of the project into nim. Based on tree-sitter and boost wave, and
+does not require complicated configuration to work. Is focused on first 90%
+of the wrapper implementation - remaining parts can be tweaked manually
+when initial wrapper generation is done.
+
+** Libclang-based wrapper-generation
+
+Libclang-based wrapper is not a finished command-line application like
 c2nim or nimterop, but rather a /framework/ for implementing custom wrapper
 scripts. It can be used as one-off tool that you can tweak manually, but it
 is mainly designed to provide *fully automatic* wrapper generators for
@@ -41,7 +70,49 @@ using user-provided or built-in tools, that allow you to
   your wrappers. No longer user would have to dig through C++ docs in order
   to make sense of what part of the wrapper they need.
 
+** Why have two differen ways of wrapping libraries?
 
-NOTE: the project is still considered work-in-progress, but all of the
+
+** Difference from existing projects and approaches
+
+Note: Main difference between other projects and hcparse is that they
+/already exist/, while hcparse is work-in-progress. For now, you can
+consider this section as an anwer to more practical question - "why
+reimplement already existing tooling?" and "how is it going to be different
+from existing tools?"
+
+- [[https://github.com/nim-lang/c2nim][c2nim]]
+  - reimplements own C and C++ parser as well as preprocessor, resulting in
+    extermely fragile tool that usually requre a lot of manual tweaking and
+    hacks.
+  - By default does not try to generate nep1-compliant wrappers, requires
+    passing ~--nep1~ flag (which is not really difficult to), but does not
+    track renames, simply squashing all identifiers into single style
+    ~name~ and ~name_~ gets converted into ~name~.
+  - Requires converting ~#define~ to ~#def~ for used macros, which is,
+    again, pretty annoying to do manually.
+- [[https://github.com/nimterop/nimterop][nimterop]]
+  - Runs when code is compiled [[https://github.com/nimterop/nimterop#wrapping][wrapping]], which makes it hard to inspect
+    generated headers. Having generated ~.nim~ wrapper files also have
+    seveal important advantages, including
+    - You have source code that you can put documentation on
+    - No implicit magic and intermediate compile-time actions between your
+      call to wrappers and actual library code.
+    - Because there exists and dumb wrapper file that can be viewed we can
+      get a lot more creative with actually mapping library code to nim.
+      Make all identifiers nep1-conformant, generate wrappers that turn
+      error codes into exceptions and so on (see list for libclang wrapper
+      generator)
+    - No need to have a wrapper generator as a dependency for your library,
+      which means I don't have to test whether /generator/ works on all
+      possible systems, I just have to make sure wrappers make sense.
+  - Does not reimplement C++ parser, and instead uses tree-sitter (just
+    like hcparse), but invokes C compiler to do the macro expansion, which
+    merges all headers into a single file, and completely ignores any
+    ~#include~ declarations. Boost wave, on the other hand [[https://www.boost.org/doc/libs/1_76_0/libs/wave/doc/class_reference_ctxpolicy.html#opened_include_file][allows]] to
+    intercept include directives.
+
+
+NOTE: the project is still considered work-in-progress, but all the
 features mentioned above have already been implemeneted at least in
 proof-of-concept quality.
