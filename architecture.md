@@ -1,0 +1,1 @@
+![tldr](architecture_tldr.jpg)
