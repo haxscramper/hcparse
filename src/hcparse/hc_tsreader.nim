@@ -9,7 +9,7 @@ import
   ./hc_save
 
 import
-  hmisc/[base_errors, helpers],
+  hmisc/core/all,
   hmisc/wrappers/[treesitter],
   hmisc/other/oswrap
 
@@ -19,7 +19,7 @@ export parseCppString
 proc getHaxdoc*(conf: WrapConf, parent: seq[CppNode]): JsonNode =
   newJNull()
 
-proc primitiveName(node: CppNode): string =
+proc primitiveName*(node: CppNode): string =
   proc aux(ts: TsCppNode): string =
     if ts.len == 0:
       result = node.getBase()[ts]
@@ -39,26 +39,37 @@ proc primitiveName(node: CppNode): string =
 
   return aux(node.getTs())
 
+proc mapOpName*(node: CppNode): string =
+  case node.strVal():
+    of "|": "or"
+    of "<<": "shl"
+    of ">>": "shr"
+    else: node.strVal()
+
+proc mapTypeName*(node: CppNode): string =
+  if node.kind == cppTypeIdentifier:
+    node.strVal()
+
+  else:
+    case node.primitiveName():
+      of "unsigned long": "ulong"
+      of "long long": "clonglong"
+      of "void": "void"
+      of "int": "cint"
+      of "char": "char"
+      of "unsigned", "unsigned int": "cuint"
+      of "float": "cfloat"
+      of "uint8_t": "uint8"
+      of "uint16_t": "uint16"
+      of "int16_t": "int16"
+      of "bool": "bool"
+      else:
+        raise newImplementKindError(node.primitiveName(), node.treeRepr())
+
 proc toSaveType*(conf: WrapConf, node: CppNode): SaveType =
   case node.kind:
-    of cppTypeIdentifier:
-      result = SaveType(kind: ctkIdent, nimName: node.strVal())
-
-    of cppSizedTypeSpecifier, cppPrimitiveType:
-      let name =
-        case node.primitiveName():
-          of "unsigned long": "ulong"
-          of "long long": "clonglong"
-          of "void": "void"
-          of "int": "cint"
-          of "char": "char"
-          of "unsigned", "unsigned int": "cuint"
-          of "float": "cfloat"
-          else:
-            raise newImplementKindError(node.primitiveName(), node.treeRepr())
-
-
-      result = SaveType(kind: ctkIdent, nimName: node.strVal())
+    of cppTypeIdentifier, cppSizedTypeSpecifier, cppPrimitiveType:
+      result = SaveType(kind: ctkIdent, nimName: mapTypeName(node))
 
     else:
       raise newImplementKindError(node, node.treeRepr())
@@ -111,37 +122,51 @@ proc skipPointer(node: CppNode): CppNode =
     of cppPointerDeclarator: skipPointer(node[0])
     else: node
 
-proc pointerWraps(node: CppNode, ftype: var SaveType) =
+template initPointerWraps*(newName, TYpe: untyped): untyped =
+  proc pointerWraps(node: CppNode, ftype: var TYpe) =
+    case node.kind:
+      of cppPointerDeclarator:
+        ftype = newName("ptr", @[ftype])
+        if node[0] of cppTypeQualifier:
+          pointerWraps(node[1], ftype)
+
+        else:
+          pointerWraps(node[0], ftype)
+
+      of cppArrayDeclarator:
+        ftype = newName("array", @[ftype])
+        pointerWraps(node[0], ftype)
+
+      of cppInitDeclarator,
+         cppTypeQualifier #[ TODO convert for SaveType? ]#:
+        pointerWraps(node[0], ftype)
+
+      of {
+        cppFieldIdentifier,
+        cppTypeIdentifier,
+        cppIdentifier,
+        cppFunctionDeclarator
+      }:
+        discard
+
+      else:
+        raise newImplementKindError(
+          node, node.strVal() & "\n" & node.treeRepr())
+
+initPointerWraps(newSaveType, SaveType)
+
+proc getName*(node: CppNode): string =
   case node.kind:
-    of cppPointerDeclarator:
-      ftype = newSaveType("ptr", @[ftype])
-      pointerWraps(node[0], ftype)
-
-    of cppArrayDeclarator:
-      # TODO array declarator size
-      ftype = newSaveType("array", @[ftype])
-      pointerWraps(node[0], ftype)
-
     of cppFieldIdentifier,
        cppTypeIdentifier,
-       cppIdentifier,
-       cppFunctionDeclarator
-         :
-      discard
-
-    else:
-      raise newImplementKindError(node, node.treeRepr())
-
-proc getName(node: CppNode): string =
-  case node.kind:
-    of cppFieldIdentifier,
-       cppTypeIdentifier,
-       cppIdentifier
-         :
+       cppIdentifier:
       node.strVal()
 
     of cppArrayDeclarator, cppFunctionDeclarator:
       node[0].getName()
+
+    of cppDeclaration, cppInitDeclarator:
+      node["declarator"].getName()
 
     else:
       if node.len > 0:
@@ -180,9 +205,6 @@ proc toSaveProc*(conf: WrapConf, node: CppNode): SaveProc =
 
     else:
       node["declarator"]
-
-  # echo decl.treeRepr()
-  # echo node.treeRepr()
 
   for idx, arg in decl["parameters"]:
     result.arguments.add conf.toSaveArg(arg, idx)
