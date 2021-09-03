@@ -72,6 +72,7 @@ using user-provided or built-in tools, that allow you to
 
 ** Why have two differen ways of wrapping libraries?
 
+# https://discord.com/channels/371759389889003530/371759389889003532/880807906335948840
 
 ** Difference from existing projects and approaches
 

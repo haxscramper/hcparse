@@ -6,7 +6,7 @@ import std/[
 
 import
   hpprint,
-  hmisc/[hexceptions, helpers],
+  hmisc/core/all,
   hmisc/other/[oswrap, hlogger, hjson, hshell],
   hmisc/types/[hmap, hgraph],
   hnimast, hnimast/pprint,

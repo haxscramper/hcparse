@@ -1,7 +1,6 @@
 import libclang_wrap
 import std/[macros, sugar, strutils, sequtils, decls]
-import hmisc/hexceptions
-import hmisc/helpers
+import hmisc/core/[all, code_errors]
 import hnimast
 
 export decls

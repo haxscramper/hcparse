@@ -5,7 +5,7 @@ import
 
 import
   hmisc/other/[oswrap],
-  hmisc/[base_errors]
+  hmisc/core/all
 
 import
   hnimast, jsony

@@ -9,7 +9,7 @@ import
   hmisc/other/[oswrap, hlogger],
   hmisc/algo/[clformat],
   hmisc/types/colorstring,
-  hmisc/helpers
+  hmisc/core/all
 
 
 import
@@ -513,7 +513,7 @@ proc getSpellingLocation*(cursor: CXCursor): Option[CxLocation] =
   result = cursor.getCursorLocation().getExpansionLocation()
 
 proc `$`*(loc: CxLocation): string =
-  &[hshow(loc.file), ":", hshow(loc.line), ":", hshow(loc.column)]
+  &[$hshow(loc.file), ":", $hshow(loc.line), ":", $hshow(loc.column)]
 
 proc relSpellingFile*(cursor: CXCursor): RelFile =
   cursor.getSpellingLocation().get().file.splitFile2().file.RelFile()
@@ -710,13 +710,13 @@ proc toRstNode(comment: CXComment): PRstNode =
 
 func dropEmptyLines*(str: string): string =
   ## Remove all empty lines from string
-  str.split("\n").filterIt(not it.allOfIt(it in Whitespace)).join("\n")
+  str.split("\n").filterIt(not it.allIt(it in Whitespace)).join("\n")
 
 
 func dropEmptyLines*(str: var string): void =
   ## Remove all empty lines from string
   str = str.split("\n").filterIt(
-    not it.allOfIt(it in Whitespace)).join("\n")
+    not it.allIt(it in Whitespace)).join("\n")
 
 proc toNimDoc*(comment: CXComment): string =
   ## Convert Comment to rst string
@@ -848,17 +848,14 @@ proc objTreeRepr*(
     var suffix: string
 
     if cursor.cxKind() == ckEnumConstantDecl:
-      suffix &= " " & toRed($cursor.getEnumConstantDeclValue())
+      suffix &= " " & $toRed($cursor.getEnumConstantDeclValue())
 
     pptObj(
-      &[("[*] " & $cursor.cxkind).toMagenta(colorize), " ", $cursor, $suffix,
-        locRange
-      ],
+      &[$toMagenta("[*] " & $cursor.cxkind, colorize),
+        " ", $cursor, $suffix, locRange],
       &[showtype.tern(@[ctype], @[]),
         showcomment.tern(@[comment], @[]),
-        children
-      ]
-    )
+        children])
 
 
 proc treeRepr*(cursor: CXCursor, tu: CXTranslationUnit,
@@ -888,10 +885,9 @@ proc objTreeRepr*(cursor: CXCursor, showtype: bool = true): ObjTree =
       pptConst($cursor.cxKind)
   else:
     pptObj(
-      ("kind: " & $cursor.cxkind).toYellow(colorize) & " " & $cursor,
+      $toYellow("kind: " & $cursor.cxkind, colorize) & " " & $cursor,
       showtype.tern(@[ctype], @[]) &
-        toSeq(cursor.children).mapIt(it.objTreeRepr(showtype))
-    )
+        toSeq(cursor.children).mapIt(it.objTreeRepr(showtype)))
 
 
 proc treeRepr*(cursor: CXCursor, showtype: bool = true): string =

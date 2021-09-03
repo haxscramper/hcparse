@@ -1,5 +1,6 @@
-import hmisc/helpers, std/[strutils, sequtils, parseutils]
+import hmisc/core/all, std/[strutils, sequtils, parseutils]
 import hmisc/other/oswrap
+import hmisc/algo/hstring_algo
 
 func toCamelCase*(str: string): string =
   var buf = str.split("_").
