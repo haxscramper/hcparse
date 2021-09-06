@@ -3,14 +3,13 @@ note: work in progress
 This project provides two types of wrapper generators -
 
 1. Command-line application for rough translation of the C and C++ code to
-   nim, including actual code translation (implementation).
+   nim, including actual code translation (actual library implementation in
+   addition to top-level declarations). Based on simple translation using
+   [[https://github.com/tree-sitter/tree-sitter][tree-sitter]] for parsing and [[https://www.boost.org/doc/libs/1_76_0/libs/wave/doc/preface.html][boost wave]] for macro expansion.
 2. Fully automatic for handling extermely large libraries (like Qt), where
-   any sort of manual editing is completely infeasible
-
-First type of wrapper generator is based on simple translation using
-[[https://github.com/tree-sitter/tree-sitter][tree-sitter]] for parsing and [[https://www.boost.org/doc/libs/1_76_0/libs/wave/doc/preface.html][boost wave]] for macro expansion. Second type is
-based on libclang and has full understanding of the code, but requires more
-sophisticated setup.
+   any sort of manual editing is completely infeasible. Based on libclang
+   and has full understanding of the code, but requires more sophisticated
+   setup.
 
 In addition to conversion of the C and C++ code to nim ~hcparse~ also
 supports generation of the ~.json~ files that contain all available

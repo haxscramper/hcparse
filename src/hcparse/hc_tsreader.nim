@@ -44,6 +44,10 @@ proc mapOpName*(node: CppNode): string =
     of "|": "or"
     of "<<": "shl"
     of ">>": "shr"
+    of "&": "and"
+    of "^": "xor"
+    of "~": "not"
+    of "!": "not" # QUESTION what is the difference between ~ and !
     else: node.strVal()
 
 proc mapTypeName*(node: CppNode): string =
@@ -54,6 +58,7 @@ proc mapTypeName*(node: CppNode): string =
     case node.primitiveName():
       of "unsigned long": "ulong"
       of "long long": "clonglong"
+      of "long": "clong"
       of "void": "void"
       of "int": "cint"
       of "char": "char"
@@ -63,6 +68,7 @@ proc mapTypeName*(node: CppNode): string =
       of "uint16_t": "uint16"
       of "int16_t": "int16"
       of "bool": "bool"
+      of "size_t": "size_t"
       else:
         raise newImplementKindError(node.primitiveName(), node.treeRepr())
 
@@ -141,6 +147,11 @@ template initPointerWraps*(newName, TYpe: untyped): untyped =
          cppTypeQualifier #[ TODO convert for SaveType? ]#:
         pointerWraps(node[0], ftype)
 
+      of cppAbstractPointerDeclarator:
+        ftype = newName("ptr", @[ftype])
+        if node.len > 0:
+          pointerWraps(node[0], ftype)
+
       of {
         cppFieldIdentifier,
         cppTypeIdentifier,
@@ -159,7 +170,8 @@ proc getName*(node: CppNode): string =
   case node.kind:
     of cppFieldIdentifier,
        cppTypeIdentifier,
-       cppIdentifier:
+       cppIdentifier,
+       cppPrimitiveType:
       node.strVal()
 
     of cppArrayDeclarator, cppFunctionDeclarator:

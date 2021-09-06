@@ -21,11 +21,22 @@ startHax()
 
 export parseCppString
 
-proc toPType*(node: CppNode): NType[PNode] = newPType(mapTypeName(node))
+
 proc getIdent*(node: CppNode, c: var StringNameCache): PNode =
   newPIdent(c.fixIdentName(node.strVal(), "f"))
 
 initPointerWraps(newPType, NType[PNode])
+
+proc toPType*(node: CppNode): NType[PNode] =
+  case node.kind:
+    of cppTypeDescriptor:
+      result = toPType(node["type"])
+      if "declarator" in node:
+        pointerWraps(node["declarator"], result)
+
+    else:
+      result = newPType(mapTypeName(node))
+
 
 
 proc conv(node: CppNode, str: string, c: var StringNameCache): PNode =
@@ -40,7 +51,8 @@ proc conv(node: CppNode, str: string, c: var StringNameCache): PNode =
         result.add ~sub
 
     of cppReturnStatement:
-      result = nnkReturnStmt.newPTree(~node[0])
+      result = nnkReturnStmt.newPTree(
+        tern(node.len > 0, ~node[0], newEmptyPNode()))
 
     of cppCallExpression:
       result = nnkCall.newPTree(~node[0])
@@ -57,7 +69,7 @@ proc conv(node: CppNode, str: string, c: var StringNameCache): PNode =
       result = nnkPar.newPTree(~node[0])
 
     of cppIdentifier, cppFieldIdentifier:
-      result = newPident(node.strVal())
+      result = newPident(c.fixIdentName(node.strVal(), "a"))
 
     of cppFieldExpression:
       result = nnkDotExpr.newPTree(~node[0], ~node[1])
@@ -78,7 +90,11 @@ proc conv(node: CppNode, str: string, c: var StringNameCache): PNode =
       result = newPLit(node.strVal().strip(chars = {'"'}))
 
     of cppPointerExpression:
-      result = newXCall("[]", ~node[0])
+      if node{0}.strVal() == "*":
+        result = newXCall("[]", ~node[0])
+
+      else:
+        result = newXCall("addr", ~node[0])
 
     of cppBreakStatement:
       result = newPBreak()
@@ -86,10 +102,14 @@ proc conv(node: CppNode, str: string, c: var StringNameCache): PNode =
     of cppSubscriptExpression:
       result = newXCall("[]", ~node["argument"], ~node["index"])
 
+    of cppCastExpression:
+      result = nnkCast.newPTree(
+        node["type"].toPType().toNNode(), ~node["value"])
+
     of cppNull:
       result = newPIdent("nil")
 
-    of cppPreprocCall:
+    of cppPreprocCall, cppPreprocIfdef, cppPreprocDef:
       result = newEmptyPNode()
 
     of cppSwitchStatement:
@@ -105,7 +125,8 @@ proc conv(node: CppNode, str: string, c: var StringNameCache): PNode =
             if 0 < body.len:
               result.addBranch(
                 ~branch["value"],
-                body[0 .. ^tern(body[^1].kind == nkBreakStmt, 2, 1)])
+                body[0 .. ^tern(body[^1].kind == nkBreakStmt, 2, 1)].
+                  newPStmtList().fixEmptyStmt())
 
             else:
               result.addBranch(~branch["value"], body)
@@ -115,9 +136,17 @@ proc conv(node: CppNode, str: string, c: var StringNameCache): PNode =
     of cppFunctionDefinition:
       var impl = newPProcDecl(node["declarator"].getName())
       for arg in node["declarator"]["parameters"]:
-        var name = c.fixIdentName(arg.getName(), "a")
-        var argType = arg["type"].toPType()
-        pointerWraps(arg["declarator"], argType)
+        var name: string
+        var argType: NType[PNode]
+
+        if "declarator" in arg:
+          name = c.fixIdentName(arg.getName(), "a")
+          argType = arg["type"].toPType()
+          pointerWraps(arg["declarator"], argType)
+
+        else:
+          name = "arg"
+          argType = arg["type"].toPType()
 
         impl.addArgument(name, argType)
 
@@ -139,11 +168,33 @@ proc conv(node: CppNode, str: string, c: var StringNameCache): PNode =
         ~node["initializer"],
         newWhile(~node["condition"], ~node[^1], update))
 
+    of cppWhileStatement:
+      result = newWhile(newPar ~node["condition"], ~node["body"])
+
+    of cppConcatenatedString:
+      result = newPLit(node.strVal())
+
     of cppConditionClause:
       result = ~node[0]
 
+    of cppSizeofExpression:
+      result = newXCall("sizeof", ~node["type"])
+
+    of cppTypeDescriptor:
+      result = toPType(node).toNNode()
+
+    of cppCharLiteral:
+      result = newPLit(node.strVal()[1])
+
     of cppIfStatement:
-      result = newIf(~node["condition"], ~node["consequence"])
+      result = newIf(
+        ~node["condition"],
+        ~node["consequence"],
+        tern("alternative" in node, ~node["alternative"], nil))
+
+    of cppDoStatement:
+      let body = ~node["body"]
+      result = newPStmtList(body, newWhile(~node["condition"], body))
 
     of cppDeclaration:
       let decl = node["declarator"]
@@ -168,8 +219,8 @@ proc conv(node: CppNode, str: string, c: var StringNameCache): PNode =
 
 
 when isMainModule:
-  let file = AbsFile"/tmp/in.c"
-  var str = file.readFile()
-  var c: StringNameCache
-  let code = parseCppString(addr str).conv(str, c).`$`
-  "/tmp/out.nim".writeFile(code)
+  for file in [AbsFile"/tmp/in.c"]:
+    var str = file.readFile()
+    var c: StringNameCache
+    let code = parseCppString(addr str).conv(str, c).`$`
+    writeFile(file.withExt("nim"), code)
