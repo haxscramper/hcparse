@@ -13,14 +13,15 @@ import
   std/[sequtils, strutils, strformat, tables, sets]
 
 import
-  hmisc/helpers,
-  hmisc/algo/namegen,
+  hmisc/core/all,
+  hmisc/algo/[namegen, hstring_algo],
   hmisc/types/colorstring,
   hmisc/other/[oswrap, hlogger],
   hmisc/macros/argpass
 
 import
-  hnimast
+  hnimast,
+  hnimast/interop/wrap_store
 
 
 type
@@ -260,6 +261,9 @@ proc fixTypeName*(str: string, idx: int, conf: WrapConf): string =
 
 proc fixTypeName*(ntype: var NimType, conf: WrapConf, idx: int = 0) =
   case ntype.kind:
+    of ctkPtr:
+      fixTypeName(ntype.wrapped, conf, idx)
+
     of ctkIdent:
       ntype.nimName = fixTypeName(ntype.nimName, idx, conf)
       var idx = idx
@@ -310,16 +314,16 @@ proc getSavePath*(conf: WrapConf, wrapped: WrappedFile): RelFile =
     result = conf.getSavePath(wrapped.baseFile).toRelative()
 
 
-proc getLibSavePath*(conf: WrapConf, wrapped: WrappedFile): LibImport =
+proc getLibSavePath*(conf: WrapConf, wrapped: WrappedFile): CxxLibImport =
   if wrapped.isGenerated:
-    result = conf.initLibImport(
+    result = conf.initCxxLibImport(
       wrapped.newFile.withoutExt().getstr().split("/"))
 
   else:
     result = conf.getSavePath(wrapped.baseFile)
 
 proc getImport*(
-    conf: WrapConf, dep, user: LibImport,
+    conf: WrapConf, dep, user: CxxLibImport,
     isExternalImport: bool
   ): NimImportSpec =
 
@@ -350,7 +354,7 @@ proc getImport*(
   ##   can be left unspecified as result will be determined solely by
   ##   @arg{conf.getSavePath} callback and @arg{conf.wrapName}
   if isExternalImport:
-    result = conf.getImport(conf.getSavePath(dep), LibImport(), true)
+    result = conf.getImport(conf.getSavePath(dep), CxxLibImport(), true)
 
   else:
     if conf.isInLibrary(dep, conf):
@@ -429,14 +433,15 @@ let baseCppWrapConf* = WrapConf(
     proc(cursor: CXCursor, conf: WrapConf): NimHeaderSpec {.closure.} =
       let file = cursor.asGlobalInclude(conf)
       if file.startsWith("/"):
-        NimHeaderSpec(kind: nhskAbsolute, file: AbsFile(file))
+        NimHeaderSpec(kind: chkAbsolute, file: AbsFile(file))
+
       else:
-        NimHeaderSpec(kind: nhskGlobal, global: file)
+        NimHeaderSpec(kind: chkGlobal, global: file)
   ),
   getSavePathImpl: (
-    proc(orig: AbsFile, conf: WrapConf): LibImport =
+    proc(orig: AbsFile, conf: WrapConf): CxxLibImport =
       let rel = relativePath(orig, conf.baseDir)
-      return initLibImport(
+      return initCxxLibImport(
         conf.wrapName,
           rel.
           withoutExt().
@@ -556,7 +561,7 @@ proc dotDepImports*(
     cache: WrapCache, conf: WrapConf, outFile: AbsFile) =
 
   var dot = cache.importGraph.dotRepr(
-    proc(node: LibImport, _: HNode): DotNode = makeDotNode(0, $node),
+    proc(node: CxxLibImport, _: HNode): DotNode = makeDotNode(0, $node),
     clusters = mapIt(
       cache.importGraph.findCycles(ignoreSelf = true).mergeCycleSets(),
       (it, "")))

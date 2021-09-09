@@ -95,23 +95,29 @@ exclusive requirements.
 
 - tree-sitter & boost wave ::
   - advantages ::
-    - Does not require valid translation unit or even /valid code/ - it [[https://tree-sitter.github.io/tree-sitter/#underlying-research][uses]]
-      LR parser with built-in support for error recover, which means I'm able
-      to provide /best possible/ solution in case of malformed code. This is
-      important, because most of the C code you can find is actually not
-      *valid C*, it becomes valid after you use preprocessor. But with
-      tree-sitter it is not required.
+    - Does not require valid translation unit or even /valid code/ - it
+      [[https://tree-sitter.github.io/tree-sitter/#underlying-research][uses]] LR parser with built-in support for error recovery, which means
+      I'm able to provide /best possible/ solution in case of malformed
+      code. This is important, because most of the C code you can find is
+      actually not *valid C*, it becomes valid after you use preprocessor.
+      But with tree-sitter it is not required.
     - Can override behavior of the preprocessor - ~include~ statements in
       code might be ignored for initial processing, making it possible to
       provide 1:1 mapping of the original source file.
     - Can provide /some/ level of automatic code enhancement - fixing
       identifiers, providing enum wrappers etc.
+    - Can be used for syntax-directed translation. It is not possible to
+      automatically map C or C++ code to nim /in general/, but automating
+      manual code conversion is still helpful. Of course generated code
+      requires a lot of manual correction (especially for cases that are
+      syntactically identical, but /semantically/ different), but it is
+      better than nothing.
   - disadvantages ::
     - Does not really understand C++ code. In cases like ~using namespace
       std;~ followed by ~string getStr() {};~ there is no way to correctly
       track /actually used types/ - doing so would require reimplementing
-      all of the C++ bookeeping. ~using~ declarations, type aliases, active
-      namespaces and so on.
+      all of the C++ bookeeping - ~using~ declarations, type aliases,
+      active namespaces and so on.
 - libclang ::
   - advantages ::
     - Expands all macros itself, operate on stable AST, so no code
@@ -166,14 +172,14 @@ from existing tools?"
     hacks.
   - By default does not try to generate nep1-compliant wrappers, requires
     passing ~--nep1~ flag (which is not really difficult to), but does not
-    track renames, simply squashing all identifiers into single style
+    track renames, simply squashing all identifiers into single style:
     ~name~ and ~name_~ gets converted into ~name~.
   - Requires converting ~#define~ to ~#def~ for used macros, which is,
     again, pretty annoying to do manually.
 - [[https://github.com/nimterop/nimterop][nimterop]]
-  - Runs when code is compiled [[https://github.com/nimterop/nimterop#wrapping][wrapping]], which makes it hard to inspect
-    generated headers. Having generated ~.nim~ wrapper files also have
-    seveal important advantages, including
+  - Runs when code is [[https://github.com/nimterop/nimterop#wrapping][compiled]], which makes it hard to inspect generated
+    headers. Having generated ~.nim~ wrapper files also have several
+    important advantages, including
     - You have source code that you can put documentation on
     - No implicit magic and intermediate compile-time actions between your
       call to wrappers and actual library code.

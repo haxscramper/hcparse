@@ -1,4 +1,4 @@
-import cxtypes, cxcommon
+import ./cxtypes, ./cxcommon
 import std/[
   tables, sets, strutils, sequtils, hashes, strformat, macros,
   segfaults, parseutils, decls
@@ -9,7 +9,9 @@ import
   hmisc/core/all,
   hmisc/other/[oswrap, hlogger, hjson, hshell],
   hmisc/types/[hmap, hgraph],
-  hnimast, hnimast/pprint,
+  hnimast,
+  hnimast/pprint,
+  hnimast/interop/[wrap_store, wrap_icpp],
   hmisc/algo/[
     hseq_mapping, hstring_algo, hseq_distance, namegen, halgorithm]
 
@@ -21,10 +23,6 @@ type
     drkImportUses ## Assume dependency is wrapped in other module, and
     ## generate `import` for it.
 
-  CTypeKind* = enum
-    ## Kind of the wrapped Cxx type
-    ctkIdent ## Identifier with optional list of template parameters
-    ctkProc ## Procedural (callback) type
 
   CTypeSpecialKind* = enum
     ## Special kind of C++ types that are almost impossbile to correctly
@@ -36,9 +34,6 @@ type
     ## behavior for 'large enough' types, but it has a different behavior
     ## with `{.bycopy.}` objects (which is what any C++ type uses)
 
-  LibImport* = object
-    library*: string
-    importPath*: seq[string]
 
   NimType* = ref object
     ## C++ type converter to nim-/like/ representation. Due to differences
@@ -64,11 +59,11 @@ type
       of false:
         ## Entry was automatically generated or constructed from invalid
         ## CxType.
-        typeImport*: LibImport
+        typeImport*: CxxLibImport
         original*: Option[CxType]
 
 
-    case kind*: CTypeKind
+    case kind*: CxxTypeKind
       of ctkIdent:
         defaultType*: Option[NimType] ## Default type value. Used in
                                       ## template type parameters
@@ -78,6 +73,9 @@ type
       of ctkProc:
         arguments*: seq[CArg]
         returnType*: NimType
+
+      of ctkPtr:
+        wrapped*: NimType
 
 
   CDeclKind* = enum
@@ -311,23 +309,17 @@ type
   FileIndex* = object
     index*: Table[AbsFile, ParsedFile] ## Index of all parsed files
 
-  NimHeaderSpecKind* = enum
-    ## Kind of the nim input header
-    nhskGlobal ## Global header file, must be installed and accessible via `includepath`
-    ## when wrappers are compiled
-    nhskAbsolute ## Absolute path to the base header file
-    nhskPNode ## Unconstrained PNode - can be anything
 
   NimHeaderSpec* = object
     ## Configuration for `>header.` generation
-    case kind*: NimHeaderSpecKind
-      of nhskGlobal:
+    case kind*: CxxHeaderKind
+      of chkGlobal:
         global*: string ## Global include like `<string>`
 
-      of nhskAbsolute:
+      of chkAbsolute:
         file*: AbsFile ## Absolute path to header file
 
-      of nhskPNode:
+      of chkPNode:
         pnode*: PNode ## Anything else
 
   NimImportSpec* = object
@@ -385,7 +377,7 @@ type
       cxType: CxType, conf: WrapConf, cache: var WrapCache): Option[NimType]
     ## Hard override generated complex types
 
-    getSavePathImpl*: proc(orig: AbsFile, conf: WrapConf): LibImport ## Return
+    getSavePathImpl*: proc(orig: AbsFile, conf: WrapConf): CxxLibImport ## Return
     ## path, *relative to project root* (@field{nimOutDir}) where file
     ## generated from `orig` should be saved.
 
@@ -493,7 +485,7 @@ type
     # defaultParamsForType*: Table[seq[string], Table[int, NimType]]
     complexCache*: Table[CxCursor, Option[NimType]]
 
-    importGraph*: HGraph[LibImport, NimType]
+    importGraph*: HGraph[CxxLibImport, NimType]
 
   GenBase* {.inheritable.} = ref object
     ## Common fields for all `GenX` types. Not used for inheritance, only
@@ -507,11 +499,6 @@ type
                        ## it corresponds to some existing Cxx entry
 
 
-  GenObjectKind* = enum
-    gokUnion
-    gokStruct
-    gokClass
-
   GenField* = ref object of GenBase
     rawName*: string
     name*: string
@@ -522,7 +509,7 @@ type
     anonymousType*: Option[GenEntry] ## Wrapper for anonymous type (if any)
 
   GenObject* = ref object of GenBase
-    kind*: GenObjectKind
+    kind*: CxxObjectKind
     rawName*: string ## Raw C[++] name of the object
     name*: NimType ## Nim object name with all generic parameters
     fullName*: CScopedIdent
@@ -544,7 +531,10 @@ type
   GenProc* = ref object of GenBase
     ## Generated wrapped proc
     name*: string ## Name of the generated proc on nim side
-    icpp*: string ## `importcpp` pattern string
+    icpp*: IcppPattern ## `importcpp` pattern string
+    # REFACTOR remove pattern construction from `hc_wrapgen` stage, instead
+    # object must contain enough information to generate pattern
+    # afterwards.
     private*: bool ## Generated proc should be private?
     arguments*: seq[CArg] ## Arguments
     returnType*: NimType
@@ -1247,14 +1237,13 @@ proc setPrefixForEnum*(
         cache.enumPrefs.incl result
 
 proc initHeaderSpec*(file: AbsFile): NimHeaderSpec =
-
-  NimHeaderSpec(kind: nhskAbsolute, file: file)
+  NimHeaderSpec(kind: chkAbsolute, file: file)
 
 proc initHeaderSpec*(global: string): NimHeaderSpec =
-  NimHeaderSpec(kind: nhskGlobal, global: global)
+  NimHeaderSpec(kind: chkGlobal, global: global)
 
 proc initHeaderSpec*(pnode: PNode): NimHeaderSpec =
-  NimHeaderSpec(kind: nhskPNode, pnode: pnode)
+  NimHeaderSpec(kind: chkPNode, pnode: pnode)
 
 func `$`*(we: WrappedEntry): string = $we.decl
 func `$`*(we: seq[WrappedEntry]): string =
@@ -1264,9 +1253,9 @@ func `$`*(we: seq[WrappedEntry]): string =
 func `==`*(a, b: NimHeaderSpec): bool =
   a.kind == b.kind and ((
     case a.kind:
-      of nhskGlobal: a.global == b.global
-      of nhskAbsolute: a.file == b.file
-      of nhskPNode: a.pnode == b.pnode
+      of chkGlobal: a.global == b.global
+      of chkAbsolute: a.file == b.file
+      of chkPNode: a.pnode == b.pnode
   ))
 
 func `==`*(a, b: CArg): bool =
@@ -1346,7 +1335,7 @@ func newNimType*(
 func newNimType*(
     name: string,
     genParams: openarray[NimType] = @[],
-    libImport: LibImport = LibImport(),
+    libImport: CxxLibImport = CxxLibImport(),
     original: Option[Cxtype] = none(CxType),
     isParam: bool = false
   ): NimType =
@@ -1381,7 +1370,7 @@ func newNimType*(
   result = newNimType(name, cxType, isParam)
   result.genParams.add genParams
 
-func withLib*(ntype: sink NimType, libImport: LibImport): NimType =
+func withLib*(ntype: sink NimType, libImport: CxxLibImport): NimType =
   result = ntype
   result.typeImport = libImport
 
@@ -1389,14 +1378,17 @@ func addIdent*(nimType: sink NimType, id: CScopedIdent): NimType =
   result = nimType
   result.fullIdent = some id
 
-func initLibImport*(name: string, path: seq[string]): LibImport =
-  LibImport(library: name, importPath: path)
+func initCxxLibImport*(name: string, path: seq[string]): CxxLibImport =
+  CxxLibImport(library: name, importPath: path)
 
-func initLibImport*(conf: WrapConf, path: seq[string]): LibImport =
-  LibImport(library: conf.wrapName, importPath: path)
+func initCxxLibImport*(conf: WrapConf, path: seq[string]): CxxLibImport =
+  CxxLibImport(library: conf.wrapName, importPath: path)
 
 func hash*(nt: NimType): Hash =
   case nt.kind:
+    of ctkPtr:
+      result = !$(hash(nt.kind) !& hash(nt.wrapped))
+
     of ctkIdent:
       result = hash(nt.nimName)
 
@@ -1419,6 +1411,9 @@ func hash*(nt: NimType): Hash =
 func `==`*(t1, t2: NimType): bool =
   if t1.kind == t2.kind:
     case t1.kind:
+      of ctkPtr:
+        return t1.wrapped == t2.wrapped
+
       of ctkIdent:
         if t1.nimName == t2.nimName and
            t1.genParams == t2.genParams:
@@ -1437,43 +1432,43 @@ func `==`*(t1, t2: NimType): bool =
           return true
 
 
-func hash*(lib: LibImport): Hash =
+func hash*(lib: CxxLibImport): Hash =
   !$(hash(lib.library) !& hash(lib.importPath))
 
-func `$`*(lib: LibImport): string =
+func `$`*(lib: CxxLibImport): string =
   if lib.library.len > 0:
     result &= lib.library
     result &= "@"
 
   result &= lib.importPath.join("/")
 
-func libImport*(conf: WrapConf, path: seq[string]): LibImport =
-  initLibImport(conf.wrapName, path)
+func libImport*(conf: WrapConf, path: seq[string]): CxxLibImport =
+  initCxxLibImport(conf.wrapName, path)
 
-func libImport*(conf: WrapConf, file: RelFile): LibImport =
-  initLibImport(
+func libImport*(conf: WrapConf, file: RelFile): CxxLibImport =
+  initCxxLibImport(
     conf.wrapName,
     file.withoutExt().getStr().split("/"))
 
-func isValid*(lib: LibImport): bool = lib.importPath.len > 0
+func isValid*(lib: CxxLibImport): bool = lib.importPath.len > 0
 
-func toRelative*(lib: LibImport): RelFile =
+func toRelative*(lib: CxxLibImport): RelFile =
   assert lib.importPath.len > 0
   result = RelFile(lib.importPath.join("/"))
   result.addExt("nim")
 
-func asImport*(lib: LibImport): RelFile =
+func asImport*(lib: CxxLibImport): RelFile =
   assert lib.importPath.len > 0
   result = RelFile(lib.importPath.join("/"))
 
-func `&`*(lib: LibImport, path: openarray[string]): LibImport =
+func `&`*(lib: CxxLibImport, path: openarray[string]): CxxLibImport =
   result = lib
   result.importPath &= @path
 
-func addNamePrefix*(lib: var LibImport, prefix: string, idx: IndexTypes = ^1) =
+func addNamePrefix*(lib: var CxxLibImport, prefix: string, idx: IndexTypes = ^1) =
   lib.importPath[idx] = prefix & lib.importPath[idx]
 
-func addPathPrefix*(lib: var LibImport, prefix: string) =
+func addPathPrefix*(lib: var CxxLibImport, prefix: string) =
   lib.importPath.insert(prefix, 0)
 
 
@@ -1494,6 +1489,9 @@ proc `$`*(nimType: NimType): string =
 
   else:
     case nimType.kind:
+      of ctkPtr:
+        result = $nimType.wrapped & "*"
+
       of ctkIdent:
         if nimType.isParam:
           result = "p!"
@@ -1730,13 +1728,13 @@ proc initEnFieldVal*(v: BiggestInt): EnFieldVal =
 
 func toNNode*(nhs: NimHeaderSpec): PNode =
   case nhs.kind:
-    of nhskPNode:
+    of chkPNode:
       nhs.pnode
 
-    of nhskAbsolute:
+    of chkAbsolute:
       newRStrLit("\"" & nhs.file.getStr() & "\"")
 
-    of nhskGlobal:
+    of chkGlobal:
       newRStrLit("<" & nhs.global & ">")
 
 
@@ -1793,6 +1791,9 @@ proc allUsedTypes*(
 
 
   case nimType.kind:
+    of ctkPtr:
+      result.add allUsedTypes(nimType.wrapped)
+
     of ctkIdent:
       for param in nimType.genParams:
         result.add allUsedTypes(param)
@@ -1812,6 +1813,9 @@ proc allGenericParams*(nimType: NimType): seq[NimType] =
 
 
   case nimType.kind:
+    of ctkPtr:
+      result = allGenericparams(nimType.wrapped)
+
     of ctkIdent:
       for param in nimType.genParams:
         result.add allGenericParams(param)
@@ -1856,7 +1860,7 @@ proc fragmentType*(entry: var GenEntry):
     else:
       discard
 
-proc getSavePath*(conf: WrapConf, path: AbsFile): LibImport =
+proc getSavePath*(conf: WrapConf, path: AbsFile): CxxLibImport =
   ## Get save path for an input file. If path is not in current library
   ## it's dependencies from [[code:WrapConf.depsConf]] would be queried as
   ## well (using [[code:WrapCOnf.isInLibrary]]).

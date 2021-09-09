@@ -1,4 +1,7 @@
 import
+  hmisc/core/all
+
+import
   hcparse, hcparse/[hc_tsreader, hc_save]
 
 import
@@ -17,12 +20,12 @@ suite "Convert PAPI":
 
 
   test "Enum":
-    let save = conf.toSave("""
+    let save = conf.toCxx("""
 enum a { b, c };
 """)
 
   test "Convert":
     let file = AbsFile("/tmp/papi.h")
     if exists(file):
-      let save = conf.toSave(file)
+      let save = conf.toCxx(file)
       "/tmp/papi.json".writeFile(save.toJson())

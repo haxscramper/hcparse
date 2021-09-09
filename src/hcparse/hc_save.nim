@@ -8,155 +8,14 @@ import
   hmisc/core/all
 
 import
-  hnimast, jsony
+  hnimast, jsony,
+  hnimast/interop/wrap_store
 
 import
   std/[
     options, macros, json, sequtils,
     strformat, with
   ]
-
-type
-  CxxSpellingLocation* = object
-    file*: AbsFile
-    line*, column*: int
-
-  SaveHeader* = object
-    case kind*: NimHeaderSpecKind
-      of nhskGlobal:
-        global*: string
-
-      of nhskAbsolute:
-        file*: AbsFile
-
-      of nhskPNode:
-        other*: string
-
-  SaveBase* = object of RootObj
-    iinfo*: LineInfo
-    spellingLocation*: Option[CxxSpellingLocation]
-    nimName*: string
-    cxxName*: seq[string]
-    icpp*: string
-    private*: bool
-    header*: Option[SaveHeader]
-    docComment*: seq[string]
-    haxdocIdent* {.requiresinit.}: JsonNode
-
-  SaveType* = ref object
-    case kind*: CTypeKind
-      of ctkIdent:
-        isConst*: bool
-        isMutable*: bool
-        isComplex*: bool
-
-        typeImport*: LibImport
-        nimName*: string
-        cxxName*: seq[string]
-        genParams*: seq[SaveType]
-        default*: Option[SaveType]
-
-      of ctkProc:
-        arguments*: seq[SaveArg]
-        returnType*: SaveType
-
-
-  SaveProc* = object of SaveBase
-    arguments*: seq[SaveArg]
-    returnType*: SaveType
-    genParams*: seq[SaveType]
-    kind*: ProcKind
-
-  SaveArg* = object of SaveBase
-    nimType*: SaveType
-    default*: Option[string] # ???
-
-  SaveField* = object of SaveBase
-    nimType*: SaveType
-    isStatic*: bool
-
-  SaveEnumValue* = object
-    baseName*: string
-    cxxName*: seq[string]
-    nimName*: string
-    value*: BiggestInt
-    comment*: string
-
-  SaveAlias* = object of SaveBase
-    isDistinct*: bool
-    newAlias*: SaveType
-    baseType*: SaveType
-
-  SaveEnum* = object of SaveBase
-    values*: seq[SaveEnumValue]
-
-  SaveObject* = object of SaveBase
-    kind*: GenObjectKind
-    genParams*: seq[SaveType]
-    mfields*: seq[SaveField]
-    methods*: seq[SaveProc]
-    nested*: seq[SaveEntry]
-
-  SaveForward* = object of SaveBase
-
-  SaveMacro* = object of SaveBase
-    arguments*: seq[string]
-
-  SaveEntry* = ref object
-    case kind*: GenEntryKind
-      of gekEnum:
-        saveEnum*: SaveEnum
-
-      of gekProc:
-        saveProc*: SaveProc
-
-      of gekObject:
-        saveObject*: SaveObject
-
-      of gekAlias:
-        saveAlias*: SaveAlias
-
-      of gekForward:
-        saveForward*: SaveForward
-
-      of gekComment:
-        saveComment*: string
-
-      of gekMacro:
-        saveMacro*: SaveMacro
-
-      else:
-        discard
-
-  SaveFile* = object
-    entries*: seq[SaveEntry]
-    savePath*: LibImport
-
-
-proc box*(en: SaveEnum): SaveEntry =
-  SaveEntry(kind: gekEnum, saveEnum: en)
-
-proc box*(en: SaveForward): SaveEntry =
-  SaveEntry(kind: gekForward, saveForward: en)
-
-proc box*(ob: SaveObject): SaveEntry =
-  SaveEntry(kind: gekObject, saveObject: ob)
-
-proc box*(en: SaveProc): SaveEntry =
-  SaveEntry(kind: gekProc, saveProc: en)
-
-proc box*(en: SaveAlias): SaveEntry =
-  SaveEntry(kind: gekAlias, saveAlias: en)
-
-proc box*(en: SaveMacro): SaveEntry =
-  SaveEntry(kind: gekMacro, saveMacro: en)
-
-proc add*(
-    s: var seq[SaveEntry],
-    other: SaveMacro | SaveAlias | SaveObject | SaveForward | SaveProc
-  ) =
-
-  s.add box(other)
 
 
 proc getCxxName*(conf: WrapConf, decl: CDecl): seq[string] =
@@ -177,11 +36,11 @@ proc getSaveSpeling*(conf: WrapConf, cdecl: CDecl): Option[CxxSpellingLocation] 
 proc getCxxName*(conf: WrapConf, cxType: CxType): seq[string] =
   conf.getTypeNamespaces(cxType).mapIt(getName(it))
 
-proc toSave*(
-    conf: WrapConf, entry: CArg, cache: var WrapCache): SaveArg
+proc toCxx*(
+    conf: WrapConf, entry: CArg, cache: var WrapCache): CxxArg
 
 
-proc dumpHook*(s: var string, v: LibImport) =
+proc dumpHook*(s: var string, v: CxxLibImport) =
   var tmp: string
   tmp.add "{"
   tmp.add &"\"library\": \"{v.library}\", "
@@ -191,7 +50,7 @@ proc dumpHook*(s: var string, v: LibImport) =
   # echo v, tmp
   s.add tmp
 
-proc getTypeImport*(conf: WrapConf, nimType: NimType): LibImport =
+proc getTypeImport*(conf: WrapConf, nimType: NimType): CxxLibImport =
   if nimType.fromCxType or nimType.original.isSome():
     let cxType =
       if nimType.fromCxType:
@@ -212,34 +71,37 @@ proc getTypeImport*(conf: WrapConf, nimType: NimType): LibImport =
     result.library = conf.wrapName
 
 
-proc toSaveComment*(str: string): SaveEntry =
-  SaveEntry(kind: gekComment, saveComment: str)
+proc toCxxComment*(str: string): CxxEntry =
+  CxxEntry(kind: cekComment, cxxComment: str)
 
-proc toSave*(conf: WrapConf, header: NimHeaderSpec): SaveHeader =
-  result = SaveHeader(kind: header.kind)
+proc toCxx*(conf: WrapConf, header: NimHeaderSpec): CxxHeader =
+  result = CxxHeader(kind: header.kind)
   case header.kind:
-    of nhskGlobal: result.global = header.global
-    of nhskAbsolute: result.file = header.file
-    of nhskPNode: result.other = $header.pnode
+    of chkGlobal: result.global = header.global
+    of chkAbsolute: result.file = header.file
+    of chkPNode: result.other = $header.pnode
 
 
-proc toSave*(
-  conf: WrapConf, nimType: NimType, cache: var WrapCache): SaveType =
+proc toCxx*(
+  conf: WrapConf, nimType: NimType, cache: var WrapCache): CxxType =
   assertRef nimType
   var nimType = nimType
   conf.fixTypeName(nimType, conf, 0)
-  result = SaveType(kind: nimType.kind)
+  result = CxxType(kind: nimType.kind)
 
   case nimType.kind:
+    of ctkPtr:
+      result.wrapped = conf.toCxx(nimType.wrapped, cache)
+
     of ctkIdent:
       if nimType.defaultType.isSome():
-        result.default = some conf.toSave(nimType.defaultType.get(), cache)
+        result.default = some conf.toCxx(nimType.defaultType.get(), cache)
 
       with result:
         isMutable = nimType.isMutable
         isConst = nimType.isParam
         nimName = nimType.nimName
-        genParams = mapIt(nimType.genParams, conf.toSave(it, cache))
+        genParams = mapIt(nimType.genParams, conf.toCxx(it, cache))
         typeImport = conf.getTypeImport(nimType)
         isComplex = nimType.isComplex
 
@@ -250,27 +112,27 @@ proc toSave*(
         result.cxxName = conf.getCxxName(nimType.original.get())
 
     of ctkProc:
-      result.returnType = conf.toSave(nimType.returnType, cache)
-      result.arguments = mapIt(nimType.arguments, conf.toSave(it, cache))
+      result.returnType = conf.toCxx(nimType.returnType, cache)
+      result.arguments = mapIt(nimType.arguments, conf.toCxx(it, cache))
 
 
 
 proc getHaxdoc*(conf: WrapConf, ident: CScopedIdent): JsonNode =
   newJNull()
 
-proc toSave*(
+proc toCxx*(
     conf: WrapConf, entry: GenEnumValue, cache: var WrapCache
-  ): SaveEnumValue =
+  ): CxxEnumValue =
 
-  result = SaveEnumValue(
+  result = CxxEnumValue(
     baseName: entry.baseName,
     value: entry.resVal
   )
 
-proc toSave*(
-    conf: WrapConf, entry: GenEnum, cache: var WrapCache): SaveEnum =
+proc toCxx*(
+    conf: WrapConf, entry: GenEnum, cache: var WrapCache): CxxEnum =
 
-  result = SaveEnum(
+  result = CxxEnum(
     spellingLocation: conf.getSaveSpelling(entry.cdecl.cursor),
     haxdocIdent: conf.getHaxdoc(entry.cdecl.ident),
     nimName: entry.name,
@@ -279,64 +141,64 @@ proc toSave*(
   )
 
   for value in entry.values:
-    result.values.add conf.toSave(value, cache)
+    result.values.add conf.toCxx(value, cache)
 
 
-proc toSave*(
-    conf: WrapConf, entry: GenEntry, cache: var WrapCache): SaveEntry
+proc toCxx*(
+    conf: WrapConf, entry: GenEntry, cache: var WrapCache): CxxEntry
 
 
-proc toSave*(
-    conf: WrapConf, entry: CArg, cache: var WrapCache): SaveArg =
+proc toCxx*(
+    conf: WrapConf, entry: CArg, cache: var WrapCache): CxxArg =
 
-  result = SaveArg(
+  result = CxxArg(
     haxdocIdent: conf.getHaxdoc(@[]),
     nimName: fixIdentName(entry.name),
     cxxName: @[entry.name],
-    nimType: conf.toSave(entry.nimType, cache)
+    nimType: conf.toCxx(entry.nimType, cache)
   )
 
-proc toSave*(
-    conf: WrapConf, entry: GenProc, cache: var WrapCache): SaveProc =
+proc toCxx*(
+    conf: WrapConf, entry: GenProc, cache: var WrapCache): CxxProc =
 
-  result = SaveProc(
+  result = CxxProc(
     icpp: entry.icpp,
-    header: some conf.toSave(entry.header),
+    header: some conf.toCxx(entry.header),
     spellingLocation: conf.getSaveSpelling(entry.cdecl.cursor),
     haxdocIdent: conf.getHaxdoc(entry.cdecl.ident),
     nimName: entry.name,
-    genParams: entry.genParams.mapIt(conf.toSave(it, cache))
+    genParams: entry.genParams.mapIt(conf.toCxx(it, cache))
   )
 
   for arg in entry.arguments:
-    result.arguments.add conf.toSave(arg, cache)
+    result.arguments.add conf.toCxx(arg, cache)
 
 
-proc toSave*(
-    conf: WrapConf, entry: GenField, cache: var WrapCache): SaveField =
+proc toCxx*(
+    conf: WrapConf, entry: GenField, cache: var WrapCache): CxxField =
 
-  result = SaveField(
+  result = CxxField(
     spellingLocation: conf.getSaveSpelling(entry.cdecl.cursor),
     haxdocIdent: conf.getHaxdoc(entry.cdecl.ident),
     nimName: entry.name,
-    nimType: conf.toSave(entry.fieldType, cache)
+    nimType: conf.toCxx(entry.fieldType, cache)
   )
 
-proc toSave*(
-    conf: WrapConf, entry: GenAlias, cache: var WrapCache): SaveAlias =
+proc toCxx*(
+    conf: WrapConf, entry: GenAlias, cache: var WrapCache): CxxAlias =
 
-  result = SaveAlias(
+  result = CxxAlias(
     spellingLocation: conf.getSaveSpelling(entry.cdecl.cursor),
     haxdocIdent: conf.getHaxdoc(entry.cdecl.ident),
-    newAlias: conf.toSave(entry.newAlias, cache),
-    baseType: conf.toSave(entry.baseType, cache)
+    newAlias: conf.toCxx(entry.newAlias, cache),
+    baseType: conf.toCxx(entry.baseType, cache)
   )
 
 
-proc toSave*(
-    conf: WrapConf, entry: GenForward, cache: var WrapCache): SaveForward =
+proc toCxx*(
+    conf: WrapConf, entry: GenForward, cache: var WrapCache): CxxForward =
 
-  result = SaveForward(
+  result = CxxForward(
     spellingLocation: conf.getSaveSpelling(entry.cdecl.cursor),
     nimName: getName(entry.cdecl.cursor),
     cxxName: conf.getCxxName(entry.cdecl),
@@ -344,65 +206,65 @@ proc toSave*(
     iinfo: entry.iinfo
   )
 
-proc toSave*(
-    conf: WrapConf, entry: GenObject, cache: var WrapCache): SaveObject =
+proc toCxx*(
+    conf: WrapConf, entry: GenObject, cache: var WrapCache): CxxObject =
 
-  result = SaveObject(
+  result = CxxObject(
     spellingLocation: conf.getSaveSpelling(entry.cdecl.cursor),
     nimName: entry.name.nimName,
     cxxName: conf.getCxxName(entry.cdecl),
     haxdocIdent: conf.getHaxdoc(entry.cdecl.ident),
     iinfo: entry.iinfo,
-    genParams: entry.name.genParams.mapIt(conf.toSave(it, cache)),
+    genParams: entry.name.genParams.mapIt(conf.toCxx(it, cache)),
     kind: entry.kind
   )
 
   for field in entry.memberFields:
-    result.mfields.add conf.toSave(field, cache)
+    result.mfields.add conf.toCxx(field, cache)
 
   for meth in entry.memberMethods:
-    result.methods.add conf.toSave(meth, cache)
+    result.methods.add conf.toCxx(meth, cache)
 
   for nested in entry.nestedEntries:
-    let save = conf.toSave(nested, cache)
-    if save.kind != gekEmpty:
+    let save = conf.toCxx(nested, cache)
+    if save.kind != cekEmpty:
       result.nested.add save
 
-proc toSave*(
-    conf: WrapConf, entry: GenEntry, cache: var WrapCache): SaveEntry =
+proc toCxx*(
+    conf: WrapConf, entry: GenEntry, cache: var WrapCache): CxxEntry =
 
   case entry.kind:
     of gekEnum:
-      result = conf.toSave(entry.genEnum, cache).box()
+      result = conf.toCxx(entry.genEnum, cache).box()
 
     of gekObject:
-      result = conf.toSave(entry.genObject, cache).box()
+      result = conf.toCxx(entry.genObject, cache).box()
 
     of gekAlias:
-      result = conf.toSave(entry.genAlias, cache).box()
+      result = conf.toCxx(entry.genAlias, cache).box()
 
     of gekForward:
-      result = conf.toSave(entry.genForward, cache).box()
+      result = conf.toCxx(entry.genForward, cache).box()
 
     of gekProc:
-      result = conf.toSave(entry.genProc, cache).box()
+      result = conf.toCxx(entry.genProc, cache).box()
 
     of gekComment:
-      result = toSaveComment(entry.comment)
+      result = toCxxComment(entry.comment)
 
     of gekMacro:
       raise newImplementKindError(entry)
 
     of gekEmpty, gekImport, gekPass:
-      result = SaveEntry(kind: gekEmpty)
+      result = CxxEntry(kind: cekEmpty)
 
-proc toSave*(
-    conf: WrapConf, file: WrappedFile, cache: var WrapCache): SaveFile  =
+proc toCxx*(
+    conf: WrapConf, file: WrappedFile, cache: var WrapCache): CxxFile  =
 
   for entry in file.entries:
-    let save = conf.toSave(entry, cache)
-    if save.kind != gekEmpty:
+    let save = conf.toCxx(entry, cache)
+    if save.kind != cekEmpty:
       result.entries.add save
 
-proc newSaveType*(name: string, genParams: seq[SaveType]): SaveType =
-  SaveType(nimName: name, genParams: genParams, kind: ctkIdent)
+proc newCxxType*(name: string, genParams: seq[CxxType]): CxxType =
+  CxxType(nimName: name, genParams: genParams, kind: ctkIdent)

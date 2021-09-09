@@ -2,7 +2,7 @@ import
   std/[
     strutils, sequtils, strformat, tables,
     lenientops, parseutils, bitops, with, sets,
-    hashes, json
+    hashes, json, algorithm
   ]
 
 import
@@ -17,9 +17,10 @@ import
 import
   hnimast,
   hnimast/[pprint, idents_types],
+  hnimast/interop/[wrap_store, wrap_icpp],
   hmisc/macros/iflet,
-  hmisc/algo/[htemplates, hseq_distance, namegen],
-  hmisc/[helpers, hexceptions],
+  hmisc/algo/[htemplates, hseq_distance, namegen, halgorithm],
+  hmisc/core/all,
   hmisc/other/[hlogger, oswrap],
   hmisc/types/colorstring
 
@@ -60,7 +61,7 @@ proc wrapOperator*(
   case oper.operatorKind:
     of cxoCopyAsgnOp:
       it.name = "setFrom"
-      it.icpp = &"(# = #)"
+      it.icpp = initIcpp "(# = #)"
       it.kind = pkRegular
       it.iinfo = currLInfo()
 
@@ -68,7 +69,7 @@ proc wrapOperator*(
       discard
 
     of cxoAsgnOp:
-      it.icpp = &"(# {it.name} #)"
+      it.icpp = icppInfix(it.name)
       it.iinfo = currLInfo()
 
     of cxoArrayOp:
@@ -77,13 +78,13 @@ proc wrapOperator*(
       if nimReturn.isMutable:
         it.name = "[]="
         # WARNING potential source of horrible c++ codegen errors
-        it.icpp = &"#[#]= #"
+        it.icpp = initIcpp"#[#]= #"
 
       else:
-        it.icpp = &"#[#]"
+        it.icpp = initIcpp"#[#]"
 
     of cxoInfixOp:
-      it.icpp = &"({toCppNamespace(oper.ident)}(#, #))"
+      it.icpp = initIcpp &"({toCppNamespace(oper.ident)}(#, #))"
       it.iinfo = currLInfo()
 
       if oper.arguments.len < 2:
@@ -91,7 +92,7 @@ proc wrapOperator*(
 
     of cxoArrowOp:
       # WARNING
-      it.icpp = &"(#.operator->(@))"
+      it.icpp = initIcpp &"(#.operator->(@))"
 
     of cxoCallOp:
       # NOTE nim does have experimental support for call
@@ -99,22 +100,22 @@ proc wrapOperator*(
       # separate function `call()`
       it.name = "call"
       it.kind = pkRegular
-      it.icpp = &"#(@)"
+      it.icpp = initIcpp &"#(@)"
       it.iinfo = currLInfo()
 
     of cxoDerefOp:
       it.name = "[]"
-      it.icpp = &"(*#)"
+      it.icpp = initIcpp &"(*#)"
       it.iinfo = currLInfo()
 
     of cxoPrefixOp:
-      it.icpp = &"({it.name}#)" # FIXME use scoped ident
+      it.icpp = initIcpp &"({it.name}#)" # FIXME use scoped ident
       it.iinfo = currLInfo()
       if oper.arguments.len == 0:
         result.addThis = true
 
     of cxoPostfixOp:
-      it.icpp = &"(#{it.name})" # FIXME use scoped ident
+      it.icpp = initIcpp &"(#{it.name})" # FIXME use scoped ident
       it.iinfo = currLInfo()
 
       if oper.arguments.len == 1:
@@ -122,7 +123,7 @@ proc wrapOperator*(
 
     of cxoCommaOp:
       it.name = "commaOp"
-      it.icpp = &"commaOp(@)"
+      it.icpp = initIcpp &"operator,(@)"
       it.kind = pkRegular
       it.iinfo = currLInfo()
 
@@ -131,7 +132,7 @@ proc wrapOperator*(
 
       with it:
         name = "to" & capitalizeAscii(restype.nimName)
-        icpp = &"@"
+        icpp = initIcpp"@"
         returnType = resType
         declType = ptkConverter
         kind = pkRegular
@@ -144,7 +145,7 @@ proc wrapOperator*(
 
       with it:
         name = "to" & capitalizeAscii(restype.nimName)
-        icpp = &"({oper.cursor}(@))"
+        icpp = initIcpp &"({oper.cursor}(@))"
         returnType = restype
         kind = pkRegular
 
@@ -244,22 +245,22 @@ proc wrapProcedure*(
       if pr.cursor.isStatic():
         addThis = false
         it.iinfo = currLInfo()
-        it.icpp = &"({icppName}(@))"
+        it.icpp = initIcpp &"({icppName}(@))"
 
       else:
         it.iinfo = currLInfo()
-        it.icpp = &"(#.{pr.getNimName(conf)}(@))"
+        it.icpp = initIcpp &"(#.{pr.getNimName(conf)}(@))"
 
       it.header = conf.makeHeader(pr.cursor, conf)
 
     else:
       if conf.isImportcpp:
         it.iinfo = currLinfo()
-        it.icpp = &"({icppName}(@))"
+        it.icpp = initIcpp &"({icppName}(@))"
 
       else:
         it.iinfo = currLInfo()
-        it.icpp = &"{icppName}"
+        it.icpp = initIcpp &"{icppName}"
 
       it.header = conf.makeHeader(pr.cursor, conf)
 
@@ -350,7 +351,7 @@ proc wrapProcedure*(
         it.name = "init" & suffix
         it.iinfo = currLInfo()
         it.returnType = parent.get()
-        it.icpp = &"{toCppNamespace(parentDecl.get().ident)}(@)"
+        it.icpp = initIcpp &"{toCppNamespace(parentDecl.get().ident)}(@)"
         result.decl.add it
 
       block newRefConstructor:
@@ -363,7 +364,7 @@ proc wrapProcedure*(
           conf, cache)
 
         it.returnType = newNimType("ref", @[parent.get()])
-        it.icpp = &"new {toCppNamespace(parentDecl.get().ident)}(@)"
+        it.icpp = initIcpp &"new {toCppNamespace(parentDecl.get().ident)}(@)"
         it.noPragmas = gpcNoPragma
 
         result.decl.add it
@@ -373,7 +374,7 @@ proc wrapProcedure*(
         it.name = "cnew" & suffix
         it.iinfo = currLInfo()
         it.returnType = newNimType("ptr", @[parent.get()])
-        it.icpp = &"new {toCppNamespace(parentDecl.get().ident)}(@)"
+        it.icpp = initIcpp &"new {toCppNamespace(parentDecl.get().ident)}(@)"
         result.decl.add it
 
 
@@ -406,7 +407,7 @@ proc wrapProcedure*(
     if pr.cursor.cxkind == ckDestructor:
       # Explicitly calling destructor on object
       it.arguments.add initCArg("self", newNimType("ptr", @[parent.get()]))
-      it.icpp = &"~{it.name}()"
+      it.icpp = initIcpp &"~{it.name}()"
       it.name = "destroy" & parent.get().nimName
       it.declareForward = true
 
@@ -463,7 +464,7 @@ proc wrapMethods*(
         arguments: @[initCArg("obj", newNimType("ptr", @[returnType]))],
         cdecl: cd,
         iinfo: currLInfo(),
-        icpp: &"#.~{className}()",
+        icpp: initIcpp &"#.~{className}()",
         header: conf.makeHeader(cd.cursor, conf),
         declareForward: true)
 
@@ -471,7 +472,7 @@ proc wrapMethods*(
       result.extra.add GenProc(
         name: "cnew" & parent.nimName.capitalizeAscii(),
         returnType: newNimType("ptr", @[returnType]),
-        icpp: &"new {className}()",
+        icpp: initIcpp &"new {className}()",
         cdecl: cd,
         iinfo: currLInfo(),
         header: conf.makeHeader(cd.cursor, conf))
@@ -489,7 +490,7 @@ proc wrapMethods*(
         name: "init" & parent.nimName.capitalizeAscii(),
         returnType: returnType,
         cdecl: cd,
-        icpp: "{className}()",
+        icpp: initICpp "{className}()",
         header: conf.makeHeader(cd.cursor, conf),
         iinfo: currLInfo())
 
@@ -694,7 +695,7 @@ proc updateAggregateInit*(
       it.name = "init" & gen.name.nimName
       it.arguments = cd.initArgs
       it.header = conf.makeHeader(cd.cursor, conf)
-      it.icpp = &"{toCppNamespace(cd.ident)}({{@}})"
+      it.icpp = initIcpp &"{toCppNamespace(cd.ident)}({{@}})"
       it.returnType = gen.name
 
     gen.nestedEntries.add pr
@@ -1188,7 +1189,7 @@ proc toNNode*(
     result.signature.pragma.add(
       newExprColonExpr(
         newPIdent(conf.importX()),
-        newRStrLit(gen.icpp)))
+        newRStrLit($gen.icpp)))
 
   # If procedure returns mutable lvalue reference ot the same type as
   # passed for the first argument we make it discardable. Most likely
@@ -1414,9 +1415,6 @@ func hash*(spec: NimImportSpec): Hash =
      tern(spec.isRelative, hash(spec.relativeDepth), hash(true)))
 
 proc addImport*(wrapped: var WrappedFile, imp: NimImportSpec) =
-  if "include" in $imp:
-    pprintStackTrace()
-
   wrapped.imports.incl imp
 
 
@@ -1491,7 +1489,7 @@ proc toNNode*(
       raise newImplementKindError(gen.kind)
 
     of gekForward:
-      raiseUnexpectedKindError(
+      raise newUnexpectedKindError(
         gen, "Forward declaration nodes should be converted to import/pass")
 
 proc writeWrapped*(

@@ -5,7 +5,7 @@ import hnimast
 import std/[sequtils, strutils]
 import hmisc/other/[hlogger, oswrap]
 import hmisc/algo/hstring_algo
-import hmisc/hexceptions
+import hmisc/core/all
 import hmisc/types/colorstring
 
 
@@ -216,11 +216,11 @@ proc isAggregateInitable*(
     return false
 
   elif cd.cxKind() notin ckTypeDeclKinds:
-    assertionFail:
-      "Invalid cursor kind of aggregate initalization check."
-      "Expected type declaration (union/enum/struct/class),"
-      "but found {toRed($cd.cxKind())} at {cd.getSpellingLocation()}\n"
-      "{cd.treeRepr()}"
+    raise newLogicError(
+      "Invalid cursor kind of aggregate initalization check.",
+      "Expected type declaration (union/enum/struct/class),",
+      "but found {toRed($cd.cxKind())} at {cd.getSpellingLocation()}\n",
+      "{cd.treeRepr()}")
 
   # List of entries that immediately mean aggregate initalization is not
   # supported.
@@ -440,7 +440,7 @@ proc visitClass*(
         cdkStruct
 
       else:
-        raiseUnexpectedKindError(cursor)
+        raise newUnexpectedKindError(cursor)
 
   var initArgs: seq[CArg]
   var ident = parent
@@ -471,8 +471,7 @@ proc visitClass*(
     icpp: ident.toCppNamespace(),
     ident: ident,
     isAggregateInit: isAggregateInitable(
-      cursor, initArgs, conf, cache)
-  )
+      cursor, initArgs, conf, cache))
 
   if not conf.isImportCpp:
     result.icpp = "struct " & result.icpp

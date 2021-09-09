@@ -1,32 +1,44 @@
-import std/[
-  tables, options, strutils, strformat,
-  hashes, sequtils, bitops, sugar, deques, sets
-]
+import hmisc/core/all
 
-import
+importx:
+  std/[
+    tables,
+    options,
+    strutils,
+    strformat,
+    hashes,
+    sequtils,
+    bitops,
+    sugar,
+    deques,
+    sets,
+    algorithm
+  ]
+
   hnimast
+  hnimast/interop/wrap_store
 
-import
-  hmisc/[helpers, hexceptions],
-  hmisc/algo/[hstring_algo, clformat],
-  hmisc/other/[oswrap, hlogger, hshell],
-  hmisc/types/[colorstring, hgraph],
-  hmisc/macros/argpass
+  hmisc/[
+    algo/[hstring_algo, clformat, halgorithm],
+    other/[oswrap, hlogger, hshell],
+    types/[colorstring, hgraph],
+    macros/argpass
+  ]
 
-import
   jsony
 
-import
-  ./cxtypes,
-  ./cxcommon,
-  ./hc_types,
-  ./hc_visitors,
-  ./hc_typeconv,
-  ./hc_depresolve,
-  ./hc_wrapgen,
-  ./hc_impls,
-  ./hc_docwrap,
-  ./hc_save
+  ./[
+    cxtypes,
+    cxcommon,
+    hc_types,
+    hc_visitors,
+    hc_typeconv,
+    hc_depresolve,
+    hc_wrapgen,
+    hc_impls,
+    hc_docwrap,
+    hc_save
+  ]
 
 
 proc parseTranslationUnit*(
@@ -724,7 +736,7 @@ iterator pairs*[K, V](s1, s2: Table[K, V]): (K, V) =
 type
   UsedSet = object
     cursors: Table[CxCursor, HashSet[NimType]]
-    libs: Table[LibImport, HashSet[NimType]]
+    libs: Table[CxxLibImport, HashSet[NimType]]
 
   UsedGroups = object
     inProcs: UsedSet
@@ -763,6 +775,9 @@ proc registerUse*(nimType: NimType, used: var UsedSet, conf: WrapConf) =
           conf.dump param, lastParam.cursor.cxKind()
 
   case nimType.kind:
+    of ctkPtr:
+      registerUse(nimType.wrapped, used, conf)
+
     of ctkIdent:
       if nimType.defaultType.isSome():
         registerUse(nimType.defaultType.get(), used, conf)
@@ -838,20 +853,20 @@ proc updateImports*(
       registerUsedTypes(entry, usedApis, conf)
 
   var
-    importGraph = newHGraph[LibImport, NimType]()
-    fileMap: Table[LibImport, WrappedFile]
+    importGraph = newHGraph[CxxLibImport, NimType]()
+    fileMap: Table[CxxLibImport, WrappedFile]
 
   for file in wrapped:
     let lib = conf.getSavePath(conf.getBaseFile(file))
     fileMap[lib] = file
 
-  proc isSelfImport(save: LibImport, imp: NimImportSpec): bool =
+  proc isSelfImport(save: CxxLibImport, imp: NimImportSpec): bool =
     imp.isRelative and
     imp.relativeDepth == 0 and
     imp.importPath.len == 1 and
     imp.importPath[^1] == save.importPath[^1]
 
-  proc addImports(graph: var HGraph[LibImport, NimType], file: WrappedFile, used: UsedSet) =
+  proc addImports(graph: var HGraph[CxxLibImport, NimType], file: WrappedFile, used: UsedSet) =
     block cursorBasedImportrs:
       let
         base = conf.getBaseFile(file)
@@ -884,8 +899,8 @@ proc updateImports*(
 
   block registerImports:
     var
-      onlyTypes = newHGraph[LibImport, NimType]()
-      onlyProcs = newHGraph[LibImport, NimType]()
+      onlyTypes = newHGraph[CxxLibImport, NimType]()
+      onlyProcs = newHGraph[CxxLibImport, NimType]()
 
     for file in wrapped:
       onlyTypes.addImports file, usedApis.inTypes
@@ -896,7 +911,7 @@ proc updateImports*(
 
     onlyTypes.
       dotRepr(
-        dotReprDollarNode[LibImport],
+        dotReprDollarNode[CxxLibImport],
         dotReprCollapseEdgesJoin[NimType],
         clusters = onlyTypes.findCycles(ignoreSelf = true).
       mergeCycleSets().mapIt((it, ""))).withResIt do:
@@ -905,7 +920,7 @@ proc updateImports*(
 
     onlyProcs.
       dotRepr(
-        dotReprDollarNode[LibImport],
+        dotReprDollarNode[CxxLibImport],
         dotReprCollapseEdgesJoin[NimType],
         clusters = onlyTypes.findCycles(ignoreSelf = true).
       mergeCycleSets().mapIt((it, ""))).withResIt do:
@@ -921,7 +936,7 @@ proc updateImports*(
   proc addImports(
       file: var WrappedFile,
       usedGroup: UsedSet,
-      ignoreImport: HashSet[LibImport] = default(HashSet[LibImport])
+      ignoreImport: HashSet[CxxLibImport] = default(HashSet[CxxLibImport])
     ) =
     let
       base = conf.getBaseFile(file)
@@ -959,7 +974,7 @@ proc updateImports*(
     var
       mergedFiles: seq[WrappedFile] = mapIt(group, fileMap[importGraph[it]])
       mergedPaths: string = mapIt(group, importGraph[it].importPath[^1]).sorted().join("_")
-      ignoreImports: HashSet[LibImport] = mapIt(group, importGraph[it]).toHashSet()
+      ignoreImports: HashSet[CxxLibImport] = mapIt(group, importGraph[it]).toHashSet()
       mergedTypes: seq[GenEntry]
 
     # conf.dump mergedPaths
@@ -981,7 +996,7 @@ proc updateImports*(
         file.addImports(usedGroup.inProcs, ignoreImports)
 
         file.addImport conf.getImport(
-          dep = conf.initLibImport(@[mergedPaths]),
+          dep = conf.initCxxLibImport(@[mergedPaths]),
           user = conf.getSavePath(base),
           false)
 
@@ -998,7 +1013,7 @@ proc updateImports*(
           newFile: RelFile(mergedPaths & ".nim"),
           original: @[conf.getBaseFile(mergedFiles[0])])
 
-      var typeImports: HashSet[LibImport]
+      var typeImports: HashSet[CxxLibImport]
       block getTypeImports:
         let usedGroup = merged.getUsedTypes(conf)
         for typeCursor, _ in usedGroup.inTypes.cursors:
@@ -1059,7 +1074,7 @@ proc wrapFiles*(
 
       ensureDir(file)
       conf.dump file
-      let j = conf.toSave(resFile, cache).toJson()
+      let j = conf.toCxx(resFile, cache).toJson()
       writeFile(file, j)
 
 
@@ -1295,11 +1310,10 @@ proc wrapSingleFile*(
   ## C++ codegen files.
 
   if conf.baseDir.len == 0:
-    raiseArgumentError(
+    raise newArgumentError(
       "Base director is not set for wrapper configuration. " &
         "Set configuration .baseDir to the root directory of C(++) " &
-        "source files"
-    )
+        "source files")
 
   var
     cache: WrapCache

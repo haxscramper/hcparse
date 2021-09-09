@@ -1,13 +1,13 @@
 ## Conversion of C types to nim
 
-import cxtypes, hc_types
-import hnimast
+import ./cxtypes, ./hc_types
+import hnimast, hnimast/interop/wrap_store
 
 import
   hmisc/other/[hlogger],
   hmisc/types/colorstring,
   hmisc/algo/[hstring_algo, hseq_mapping, clformat],
-  hmisc/helpers,
+  hmisc/core/all,
   hmisc/macros/iflet
 
 import std/[algorithm, strformat, sequtils, strutils,
@@ -432,6 +432,9 @@ proc toNType*(
 
     else:
       case nimType.kind:
+        of ctkPtr:
+          result = newPtype("ptr", [aux(nimType.wrapped, cache)])
+
         of ctkIdent:
           assert nimType.nimName.len > 0
           result = newPType(nimType.nimName)
@@ -763,6 +766,9 @@ proc genParamsForIdent*(
 func fixTypeParams*(nt: var NimType, params: seq[NimType]) =
   func aux(nt: var NimType, idx: var int) =
     case nt.kind:
+      of ctkPtr:
+        aux(nt.wrapped, idx)
+
       of ctkIdent:
         if startsWith(nt.nimName, "TYPE_PARAM"):
           nt.nimName = params[idx].nimName
@@ -783,12 +789,15 @@ func fixTypeParams*(nt: var NimType, params: seq[NimType]) =
 
 func hasSpecial*(nt: NimType, special: seq[string]): bool =
   case nt.kind:
+    of ctkPtr:
+      nt.wrapped.hasSpecial(special)
+
     of ctkIdent:
       nt.nimName in special or
-      nt.genParams.anyOfIt(it.hasSpecial(special))
+      nt.genParams.anyIt(it.hasSpecial(special))
 
     of ctkProc:
-      nt.arguments.anyOfIt(it.nimType.hasSpecial(special))
+      nt.arguments.anyIt(it.nimType.hasSpecial(special))
 
 
 func hasUnexposed*(nt: NimType): bool =
@@ -871,7 +880,7 @@ proc toInitCall*(
 
           conf.debug cursor.getSpellingLocation()
           conf.debug cursor.treeRepr()
-          raiseImplementKindError(cursor.cxType())
+          raise newImplementKindError(cursor.cxType())
 
       of ckFunctionalCastExpr:
         result = aux(cursor[1], ilist, cache)

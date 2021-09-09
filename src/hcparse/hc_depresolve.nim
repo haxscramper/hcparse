@@ -1,5 +1,5 @@
 import std/[tables, sequtils, strutils, options]
-import hmisc/helpers
+import hmisc/core/all
 import hmisc/other/[oswrap]
 import cxtypes, cxcommon, hc_types
 
