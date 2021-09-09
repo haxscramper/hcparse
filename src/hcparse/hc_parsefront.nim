@@ -36,7 +36,6 @@ importx:
     hc_depresolve,
     hc_wrapgen,
     hc_impls,
-    hc_docwrap,
     hc_save
   ]
 
@@ -1308,6 +1307,8 @@ proc wrapSingleFile*(
   ## Returns list of nim declarations with associated metadata
   ## (instantiation info in codegen callback, comments etc.) and list of
   ## C++ codegen files.
+
+  assertRef conf.logger
 
   if conf.baseDir.len == 0:
     raise newArgumentError(

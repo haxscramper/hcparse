@@ -4,7 +4,6 @@ import
   ./cxcommon,
   ./hnimast,
   ./cxtypes,
-  ./hc_docwrap,
   ./hc_depresolve,
   ./hc_typeconv,
   ./hc_wrapgen
@@ -61,7 +60,6 @@ proc errorCodesToException*(
   for (ident, code) in errorMap:
     if sameNoGeneric(genProc.cdecl.ident, ident):
       var gen2 = deepCopy(genProc)
-      # gen2.name = genProc.name
       genProc.name &= "Raw"
       gen2.noPragmas = gpcNoPragma
 

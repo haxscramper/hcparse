@@ -2,9 +2,9 @@ import
   std/[sugar, strutils, sequtils, strformat, options],
   hmisc/other/[oswrap, hshell, hlogger],
   hmisc/types/[colortext],
-  hmisc/helpers,
+  hmisc/core/all,
   hcparse,
-  hcparse/[dox_xml, hc_docwrap]
+  hcparse/[dox_xml]
 
 let
   dir = getNewTempDir("tWrapEnum")
@@ -32,8 +32,9 @@ class
 doxygenXmlForDir(dir, doxDir)
 let wrapConf = baseCppWrapConf.withDeepIt do:
   it.baseDir = dir
+  it.logger = newTermLogger()
   it.showParsed = true
-  it.refidMap = getRefidLocations(doxDir)
+  # it.refidMap = getRefidLocations(doxDir)
   it.codegenDir = some dir
 
 let resFile = dir /. "res.nim"

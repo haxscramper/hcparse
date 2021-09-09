@@ -5,7 +5,7 @@ import
   hmisc/hasts/[xml_ast],
   hmisc/other/[oswrap, hshell, hlogger],
   hmisc/algo/halgorithm,
-  hmisc/hdebug_misc
+  hmisc/core/all
 
 const doxyfileText = """
 DOXYFILE_ENCODING      = UTF-8
