@@ -11,10 +11,20 @@ This project provides two types of wrapper generators -
    and has full understanding of the code, but requires more sophisticated
    setup.
 
-In addition to conversion of the C and C++ code to nim ~hcparse~ also
-supports generation of the ~.json~ files that contain all available
-information about processed headers, which makes it possible to create own
-wrapper generation tooling.
+In addition to predefined wrapping logic API for user-implemented tooling
+is provided.
+  - Supports generation of the ~.json~ files that contain all available
+    information about processed headers, which makes it possible to create
+    own wrapper generation tooling (using any programming language that can
+    parse ~.json~, so this not even a nim-only solution), or create
+    these files elsewhere.
+  - [[https://github.com/haxscramper/hnimast][hnimast]] provides a macro for manually creating wrappers for a library.
+    It is placed in a separate package because hcparse itself is a
+    relatively heavy dependency (uses htsparse which contains a lot of
+    auto-generated code for C++ parsers). Macro internally uses IR for
+    describing C++ code.
+
+
 
 ** Tree-sitter & boost wave
 
@@ -69,9 +79,78 @@ using user-provided or built-in tools, that allow you to
   your wrappers. No longer user would have to dig through C++ docs in order
   to make sense of what part of the wrapper they need.
 
-** Why have two differen ways of wrapping libraries?
+** Why have multiple different ways of wrapping libraries?
 
 # https://discord.com/channels/371759389889003530/371759389889003532/880807906335948840
+
+Why is it necessary to have multiple different approaches to code wrapping?
+Having single entry point would make it much easier for new users,
+simplifty documentation and explanation and so on.
+
+Main reason for providing two (three if you count
+[][hnimast/wrap/wrap_decl] as well) solutions is very simple - each has
+it's own downsides (for end user), and it is not possible to create a tool
+where both techniques are used, as they have large number of mutually
+exclusive requirements.
+
+- tree-sitter & boost wave ::
+  - advantages ::
+    - Does not require valid translation unit or even /valid code/ - it [[https://tree-sitter.github.io/tree-sitter/#underlying-research][uses]]
+      LR parser with built-in support for error recover, which means I'm able
+      to provide /best possible/ solution in case of malformed code. This is
+      important, because most of the C code you can find is actually not
+      *valid C*, it becomes valid after you use preprocessor. But with
+      tree-sitter it is not required.
+    - Can override behavior of the preprocessor - ~include~ statements in
+      code might be ignored for initial processing, making it possible to
+      provide 1:1 mapping of the original source file.
+    - Can provide /some/ level of automatic code enhancement - fixing
+      identifiers, providing enum wrappers etc.
+  - disadvantages ::
+    - Does not really understand C++ code. In cases like ~using namespace
+      std;~ followed by ~string getStr() {};~ there is no way to correctly
+      track /actually used types/ - doing so would require reimplementing
+      all of the C++ bookeeping. ~using~ declarations, type aliases, active
+      namespaces and so on.
+- libclang ::
+  - advantages ::
+    - Expands all macros itself, operate on stable AST, so no code
+      modification is needed *at all*. This is especially important for
+      large libraries, where manual modification is out of the question.
+    - Has full understanding of the C++ code -
+      ~getTypeDeclaration().getSemanticParent()~, all bookeeping, namespace
+      tracking, type aliases and so on.
+    - Can provide more powerful automatic code enhacement features ehanced
+      with the type declaration knowledge.
+  - disadvantages ::
+    - Requires fully valid translation unit to work with - all includes
+      must be resolved, all defines must be specified. Much harder to use
+      in libraries that use non-standard build system (e.g. cmake that
+      executes codegen, merges together multiple files and complies
+      everyting at once)
+- manual, using macros ::
+  - advantanges ::
+    - Implementation controlled by end user - no intermediate code
+      generation steps (even though they are not embedded in final
+      compilation process like nimterop does, it might be somewhat annoying
+      to deal with).
+    - Much simpler to provide convenience wrappers - no need to manage
+      multiple files or somehow annotate entries to differentiate between
+      generated and non-generated ones. You just write some DSL, and
+      immediately start adding convenience
+  - disadvantages ::
+    - As with any manual wrapping - for large libraries it is not really
+      possible.
+    - It is not possible to put documentation comments on some of the
+      generated types - macros does not have full access to the comment
+      fields.
+
+As you can see, each approach has it's own powerful sides, but it is
+fundamentally impossible to merge two of them, since they have completely
+opposite requirements - one does not understand C++ code, and *does not
+need to*, while for second one it is absolutely mandatory. Manual wrapping
+was added for the sake of completeness, since implementation reuses the
+same IR.
 
 ** Difference from existing projects and approaches
 
