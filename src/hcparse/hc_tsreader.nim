@@ -58,22 +58,7 @@ proc mapTypeName*(node: CppNode): string =
     node.strVal()
 
   else:
-    case node.primitiveName():
-      of "unsigned long": "ulong"
-      of "long long": "clonglong"
-      of "long": "clong"
-      of "void": "void"
-      of "int": "cint"
-      of "char": "char"
-      of "unsigned", "unsigned int": "cuint"
-      of "float": "cfloat"
-      of "uint8_t": "uint8"
-      of "uint16_t": "uint16"
-      of "int16_t": "int16"
-      of "bool": "bool"
-      of "size_t": "size_t"
-      else:
-        raise newImplementKindError(node.primitiveName(), node.treeRepr())
+    mapPrimitiveName(node.primitiveName())
 
 proc toCxxType*(conf: WrapConf, node: CppNode): CxxType =
   case node.kind:

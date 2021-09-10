@@ -68,16 +68,19 @@ type
   CxxName* = object
     scopes*: seq[string]
 
+  CxxNamePair* = object
+    nim*: string
+    cxx*: CxxName
+
   CxxIdent* = object
-    name*: CxxName
+    name*: CxxNamePair
     genParams*: seq[CxxTypeUse]
 
-  CxxGenParams* = seq[tuple[name: string, default: Option[CxxTypeUse]]]
+  CxxGenParams* = seq[tuple[name: CxxNamePair, default: Option[CxxTypeUse]]]
 
   CxxTypeDecl* = object
     isForward*: bool
-    cxxName*: CxxName
-    nimName*: string
+    name*: CxxNamePair
     typeImport*: CxxLibImport
     genParams*: CxxGenParams
 
@@ -94,13 +97,12 @@ type
 
   CxxTypeRef = object
     ## Reference to used C++ type
+    name*: CxxNamePair
     case isParam*: bool
       of true:
-        paramName*: string
+        discard
 
       of false:
-        nimName*: string
-        cxxName*: CxxName
         typeLib*: Option[string]
         typeStore*: CxxTypeStore
 
@@ -109,6 +111,7 @@ type
     ctfMutable
     ctfComplex
     ctfParam
+    ctfDefaultedParam
 
   CxxTypeUse* = ref object
     ## Instantiated type
@@ -137,8 +140,13 @@ type
     ## Procedure kind
     cpkRegular ## Regular proc: `hello()`
     cpkOperator ## Operator: `*`
-    cpkHook ## Destructor/sink (etc.) hook: `=destroy`
-    cpkAssgn ## Assignment proc `field=`
+
+    cpkAssignOperator
+    cpkCopyOperator
+    # cpk
+
+    # cpkHook ## Destructor/sink (etc.) hook: `=destroy`
+    # cpkAssgn ## Assignment proc `field=`
 
   CxxProcFlag = enum
     cpfConst
@@ -161,8 +169,8 @@ type
 
     flags*: set[CxxProcFlag]
 
-    constructorOf*: Option[CxxName]
-    methodOf*: Option[CxxName]
+    constructorOf*: Option[CxxNamePair]
+    methodOf*: Option[CxxNamePair]
 
   CxxExprKind = enum
     cekIntLit
@@ -178,11 +186,10 @@ type
         strVal*: string
 
       of cekCall:
-        ident*: CxxName
+        ident*: CxxNamePair
 
   CxxArg* = object of CxxBase
-    nimName*: string
-    cxxName*: CxxName
+    name*: CxxNamePair
     nimType*: CxxTypeUse
     default*: Option[CxxExpr]
 
@@ -192,8 +199,7 @@ type
 
   CxxEnumValue* = object
     baseName*: string
-    cxxName*: seq[string]
-    nimName*: string
+    name*: CxxNamePair
     value*: BiggestInt
     comment*: string
 
@@ -227,8 +233,7 @@ type
     decl*: CxxTypeDecl
 
   CxxMacro* = object of CxxBase
-    nimName*: string
-    cxxName*: CxxName
+    name*: CxxNamePair
     arguments*: seq[string]
 
 
@@ -283,17 +288,23 @@ type
     entries*: seq[CxxEntry]
     savePath*: CxxLibImport
 
-func cxxName*(pr: CxxProc): CxxName = pr.head.cxxName
-func cxxName*(obj: CxxObject): CxxName = obj.decl.cxxName
+func `nimName=`*(pr: var CxxProc, name: string) =
+  pr.head.name.nim = name
+
+func cxxName*(pr: CxxProc): CxxName = pr.head.name.cxx
+func cxxName*(obj: CxxObject): CxxName = obj.decl.name.cxx
 func cxxName*(name: string): CxxName = CxxName(scopes: @[name])
 func cxxName*(scopes: seq[string]): CxxName = CxxName(scopes: scopes)
+func cxxPair*(nim: string, cxx: CxxName): CxxNamePair =
+  CxxNamePair(nim: nim, cxx: cxx)
 
+func cxxPair*(name: string): CxxNamePair = cxxPair(name, cxxName(@[name]))
 
 func isConst*(pr: CxxProc): bool = cpfConst in pr.flags
 func isConstructor*(pr: CxxProc): bool = pr.constructorOf.isSome()
 func isMethod*(pr: CxxProc): bool = pr.methodOf.isSome()
 
-func getConstructed*(pr: CxxProc): CxxName =
+func getConstructed*(pr: CxxProc): CxxNamePair =
   pr.constructorOf.get()
 
 func getIcppName*(pr: CxxProc, asMethod: bool = false): string =
@@ -309,11 +320,8 @@ func initCxxHeader*(global: string): CxxHeader =
 func initCxxHeader*(file: AbsFile): CxxHeader =
   CxxHeader(kind: chkAbsolute, file: file)
 
-func initCxxArg*(name: string, argType: CxxTypeUse): CxxArg =
-  CxxArg(nimType: argType, nimName: name, haxdocIdent: newJNull())
-
-func initCxxArg*(name: CxxName, argType: CxxTypeUse): CxxArg =
-  CxxArg(nimType: argType, cxxName: name, haxdocIdent: newJNull())
+func initCxxArg*(name: CxxNamePair, argType: CxxTypeUse): CxxArg =
+  CxxArg(nimType: argType, name: name, haxdocIdent: newJNull())
 
 func wrap*(wrapped: CxxTypeUse, kind: CxxTypeKind): CxxTypeUse =
   if kind == ctkIdent:
@@ -324,23 +332,21 @@ func wrap*(wrapped: CxxTypeUse, kind: CxxTypeKind): CxxTypeUse =
     result.wrapped = wrapped
 
 func cxxTypeRef*(
-    cxxName: CxxName, nimName: string = "", store: CxxTypeStore = nil
-  ): CxxTypeRef =
-
-  CxxTypeRef(
-    isParam: false, nimName: nimName,
-    cxxName: cxxName, typeStore: store)
+    name: CxxNamePair, store: CxxTypeStore = nil): CxxTypeRef =
+  CxxTypeRef(isParam: false, name: name, typeStore: store)
 
 func cxxTypeDecl*(
-    head: CxxName, genParams: CxxGenParams = @[]): CxxTypeDecl =
-
-  CxxTypeDecl(cxxName: head, genParams: genParams)
+    head: CxxNamePair, genParams: CxxGenParams = @[]): CxxTypeDecl =
+  CxxTypeDecl(name: head, genParams: genParams)
 
 func cxxTypeUse*(
-    head: CxxName, genParams: seq[CxxTypeUse] = @[]): CxxTypeUse =
+    head: CxxNamePair,
+    genParams: seq[CxxTypeUse] = @[],
+    store: CxxTypeStore = nil
+  ): CxxTypeUse =
 
   CxxTypeUse(
-    kind: ctkIdent, cxxType: cxxTypeRef(head), genParams: @genParams)
+    kind: ctkIdent, cxxType: cxxTypeRef(head, store), genParams: @genParams)
 
 func getReturn*(
     pr: CxxProc, onConstructor: CxxTypeKind = ctkIdent): CxxTypeUse =
@@ -398,18 +404,19 @@ func cxxTypeUse*(
   CxxTypeUse(
     kind: ctkProc, arguments: arguments, returnType: returnType)
 
-func cxxObject*(cxxName: CxxName, genParams: CxxGenParams): CxxObject =
-  CxxObject(decl: cxxTypeDecl(cxxName, genParams), haxdocIdent: newJNull())
+func cxxObject*(name: CxxNamePair, genParams: CxxGenParams): CxxObject =
+  CxxObject(decl: cxxTypeDecl(name, genParams), haxdocIdent: newJNull())
+
 
 func cxxProc*(
-    cxxName: CxxName,
+    name: CxxNamePair,
     arguments: seq[CxxArg] = @[],
-    returnType: CxxTypeUse = cxxTypeUse(cxxName"void"),
+    returnType: CxxTypeUse = cxxTypeUse(cxxPair"void"),
     genParams: CxxGenParams = @[]
   ): CxxProc =
 
   CxxProc(
-    head: cxxTypeDecl(cxxName, genParams),
+    head: cxxTypeDecl(name, genParams),
     haxdocIdent: newJNull(),
     returnType: returnType,
     arguments: arguments

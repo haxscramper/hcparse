@@ -1,7 +1,7 @@
 ## Conversion of C types to nim
 
 import ./cxtypes, ./hc_types
-import hnimast, hnimast/interop/wrap_store
+import hnimast
 
 import
   hmisc/other/[hlogger],
@@ -13,7 +13,7 @@ import
 import std/[algorithm, strformat, sequtils, strutils,
             parseutils, tables, decls]
 
-import cxcommon
+import ./cxcommon, ./interop_ir/wrap_store
 
 
 func add*(
@@ -490,6 +490,9 @@ proc toNType*(
             nimType.returnType.aux(cache),
             newPPragma("cdecl"))
 
+        else:
+          raise newImplementKindError(nimType)
+
 
   if isNil(nimType):
     return newPType("void")
@@ -555,6 +558,46 @@ proc fromCxxTypeName*(name: string): string =
     of "int": "cint"
     of "unsigned long": "culong"
     else: ""
+
+func mapPrimitiveName*(name: string): string =
+  case name:
+    of "unsigned long": "ulong"
+    of "long long": "clonglong"
+    of "long": "clong"
+    of "void": "void"
+    of "int": "cint"
+    of "char": "char"
+    of "unsigned", "unsigned int": "cuint"
+    of "float": "cfloat"
+    of "uint8_t": "uint8"
+    of "uint16_t": "uint16"
+    of "int16_t": "int16"
+    of "bool": "bool"
+    of "size_t": "size_t"
+    # of tkBool:       ("bool")
+    # of tkint:        ("cint")
+    # of tkvoid:       ("void")
+    # of tkuint:       ("cuint")
+    # of tklonglong:   ("clonglong")
+    # of tkulonglong:  ("culonglong")
+    # of tkdouble:     ("cdouble")
+    # of tkulong:      ("culong")
+    # of tkuchar:      ("cuchar")
+    # of tkchar16:     ("cchar16")
+    # of tkchar32:     ("cchar32")
+    # of tkwchar:      ("cwchar")
+    # of tkchar_s:     ("cchar")
+    # of tklong:       ("clong")
+    # of tkushort:     ("cushort")
+    # of tknullptr:    ("pointer") # warning c++ type is `nullptr_t`
+    # of tkfloat:      ("cfloat")
+    # of tklongdouble: ("clongdouble")
+    # of tkshort:      ("cshort")
+    # of tkschar:      ("cschar")
+
+    else:
+      raise newImplementKindError(name)
+
 
 proc toNimType*(
     cxtype: CXType, conf: WrapConf, cache: var WrapCache): NimType =
@@ -766,8 +809,14 @@ proc genParamsForIdent*(
 func fixTypeParams*(nt: var NimType, params: seq[NimType]) =
   func aux(nt: var NimType, idx: var int) =
     case nt.kind:
-      of ctkPtr:
+      of ctkWrapKinds:
         aux(nt.wrapped, idx)
+
+      of ctkArrayKinds:
+        aux(nt.arrayElement, idx)
+
+      of ctkStaticParam:
+        discard
 
       of ctkIdent:
         if startsWith(nt.nimName, "TYPE_PARAM"):
@@ -789,8 +838,14 @@ func fixTypeParams*(nt: var NimType, params: seq[NimType]) =
 
 func hasSpecial*(nt: NimType, special: seq[string]): bool =
   case nt.kind:
-    of ctkPtr:
+    of ctkWrapKinds:
       nt.wrapped.hasSpecial(special)
+
+    of ctkArrayKinds:
+      nt.arrayElement.hasSpecial(special)
+
+    of ctkStaticParam:
+      false
 
     of ctkIdent:
       nt.nimName in special or

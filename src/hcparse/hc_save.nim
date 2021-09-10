@@ -1,15 +1,15 @@
 import
   ./hc_types,
   ./cxtypes,
-  ./cxcommon
+  ./cxcommon,
+  ./interop_ir/wrap_store
 
 import
   hmisc/other/[oswrap],
   hmisc/core/all
 
 import
-  hnimast, jsony,
-  hnimast/interop/wrap_store
+  hnimast, jsony
 
 import
   std/[
@@ -83,11 +83,12 @@ proc toCxx*(conf: WrapConf, header: NimHeaderSpec): CxxHeader =
 
 
 proc toCxx*(
-  conf: WrapConf, nimType: NimType, cache: var WrapCache): CxxType =
+  conf: WrapConf, nimType: NimType, cache: var WrapCache): CxxTypeUse =
+
   assertRef nimType
   var nimType = nimType
   conf.fixTypeName(nimType, conf, 0)
-  result = CxxType(kind: nimType.kind)
+  result = CxxTypeUse(kind: nimType.kind)
 
   case nimType.kind:
     of ctkPtr:

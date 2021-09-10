@@ -1424,8 +1424,15 @@ func hash*(nt: NimType): Hash =
 func `==`*(t1, t2: NimType): bool =
   if t1.kind == t2.kind:
     case t1.kind:
-      of ctkPtr:
+      of ctkWrapKinds:
         return t1.wrapped == t2.wrapped
+
+      of ctkStaticParam:
+        return t1.param == t2.param
+
+      of ctkArrayKinds:
+        return t1.arraySize == t2.arraySize and
+               t1.arrayElement == t2.arrayElement
 
       of ctkIdent:
         if t1.nimName == t2.nimName and
@@ -1504,6 +1511,21 @@ proc `$`*(nimType: NimType): string =
     case nimType.kind:
       of ctkPtr:
         result = $nimType.wrapped & "*"
+
+      of ctkLVRef:
+        result = $nimType.wrapped & "&"
+
+      of ctkRVRef:
+        result = $nimType.wrapped & "&&"
+
+      of ctkDynamicArray:
+        result = $nimType.wrapped & "[]"
+
+      of ctkFixedArray, ctkDependentArray:
+        result = $nimType.arrayElement & "[" & $nimType.arraySize & "]"
+
+      of ctkStaticParam:
+        result = $nimType.param
 
       of ctkIdent:
         if nimType.isParam:
@@ -1804,8 +1826,14 @@ proc allUsedTypes*(
 
 
   case nimType.kind:
-    of ctkPtr:
+    of ctkWrapKinds:
       result.add allUsedTypes(nimType.wrapped)
+
+    of ctkArrayKinds:
+      result.add allUsedTypes(nimType.arrayElement)
+
+    of ctkStaticParam:
+      discard
 
     of ctkIdent:
       for param in nimType.genParams:
@@ -1826,8 +1854,14 @@ proc allGenericParams*(nimType: NimType): seq[NimType] =
 
 
   case nimType.kind:
-    of ctkPtr:
+    of ctkWrapKinds:
       result = allGenericparams(nimType.wrapped)
+
+    of ctkArrayKinds:
+      result = allGenericParams(nimType.arrayElement)
+
+    of ctkStaticParam:
+      discard
 
     of ctkIdent:
       for param in nimType.genParams:
