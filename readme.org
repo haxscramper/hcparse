@@ -21,8 +21,9 @@ is provided.
   - [[https://github.com/haxscramper/hnimast][hnimast]] provides a macro for manually creating wrappers for a library.
     It is placed in a separate package because hcparse itself is a
     relatively heavy dependency (uses htsparse which contains a lot of
-    auto-generated code for C++ parsers). Macro internally uses IR for
-    describing C++ code.
+    auto-generated code for C++ parsers). Type definitions for ~.json~
+    reprsentation are also placed in hnimast for that reason -
+    ~hnimast/interop/wrap_store~.
 
 
 
