@@ -19,7 +19,9 @@ proc toNNode*[N](t: CxxType): N =
       raise newImplementKindError(t)
 
 proc toNNode*[N](arg: CxxArg): N =
-  nnkIdentDefs.newTree(ident(arg.nimName), toNNode[N](arg.nimType), newEmptyNode())
+  nnkIdentDefs.newTree(
+    ident(arg.nimName),
+    toNNode[N](arg.nimType), newEmptyNode())
 
 proc toNNode*[N](header: CxxHeader): N =
   case header.kind:

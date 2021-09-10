@@ -304,6 +304,10 @@ func isConst*(pr: CxxProc): bool = cpfConst in pr.flags
 func isConstructor*(pr: CxxProc): bool = pr.constructorOf.isSome()
 func isMethod*(pr: CxxProc): bool = pr.methodOf.isSome()
 
+func add*(t: var CxxTypeUse, other: CxxTypeUse) =
+  t.genParams.add other
+  t.genParams.last().flags.incl ctfParam
+
 func getConstructed*(pr: CxxProc): CxxNamePair =
   pr.constructorOf.get()
 

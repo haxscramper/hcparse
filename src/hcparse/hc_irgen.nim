@@ -1,10 +1,11 @@
 import
   hmisc/core/all,
-  hmisc/algo/[hstring_algo]
+  hmisc/algo/[hstring_algo],
+  hmisc/types/colorstring
 
 
 
-import std/[with]
+import std/[with, sequtils, strutils, strformat]
 
 import
   ./interop_ir/[wrap_store, wrap_icpp],
@@ -31,8 +32,8 @@ proc toCxxElaborated*(
     cxtype: CXType, conf: WrapConf, cache: var WrapCache): CxxTypeUse =
 
   let decl = cxtype.getTypeDeclaration()
+  result = conf.cxxPair(cxtype, cache).cxxTypeUse()
   if cxtype.getNumTemplateArguments() > 0:
-    result = conf.cxxPair(cxtype, @[])
     case decl.cxKind:
       of ckTypedefDecl, ckTypeAliasDecl, ckTypeAliasTemplateDecl:
         # WARNING `template <J, Q> using` is not handled
@@ -40,7 +41,7 @@ proc toCxxElaborated*(
         # result = conf.cxxPair(cxtype, @[]) # newNimType(cxtype.getTypeName(conf), cxtype)
 
       of ckTypeDeclKinds:
-        result = newNimType(cxtype.getTypeName(conf), cxtype)
+        # result = newNimType(cxtype.getTypeName(conf), cxtype)
         let params = cxtype.templateParams()
         for idx, parm in params:
           if parm.cxKind != tkInvalid:
@@ -50,8 +51,8 @@ proc toCxxElaborated*(
         conf.warn "Conversion from elaborated type: ", decl
         conf.debug "  ", decl.cxKind(), " in ", decl.getSpellingLocation()
 
-  else:
-    result = newNimType(getTypeName(cxtype, conf), cxtype)
+  # else:
+  #   result = newNimType(getTypeName(cxtype, conf), cxtype)
 
 proc toCxxUse*(conf: WrapConf, cxtype: CxType, cache: var WrapCache): CxxTypeUse =
   if conf.isComplexType(cxtype, cache):
@@ -73,143 +74,126 @@ proc toCxxUse*(conf: WrapConf, cxtype: CxType, cache: var WrapCache): CxxTypeUse
 
     of tkTypedef:
       mutable = cxType.isMutableRef()
-      pair = cxxPair(($cxtype).dropPrefix("const "), conf.cxxName(cxtype))
+      pair = cxxPair(($cxtype).dropPrefix("const "), cxxName(cxtype, cache))
 
     of tkElaborated, tkRecord, tkEnum:
-      fromElaboratedPType(cxtype, conf, cache)
+      result = toCxxElaborated(cxtype, conf, cache) # fromElaboratedPType(cxtype, conf, cache)
 
     of tkPointer:
-      case cxtype[].cxkind:
-        of tkChar_S:
-          newNimType("cstring", cxtype)
+      result = toCxxUse(conf, cxtype[], cache)
+      result = wrap(result, ctkPtr)
 
-        of tkPointer:
-          if cxtype[][].cxKind() == tkChar_S:
-            newNimType("cstringArray", cxtype)
+    # of tkConstantArray:
+    #   newNimType(
+    #     "ptr", [
+    #       newNimType(
+    #         "array", @[
+    #           newNimType($cxtype.getNumElements(), cxtype.getElementType()),
+    #           toNimType(cxtype.getElementType(), conf, cache)
+    #         ], cxType)
+    #     ], cxType)
 
-          else:
-            newNimType("ptr", [toNimType(cxtype[], conf, cache)], cxtype)
+    # of tkIncompleteArray:
+    #   # QUESTION maybe convert to `ptr UncheckedArray?` or add user-defined
+    #   # callback for switching between different behaviors.
+    #   newNimType("ptr", [toNimType(
+    #     cxtype.getElementType(), conf, cache)], cxType)
 
-        of tkVoid:
-          newNimType("pointer", cxtype)
+    # of tkFunctionProto:
+    #   newNimType(
+    #     cxtype.argTypes.mapIt(initCArg("", toNimType(it, conf, cache))),
+    #     cxtype.getResultType().toNimType(conf, cache)
+    #   )
 
-        of tkFunctionProto:
-          toNimType(cxtype[], conf, cache)
+    # of tkLValueReference:
+    #   # NOTE this implementation does not work as expected, becuase `const
+    #   # T&` is not a const-qulified type.
+    #   #
+    #   # mutable = not cxType.isConstQualified()
+    #   mutable = not startsWith($cxType, "const")
+    #   special = ctskLValueRef
 
-        else:
-          newNimType("ptr", [toNimType(cxtype[], conf, cache)], cxtype)
+    #   toNimType(cxType[], conf, cache)
 
-    of tkConstantArray:
-      newNimType(
-        "ptr", [
-          newNimType(
-            "array", @[
-              newNimType($cxtype.getNumElements(), cxtype.getElementType()),
-              toNimType(cxtype.getElementType(), conf, cache)
-            ], cxType)
-        ], cxType)
+    # of tkRValueReference: # WARNING I'm not 100% sure this is correct
+    #                       # way to map rvalue references to nim type
+    #                       # system.
+    #   mutable = cxType.isMutableRef()
+    #   special = ctskRValueRef
+    #   toNimType(cxType[], conf, cache)
 
-    of tkIncompleteArray:
-      # QUESTION maybe convert to `ptr UncheckedArray?` or add user-defined
-      # callback for switching between different behaviors.
-      newNimType("ptr", [toNimType(
-        cxtype.getElementType(), conf, cache)], cxType)
+    # of tkUnexposed:
+    #   let strval = ($cxType).dropPrefix("const ") # WARNING
+    #   let db = "string" in strval
 
-    of tkFunctionProto:
-      newNimType(
-        cxtype.argTypes.mapIt(initCArg("", toNimType(it, conf, cache))),
-        cxtype.getResultType().toNimType(conf, cache)
-      )
+    #   if strval.validCxxIdentifier():
+    #     newNimType(strval, cxtype)
 
-    of tkLValueReference:
-      # NOTE this implementation does not work as expected, becuase `const
-      # T&` is not a const-qulified type.
-      #
-      # mutable = not cxType.isConstQualified()
-      mutable = not startsWith($cxType, "const")
-      special = ctskLValueRef
-
-      toNimType(cxType[], conf, cache)
-
-    of tkRValueReference: # WARNING I'm not 100% sure this is correct
-                          # way to map rvalue references to nim type
-                          # system.
-      mutable = cxType.isMutableRef()
-      special = ctskRValueRef
-      toNimType(cxType[], conf, cache)
-
-    of tkUnexposed:
-      let strval = ($cxType).dropPrefix("const ") # WARNING
-      let db = "string" in strval
-
-      if strval.validCxxIdentifier():
-        newNimType(strval, cxtype)
-
-      else:
-        let
-          decl = cxtype.getTypeDeclaration()
-          name = cxType.namespacedName(conf)
-          typenameParts = toStrPart(@[
-            "type-parameter", "typename type-parameter",
-            "typename rebind<type-parameter",
-            "typename"
-          ])
+    #   else:
+    #     let
+    #       decl = cxtype.getTypeDeclaration()
+    #       name = cxType.namespacedName(conf)
+    #       typenameParts = toStrPart(@[
+    #         "type-parameter", "typename type-parameter",
+    #         "typename rebind<type-parameter",
+    #         "typename"
+    #       ])
 
 
-        var res = newNimType(name, cxType)
-        if decl.cxKind in ckTypeDeclKinds:
-          # HACK list of necessary kinds is determined by trial and error,
-          # I'm still not really sure what `tkUnexposed` actually
-          # represents.
-          for arg in cxType.templateParams():
-            res.add toNimType(arg, conf, cache)
-            res.genParams[^1].isParam = true
+    #     var res = newNimType(name, cxType)
+    #     if decl.cxKind in ckTypeDeclKinds:
+    #       # HACK list of necessary kinds is determined by trial and error,
+    #       # I'm still not really sure what `tkUnexposed` actually
+    #       # represents.
+    #       for arg in cxType.templateParams():
+    #         res.add toNimType(arg, conf, cache)
+    #         res.genParams[^1].isParam = true
 
-        elif startsWith($cxType, typenameParts):
-          let unprefix = dropPrefix($cxType, typenameParts)
-          if allIt(unprefix, it in {'0' .. '9', '-'}):
-            res = newNimType("TYPE_PARAM " & unprefix, cxtype, true)
+    #     elif startsWith($cxType, typenameParts):
+    #       let unprefix = dropPrefix($cxType, typenameParts)
+    #       if allIt(unprefix, it in {'0' .. '9', '-'}):
+    #         res = newNimType("TYPE_PARAM " & unprefix, cxtype, true)
 
-          else:
-            res = newTemplateUndefined(cxType)
+    #       else:
+    #         res = newTemplateUndefined(cxType)
 
-        else:
-          res = newNimType("UNEXPOSED", cxtype, true)
-          if decl.cxKind() notin {ckNoDeclFound}:
-            conf.warn "No decl found for type"
-            conf.logger.indented:
-              conf.info cxtype.lispRepr()
-              conf.debug decl.getSpellingLocation()
-              conf.debug decl.cxKind()
-              conf.debug decl.treeRepr()
+    #     else:
+    #       res = newNimType("UNEXPOSED", cxtype, true)
+    #       if decl.cxKind() notin {ckNoDeclFound}:
+    #         conf.warn "No decl found for type"
+    #         conf.logger.indented:
+    #           conf.info cxtype.lispRepr()
+    #           conf.debug decl.getSpellingLocation()
+    #           conf.debug decl.cxKind()
+    #           conf.debug decl.treeRepr()
 
 
-        res
+    #     res
 
-    of tkDependent:
-      newNimType("DEPENDENT", cxType, true)
+    # of tkDependent:
+    #   newNimType("DEPENDENT", cxType, true)
 
-    of tkMemberPointer:
-      # WARNING Member pointer
-      newNimType("!!!", cxType, false)
+    # of tkMemberPointer:
+    #   # WARNING Member pointer
+    #   newNimType("!!!", cxType, false)
 
-    of tkDependentSizedArray:
-      let cx = $cxtype
-      let name = cx[cx.skipUntil('[') + 1 .. ^2].strip()
-      newNimType("array", @[
-        newNimType(name),
-        toNimType(cxtype.getElementType(), conf, cache)
-      ], cxType)
+    # of tkDependentSizedArray:
+    #   let cx = $cxtype
+    #   let name = cx[cx.skipUntil('[') + 1 .. ^2].strip()
+    #   newNimType("array", @[
+    #     newNimType(name),
+    #     toNimType(cxtype.getElementType(), conf, cache)
+    #   ], cxType)
 
     else:
       conf.err "CANT CONVERT: ".toRed({styleItalic}),
         cxtype.kind, " ", ($cxtype).toGreen(), " ",
         cxtype[]
 
-      newNimType("!!!", cxtype)
+      # newNimType("!!!", cxtype)
 
-  result.isMutable = mutable
-  result.specialKind = special
+  # result.isMutable = mutable
+  # result.specialKind = special
 
 proc toCxxOperator*(
     oper: CDecl,
@@ -248,8 +232,8 @@ proc toCxxOperator*(
     of cxoInfixOp:
       result.icpp = initIcpp &"({toCppNamespace(oper.ident)}(#, #))"
 
-      if oper.arguments.len < 2:
-        result.addThis = true
+      # if oper.arguments.len < 2:
+      #   result.addThis = true
 
     of cxoArrowOp:
       # WARNING
@@ -260,12 +244,12 @@ proc toCxxOperator*(
       # operator, but I think it is better to wrap this one as
       # separate function `call()`
       with result:
-        name = "call"
-        kind = pkRegular
+        nimName = "call"
+        kind = cpkRegular
         icpp = initIcpp &"#(@)"
 
     of cxoDerefOp:
-      result.name = "[]"
+      result.nimName = "[]"
       result.icpp = initIcpp &"(*#)"
 
     of cxoPrefixOp:
@@ -281,7 +265,7 @@ proc toCxxOperator*(
 
     of cxoCommaOp:
       with result:
-        name = "commaOp"
+        nimName = "commaOp"
         icpp = initIcpp &"operator,(@)"
         kind = pkRegular
 
@@ -307,3 +291,269 @@ proc toCxxOperator*(
         kind = pkRegular
 
   result.header = conf.makeHeader(oper.cursor, conf)
+
+proc toCxxProc*(
+    pr: CDecl,
+    conf: WrapConf,
+    parent: Option[NimType],
+    cache: var WrapCache,
+    parentDecl: Option[CDecl]
+  ): CxxProc
+
+  var it = initGenProc(pr, currLInfo())
+
+  template endProc(it: GenProc): untyped =
+    let generated = newProcVisit(it, conf, cache)
+    result.decl.add it
+    result.decl.add GenPass(iinfo: currLInfo(), passEntries: generated)
+
+
+  var addThis = (
+    pr.kind == cdkMethod and
+    pr.cursor.cxKind notin {
+      ckConstructor, ckDestructor, ckConversionFunction })
+
+  it.genParams = conf.genParamsForIdent(pr.ident, cache)
+
+  var opKind: CxOperatorKind
+  result.canAdd = true
+  if pr.isOperator:
+    # HACK temporary workaround for `new` and `delete` operator handing
+    var opKind = classifyOperator(pr, conf)
+    if opKind notin {cxoNewOp, cxoDeleteOp}:
+      let (decl, adt) = pr.wrapOperator(conf, cache)
+      it = decl
+      addThis = adt
+
+    else:
+      addThis = false
+      result.canAdd = false
+
+  else:
+    it.name = pr.getNimName(conf)
+
+    let icppName = toCppNamespace(pr.ident)
+    if parent.isSome():
+      assert conf.isImportcpp,
+        "Cannot wrap methods for non-cxx targets"
+
+      if pr.cursor.isStatic():
+        addThis = false
+        it.iinfo = currLInfo()
+        it.icpp = initIcpp &"({icppName}(@))"
+
+      else:
+        it.iinfo = currLInfo()
+        it.icpp = initIcpp &"(#.{pr.getNimName(conf)}(@))"
+
+      it.header = conf.makeHeader(pr.cursor, conf)
+
+    else:
+      if conf.isImportcpp:
+        it.iinfo = currLinfo()
+        it.icpp = initIcpp &"({icppName}(@))"
+
+      else:
+        it.iinfo = currLInfo()
+        it.icpp = initIcpp &"{icppName}"
+
+      it.header = conf.makeHeader(pr.cursor, conf)
+
+
+  if $it.cdecl.cursor == "operator=":
+    # FIXME check if first argument and parent declaration types are
+    # identical. Right now it does not work because
+    # `b3Matrix3x3` != `const b3Matrix3x3 &`
+    if parentDecl.get().cursor.cxType() == pr.arguments[0].cursor.cxType():
+      # By default `operator=` is converted to regular `setFrom` proc to
+      # correctly handle multiple overloads (in C++ `operator=` can have
+      # different types on RHS and LHS, but this is not the case in nim).
+      # *if* assignmed is indeed done from two identical types, then it can
+      # be wrapped as actual `=` proc.
+      it.name = "="
+      it.kind = pkOperator
+
+    else:
+      # Otherwise add `self` for wrapped proc
+      addThis = parent.isSome()
+
+  if addThis:
+    assert parent.isSome()
+    it.arguments.add initCArg(
+      "self", parent.get(),
+      pr.cursor.isConstMethod.tern(nvdVar, nvdLet)
+    )
+
+  for argIdx, arg in pr.arguments:
+    var argType = arg.cursor.cxType().toNimType(conf, cache)
+    if arg.cursor.cxType().isEnum():
+      argType.nimName &= conf.rawSuffix()
+
+    if argType.kind in {ctkIdent}:
+      argType.genParams.add argType.getPartialParams(conf, cache, false)
+
+      if argType.nimName == "UNEXPOSED":
+        # WARNING currently parameters which contain `tkUnexposed`
+        # types are not handled but are skipped instead. I don't
+        # know how to fix right now.
+        result.canAdd = false
+
+      if argType.isComplex.not() and
+         parentDecl.isSome() and
+         arg.cursor.inheritsGenParamsOf(parentDecl.get().cursor) and
+         parent.isSome() and
+         (arg.cursor.cxType().kind notin {tkUnexposed})
+        :
+        # WARNING nested class definitions with additional template
+        # parameters are not handled right now. It will break for
+        # code like
+        # `<Ta> struct A { <Tb> struct B {void func(); }; };`
+        # and only add `Tb` as template parameter for `func()`.
+        for param in parent.get().genParams:
+          argType.add param
+        # FAIL most likely broken with recent refactoring
+
+    else:
+      # FIXME determine and implement edge case handling for procvar
+      # arguments
+      conf.warn "Temporarily droppping procvar arguemtn handling"
+
+
+    if not (opKind == cxoPostfixOp and argIdx > 0):
+      var newArg = initCArg(arg.name, argType)
+      setDefaultForArg(newArg, arg.cursor, conf, cache)
+      it.arguments.add newArg
+
+  if pr.cursor.isVariadic() == 1:
+    it.pragma.add newPIdent("varargs")
+
+  if pr.isOperator and pr.classifyOperator(conf) == cxoAsgnOp:
+    # HACK Force override return type for assignment operators
+    it.returnType = newNimType("void")
+    endProc(it)
+
+  elif pr.cursor.kind in {ckConstructor, ckConversionFunction}:
+    # Override handling of return types for constructors
+    if not pr.isOperator:
+      # But ignore implicit user-defined conversion functions like
+      # `operator T()`
+
+      it.header = conf.makeHeader(pr.cursor, conf)
+      let suffix = parent.get().nimName.capitalizeAscii()
+
+      block initConstructor:
+        var it = deepCopy(it)
+        it.name = "init" & suffix
+        it.iinfo = currLInfo()
+        it.returnType = parent.get()
+        it.icpp = initIcpp &"{toCppNamespace(parentDecl.get().ident)}(@)"
+        result.decl.add it
+
+      block newRefConstructor:
+        var it = deepCopy(it)
+        it.name = "new" & suffix
+        it.iinfo = currLInfo()
+        it.impl = some initDestroyCall(
+          parent.get(), it.arguments,
+          toCppNamespace(parentDecl.get().ident),
+          conf, cache)
+
+        it.returnType = newNimType("ref", @[parent.get()])
+        it.icpp = initIcpp &"new {toCppNamespace(parentDecl.get().ident)}(@)"
+        it.noPragmas = gpcNoPragma
+
+        result.decl.add it
+
+      block newPtrConstructor:
+        var it = deepCopy(it)
+        it.name = "cnew" & suffix
+        it.iinfo = currLInfo()
+        it.returnType = newNimType("ptr", @[parent.get()])
+        it.icpp = initIcpp &"new {toCppNamespace(parentDecl.get().ident)}(@)"
+        result.decl.add it
+
+
+    else:
+      conf.warn "Discarding wrappers for conversion function"
+      conf.dump pr.cursor
+      conf.dump pr.cursor.getSpellingLocation()
+
+  else:
+    let re = pr.cursor.retType()
+    var returnType = toNimType(re, conf, cache)
+
+    if returnType.isComplex.not() and
+       parentDecl.isSome() and
+       parent.isSome() and
+       pr.cursor.retType().
+       getTypeDeclaration().
+       inheritsGenParamsOf(parentDecl.get().cursor):
+
+      returnType.genParams = parent.get().genParams
+      # WARNING(refactor)
+
+    it.returnType = returnType
+
+    if returnType.hasUnexposed():
+      # WARNING dropping all methods that use `tkUnexposed` type
+      # in return value. This must be fixed in future versions.
+      result.canAdd = false
+
+    if pr.cursor.cxkind == ckDestructor:
+      # Explicitly calling destructor on object
+      it.arguments.add initCArg("self", newNimType("ptr", @[parent.get()]))
+      it.icpp = initIcpp &"~{it.name}()"
+      it.name = "destroy" & parent.get().nimName
+      it.declareForward = true
+
+    endProc(it)
+
+
+proc toCxxObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): GenObject =
+  let tdecl = cd.cursor.cxType().getTypeDeclaration()
+  assert cd.kind in {
+    cdkClass, cdkStruct, cdkUnion, cdkForward}, $cd.kind
+
+  result = GenObject(
+    rawName: $cd.cursor,
+    iinfo: currLInfo(),
+    name: conf.typeNameForScoped(cd.ident, cache),
+    cdecl: cd
+  )
+
+  assert result.name.kind == ctkIdent
+
+  updateAggregateInit(cd, conf, cache, result)
+
+  if cd.kind != cdkForward:
+    # Add type declaration for nested types
+    for entry in cd.nestedTypes:
+      case entry.kind:
+        of cdkEnum:
+          result.nestedEntries.add wrapEnum(entry, conf, cache)
+
+        of cdkStruct, cdkClass, cdkUnion:
+          result.nestedEntries.add wrapObject(entry, conf, cache)
+
+
+        else:
+          discard
+
+
+    updateFieldExport(cd, conf, cache, result)
+
+    let (procs, extra) = wrapMethods(cd, conf, result.name, cache)
+    result.memberMethods.add procs
+    result.nestedEntries.add extra
+
+
+proc toCxxEnum*(declEn: CDecl, conf: WrapConf, cache: var WrapCache): CxxEnum =
+  var gen = makeGenEnum(
+    declEn,
+    declEn.enumFields.sortedByIt(it[1]).deduplicate(isSorted = true),
+    conf, cache
+  )
+
+  cache.genEnums.add gen
+  result.add gen
+  gen.auxGen.add makeEnumConverters(gen, conf, cache)
