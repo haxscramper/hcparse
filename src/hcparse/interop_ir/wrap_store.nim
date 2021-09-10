@@ -139,10 +139,23 @@ type
   CxxProcKind* = enum
     ## Procedure kind
     cpkRegular ## Regular proc: `hello()`
-    cpkOperator ## Operator: `*`
+    cpkConstructor
+    cpkDestructor
 
-    cpkAssignOperator
-    cpkCopyOperator
+    cpkPrefixOp ## Prefix operator `@a`
+    cpkPostfixOp ## Postfix operator `a@`
+    cpkInfixOP ## Infix operator `a @ b`
+    cpkAsgnOp ## Assign operator `a += b`
+    cpkCopyAsgnOp ## Copy assignment operator `a = b`
+    cpkArrayOp ## Array access operator `a[b]`
+    cpkArrowOp ## Arrow operator `a->`
+    cpkCallOp ## Call operator `a()`
+    cpkDerefOp ## Prefix dereference operator
+    cpkCommaOp ## Comma operator
+    cpkConvertOp ## User-defined conversion operator
+    cpkUserLitOp ## User-defined literal operators
+    cpkNewOp ## `new` operator
+    cpkDeleteOp ## `delete` operator
     # cpk
 
     # cpkHook ## Destructor/sink (etc.) hook: `=destroy`
@@ -291,6 +304,9 @@ type
 func `nimName=`*(pr: var CxxProc, name: string) =
   pr.head.name.nim = name
 
+
+func nimName*(pr: CxxProc): string = pr.head.name.nim
+func nimName*(t: CxxTypeUse): string = t.cxxType.name.nim
 func cxxName*(pr: CxxProc): CxxName = pr.head.name.cxx
 func cxxName*(obj: CxxObject): CxxName = obj.decl.name.cxx
 func cxxName*(name: string): CxxName = CxxName(scopes: @[name])

@@ -22,11 +22,19 @@ proc cxxName*(cxtype: CxType, cache: var WrapCache): CxxName =
 proc cxxPair*(conf: WrapConf, decl: CDecl): CxxNamePair =
   cxxPair(decl.getNimName(conf), conf.cxxName(decl))
 
-proc cxxPair*(conf: WrapConf, cxtype: CxType, cache: var WrapCache): CxxNamePair =
+proc cxxPair*(
+  conf: WrapConf, cxtype: CxType, cache: var WrapCache): CxxNamePair =
   raise newImplementError()
   # cxxPair(cxtype.getTypeName(conf))
 
-proc toCxxUse*(conf: WrapConf, cxtype: CxType, cache: var WrapCache): CxxTypeUse
+proc toCxxUse*(
+  conf: WrapConf, cxtype: CxType, cache: var WrapCache): CxxTypeUse
+
+proc cxxGenParams*(
+    conf: WrapConf, ident: CSCopedIdent, cache: var WrapCache
+  ): CxxGenParams =
+
+  raise newImplementError()
 
 proc toCxxElaborated*(
     cxtype: CXType, conf: WrapConf, cache: var WrapCache): CxxTypeUse =
@@ -203,22 +211,23 @@ proc toCxxOperator*(
   assert conf.isImportcpp
 
   result = conf.cxxPair(oper).cxxProc()
+  result.kind = oper.classifyOperator(conf)
 
-  let kind = oper.classifyOperator(conf)
+  case result.kind:
+    of cpkRegular, cpkConstructor, cpkDestructor:
+      raise newUnexpectedKindError(result)
 
-  case oper.operatorKind:
-    of cxoCopyAsgnOp:
+    of cpkCopyAsgnOp:
       result.nimName = "setFrom"
       result.icpp = icppInfix("=")
-      result.kind = cpkAssignOperator
 
-    of cxoNewOp, cxoDeleteOp:
+    of cpkNewOp, cpkDeleteOp:
       discard
 
-    of cxoAsgnOp:
+    of cpkAsgnOp:
       result.icpp = icppInfix("=")
 
-    of cxoArrayOp:
+    of cpkArrayOp:
       let rtype = oper.cursor.retType()
       let nimReturn = rtype.toNimType(conf, cache)
       if nimReturn.isMutable:
@@ -229,68 +238,58 @@ proc toCxxOperator*(
       else:
         result.icpp = initIcpp(ipkNextArg, "[", ipkNextARg, "]")
 
-    of cxoInfixOp:
+    of cpkInfixOp:
       result.icpp = initIcpp &"({toCppNamespace(oper.ident)}(#, #))"
 
       # if oper.arguments.len < 2:
       #   result.addThis = true
 
-    of cxoArrowOp:
+    of cpkArrowOp:
       # WARNING
       result.icpp = initIcpp &"(#.operator->(@))"
 
-    of cxoCallOp:
+    of cpkCallOp:
       # NOTE nim does have experimental support for call
       # operator, but I think it is better to wrap this one as
       # separate function `call()`
       with result:
         nimName = "call"
-        kind = cpkRegular
-        icpp = initIcpp &"#(@)"
+        kind = cpkCallOp
+        icpp = initIcpp(ipkNextArg, "(", ipkArgSplice, ")") # &"#(@)"
 
-    of cxoDerefOp:
+    of cpkDerefOp:
       result.nimName = "[]"
       result.icpp = initIcpp &"(*#)"
 
-    of cxoPrefixOp:
-      result.icpp = initIcpp &"({result.name}#)" # FIXME use scoped ident
-      if oper.arguments.len == 0:
-        result.addThis = true
+    of cpkPrefixOp:
+      result.icpp = initIcpp($result.cxxName, ipkNextArg)
 
-    of cxoPostfixOp:
-      result.icpp = initIcpp &"(#{result.name})" # FIXME use scoped ident
+    of cpkPostfixOp:
+      result.icpp = initIcpp(ipkNextArg, $result.cxxName)
 
-      if oper.arguments.len == 1:
-        result.addThis = true
 
-    of cxoCommaOp:
+    of cpkCommaOp:
+      result.nimName = "commaOp"
+      result.icpp = initIcpp &"operator,(@)"
+
+    of cpkConvertOp:
+      let restype = toCxxUse(conf, oper.cursor.retType(), cache)
       with result:
-        nimName = "commaOp"
-        icpp = initIcpp &"operator,(@)"
-        kind = pkRegular
-
-    of cxoConvertOp:
-      let restype = oper.cursor.retType().toNimType(conf, cache)
-
-      with result:
-        name = "to" & capitalizeAscii(restype.nimName)
-        icpp = initIcpp"@"
+        nimName = "to" & capitalizeAscii(restype.nimName)
+        icpp = initIcpp(ipkArgSplice)
         returnType = resType
-        declType = ptkConverter
-        kind = pkRegular
 
 
 
-    of cxoUserLitOp:
-      let restype = oper.cursor.retType().toNimType(conf, cache)
-
+    of cpkUserLitOp:
+      let restype = toCxxUse(conf, oper.cursor.retType(), cache)
       with result:
-        name = "to" & capitalizeAscii(restype.nimName)
+        nimName = "to" & capitalizeAscii(restype.nimName)
         icpp = initIcpp &"({oper.cursor}(@))"
         returnType = restype
-        kind = pkRegular
 
-  result.header = conf.makeHeader(oper.cursor, conf)
+  # FIXME
+  # result.header = conf.makeHeader(oper.cursor, conf)
 
 proc toCxxProc*(
     pr: CDecl,
@@ -298,13 +297,13 @@ proc toCxxProc*(
     parent: Option[NimType],
     cache: var WrapCache,
     parentDecl: Option[CDecl]
-  ): CxxProc
+  ): CxxProc =
 
-  var it = initGenProc(pr, currLInfo())
+  result = cxxProc(conf.cxxPair(pr))
 
-  template endProc(it: GenProc): untyped =
-    let generated = newProcVisit(it, conf, cache)
-    result.decl.add it
+  template endProc(result: GenProc): untyped =
+    let generated = newProcVisit(result, conf, cache)
+    result.decl.add result
     result.decl.add GenPass(iinfo: currLInfo(), passEntries: generated)
 
 
@@ -313,54 +312,39 @@ proc toCxxProc*(
     pr.cursor.cxKind notin {
       ckConstructor, ckDestructor, ckConversionFunction })
 
-  it.genParams = conf.genParamsForIdent(pr.ident, cache)
+  result.head.genParams = conf.cxxGenParams(pr.ident, cache) # conf.genParamsForIdent(pr.ident, cache)
 
-  var opKind: CxOperatorKind
-  result.canAdd = true
   if pr.isOperator:
     # HACK temporary workaround for `new` and `delete` operator handing
     var opKind = classifyOperator(pr, conf)
-    if opKind notin {cxoNewOp, cxoDeleteOp}:
-      let (decl, adt) = pr.wrapOperator(conf, cache)
-      it = decl
-      addThis = adt
-
-    else:
-      addThis = false
-      result.canAdd = false
+    if opKind notin {cpkNewOp, cpkDeleteOp}:
+      result = pr.toCxxOperator(conf, cache)
 
   else:
-    it.name = pr.getNimName(conf)
-
     let icppName = toCppNamespace(pr.ident)
     if parent.isSome():
       assert conf.isImportcpp,
         "Cannot wrap methods for non-cxx targets"
 
       if pr.cursor.isStatic():
-        addThis = false
-        it.iinfo = currLInfo()
-        it.icpp = initIcpp &"({icppName}(@))"
+        result.icpp = initIcpp &"({icppName}(@))"
 
       else:
-        it.iinfo = currLInfo()
-        it.icpp = initIcpp &"(#.{pr.getNimName(conf)}(@))"
+        result.icpp = initIcpp &"(#.{pr.getNimName(conf)}(@))"
 
-      it.header = conf.makeHeader(pr.cursor, conf)
+      # result.header = conf.makeHeader(pr.cursor, conf)
 
     else:
       if conf.isImportcpp:
-        it.iinfo = currLinfo()
-        it.icpp = initIcpp &"({icppName}(@))"
+        result.icpp = initIcpp &"({icppName}(@))"
 
       else:
-        it.iinfo = currLInfo()
-        it.icpp = initIcpp &"{icppName}"
+        result.icpp = initIcpp &"{icppName}"
 
-      it.header = conf.makeHeader(pr.cursor, conf)
+      # result.header = conf.makeHeader(pr.cursor, conf)
 
 
-  if $it.cdecl.cursor == "operator=":
+  if $pr.cursor == "operator=":
     # FIXME check if first argument and parent declaration types are
     # identical. Right now it does not work because
     # `b3Matrix3x3` != `const b3Matrix3x3 &`
@@ -370,8 +354,10 @@ proc toCxxProc*(
       # different types on RHS and LHS, but this is not the case in nim).
       # *if* assignmed is indeed done from two identical types, then it can
       # be wrapped as actual `=` proc.
-      it.name = "="
-      it.kind = pkOperator
+
+      # result.name = "="
+      # result.kind = pkOperator
+      discard
 
     else:
       # Otherwise add `self` for wrapped proc
@@ -379,7 +365,7 @@ proc toCxxProc*(
 
   if addThis:
     assert parent.isSome()
-    it.arguments.add initCArg(
+    result.arguments.add initCArg(
       "self", parent.get(),
       pr.cursor.isConstMethod.tern(nvdVar, nvdLet)
     )
@@ -419,94 +405,91 @@ proc toCxxProc*(
       conf.warn "Temporarily droppping procvar arguemtn handling"
 
 
-    if not (opKind == cxoPostfixOp and argIdx > 0):
+    if not (opKind == cpkPostfixOp and argIdx > 0):
       var newArg = initCArg(arg.name, argType)
       setDefaultForArg(newArg, arg.cursor, conf, cache)
-      it.arguments.add newArg
+      result.arguments.add newArg
 
   if pr.cursor.isVariadic() == 1:
-    it.pragma.add newPIdent("varargs")
+    result.pragma.add newPIdent("varargs")
 
-  if pr.isOperator and pr.classifyOperator(conf) == cxoAsgnOp:
+  if pr.isOperator and pr.classifyOperator(conf) == cpkAsgnOp:
     # HACK Force override return type for assignment operators
-    it.returnType = newNimType("void")
-    endProc(it)
+    result.returnType = newNimType("void")
+    endProc(result)
 
-  elif pr.cursor.kind in {ckConstructor, ckConversionFunction}:
-    # Override handling of return types for constructors
-    if not pr.isOperator:
-      # But ignore implicit user-defined conversion functions like
-      # `operator T()`
+  # elif pr.cursor.kind in {ckConstructor, ckConversionFunction}:
+  #   # Override handling of return types for constructors
+  #   if not pr.isOperator:
+  #     # But ignore implicit user-defined conversion functions like
+  #     # `operator T()`
 
-      it.header = conf.makeHeader(pr.cursor, conf)
-      let suffix = parent.get().nimName.capitalizeAscii()
+  #     # result.header = conf.makeHeader(pr.cursor, conf)
+  #     let suffix = parent.get().nimName.capitalizeAscii()
 
-      block initConstructor:
-        var it = deepCopy(it)
-        it.name = "init" & suffix
-        it.iinfo = currLInfo()
-        it.returnType = parent.get()
-        it.icpp = initIcpp &"{toCppNamespace(parentDecl.get().ident)}(@)"
-        result.decl.add it
+  #     block initConstructor:
+  #       var result = deepCopy(result)
+  #       result.name = "init" & suffix
+  #       result.returnType = parent.get()
+  #       result.icpp = initIcpp &"{toCppNamespace(parentDecl.get().ident)}(@)"
+  #       result.decl.add result
 
-      block newRefConstructor:
-        var it = deepCopy(it)
-        it.name = "new" & suffix
-        it.iinfo = currLInfo()
-        it.impl = some initDestroyCall(
-          parent.get(), it.arguments,
-          toCppNamespace(parentDecl.get().ident),
-          conf, cache)
+  #     block newRefConstructor:
+  #       var result = deepCopy(result)
+  #       result.name = "new" & suffix
+  #       result.impl = some initDestroyCall(
+  #         parent.get(), result.arguments,
+  #         toCppNamespace(parentDecl.get().ident),
+  #         conf, cache)
 
-        it.returnType = newNimType("ref", @[parent.get()])
-        it.icpp = initIcpp &"new {toCppNamespace(parentDecl.get().ident)}(@)"
-        it.noPragmas = gpcNoPragma
+  #       result.returnType = newNimType("ref", @[parent.get()])
+  #       result.icpp = initIcpp &"new {toCppNamespace(parentDecl.get().ident)}(@)"
+  #       result.noPragmas = gpcNoPragma
 
-        result.decl.add it
+  #       result.decl.add result
 
-      block newPtrConstructor:
-        var it = deepCopy(it)
-        it.name = "cnew" & suffix
-        it.iinfo = currLInfo()
-        it.returnType = newNimType("ptr", @[parent.get()])
-        it.icpp = initIcpp &"new {toCppNamespace(parentDecl.get().ident)}(@)"
-        result.decl.add it
+  #     block newPtrConstructor:
+  #       var result = deepCopy(result)
+  #       result.name = "cnew" & suffix
+  #       result.returnType = newNimType("ptr", @[parent.get()])
+  #       result.icpp = initIcpp &"new {toCppNamespace(parentDecl.get().ident)}(@)"
+  #       result.decl.add result
 
 
-    else:
-      conf.warn "Discarding wrappers for conversion function"
-      conf.dump pr.cursor
-      conf.dump pr.cursor.getSpellingLocation()
+  #   else:
+  #     conf.warn "Discarding wrappers for conversion function"
+  #     conf.dump pr.cursor
+  #     conf.dump pr.cursor.getSpellingLocation()
 
-  else:
-    let re = pr.cursor.retType()
-    var returnType = toNimType(re, conf, cache)
+  # else:
+  #   let re = pr.cursor.retType()
+  #   var returnType = toNimType(re, conf, cache)
 
-    if returnType.isComplex.not() and
-       parentDecl.isSome() and
-       parent.isSome() and
-       pr.cursor.retType().
-       getTypeDeclaration().
-       inheritsGenParamsOf(parentDecl.get().cursor):
+  #   if returnType.isComplex.not() and
+  #      parentDecl.isSome() and
+  #      parent.isSome() and
+  #      pr.cursor.retType().
+  #      getTypeDeclaration().
+  #      inheritsGenParamsOf(parentDecl.get().cursor):
 
-      returnType.genParams = parent.get().genParams
-      # WARNING(refactor)
+  #     returnType.genParams = parent.get().genParams
+  #     # WARNING(refactor)
 
-    it.returnType = returnType
+  #   result.returnType = returnType
 
-    if returnType.hasUnexposed():
-      # WARNING dropping all methods that use `tkUnexposed` type
-      # in return value. This must be fixed in future versions.
-      result.canAdd = false
+  #   if returnType.hasUnexposed():
+  #     # WARNING dropping all methods that use `tkUnexposed` type
+  #     # in return value. This must be fixed in future versions.
+  #     result.canAdd = false
 
-    if pr.cursor.cxkind == ckDestructor:
-      # Explicitly calling destructor on object
-      it.arguments.add initCArg("self", newNimType("ptr", @[parent.get()]))
-      it.icpp = initIcpp &"~{it.name}()"
-      it.name = "destroy" & parent.get().nimName
-      it.declareForward = true
+  #   if pr.cursor.cxkind == ckDestructor:
+  #     # Explicitly calling destructor on object
+  #     result.arguments.add initCArg("self", newNimType("ptr", @[parent.get()]))
+  #     result.icpp = initIcpp &"~{result.name}()"
+  #     result.name = "destroy" & parent.get().nimName
+  #     result.declareForward = true
 
-    endProc(it)
+  #   endProc(result)
 
 
 proc toCxxObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): GenObject =
@@ -516,7 +499,6 @@ proc toCxxObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): GenObject =
 
   result = GenObject(
     rawName: $cd.cursor,
-    iinfo: currLInfo(),
     name: conf.typeNameForScoped(cd.ident, cache),
     cdecl: cd
   )

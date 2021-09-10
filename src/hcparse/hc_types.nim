@@ -110,23 +110,6 @@ type
         default*: Option[PNode] ## Optional default value for an argument
 
 
-  CXOperatorKind* = enum
-    ## Classification for operators
-    cxoPrefixOp ## Prefix operator `@a`
-    cxoPostfixOp ## Postfix operator `a@`
-    cxoInfixOP ## Infix operator `a @ b`
-    cxoAsgnOp ## Assign operator `a += b`
-    cxoCopyAsgnOp ## Copy assignment operator `a = b`
-    cxoArrayOp ## Array access operator `a[b]`
-    cxoArrowOp ## Arrow operator `a->`
-    cxoCallOp ## Call operator `a()`
-    cxoDerefOp ## Prefix dereference operator
-    cxoCommaOp ## Comma operator
-    cxoConvertOp ## User-defined conversion operator
-    cxoUserLitOp ## User-defined literal operators
-    cxoNewOp ## `new` operator
-    cxoDeleteOp ## `delete` operator
-
   IncludeDep* = object
     # TODO use it as edge value
     includedAs*: string
@@ -203,7 +186,7 @@ type
         case isOperator*: bool
           of true:
             operatorName*: string ## Name with dropped `operator` prefix
-            operatorKind*: CXOperatorKind ## Operator classification
+            operatorKind*: CxxProcKind ## Operator classification
 
           of false:
             discard
@@ -1653,7 +1636,7 @@ proc cxType*(arg: CArg): CxType =
         "it's type is not `fromNimType`,",
         "`original` type is not set")
 
-proc classifyOperator*(cd: CDecl, conf: WrapConf): CXOperatorKind =
+proc classifyOperator*(cd: CDecl, conf: WrapConf): CxxProcKind =
   ## Classify C++ operator declaration
   assert cd.isOperator
   let inType = cd.cursor.
@@ -1662,75 +1645,75 @@ proc classifyOperator*(cd: CDecl, conf: WrapConf): CXOperatorKind =
   let name = cd.lastName(conf).dropPrefix("operator")
   case name:
     of "=":
-      cxoCopyAsgnOp
+      cpkCopyAsgnOp
 
     of "+=", "-=", "*=",
        "<<=", ">>=", "&=", "|=", "/=", "%=", "^="
       :
-      cxoAsgnOp
+      cpkAsgnOp
 
     of "[]":
-      cxoArrayOp
+      cpkArrayOp
 
     of "-", "+":
       if cd.arguments.len >= 2 or (cd.arguments.len == 1 and inType):
-        cxoInfixOp
+        cpkInfixOp
 
       else:
-        cxoPrefixOp
+        cpkPrefixOp
 
     of "++", "--":
       # NOTE this is an operator implementation, so we are not (i hope)
       # dropping information about prefi/postfix calls
       if cd.arguments.len == 1 and
          $cd.arguments[0].cxType() == "int":
-        cxoPostfixOp
+        cpkPostfixOp
 
       else:
-        cxoPrefixOp
+        cpkPrefixOp
 
     of "/",
        "<<", ">>", "==", "!=", "&&", "||",
        "%", "^", "&", "|", "<", ">", "<=", ">=":
-      cxoInfixOp
+      cpkInfixOp
 
     of "*": # NOTE this heuristics might not be valid in all cases.
       if cd.arguments.len == 0:
-        cxoDerefOp
+        cpkDerefOp
       else:
-        cxoInfixOp
+        cpkInfixOp
 
     of "->", "->*":
-      cxoArrowOp
+      cpkArrowOp
 
     of "()":
-      cxoCallOp
+      cpkCallOp
 
     of "~", "!":
-      cxoPrefixOp
+      cpkPrefixOp
 
     of ",":
-      cxoCommaOp
+      cpkCommaOp
 
     of " new", " new[]":
-      cxoNewOp
+      cpkNewOp
 
     of " delete", " delete[]":
-      cxoDeleteOp
+      cpkDeleteOp
 
 
     else:
       if cd.cursor.cxKind() == ckConversionFunction:
-        cxoConvertOp
+        cpkConvertOp
 
       elif (cd.cursor.cxKind() in {
         ckFunctionDecl, ckFunctionTemplate
       }) and (name.startsWith("\"\"")):
-        cxoUserLitOp
+        cpkUserLitOp
 
       elif cd.cursor.cxKind() in {ckFunctionTemplate}:
         # warn cd.ident
-        cxoConvertOp
+        cpkConvertOp
 
       else:
         raiseAssert(
