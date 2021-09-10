@@ -11,7 +11,7 @@ import
   hmisc/types/[hmap, hgraph],
   hnimast,
   hnimast/pprint,
-  hnimast/interop/[wrap_store, wrap_icpp],
+  ./interop_ir/[wrap_store, wrap_icpp],
   hmisc/algo/[
     hseq_mapping, hstring_algo, hseq_distance, namegen, halgorithm]
 
@@ -74,8 +74,15 @@ type
         arguments*: seq[CArg]
         returnType*: NimType
 
-      of ctkPtr:
+      of ctkWrapKinds:
         wrapped*: NimType
+
+      of ctkStaticParam:
+        param*: CXCursor
+
+      of ctkArrayKinds:
+        arraySize*: CXCursor
+        arrayElement*: NimType
 
 
   CDeclKind* = enum
@@ -1386,8 +1393,14 @@ func initCxxLibImport*(conf: WrapConf, path: seq[string]): CxxLibImport =
 
 func hash*(nt: NimType): Hash =
   case nt.kind:
-    of ctkPtr:
+    of ctkWrapKinds:
       result = !$(hash(nt.kind) !& hash(nt.wrapped))
+
+    of ctkArrayKinds:
+      result = !$(hash(nt.arraySize) !& hash(nt.arrayElement))
+
+    of ctkStaticParam:
+      result = hash(nt.param)
 
     of ctkIdent:
       result = hash(nt.nimName)

@@ -7,6 +7,26 @@ import
   ./wrap_icpp
 
 type
+  CxxTypeKind* = enum
+    ## Kind of the wrapped Cxx type
+    ctkIdent ## Identifier with optional list of template parameters
+    ctkProc ## Procedural (callback) type
+    ctkPtr
+    ctkLVref
+    ctkRVref
+    ctkFixedArray
+    ctkDependentArray
+    ctkDynamicArray
+
+    ctkStaticParam
+
+const
+  ctkWrapKinds* = { ctkPtr, ctkLVRef, ctkRVRef, ctkDynamicArray }
+  ctkArrayKinds* = { ctkFixedArray, ctkDependentArray }
+
+
+
+type
   CxxSpellingLocation* = object
     file*: AbsFile
     line*, column*: int
@@ -45,19 +65,6 @@ type
     docComment*: seq[string]
     haxdocIdent* {.requiresinit.}: JsonNode
 
-  CxxTypeKind* = enum
-    ## Kind of the wrapped Cxx type
-    ctkIdent ## Identifier with optional list of template parameters
-    ctkProc ## Procedural (callback) type
-    ctkPtr
-    ctkLVref
-    ctkRVref
-    ctkFixedArray
-    ctkDependentArray
-    ctkDynamicArray
-
-    ctkStaticParam
-
   CxxName* = object
     scopes*: seq[string]
 
@@ -65,12 +72,14 @@ type
     name*: CxxName
     genParams*: seq[CxxTypeUse]
 
+  CxxGenParams* = seq[tuple[name: string, default: Option[CxxTypeUse]]]
+
   CxxTypeDecl* = object
     isForward*: bool
     cxxName*: CxxName
     nimName*: string
     typeImport*: CxxLibImport
-    genParams*: seq[tuple[name: string, default: Option[CxxTypeUse]]]
+    genParams*: CxxGenParams
 
     store*: CxxTypeStore
 
@@ -153,7 +162,7 @@ type
     flags*: set[CxxProcFlag]
 
     constructorOf*: Option[CxxName]
-    methodOf*: Option[CxxType]
+    methodOf*: Option[CxxName]
 
   CxxExprKind = enum
     cekIntLit
@@ -172,6 +181,8 @@ type
         ident*: CxxName
 
   CxxArg* = object of CxxBase
+    nimName*: string
+    cxxName*: CxxName
     nimType*: CxxTypeUse
     default*: Option[CxxExpr]
 
@@ -272,19 +283,25 @@ type
     entries*: seq[CxxEntry]
     savePath*: CxxLibImport
 
+func cxxName*(pr: CxxProc): CxxName = pr.head.cxxName
+func cxxName*(obj: CxxObject): CxxName = obj.decl.cxxName
+func cxxName*(name: string): CxxName = CxxName(scopes: @[name])
+func cxxName*(scopes: seq[string]): CxxName = CxxName(scopes: scopes)
+
+
 func isConst*(pr: CxxProc): bool = cpfConst in pr.flags
 func isConstructor*(pr: CxxProc): bool = pr.constructorOf.isSome()
 func isMethod*(pr: CxxProc): bool = pr.methodOf.isSome()
 
-func getConstructed*(pr: CxxProc): string =
+func getConstructed*(pr: CxxProc): CxxName =
   pr.constructorOf.get()
 
 func getIcppName*(pr: CxxProc, asMethod: bool = false): string =
   if asMethod:
-    pr.cxxName[^1]
+    pr.cxxName.scopes[^1]
 
   else:
-    pr.cxxName.join("::")
+    pr.cxxName.scopes.join("::")
 
 func initCxxHeader*(global: string): CxxHeader =
   CxxHeader(global: global, kind: chkGlobal)
@@ -292,26 +309,44 @@ func initCxxHeader*(global: string): CxxHeader =
 func initCxxHeader*(file: AbsFile): CxxHeader =
   CxxHeader(kind: chkAbsolute, file: file)
 
-func initCxxArg*(name: string, argType: CxxType): CxxArg =
+func initCxxArg*(name: string, argType: CxxTypeUse): CxxArg =
   CxxArg(nimType: argType, nimName: name, haxdocIdent: newJNull())
 
+func initCxxArg*(name: CxxName, argType: CxxTypeUse): CxxArg =
+  CxxArg(nimType: argType, cxxName: name, haxdocIdent: newJNull())
 
-func wrap*(wrapped: CxxType, kind: CxxTypeKind): CxxType =
+func wrap*(wrapped: CxxTypeUse, kind: CxxTypeKind): CxxTypeUse =
   if kind == ctkIdent:
     result = wrapped
 
   else:
-    result = CxxType(kind: kind)
+    result = CxxTypeUse(kind: kind)
     result.wrapped = wrapped
 
-func initCxxType*(head: string, genParams: seq[CxxType] = @[]): CxxType =
-  CxxType(kind: ctkIdent, nimName: head, genParams: @genParams)
+func cxxTypeRef*(
+    cxxName: CxxName, nimName: string = "", store: CxxTypeStore = nil
+  ): CxxTypeRef =
+
+  CxxTypeRef(
+    isParam: false, nimName: nimName,
+    cxxName: cxxName, typeStore: store)
+
+func cxxTypeDecl*(
+    head: CxxName, genParams: CxxGenParams = @[]): CxxTypeDecl =
+
+  CxxTypeDecl(cxxName: head, genParams: genParams)
+
+func cxxTypeUse*(
+    head: CxxName, genParams: seq[CxxTypeUse] = @[]): CxxTypeUse =
+
+  CxxTypeUse(
+    kind: ctkIdent, cxxType: cxxTypeRef(head), genParams: @genParams)
 
 func getReturn*(
-    pr: CxxProc, onConstructor: CxxTypeKind = ctkIdent): CxxType =
+    pr: CxxProc, onConstructor: CxxTypeKind = ctkIdent): CxxTypeUse =
 
   if pr.isConstructor:
-    result = initCxxType(pr.getConstructed()).wrap(onConstructor)
+    result = cxxTypeUse(pr.getConstructed()).wrap(onConstructor)
 
   else:
     assertRef pr.returnType
@@ -347,7 +382,7 @@ func getIcpp*(pr: CxxObject): IcppPattern =
     return pr.icpp
 
   else:
-    result.ctype(pr.cxxName.join("::"))
+    result.ctype(pr.cxxName.scopes.join("::"))
 
 
 func getIcppStr*(pr: CxxObject): string = $getIcpp(pr)
@@ -358,21 +393,23 @@ func initIcpp*(
   pr.icpp = getIcpp(pr, onConstructor)
 
 
-func initCxxType*(arguments: seq[CxxArg], returnType: CxxType): CxxType =
-  CxxType(
+func cxxTypeUse*(
+    arguments: seq[CxxArg], returnType: CxxTypeUse): CxxTypeUse =
+  CxxTypeUse(
     kind: ctkProc, arguments: arguments, returnType: returnType)
 
-func initCxxObject*(nimName, cxxName: string): CxxObject =
-  CxxObject(nimName: nimName, cxxName: @[cxxName], haxdocIdent: newJNull())
+func cxxObject*(cxxName: CxxName, genParams: CxxGenParams): CxxObject =
+  CxxObject(decl: cxxTypeDecl(cxxName, genParams), haxdocIdent: newJNull())
 
-func initCxxProc*(
-    nimName, cxxName: string,
-    arguments: seq[CxxArg] = @[], returnType: CxxType = initCxxType("void")
+func cxxProc*(
+    cxxName: CxxName,
+    arguments: seq[CxxArg] = @[],
+    returnType: CxxTypeUse = cxxTypeUse(cxxName"void"),
+    genParams: CxxGenParams = @[]
   ): CxxProc =
 
   CxxProc(
-    nimName: nimName,
-    cxxName: @[cxxName],
+    head: cxxTypeDecl(cxxName, genParams),
     haxdocIdent: newJNull(),
     returnType: returnType,
     arguments: arguments
