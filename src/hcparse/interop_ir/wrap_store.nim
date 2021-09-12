@@ -65,6 +65,8 @@ type
     docComment*: seq[string]
     haxdocIdent* {.requiresinit.}: JsonNode
 
+    isAnonymous*: bool
+
   CxxName* = object
     scopes*: seq[string]
 
@@ -161,7 +163,7 @@ type
     # cpkHook ## Destructor/sink (etc.) hook: `=destroy`
     # cpkAssgn ## Assignment proc `field=`
 
-  CxxProcFlag = enum
+  CxxProcFlag* = enum
     cpfConst
     cpfOperator
     cpfOverride
@@ -169,6 +171,7 @@ type
     cpfSlot
     cpfSignal
     cpfVirtual
+    cpfVariadic
 
   CxxProc* = object of CxxBase
     kind*: CxxProcKind
@@ -182,8 +185,8 @@ type
 
     flags*: set[CxxProcFlag]
 
-    constructorOf*: Option[CxxNamePair]
-    methodOf*: Option[CxxNamePair]
+    constructorOf*: Option[CxxTypeUse]
+    methodOf*: Option[CxxTypeUse]
 
   CxxExprKind = enum
     cekIntLit
@@ -206,23 +209,35 @@ type
     nimType*: CxxTypeUse
     default*: Option[CxxExpr]
 
-  CxxField* = object of CxxBase
-    nimType*: CxxTypeUse
-    isStatic*: bool
+  CxxFieldFlag* = enum
+    cffStatic
+    cffPublic
+    cffPrivate
+    cffProtected
 
-  CxxEnumValue* = object
-    baseName*: string
+  CxxField* = object of CxxBase
     name*: CxxNamePair
-    value*: BiggestInt
-    comment*: string
+    nimType*: CxxTypeUse
+    flags*: set[CxxFieldFlag]
+
 
   CxxAlias* = object of CxxBase
     isDistinct*: bool
-    newAlias*: CxxTypeDecl
-    baseType*: CxxTypeUse
+    newType*: CxxTypeDecl
+    oldType*: CxxTypeUse
+
+
+  CxxEnumValue* = object
+    name*: CxxNamePair
+    value*: BiggestInt
+    valueTokens*: seq[string]
+    comment*: string
 
   CxxEnum* = object of CxxBase
+    isClassEnum*: bool
+    decl*: CxxTypeDecl
     values*: seq[CxxEnumValue]
+    duplicates*: seq[CxxEnumValue]
 
 
   CxxObjectKind* = enum
@@ -249,6 +264,8 @@ type
     name*: CxxNamePair
     arguments*: seq[string]
 
+  CxxMacroGroup* = object
+    macros*: seq[CxxMacro]
 
   CxxEntryKind* = enum
     cekEnum ## Enum wrapper
@@ -261,6 +278,7 @@ type
     cekImport ## Import statement
     cekEmpty
     cekTypeGroup
+    cekMacroGroup
 
     cekMacro
     cekComment
@@ -291,6 +309,9 @@ type
       of cekMacro:
         cxxMacro*: CxxMacro
 
+      of cekMacroGroup:
+        cxxMacroGroup*: CxxMacroGroup
+
       else:
         discard
 
@@ -307,10 +328,14 @@ func `nimName=`*(pr: var CxxProc, name: string) =
 
 func nimName*(pr: CxxProc): string = pr.head.name.nim
 func nimName*(t: CxxTypeUse): string = t.cxxType.name.nim
+
+func cxxName*(t: CxxTypeUse): CxxName = t.cxxType.name.cxx
+func cxxName*(t: CxxTypeDecl): CxxName = t.name.cxx
 func cxxName*(pr: CxxProc): CxxName = pr.head.name.cxx
 func cxxName*(obj: CxxObject): CxxName = obj.decl.name.cxx
 func cxxName*(name: string): CxxName = CxxName(scopes: @[name])
 func cxxName*(scopes: seq[string]): CxxName = CxxName(scopes: scopes)
+
 func cxxPair*(nim: string, cxx: CxxName): CxxNamePair =
   CxxNamePair(nim: nim, cxx: cxx)
 
@@ -324,7 +349,7 @@ func add*(t: var CxxTypeUse, other: CxxTypeUse) =
   t.genParams.add other
   t.genParams.last().flags.incl ctfParam
 
-func getConstructed*(pr: CxxProc): CxxNamePair =
+func getConstructed*(pr: CxxProc): CxxTypeUse =
   pr.constructorOf.get()
 
 func getIcppName*(pr: CxxProc, asMethod: bool = false): string =
@@ -372,7 +397,7 @@ func getReturn*(
     pr: CxxProc, onConstructor: CxxTypeKind = ctkIdent): CxxTypeUse =
 
   if pr.isConstructor:
-    result = cxxTypeUse(pr.getConstructed()).wrap(onConstructor)
+    result = pr.getConstructed().wrap(onConstructor)
 
   else:
     assertRef pr.returnType
@@ -424,9 +449,20 @@ func cxxTypeUse*(
   CxxTypeUse(
     kind: ctkProc, arguments: arguments, returnType: returnType)
 
-func cxxObject*(name: CxxNamePair, genParams: CxxGenParams): CxxObject =
+func cxxTypeUse*(decl: CxxTypeDecl, store: CxxTypeStore = nil): CxxTypeUse =
+  CxxTypeUse(kind: ctkIdent, cxxType: cxxTypeRef(decl.name, store))
+
+func cxxObject*(name: CxxNamePair, genParams: CxxGenParams = @[]): CxxObject =
   CxxObject(decl: cxxTypeDecl(name, genParams), haxdocIdent: newJNull())
 
+func cxxEnum*(name: CxxNamePair): CxxEnum =
+  CxxEnum(decl: cxxTypeDecl(name), haxdocIdent: newJNull())
+
+func cxxField*(name: CxxNamePair, nimType: CxxTypeUse): CxxField =
+  CxxField(name: name, nimType: nimType, haxdocIdent: newJNull())
+
+func cxxAlias*(newType: CxxTypeDecl, oldType: CxxTypeUse): CxxAlias =
+  CxxAlias(newType: newType, oldType: oldType, haxdocIdent: newJNull())
 
 func cxxProc*(
     name: CxxNamePair,
@@ -482,7 +518,7 @@ func box*(en: CxxMacro): CxxEntry =
 
 func add*(
     s: var seq[CxxEntry],
-    other: CxxMacro | CxxAlias | CxxObject | CxxForward | CxxProc
+    other: CxxMacro | CxxAlias | CxxObject | CxxForward | CxxProc | CxxEnum
   ) =
 
   s.add box(other)

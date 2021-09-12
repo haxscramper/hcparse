@@ -5,7 +5,7 @@ import
 
 
 
-import std/[with, sequtils, strutils, strformat]
+import std/[with, sequtils, strutils, strformat, sets]
 
 import
   ./interop_ir/[wrap_store, wrap_icpp],
@@ -21,6 +21,13 @@ proc cxxName*(cxtype: CxType, cache: var WrapCache): CxxName =
 
 proc cxxPair*(conf: WrapConf, decl: CDecl): CxxNamePair =
   cxxPair(decl.getNimName(conf), conf.cxxName(decl))
+
+proc cxxPair*(conf: WrapConf, cursor: CxCursor): CxxNamePair =
+  cxxPair($cursor, cxxName(@[$cursor]))
+
+proc cxxPair*(
+    conf: WrapConf, ident: CSCopedIdent, cache: var WrapCache): CxxNamePair =
+  raise newImplementError()
 
 proc cxxPair*(
   conf: WrapConf, cxtype: CxType, cache: var WrapCache): CxxNamePair =
@@ -291,10 +298,14 @@ proc toCxxOperator*(
   # FIXME
   # result.header = conf.makeHeader(oper.cursor, conf)
 
+proc toCxxArg*(arg: CArg, conf: WrapConf, cache: var WrapCache): CxxArg =
+  initCxxArg(cxxPair(conf, arg.cursor),
+             toCxxUse(conf, arg.cursor.cxType(), cache))
+
 proc toCxxProc*(
     pr: CDecl,
     conf: WrapConf,
-    parent: Option[NimType],
+    parent: Option[CxxTypeDecl],
     cache: var WrapCache,
     parentDecl: Option[CDecl]
   ): CxxProc =
@@ -343,80 +354,18 @@ proc toCxxProc*(
 
       # result.header = conf.makeHeader(pr.cursor, conf)
 
+  if pr.cursor.kind in {ckConstructor}:
+    result.constructorOf = some parent.get().cxxTypeUse()
 
-  if $pr.cursor == "operator=":
-    # FIXME check if first argument and parent declaration types are
-    # identical. Right now it does not work because
-    # `b3Matrix3x3` != `const b3Matrix3x3 &`
-    if parentDecl.get().cursor.cxType() == pr.arguments[0].cursor.cxType():
-      # By default `operator=` is converted to regular `setFrom` proc to
-      # correctly handle multiple overloads (in C++ `operator=` can have
-      # different types on RHS and LHS, but this is not the case in nim).
-      # *if* assignmed is indeed done from two identical types, then it can
-      # be wrapped as actual `=` proc.
-
-      # result.name = "="
-      # result.kind = pkOperator
-      discard
-
-    else:
-      # Otherwise add `self` for wrapped proc
-      addThis = parent.isSome()
-
-  if addThis:
-    assert parent.isSome()
-    result.arguments.add initCArg(
-      "self", parent.get(),
-      pr.cursor.isConstMethod.tern(nvdVar, nvdLet)
-    )
+  elif parent.isSome():
+    result.methodOf = some parent.get().cxxTypeUse()
 
   for argIdx, arg in pr.arguments:
-    var argType = arg.cursor.cxType().toNimType(conf, cache)
-    if arg.cursor.cxType().isEnum():
-      argType.nimName &= conf.rawSuffix()
-
-    if argType.kind in {ctkIdent}:
-      argType.genParams.add argType.getPartialParams(conf, cache, false)
-
-      if argType.nimName == "UNEXPOSED":
-        # WARNING currently parameters which contain `tkUnexposed`
-        # types are not handled but are skipped instead. I don't
-        # know how to fix right now.
-        result.canAdd = false
-
-      if argType.isComplex.not() and
-         parentDecl.isSome() and
-         arg.cursor.inheritsGenParamsOf(parentDecl.get().cursor) and
-         parent.isSome() and
-         (arg.cursor.cxType().kind notin {tkUnexposed})
-        :
-        # WARNING nested class definitions with additional template
-        # parameters are not handled right now. It will break for
-        # code like
-        # `<Ta> struct A { <Tb> struct B {void func(); }; };`
-        # and only add `Tb` as template parameter for `func()`.
-        for param in parent.get().genParams:
-          argType.add param
-        # FAIL most likely broken with recent refactoring
-
-    else:
-      # FIXME determine and implement edge case handling for procvar
-      # arguments
-      conf.warn "Temporarily droppping procvar arguemtn handling"
-
-
-    if not (opKind == cpkPostfixOp and argIdx > 0):
-      var newArg = initCArg(arg.name, argType)
-      setDefaultForArg(newArg, arg.cursor, conf, cache)
-      result.arguments.add newArg
+    result.add toCxxArg(arg, conf, cache)
 
   if pr.cursor.isVariadic() == 1:
-    result.pragma.add newPIdent("varargs")
+    result.flags.incl cpfVariadic
 
-  if pr.isOperator and pr.classifyOperator(conf) == cpkAsgnOp:
-    # HACK Force override return type for assignment operators
-    result.returnType = newNimType("void")
-    endProc(result)
 
   # elif pr.cursor.kind in {ckConstructor, ckConversionFunction}:
   #   # Override handling of return types for constructors
@@ -492,50 +441,147 @@ proc toCxxProc*(
   #   endProc(result)
 
 
-proc toCxxObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): GenObject =
+proc toCxxEnum*(declEn: CDecl, conf: WrapConf, cache: var WrapCache): CxxEnum =
+  result = cxxEnum(conf.cxxPair(declEn))
+  result.isClassEnum = declEn.isClassEnum
+
+  var visited: HashSet[BiggestInt]
+  for (cursor, value) in declEn.enumFields:
+    let gen = CxxEnumValue(
+      name: conf.cxxPair(cursor),
+      value: value,
+      valueTokens: tokenStrings(cursor, conf.unit))
+
+    if value in visited:
+      result.duplicates.add gen
+
+    else:
+      result.values.add gen
+      visited.incl value
+
+
+    # if val != prev:
+    #   prev = val
+    #   result.values.add GenEnumValue(
+    #     cdecl: CDecl(cursor: name, kind: cdkField, ident: @[]),
+    #     docComment: @[conf.docCommentFor(declEn.ident & toCName(name))],
+    #     iinfo: currLInfo(),
+    #     baseName: $name,
+    #     resCName: cEnumName($name, nt, conf, cache),
+    #     resNimName: renameField($name, pref, enumPref, cache),
+    #     resVal: val,
+    #     stringif: toCppNamespace(declEn.ident) & "::" & $name
+    #   )
+
+
+
+
+proc toCxxObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): CxxObject
+
+proc toCxxAlias*(
+    al: CDecl, conf: WrapConf, cache: var WrapCache
+  ): seq[CxxEntry] =
+  # NOTE returning multiple values because of
+  # `typedef struct A {} A, *APtr` shit that can result in multple
+  # declarations, nested types (that might recursively contain who-knows-what)
+
+  if al.isNewType:
+    var baseType: CxxTypeUse
+    if al.aliasNewType.kind in {cdkClass, cdkStruct, cdkUnion}:
+      let wrapBase = al.aliasNewType.toCxxObject(conf, cache)
+      result.add wrapBase
+      baseType = wrapBase.decl.cxxTypeUse()
+
+    else:
+      let wrapBase = al.aliasNewType.toCxxEnum(conf, cache)
+      result.add wrapBase
+      baseType = wrapBase.decl.cxxTypeUse()
+
+    for newName in al.newTypes:
+      var newType = cxxPair(conf, newName).cxxTypeDecl()
+      # newType.genParams = baseType.genParams # FIXME port generic parameters from
+      if newType.cxxName() != baseType.cxxName():
+        # Alias names might be the same for `typedef struct St {} St;`
+        result.add cxxAlias(newType, baseType)
+
+  else:
+    # Get underlying type for alias
+    let aliasof = al.cursor.cxType().getCanonicalType()
+
+    # Create new identifier for aliased type
+    var newAlias = conf.cxxPair(al.ident, cache).cxxTypeDecl()
+
+    # Identifier for old aliased type
+    var baseType: CxxTypeUse
+    if getTypeDeclaration(aliasof).cxKind() == ckNodeclFound:
+      baseType = toCxxUse(conf, aliasof, cache)
+
+    else:
+      baseType = conf.cxxPair(conf.fullScopedIdent(aliasof), cache).cxxTypeUse()
+      # WARNING mismatched generic parameters between lhs and rhs parts of
+      # alias might result in broken wrappers.
+
+    var maxIdx = 0
+    for idx, param in al.cursor.cxType().templateParams():
+      baseType.genParams[idx] = toCxxUse(conf, param, cache)
+      maxIdx = idx
+
+    # FIXME WARNING skipping generic parameters for now, I don't remember
+    # what went into fixing them in the first place, so most likely it is a
+    # completely broken pile of garbage now.
+
+    # for idx in (maxIdx + 1) ..< baseType.genParams.len:
+    #   newAlias.genParams.add baseType.genParams[idx]
+
+    # # QUESTION is it necessary?
+    # # baseType.genParams.add baseType.getPartialParams(conf, cache, defaulted = true)
+
+    # fixTypeParams(baseType, newAlias.genParams)
+
+    result.add cxxALias(newAlias, baseType)
+
+proc toCxxObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): CxxObject =
+  assert cd.kind in {cdkClass, cdkStruct, cdkUnion, cdkForward}, $cd.kind
+  result = cxxObject(conf.cxxPair(cd))
+
   let tdecl = cd.cursor.cxType().getTypeDeclaration()
-  assert cd.kind in {
-    cdkClass, cdkStruct, cdkUnion, cdkForward}, $cd.kind
-
-  result = GenObject(
-    rawName: $cd.cursor,
-    name: conf.typeNameForScoped(cd.ident, cache),
-    cdecl: cd
-  )
-
-  assert result.name.kind == ctkIdent
-
-  updateAggregateInit(cd, conf, cache, result)
 
   if cd.kind != cdkForward:
-    # Add type declaration for nested types
     for entry in cd.nestedTypes:
       case entry.kind:
         of cdkEnum:
-          result.nestedEntries.add wrapEnum(entry, conf, cache)
+          result.nested.add toCxxEnum(entry, conf, cache).box()
 
         of cdkStruct, cdkClass, cdkUnion:
-          result.nestedEntries.add wrapObject(entry, conf, cache)
+          result.nested.add toCxxObject(entry, conf, cache).box()
 
+        of cdkAlias:
+          result.nested.add toCxxAlias(entry, conf, cache)
 
         else:
           discard
 
+    for mem in cd.members:
+      case mem.kind:
+        of cdkMethod:
+          result.methods.add toCxxProc(mem, conf, some result.decl, cache, some cd)
 
-    updateFieldExport(cd, conf, cache, result)
+        of cdkField:
+          var field = cxxField(
+            conf.cxxPair(mem.cursor),
+            toCxxUse(conf, mem.cursor.cxType(), cache)
+          )
 
-    let (procs, extra) = wrapMethods(cd, conf, result.name, cache)
-    result.memberMethods.add procs
-    result.nestedEntries.add extra
+          case mem.access:
+            of asPublic: field.flags.incl cffPublic
+            of asPrivate: field.flags.incl cffPrivate
+            of asProtected: field.flags.incl cffProtected
+            of asInvalidAccessSpecifier: discard
 
+          if mem.cursor.isStatic:
+            field.flags.incl cffStatic
 
-proc toCxxEnum*(declEn: CDecl, conf: WrapConf, cache: var WrapCache): CxxEnum =
-  var gen = makeGenEnum(
-    declEn,
-    declEn.enumFields.sortedByIt(it[1]).deduplicate(isSorted = true),
-    conf, cache
-  )
+          result.mfields.add field
 
-  cache.genEnums.add gen
-  result.add gen
-  gen.auxGen.add makeEnumConverters(gen, conf, cache)
+        else:
+          discard
