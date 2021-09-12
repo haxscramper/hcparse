@@ -1,7 +1,8 @@
 import
   hmisc/other/oswrap,
   hmisc/core/all,
-  std/[options, macros, json, strutils, strformat, tables]
+  std/[options, macros, json, strutils, strformat,
+       tables, hashes, sets, sequtils]
 
 import
   ./wrap_icpp
@@ -66,6 +67,7 @@ type
     haxdocIdent* {.requiresinit.}: JsonNode
 
     isAnonymous*: bool
+    isPromotedForward*: bool
 
   CxxName* = object
     scopes*: seq[string]
@@ -97,7 +99,7 @@ type
     classDecls*: Table[CxxName, seq[CxxObject]]
 
 
-  CxxTypeRef = object
+  CxxTypeRef* = object
     ## Reference to used C++ type
     name*: CxxNamePair
     case isParam*: bool
@@ -114,6 +116,7 @@ type
     ctfComplex
     ctfParam
     ctfDefaultedParam
+    ctfIsPodType
 
   CxxTypeUse* = ref object
     ## Instantiated type
@@ -122,10 +125,10 @@ type
       of ctkStaticParam:
         value*: CxxExpr
 
-      of ctkPtr, ctkLVref, ctkRVRef, ctkDynamicArray:
+      of ctkWrapKinds:
         wrapped*: CxxTypeUse
 
-      of ctkFixedArray, ctkDependentArray:
+      of ctkArrayKinds:
         arraySize*: CxxTypeUse
         arrayElement*: CxxTypeUse
 
@@ -312,15 +315,128 @@ type
       of cekMacroGroup:
         cxxMacroGroup*: CxxMacroGroup
 
-      else:
+      of cekPass, cekEmpty,
+         cekImport #[ REVIEW maybe make import and entry? ]#:
         discard
 
   CxxFile* = object
-    imports*: seq[CxxLibImport]
-    exports*: seq[CxxLibImport]
+    imports*: HashSet[CxxLibImport]
+    exports*: HashSet[CxxLibImport]
 
     entries*: seq[CxxEntry]
+
+    isGenerated*: bool
     savePath*: CxxLibImport
+
+
+func `$`*(cxx: CxxLibImport): string =
+  cxx.library & "@" & cxx.importPath.join("/")
+
+func `$`*(name: CxxName): string = name.scopes.join("::")
+func `$`*(name: CxxNamePair): string = $name.cxx
+func `$`*(expr: CxxExpr): string = raise newImplementError()
+
+func `$`*(tref: CxxTypeRef): string =
+  if not tref.isParam:
+    if tref.typeLib.isSome():
+      result.add tref.typeLib.get()
+      result.add "@"
+
+  result.add $tref.name
+
+
+func `$`*(ct: CxxTypeUse): string
+
+func `$`*(arg: CxxArg): string =
+  result = $arg.name & ": " & $arg.nimType
+  if arg.default.isSome():
+    result &= " = "
+    result &= $arg.default.get()
+
+func `$`*(ct: CxxTypeUse): string =
+  if isNil(ct):
+    result = "void"
+
+  else:
+    case ct.kind:
+      of ctkPtr:
+        result = $ct.wrapped & "*"
+
+      of ctkLVRef:
+        result = $ct.wrapped & "&"
+
+      of ctkRVRef:
+        result = $ct.wrapped & "&&"
+
+      of ctkDynamicArray:
+        result = $ct.wrapped & "[]"
+
+      of ctkFixedArray, ctkDependentArray:
+        result = $ct.arrayElement & "[" & $ct.arraySize & "]"
+
+      of ctkStaticParam:
+        result = $ct.value
+
+      of ctkIdent:
+        result &= $ct.cxxType
+        if ct.genParams.len > 0:
+          result &= "["
+          result &= ct.genParams.mapIt($it).join(", ")
+          result &= "]"
+
+      of ctkProc:
+        result &= "proc("
+        for idx, arg in ct.arguments:
+          if idx > 0:
+            result.add ", "
+          result &= $arg
+
+        result &= "): "
+        result &= $ct.returnType
+
+func hash*(name: CxxName): Hash = hash(name.scopes)
+
+func hash*[T](opt: Option[T]): Hash =
+  if opt.isSome():
+    return hash(opt.get())
+
+func hash*(pair: CxxNamePair): Hash =
+  !$(hash(pair.cxx) !& hash(pair.nim))
+
+func hash*(tref: CxxTypeRef): Hash  =
+  result = hash(tref.name)
+  if not tref.isParam:
+    result = result !& hash(tref.typeLib)
+
+
+func hash*(use: CxxTypeUse): Hash
+
+func hash*(lib: CxxLibImport): Hash = hash(lib.library) !& hash(lib.importPath)
+
+func hash*(arg: CxxArg): Hash = hash(arg.name) !& hash(arg.nimType)
+
+func hash*(use: CxxTypeUse): Hash =
+  result = hash(use.kind) !& hash(use.flags)
+  case use.kind:
+    of ctkStaticParam:
+      raise newImplementKindError(use)
+
+    of ctkWrapKinds:
+      result = result !& hash(use.wrapped)
+
+    of ctkArrayKinds:
+      result = result !& hash(use.arraySize) !& hash(use.arrayElement)
+
+    of ctkIdent:
+      result = result !& hash(use.cxxType) !& hash(use.genParams)
+
+    of ctkProc:
+      result = result !& hash(use.arguments)
+      if use.returnType.notNil():
+        result = result !& hash(use.returnType)
+
+func hash*(decl: CxxTypeDecl): Hash =
+  !$(hash(decl.name) !& hash(decl.genParams) !& hash(decl.typeImport))
 
 func `nimName=`*(pr: var CxxProc, name: string) =
   pr.head.name.nim = name
@@ -344,6 +460,9 @@ func cxxPair*(name: string): CxxNamePair = cxxPair(name, cxxName(@[name]))
 func isConst*(pr: CxxProc): bool = cpfConst in pr.flags
 func isConstructor*(pr: CxxProc): bool = pr.constructorOf.isSome()
 func isMethod*(pr: CxxProc): bool = pr.methodOf.isSome()
+
+
+func isPOD*(use: CxxTypeUse): bool = ctfIsPodType in use.flags
 
 func add*(t: var CxxTypeUse, other: CxxTypeUse) =
   t.genParams.add other
@@ -392,6 +511,59 @@ func cxxTypeUse*(
 
   CxxTypeUse(
     kind: ctkIdent, cxxType: cxxTypeRef(head, store), genParams: @genParams)
+
+func getDecl*(use: CxxTypeUse): CxxTypeDecl =
+  assertKind(use, {ctkIdent})
+  assert not use.cxxType.isParam
+  assertRef use.cxxType.typeStore
+  for decl in use.cxxType.typeStore.typeDecls[use.cxxName()]:
+    if use.cxxType.typeLib.isNone():
+      return decl
+
+    else:
+      if decl.typeImport.library == use.cxxType.typeLib.get():
+        return decl
+
+  raise newGetterError("Cannot get import for type use")
+
+func getImport*(use: CxxTypeUse): CxxLibImport =
+  use.getDecl().typeImport
+
+func getImport*(decl: CxxTypeDecl): CxxLibImport = decl.typeImport
+func getFilename*(limport: CxxLibImport): string =
+  limport.importPath[^1] # TODO drop extension
+
+
+func getType*(arg: CxxArg): CxxTypeUse = arg.nimType
+func getType*(field: CxxField): CxxTypeUse = field.nimType
+
+
+proc getUsedTypesRec*(
+    t: CxxTypeUse, ignoreHead: bool = false): seq[CxxTypeUse] =
+  if not ignoreHead:
+    result.add t
+
+  case t.kind:
+    of ctkWrapKinds:
+      result.add getUsedTypesRec(t.wrapped)
+
+    of ctkArrayKinds:
+      result.add getUsedTypesRec(t.arrayElement)
+
+    of ctkStaticParam:
+      discard
+
+    of ctkIdent:
+      for param in t.genParams:
+        result.add getUsedTypesRec(param)
+
+    of ctkProc:
+      if notNil t.returnType:
+        result.add t.returnType
+
+      for argument in t.arguments:
+        result.add getUsedTypesRec(argument.getType())
+
 
 func getReturn*(
     pr: CxxProc, onConstructor: CxxTypeKind = ctkIdent): CxxTypeUse =
@@ -464,6 +636,8 @@ func cxxField*(name: CxxNamePair, nimType: CxxTypeUse): CxxField =
 func cxxAlias*(newType: CxxTypeDecl, oldType: CxxTypeUse): CxxAlias =
   CxxAlias(newType: newType, oldType: oldType, haxdocIdent: newJNull())
 
+func cxxEmpty*(): CxxEntry = CxxEntry(kind: cekEmpty)
+
 func cxxProc*(
     name: CxxNamePair,
     arguments: seq[CxxArg] = @[],
@@ -497,6 +671,24 @@ func setHeaderRec*(entry: var CxxEntry, header: CxxHeader) =
 
     else:
       discard
+
+func hasTypeDecl*(entry: CxxEntry): bool =
+  entry.kind in {cekEnum, cekForward, cekObject, cekAlias}
+
+func getTypeDecl*(entry: CxxEntry): CxxTypeDecl =
+  case entry.kind:
+    of cekEnum: result = entry.cxxEnum.decl
+    of cekObject: result = entry.cxxEnum.decl
+    of cekAlias: result = entry.cxxAlias.newType
+    of cekForward: result = entry.cxxForward.decl
+    else: raise newUnexpectedKindError(entry)
+
+func toRealDecl*(entry: CxxEntry): CxxEntry =
+  assertKind(entry, cekForward)
+  raise newImplementError()
+
+  # result.isPromotedForward = true
+
 
 func box*(en: CxxEnum): CxxEntry =
   CxxEntry(kind: cekEnum, cxxEnum: en)

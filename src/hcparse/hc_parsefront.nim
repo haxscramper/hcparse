@@ -1110,73 +1110,73 @@ proc wrapFiles*(
 
 
 
-proc mergeSfinae*(
-    decls: seq[WrappedEntry],
-    conf: WrapConf, cache: var WrapCache): seq[WrappedEntry] =
+proc mergesfinae*(
+    decls: seq[wrappedentry],
+    conf: wrapconf, cache: var wrapcache): seq[wrappedentry] =
 
-  var byArglen: OrderedTable[int, seq[WrappedEntry]]
+  var byarglen: orderedtable[int, seq[wrappedentry]]
   for decl in decls:
-    byArgLen.mgetOrPut(decl.decl.procDecl.arguments.len(), @[]).add decl
+    byarglen.mgetorput(decl.decl.procdecl.arguments.len(), @[]).add decl
 
-  for arglen, decls in byArgLen:
+  for arglen, decls in byarglen:
     if decls.len == 1:
       result.add decls
 
     else:
-      # Multiple buckets with equal overloads
-      var unifyEq: seq[seq[WrappedEntry]]
-      # For each declaration in input list
+      # multiple buckets with equal overloads
+      var unifyeq: seq[seq[wrappedentry]]
+      # for each declaration in input list
 
       for decl in decls:
-        # For each group in unification buckets
-        let gen1 = decl.decl.procDecl.genTable()
-        for group in mitems(unifyEq):
-          # For each item in bucket
-          var foundBucket: bool = false
+        # for each group in unification buckets
+        let gen1 = decl.decl.procdecl.gentable()
+        for group in mitems(unifyeq):
+          # for each item in bucket
+          var foundbucket: bool = false
           for item in group:
-            # If it is equal with any of the elements in bucket, add it to
+            # if it is equal with any of the elements in bucket, add it to
             # the list
-            let (sig1, sig2) = (decl.decl.procDecl.signature, item.decl.procDecl.signature)
+            let (sig1, sig2) = (decl.decl.procdecl.signature, item.decl.procdecl.signature)
             conf.dump sig1, sig2
-            let gen2 = item.decl.procDecl.genTable()
-            var types1, types2: seq[NType[PNode]]
+            let gen2 = item.decl.procdecl.gentable()
+            var types1, types2: seq[ntype[pnode]]
 
-            # Only consider argument types
-            types1.add sig1.argumentTypes()
-            types2.add sig2.argumentTypes()
+            # only consider argument types
+            types1.add sig1.argumenttypes()
+            types2.add sig2.argumenttypes()
             if types1.len == types2.len:
-              var allOk = true
+              var allok = true
               for (t1, t2) in zip(types1, types2):
                 if not unify(t1, t2, gen1, gen2):
-                  allOk = false
+                  allok = false
                   break
 
-              if allOk:
-                foundBucket = true
+              if allok:
+                foundbucket = true
                 group.add item
                 break
 
-          # Otherwise create new bucket
-          if not foundBucket:
-            unifyEq.add @[decl]
+          # otherwise create new bucket
+          if not foundbucket:
+            unifyeq.add @[decl]
 
-      for group in unifyEq:
+      for group in unifyeq:
         if group.len == 1:
           result.add group[0]
 
         else:
-          raise newImplementError()
+          raise newimplementerror()
 
-proc mergeSfinae*(
-    decls: OrderedTable[string, seq[WrappedEntry]],
-    conf: WrapConf, cache: var WrapCache): seq[WrappedEntry] =
+proc mergesfinae*(
+    decls: orderedtable[string, seq[wrappedentry]],
+    conf: wrapconf, cache: var wrapcache): seq[wrappedentry] =
 
   for name, grouped in pairs(decls):
     if grouped.len == 1:
       result.add grouped
 
     else:
-      result.add mergeSfinae(grouped, conf, cache)
+      result.add mergesfinae(grouped, conf, cache)
 
 proc wrapFile*(
     wrapped: WrappedFile, conf: WrapConf,
