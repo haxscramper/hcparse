@@ -1,11 +1,15 @@
 import
   hmisc/preludes/unittest,
   hcparse/[hc_parsefront, hc_codegen],
-  compiler/[ast, renderer]
+  compiler/[ast, renderer],
+  hnimast/nim_decl
 
-proc conv(str: string): string =
-  renderer.`$`(hc_codegen.toNNode[PNode](wrapViaTs(str)))
+proc convStr(str: string): string =
+  renderer.`$`(
+    nim_decl.toNNode(
+      hc_codegen.toNNode[PNode](
+        wrapViaTs(str))))
 
 suite "Convert type declarations":
   test "Regular struct":
-    echo conv("class S {};")
+    echo convStr("class S {};")

@@ -1,28 +1,30 @@
 import
   ./interop_ir/wrap_store,
-  hnimast/hast_common
+  hnimast/hast_common,
+  hnimast,
+  hnimast/proc_decl
 
 import
   hmisc/core/all,
   hmisc/macros/argpass,
   std/[macros, sequtils]
 
-proc toNNode*[N](t: CxxTypeUse): N =
+proc toNNode*[N](t: CxxTypeUse): NType[N] =
   case t.kind:
     of ctkIdent:
-      result = newNIdent[N](t.nimName)
+      result = newNNType[N](t.nimName, @[])
 
     of ctkPtr:
-      result = newNTree[N](nnkPtrTy, toNNode[N](t.wrapped))
+      result = newNType[N]("ptr", @[toNNode[N](t.wrapped)])
 
     else:
       raise newImplementKindError(t)
 
-proc toNNode*[N](arg: CxxArg): N =
-  newNTree[N](
-    nnkIdentDefs,
-    newNIdent[N](arg.nimName),
-    toNNode[N](arg.nimType), newEmptyNNode[N]())
+proc toNNode*[N](arg: CxxArg): NIdentDefs[N] =
+  newNIdentDefs[N](
+    arg.nimName,
+    toNNode[N](arg.nimType),
+    value = some newEmptyNNode[N]())
 
 proc toNNode*[N](header: CxxHeader): N =
   case header.kind:
@@ -30,66 +32,38 @@ proc toNNode*[N](header: CxxHeader): N =
     of chkAbsolute: newNLit[N, string](header.file.string)
     of chkPNode: newNLit[N, string](header.other)
 
-proc toNNode*[N](def: CxxProc, onConstructor: CxxTypeKind = ctkIdent): N =
-  var pragmas: seq[N]
+proc toNNode*[N](def: CxxProc, onConstructor: CxxTypeKind = ctkIdent): ProcDecl[N] =
+  result = newProcDecl[N](def.nimName)
+  result.exported = true
+
   if cpfExportc in def.flags:
-    pragmas.add newIdentColonExpr(
-      "exportc", newNLit[N, string](def.cxxName.cxxStr()))
+    result.addPragma("exportc", newNLit[N, string](def.cxxName.cxxStr()))
 
   else:
     if def.header.isSome():
-      pragmas.add newIdentColonExpr[N](
-        "header", toNNode[N](def.header.get()))
+      result.addPragma("header", toNNode[N](def.header.get()))
 
-    pragmas.add newIdentColonExpr(
-      "importcpp", newNLit[N, string](def.getIcppStr(ctkPtr)))
+    result.addPragma("importcpp", newNLit[N, string](def.getIcppStr(ctkPtr)))
 
   if def.isConstructor and onConstructor == ctkIdent:
-    pragmas.add newNIdent[N]("constructor")
+    result.addPragma("constructor")
 
-  let args = newNTree[N](
-    nnkFormalParams,
-    toNNode[N](def.getReturn(onConstructor)) & def.arguments.map(toNNode[N]))
+  # nim's overload-resolution-in-generics magic
+  proc_decl.`returnType=`(result, toNNode[N](def.getReturn(onConstructor)))
 
-  newNTree[N](
-    nnkProcDef,
-    newNTree[N](nnkPostfix, newNIdent[N]("*"), newNIdent[N](def.nimName)),
-    newEmptyNNode[N](),
-    newEmptyNNode[N](),
-    args,
-    nnkPragma.newTree(pragmas),
-    newEmptyNNode[N](),
-    newEmptyNNode[N]())
+  for arg in def.arguments:
+    result.addArgument toNNode[N](arg)
 
-
-proc toNNode*[N](entry: CxxEntry): N =
-  result = newNTree[N](nnkStmtList)
+proc toNNode*[N](entry: CxxEntry): seq[NimDecl[N]] =
   case entry.kind:
     of cekObject:
-      var fieldList = newNTree[N](nnkRecList)
       let obj = entry.cxxObject
+      var res = newObjectDecl[N](obj.nimName)
 
-      result.add newNTree[N](
-        nnkTypeDef,
-        newNTree[N](
-          nnkPragmaExpr,
-          newNIdent[N](obj.nimName),
-          newNTree[N](
-            nnkPragma,
-            newNIdent[N]("inheritable"),
-            newNIdent[N]("byref"),
-            newIdentColonExpr("header", toNNode[N](obj.header.get())),
-            newIdentColonExpr("importcpp", newNLit[N, string](obj.getIcppStr())))),
-        newEmptyNNode[N](),
-        newNTree[N](
-          nnkObjectTy,
-          newEmptyNNode[N](),
-          tern(
-            obj.super.len == 0,
-            newEmptyNNode[N](),
-            newNTree[N](nnkOfInherit, toNNode[N](obj.super[0]))),
-          fieldList))
-
+      res.addPragma("inheritable")
+      res.addPragma("byref")
+      res.addPragma("header", toNNode[N](obj.header.get()))
+      res.addPragma("importcpp", newNLit[N, string](obj.getIcppStr()))
 
       for meth in obj.methods:
         result.add toNNode[N](meth, ctkPtr)
@@ -97,22 +71,24 @@ proc toNNode*[N](entry: CxxEntry): N =
       for n in obj.nested:
         result.add toNNode[N](n)
 
+      result.add toNimDecl(res)
+
     of cekProc:
-      result = toNNode[N](entry.cxxProc, ctkPtr)
+      result.add toNNode[N](entry.cxxProc, ctkPtr).toNimDecl()
 
     else:
       raise newImplementKindError(entry)
 
-proc toNNode*[N](entries: seq[CxxEntry]): N =
-  var types: seq[N]
-  var other: seq[N]
+proc toNNode*[N](entries: seq[CxxEntry]): seq[NimDecl[N]] =
+  var types: seq[NimTypeDecl[N]]
+  var other: seq[NimDecl[N]]
   for item in entries:
     for conv in toNNode[N](item):
-      if conv.nnKind() == nnkTypeDef:
-        types.add conv
+      if conv of {nekObjectDecl, nekAliasDecl, nekEnumDecl}:
+        types.add toNimTypeDecl(conv)
 
       else:
         other.add conv
 
-  result = newNTree[N](nnkStmtList, newTree[N](nnkTypeSection, types))
+  result.add toNimDecl(types)
   result.add other
