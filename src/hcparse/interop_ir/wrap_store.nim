@@ -85,7 +85,7 @@ type
   CxxTypeDecl* = object
     isForward*: bool
     name*: CxxNamePair
-    typeImport*: CxxLibImport
+    typeImport*: Option[CxxLibImport]
     genParams*: CxxGenParams
 
     store*: CxxTypeStore
@@ -517,19 +517,28 @@ func getDecl*(use: CxxTypeUse): CxxTypeDecl =
   assert not use.cxxType.isParam
   assertRef use.cxxType.typeStore
   for decl in use.cxxType.typeStore.typeDecls[use.cxxName()]:
-    if use.cxxType.typeLib.isNone():
+    if use.cxxType.typeLib.isNone() or decl.typeImport.isNone():
       return decl
 
     else:
-      if decl.typeImport.library == use.cxxType.typeLib.get():
+      if decl.typeImport.get().library == use.cxxType.typeLib.get():
         return decl
 
   raise newGetterError("Cannot get import for type use")
 
-func getImport*(use: CxxTypeUse): CxxLibImport =
-  use.getDecl().typeImport
+func hasImport*(use: CxxTypeUse): bool =
+  use of ctkIdent and use.getDecl().typeImport.isSome()
 
-func getImport*(decl: CxxTypeDecl): CxxLibImport = decl.typeImport
+func getImport*(use: CxxTypeUse): CxxLibImport =
+  use.getDecl().typeImport.get()
+
+func hasImport*(decl: CxxTypeDecl): bool =
+  decl.typeImport.isSome()
+
+func cxxLibImport*(library: string, path: seq[string]): CxxLibImport =
+  CxxLibImport(library: library, importPath: path)
+
+func getImport*(decl: CxxTypeDecl): CxxLibImport = decl.typeImport.get()
 func getFilename*(limport: CxxLibImport): string =
   limport.importPath[^1] # TODO drop extension
 
@@ -687,26 +696,13 @@ func toRealDecl*(entry: CxxEntry): CxxEntry =
   assertKind(entry, cekForward)
   raise newImplementError()
 
-  # result.isPromotedForward = true
-
-
-func box*(en: CxxEnum): CxxEntry =
-  CxxEntry(kind: cekEnum, cxxEnum: en)
-
+func box*(en: CxxEnum): CxxEntry = CxxEntry(kind: cekEnum, cxxEnum: en)
 func box*(en: CxxForward): CxxEntry =
   CxxEntry(kind: cekForward, cxxForward: en)
-
-func box*(ob: CxxObject): CxxEntry =
-  CxxEntry(kind: cekObject, cxxObject: ob)
-
-func box*(en: CxxProc): CxxEntry =
-  CxxEntry(kind: cekProc, cxxProc: en)
-
-func box*(en: CxxAlias): CxxEntry =
-  CxxEntry(kind: cekAlias, cxxAlias: en)
-
-func box*(en: CxxMacro): CxxEntry =
-  CxxEntry(kind: cekMacro, cxxMacro: en)
+func box*(ob: CxxObject): CxxEntry = CxxEntry(kind: cekObject, cxxObject: ob)
+func box*(en: CxxProc): CxxEntry = CxxEntry(kind: cekProc, cxxProc: en)
+func box*(en: CxxAlias): CxxEntry = CxxEntry(kind: cekAlias, cxxAlias: en)
+func box*(en: CxxMacro): CxxEntry = CxxEntry(kind: cekMacro, cxxMacro: en)
 
 func add*(
     s: var seq[CxxEntry],
@@ -714,3 +710,33 @@ func add*(
   ) =
 
   s.add box(other)
+
+proc fragmentType*(entry: var CxxEntry):
+  tuple[newDecl: seq[CxxEntry], extras: seq[CxxEntry]] =
+
+  case entry.kind:
+    of cekAlias, cekEnum:
+      result.newDecl.add entry
+      entry = cxxEmpty()
+
+    of cekObject:
+      for e in entry.cxxObject.methods:
+        result.extras.add e
+
+      entry.cxxObject.methods = @[]
+
+      for nested in mitems(entry.cxxObject.nested):
+        if nested.kind in { cekEnum, cekObject, cekAlias }:
+          let (newDecls, extras) = fragmentType(nested)
+          result.newdecl.add newDecls
+          result.extras.add extras
+
+        else:
+          result.extras.add nested
+
+      entry.cxxObject.nested = @[]
+      result.newDecl.add entry
+      entry = cxxEmpty()
+
+    else:
+      discard

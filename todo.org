@@ -63,3 +63,7 @@
 - [ ] ~cxx11~ namespace is not correctly collapsed for wrapping methods.
 - [ ] Multiple annonymous enums are converter to the same name
 - [ ] Generated ~importcpp~ for nested anonymous enums is incorrect.
+
+* else
+
+- https://news.ycombinator.com/item?id=28507758
