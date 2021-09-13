@@ -216,19 +216,16 @@ proc toCxxField*(node: CppNode): CxxField =
 
 proc toCxxObject*(node: CppNode): CxxObject =
   var decl: CxxNamePair
-
+  if "name" in node:
+    decl = cxxPair(node["name"].strVal())
 
   result = cxxObject(decl)
 
   case node.kind:
-    of cppStructSpecifier:
-      result.kind = cokStruct
-
-    of cppUnionSpecifier:
-      result.kind = cokUnion
-
-    else:
-      raise newImplementKindError(node)
+    of cppStructSpecifier: result.kind = cokStruct
+    of cppUnionSpecifier: result.kind = cokUnion
+    of cppClassSpecifier: result.kind = cokClass
+    else: raise newUnexpectedKindError(node)
 
 
   for field in node["body"]:
@@ -265,6 +262,9 @@ proc toCxx*(node: CppNode): seq[CxxEntry] =
 
     of cppPreprocCall:
       discard
+
+    of cppClassSpecifier, cppStructSpecifier, cppUnionSpecifier:
+      result.add toCxxObject(node)
 
     of cppPreprocDef:
       if node.len < 2:

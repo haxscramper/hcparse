@@ -10,75 +10,84 @@ import
 proc toNNode*[N](t: CxxTypeUse): N =
   case t.kind:
     of ctkIdent:
-      result = ident(t.nimName)
+      result = newNIdent[N](t.nimName)
 
     of ctkPtr:
-      result = newTree(nnkPtrTy, toNNode[N](t.wrapped))
+      result = newNTree[N](nnkPtrTy, toNNode[N](t.wrapped))
 
     else:
       raise newImplementKindError(t)
 
 proc toNNode*[N](arg: CxxArg): N =
-  nnkIdentDefs.newTree(
-    ident(arg.nimName),
-    toNNode[N](arg.nimType), newEmptyNode())
+  newNTree[N](
+    nnkIdentDefs,
+    newNIdent[N](arg.nimName),
+    toNNode[N](arg.nimType), newEmptyNNode[N]())
 
 proc toNNode*[N](header: CxxHeader): N =
   case header.kind:
-    of chkGlobal: newLit(header.global)
-    of chkAbsolute: newLit(header.file.string)
-    of chkPNode: newLit(header.other)
-
+    of chkGlobal: newNLit[N, string](header.global)
+    of chkAbsolute: newNLit[N, string](header.file.string)
+    of chkPNode: newNLit[N, string](header.other)
 
 proc toNNode*[N](def: CxxProc, onConstructor: CxxTypeKind = ctkIdent): N =
   var pragmas: seq[N]
-  if def.isExportc:
-    pragmas.add newEcE("exportc", newLit(def.cxxName[0]))
+  if cpfExportc in def.flags:
+    pragmas.add newIdentColonExpr(
+      "exportc", newNLit[N, string](def.cxxName.cxxStr()))
 
   else:
     if def.header.isSome():
-      pragmas.add newEcE("header", toNNode[N](def.header.get()))
+      pragmas.add newIdentColonExpr[N](
+        "header", toNNode[N](def.header.get()))
 
-    pragmas.add newEcE("importcpp", newLit(def.getIcppStr(ctkPtr)))
+    pragmas.add newIdentColonExpr(
+      "importcpp", newNLit[N, string](def.getIcppStr(ctkPtr)))
 
   if def.isConstructor and onConstructor == ctkIdent:
     pragmas.add newNIdent[N]("constructor")
 
-  let args = nnkFormalParams.newTree(
+  let args = newNTree[N](
+    nnkFormalParams,
     toNNode[N](def.getReturn(onConstructor)) & def.arguments.map(toNNode[N]))
 
-  nnkProcDef.newTree(
-    nnkPostfix.newTree(ident("*"), ident(def.nimName)),
-    newEmptyNode(),
-    newEmptyNode(),
+  newNTree[N](
+    nnkProcDef,
+    newNTree[N](nnkPostfix, newNIdent[N]("*"), newNIdent[N](def.nimName)),
+    newEmptyNNode[N](),
+    newEmptyNNode[N](),
     args,
     nnkPragma.newTree(pragmas),
-    newEmptyNode(),
-    newEmptyNode())
+    newEmptyNNode[N](),
+    newEmptyNNode[N]())
 
 
 proc toNNode*[N](entry: CxxEntry): N =
-  result = newStmtList()
+  result = newNTree[N](nnkStmtList)
   case entry.kind:
     of cekObject:
-      var fieldList = nnkRecList.newTree()
+      var fieldList = newNTree[N](nnkRecList)
       let obj = entry.cxxObject
 
-      result.add nnkTypeDef.newTree(
-        nnkPragmaExpr.newTree(
-          ident(obj.nimName),
-          nnkPragma.newTree(
-              ident("inheritable"),
-              ident("byref"),
-              newEcE("header", toNNode[N](obj.header.get())),
-              newEcE("importcpp", newLit(obj.getIcppStr())))),
-        newEmptyNode(),
-        nnkObjectTy.newTree(
-          newEmptyNode(),
+      result.add newNTree[N](
+        nnkTypeDef,
+        newNTree[N](
+          nnkPragmaExpr,
+          newNIdent[N](obj.nimName),
+          newNTree[N](
+            nnkPragma,
+            newNIdent[N]("inheritable"),
+            newNIdent[N]("byref"),
+            newIdentColonExpr("header", toNNode[N](obj.header.get())),
+            newIdentColonExpr("importcpp", newNLit[N, string](obj.getIcppStr())))),
+        newEmptyNNode[N](),
+        newNTree[N](
+          nnkObjectTy,
+          newEmptyNNode[N](),
           tern(
             obj.super.len == 0,
-            newEmptyNode(),
-            nnkOfInherit.newTree(toNNode[N](obj.super[0]))),
+            newEmptyNNode[N](),
+            newNTree[N](nnkOfInherit, toNNode[N](obj.super[0]))),
           fieldList))
 
 

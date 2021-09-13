@@ -164,6 +164,9 @@ proc wrapViaTs*(str: string): seq[CxxEntry] =
   let node = parseCppString(addr str)
   result = toCxx(node)
 
+  for item in mitems(result):
+    setHeaderRec(item, cxxHeader("?"))
+
 proc wrapViaClang*(conf: WrapConf, file: AbsFile): CxxFile =
   var cache: WrapCache
   let parsed = parseFile(file, conf, cache)

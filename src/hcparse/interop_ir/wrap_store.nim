@@ -332,7 +332,8 @@ type
 func `$`*(cxx: CxxLibImport): string =
   cxx.library & "@" & cxx.importPath.join("/")
 
-func `$`*(name: CxxName): string = name.scopes.join("::")
+func cxxStr*(name: CxxName): string = name.scopes.join("::")
+func `$`*(name: CxxName): string = name.cxxStr()
 func `$`*(name: CxxNamePair): string = $name.cxx
 func `$`*(expr: CxxExpr): string = raise newImplementError()
 
@@ -443,7 +444,9 @@ func `nimName=`*(pr: var CxxProc, name: string) =
 
 
 func nimName*(pr: CxxProc): string = pr.head.name.nim
+func nimName*(arg: CxxArg): string = arg.name.nim
 func nimName*(t: CxxTypeUse): string = t.cxxType.name.nim
+func nimName*(obj: CxxObject): string = obj.decl.name.nim
 
 func cxxName*(t: CxxTypeUse): CxxName = t.cxxType.name.cxx
 func cxxName*(t: CxxTypeDecl): CxxName = t.name.cxx
@@ -478,10 +481,10 @@ func getIcppName*(pr: CxxProc, asMethod: bool = false): string =
   else:
     pr.cxxName.scopes.join("::")
 
-func initCxxHeader*(global: string): CxxHeader =
+func cxxHeader*(global: string): CxxHeader =
   CxxHeader(global: global, kind: chkGlobal)
 
-func initCxxHeader*(file: AbsFile): CxxHeader =
+func cxxHeader*(file: AbsFile): CxxHeader =
   CxxHeader(kind: chkAbsolute, file: file)
 
 func cxxArg*(name: CxxNamePair, argType: CxxTypeUse): CxxArg =
