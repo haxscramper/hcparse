@@ -299,8 +299,8 @@ proc toCxxOperator*(
   # result.header = conf.makeHeader(oper.cursor, conf)
 
 proc toCxxArg*(arg: CArg, conf: WrapConf, cache: var WrapCache): CxxArg =
-  initCxxArg(cxxPair(conf, arg.cursor),
-             toCxxUse(conf, arg.cursor.cxType(), cache))
+  cxxArg(cxxPair(conf, arg.cursor),
+         toCxxUse(conf, arg.cursor.cxType(), cache))
 
 proc toCxxProc*(
     pr: CDecl,
@@ -585,3 +585,30 @@ proc toCxxObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): CxxObject =
 
         else:
           discard
+
+proc toCxxFile*(
+    parsed: ParsedFile, conf: WrapConf, cache: var WrapCache): CxxFile =
+
+  for decl in parsed.api.decls:
+    case decl.kind:
+      of cdkClass, cdkStruct, cdkUnion:
+        result.entries.add decl.toCxxObject(conf, cache)
+
+      of cdkAlias:
+        result.entries.add decl.toCxxAlias(conf, cache)
+
+      of cdkEnum:
+        result.entries.add decl.toCxxEnum(conf, cache)
+
+      of cdkFunction:
+        result.entries.add decl.toCxxProc(
+          conf, none CxxTypeDecl, cache, none CDecl)
+
+      of cdkMacro:
+        raise newImplementError()
+
+      of cdkMethod, cdkField:
+        discard
+
+      of cdkForward:
+        raise newImplementError()

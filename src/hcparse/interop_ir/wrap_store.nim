@@ -484,7 +484,7 @@ func initCxxHeader*(global: string): CxxHeader =
 func initCxxHeader*(file: AbsFile): CxxHeader =
   CxxHeader(kind: chkAbsolute, file: file)
 
-func initCxxArg*(name: CxxNamePair, argType: CxxTypeUse): CxxArg =
+func cxxArg*(name: CxxNamePair, argType: CxxTypeUse): CxxArg =
   CxxArg(nimType: argType, name: name, haxdocIdent: newJNull())
 
 func wrap*(wrapped: CxxTypeUse, kind: CxxTypeKind): CxxTypeUse =

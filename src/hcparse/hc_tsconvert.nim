@@ -36,7 +36,7 @@ proc toPType*(node: CppNode): NType[PNode] =
 
 
 
-proc conv(node: CppNode, str: string, c: var StringNameCache): PNode =
+proc conv*(node: CppNode, str: string, c: var StringNameCache): PNode =
   template `~`(expr: CppNode): untyped = conv(expr, str, c)
 
   case node.kind:
@@ -212,7 +212,6 @@ proc conv(node: CppNode, str: string, c: var StringNameCache): PNode =
       raise newImplementKindError(
         node, node.strVal() & "\n" & $node.treeRepr(
           str, unnamed = true, opts = hdisplay(maxLen = 5)))
-
 
 
 when isMainModule:

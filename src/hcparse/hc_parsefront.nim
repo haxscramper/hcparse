@@ -8,12 +8,17 @@ import
   ./hc_visitors,
   ./hc_tsreader,
   ./hc_tsconvert,
-  ./hc_codegen
+  ./hc_codegen,
+  ./hc_irgen,
+  ./interop_ir/wrap_store
+
+import
+  hnimast
 
 import
   hmisc/other/oswrap,
   hmisc/types/colorstring,
-  hmisc/algo/[hstring_algo]
+  hmisc/algo/[hstring_algo, namegen]
 
 proc parseTranslationUnit*(
     trIndex: CXIndex,
@@ -122,26 +127,19 @@ proc parseFile*(
   result = parseTranslationUnit(index, file, flags, opts)
 
 proc parseFile*(
-    file: AbsFile,
-    config: ParseConf,
-    conf: WrapConf,
-    cache: var WrapCache,
-    reparseOnNil: bool = true
-  ): ParsedFile =
+    file: AbsFile, conf: WrapConf, cache: var WrapCache): ParsedFile =
 
 
   file.assertExists()
 
-  let flags = config.getFlags(file)
+  let flags = conf.parseConf.getFlags(file)
   result.filename = file
   result.index = createIndex()
 
   var conf = conf
   result.unit = parseTranslationUnit(
     result.index, file, flags, {
-      tufSkipFunctionBodies, tufDetailedPreprocessingRecord},
-    reparseOnNil = reparseOnNil
-  )
+      tufSkipFunctionBodies, tufDetailedPreprocessingRecord})
 
   conf.unit = result.unit
 
@@ -150,9 +148,24 @@ proc parseFile*(
 
 
 proc parseAll*(
-    files: seq[AbsFile], parseConf: ParseConf, conf: WrapConf,
-    cache: var WrapCache
+    files: seq[AbsFile], conf: WrapConf, cache: var WrapCache
   ): hc_types.FileIndex =
+
   for file in files:
-    result.index[file] = parseFile(
-      file, parseConf, conf, cache)
+    result.index[file] = parseFile(file, conf, cache)
+
+proc convertViaTs*(text: string): PNode =
+  var text = text
+  var cache: StringNameCache
+  return parseCppString(addr text).conv(text, cache)
+
+proc wrapViaTs*(str: string): seq[CxxEntry] =
+  var str = str
+  let node = parseCppString(addr str)
+  result = toCxx(node)
+
+proc wrapViaClang*(conf: WrapConf, file: AbsFile): CxxFile =
+  var cache: WrapCache
+  let parsed = parseFile(file, conf, cache)
+  conf.unit = parsed.unit
+  toCxxFile(parsed, conf, cache)

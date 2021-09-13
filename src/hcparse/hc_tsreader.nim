@@ -16,10 +16,6 @@ import
 
 export parseCppString
 
-
-proc getHaxdoc*(conf: WrapConf, parent: seq[CppNode]): JsonNode =
-  newJNull()
-
 proc primitiveName*(node: CppNode): string =
   proc aux(ts: TsCppNode): string =
     if ts.len == 0:
@@ -58,7 +54,7 @@ proc mapTypeName*(node: CppNode): string =
   else:
     mapPrimitiveName(node.primitiveName())
 
-proc toCxxType*(conf: WrapConf, node: CppNode): CxxTypeUse =
+proc toCxxType*(node: CppNode): CxxTypeUse =
   case node.kind:
     of cppTypeIdentifier, cppSizedTypeSpecifier, cppPrimitiveType:
       result = cxxTypeUse(cxxPair(
@@ -70,7 +66,7 @@ proc toCxxType*(conf: WrapConf, node: CppNode): CxxTypeUse =
 
 
 
-proc toCxxMacro*(conf: WrapConf, node: CppNode): CxxMacro =
+proc toCxxMacro*(node: CppNode): CxxMacro =
   assertKind(node, {cppPreprocFunctionDef, cppPreprocDef})
 
   result = cxxMacro(cxxPair(node["name"].strVal()))
@@ -87,7 +83,7 @@ proc toCxxMacro*(conf: WrapConf, node: CppNode): CxxMacro =
   # TODO convert body
 
 
-proc toCxxEnum*(conf: WrapConf, node: CppNode): CxxEnum =
+proc toCxxEnum*(node: CppNode): CxxEnum =
   var name: CxxNamePair
 
   if "name" in node:
@@ -174,21 +170,25 @@ proc getName*(node: CppNode): string =
       else:
         raise newImplementKindError(node, node.treeRepr())
 
-proc toCxxArg*(conf: WrapConf, node: CppNode, idx: int): CxxArg =
+proc toCxxArg*(node: CppNode, idx: int): CxxArg =
   assertKind(node, {cppParameterDeclaration})
-  result = CxxArg(haxdocIdent: conf.getHaxdoc(@[node]))
-  result.nimType = conf.toCxxType(node["type"])
+  var
+    name: CxxNamePair
+    argt: CxxTypeUse = toCxxType(node["type"])
 
   if "declarator" in node:
-    result.name = cxxPair(getName(node["declarator"]))
-    pointerWraps(node["declarator"], result.nimType)
+    name = cxxPair(getName(node["declarator"]))
+    pointerWraps(node["declarator"], argt)
 
   else:
-    result.name = cxxPair("a" & $idx)
+    name = cxxPair("a" & $idx)
 
-proc toCxxProc*(conf: WrapConf, node: CppNode): CxxProc =
+  result = cxxArg(name, argt)
+
+
+proc toCxxProc*(node: CppNode): CxxProc =
   result = cxxProc(cxxPair(node["declarator"].getName()))
-  result.returnType = conf.toCxxType(node["type"])
+  result.returnType = toCxxType(node["type"])
 
   if node[0].kind == cppTypeQualifier:
     result.returnType.flags.incl ctfConst
@@ -203,21 +203,20 @@ proc toCxxProc*(conf: WrapConf, node: CppNode): CxxProc =
       node["declarator"]
 
   for idx, arg in decl["parameters"]:
-    result.arguments.add conf.toCxxArg(arg, idx)
+    result.arguments.add toCxxArg(arg, idx)
 
 
-proc toCxxField*(conf: WrapConf, node: CppNode): CxxField =
+proc toCxxField*(node: CppNode): CxxField =
   assertKind(node, {cppFieldDeclaration})
   result = cxxField(
     cxxPair(getName(node["declarator"])),
-    conf.toCxxType(node["type"]))
+    toCxxType(node["type"]))
 
   pointerWraps(node["declarator"], result.nimType)
 
-proc toCxxObject*(conf: WrapConf, node: CppNode): CxxObject =
+proc toCxxObject*(node: CppNode): CxxObject =
   var decl: CxxNamePair
-  if "name" in node:
-    decl = cxxPair(node["name"].strVal())
+
 
   result = cxxObject(decl)
 
@@ -235,7 +234,7 @@ proc toCxxObject*(conf: WrapConf, node: CppNode): CxxObject =
   for field in node["body"]:
     case field.kind:
       of cppFieldDeclaration:
-        result.mfields.add conf.toCxxField(field)
+        result.mfields.add toCxxField(field)
 
       of cppComment:
         result.mfields[^1].docComment.add field.strVal()
@@ -245,7 +244,7 @@ proc toCxxObject*(conf: WrapConf, node: CppNode): CxxObject =
 
 
 
-proc toCxx*(conf: WrapConf, node: CppNode): seq[CxxEntry] =
+proc toCxx*(node: CppNode): seq[CxxEntry] =
   case node.kind:
     of cppTranslationUnit,
        cppPreprocIfdef,
@@ -255,7 +254,7 @@ proc toCxx*(conf: WrapConf, node: CppNode): seq[CxxEntry] =
        cppPreprocElse
          :
       for sub in node:
-        result.add conf.toCxx(sub)
+        result.add toCxx(sub)
 
     of cppIdentifier,
        cppStringLiteral,
@@ -272,23 +271,23 @@ proc toCxx*(conf: WrapConf, node: CppNode): seq[CxxEntry] =
         discard
 
       else:
-        result.add toCxxMacro(conf, node).box()
+        result.add toCxxMacro(node).box()
 
     of cppPreprocFunctionDef:
-      result.add toCxxMacro(conf, node).box()
+      result.add toCxxMacro(node).box()
 
     of cppComment:
       discard
       # result.add toCxxComment(node.strVal)
 
     of cppEnumSpecifier:
-      result.add toCxxEnum(conf, node).box()
+      result.add toCxxEnum(node).box()
 
     of cppTypeDefinition:
       if node.len == 1:
         case node[0].kind:
           of cppEnumSpecifier:
-            result.add toCxxEnum(conf, node[0]).box()
+            result.add toCxxEnum(node[0]).box()
 
           else:
             raise newImplementKindError(node[0])
@@ -304,23 +303,23 @@ proc toCxx*(conf: WrapConf, node: CppNode): seq[CxxEntry] =
                  cppPrimitiveType
                    :
                 var save = cxxAlias(
-                  conf.toCxxType(node["type"]).toDecl(),
+                  toCxxType(node["type"]).toDecl(),
                   cxxTypeUse(node["declarator"].getName(), @[]))
 
                 pointerWraps(node["declarator"], save.oldType)
                 result.add save
 
               of cppStructSpecifier, cppUnionSpecifier:
-                let struct = conf.toCxxObject(node[0])
+                let struct = toCxxObject(node[0])
                 result.add cxxAlias(
-                  struct.decl, conf.toCxxType(node["declarator"]))
+                  struct.decl, toCxxType(node["declarator"]))
 
               else:
                 raise newImplementKindError(node[0], node.treeRepr())
 
           of cppFunctionDeclarator:
             result.add cxxAlias(
-              conf.toCxxType(node["type"]).toDecl(),
+              toCxxType(node["type"]).toDecl(),
               cxxTypeUse(node["declarator"].getName(), @[]))
 
           else:
@@ -332,7 +331,7 @@ proc toCxx*(conf: WrapConf, node: CppNode): seq[CxxEntry] =
     of cppDeclaration:
       case node["declarator"].skipPointer().kind:
         of cppFunctionDeclarator:
-          result.add conf.toCxxProc(node)
+          result.add toCxxProc(node)
 
         else:
           raise newImplementKindError(node[1], node.treeRepr())
@@ -340,20 +339,3 @@ proc toCxx*(conf: WrapConf, node: CppNode): seq[CxxEntry] =
     else:
       raise newImplementKindError(node, node.treeRepr(
         opts = hdisplay(maxlen = 10, maxdepth = 3)))
-
-proc toCxx*(
-  conf: WrapConf, file: AbsFile, expand: bool = false): seq[CxxEntry] =
-
-  var str =
-    if expand:
-      file.getExpanded(conf.parseConf)
-
-    else:
-      file.readFile()
-
-  result = conf.toCxx(parseCppString(addr str))
-
-
-proc toCxx*(conf: WrapConf, str: string): seq[CxxEntry] =
-  let node = parseCppString(unsafeAddr str)
-  result = conf.toCxx(node)
