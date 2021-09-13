@@ -5,7 +5,10 @@ import
   ./cxtypes,
   ./hc_types,
   ./hc_impls,
-  ./hc_visitors
+  ./hc_visitors,
+  ./hc_tsreader,
+  ./hc_tsconvert,
+  ./hc_codegen
 
 import
   hmisc/other/oswrap,

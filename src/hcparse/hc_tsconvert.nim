@@ -6,8 +6,8 @@ import
 
 import
   ./hc_types,
-  ./hc_save,
-  ./hc_tsreader
+  ./hc_tsreader,
+  ./interop_ir/wrap_store
 
 import
   hmisc/core/all,
@@ -17,10 +17,7 @@ import
   hmisc/algo/namegen,
   hnimast
 
-startHax()
-
 export parseCppString
-
 
 proc getIdent*(node: CppNode, c: var StringNameCache): PNode =
   newPIdent(c.fixIdentName(node.strVal(), "f"))

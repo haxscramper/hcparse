@@ -6,15 +6,13 @@ import
 
 import
   ./hc_types,
-  ./hc_save
+  ./hc_typeconv,
+  ./interop_ir/wrap_store
 
 import
   hmisc/core/all,
   hmisc/wrappers/[treesitter],
   hmisc/other/oswrap
-
-import
-  hnimast/interop/wrap_store
 
 export parseCppString
 
@@ -60,28 +58,27 @@ proc mapTypeName*(node: CppNode): string =
   else:
     mapPrimitiveName(node.primitiveName())
 
-proc toCxxType*(conf: WrapConf, node: CppNode): CxxType =
+proc toCxxType*(conf: WrapConf, node: CppNode): CxxTypeUse =
   case node.kind:
     of cppTypeIdentifier, cppSizedTypeSpecifier, cppPrimitiveType:
-      result = CxxType(kind: ctkIdent, nimName: mapTypeName(node))
+      result = cxxTypeUse(cxxPair(
+        mapTypeName(node),
+        cxxName(@[node.strVal()])))
 
     else:
       raise newImplementKindError(node, node.treeRepr())
 
 
 
-proc fixType*(save: CxxType): CxxType =
-  result = save
-
-
-
 proc toCxxMacro*(conf: WrapConf, node: CppNode): CxxMacro =
   assertKind(node, {cppPreprocFunctionDef, cppPreprocDef})
 
-  result = CxxMacro(
-    haxdocIdent: conf.getHaxdoc(@[]),
-    cxxName: @[node["name"].strVal]
-  )
+  result = cxxMacro(cxxPair(node["name"].strVal()))
+
+  # result = CxxMacro(
+  #   haxdocIdent: conf.getHaxdoc(@[]),
+  #   name: (node["name"].strVal)
+  # )
 
   if "parameters" in node:
     for arg in node["parameters"]:
@@ -91,16 +88,18 @@ proc toCxxMacro*(conf: WrapConf, node: CppNode): CxxMacro =
 
 
 proc toCxxEnum*(conf: WrapConf, node: CppNode): CxxEnum =
-  result = CxxEnum(haxdocIdent: conf.getHaxdoc(@[node]))
+  var name: CxxNamePair
 
   if "name" in node:
-    result.cxxName = @[node["name"].strVal()]
+    name = cxxPair(node["name"].strVal())
+
+  result = cxxEnum(name)
 
   for en in node["body"]:
     case en.kind:
       of cppEnumerator:
         result.values.add CxxEnumValue(
-          cxxName: @[en["name"].strVal()],
+          name: cxxPair(en["name"].strVal()),
           value: 0 # TODO convert from `en["value"]`
         )
 
@@ -116,7 +115,7 @@ proc skipPointer(node: CppNode): CppNode =
     of cppPointerDeclarator: skipPointer(node[0])
     else: node
 
-template initPointerWraps*(newName, TYpe: untyped): untyped =
+template initPointerWraps*(newName, Type: untyped): untyped =
   proc pointerWraps(node: CppNode, ftype: var TYpe) =
     case node.kind:
       of cppPointerDeclarator:
@@ -152,7 +151,7 @@ template initPointerWraps*(newName, TYpe: untyped): untyped =
         raise newImplementKindError(
           node, node.strVal() & "\n" & node.treeRepr())
 
-initPointerWraps(newCxxType, CxxType)
+initPointerWraps(cxxTypeUse, CxxTypeUse)
 
 proc getName*(node: CppNode): string =
   case node.kind:
@@ -181,21 +180,18 @@ proc toCxxArg*(conf: WrapConf, node: CppNode, idx: int): CxxArg =
   result.nimType = conf.toCxxType(node["type"])
 
   if "declarator" in node:
-    result.cxxName = @[getName(node["declarator"])]
+    result.name = cxxPair(getName(node["declarator"]))
     pointerWraps(node["declarator"], result.nimType)
 
   else:
-    result.nimName = "a" & $idx
+    result.name = cxxPair("a" & $idx)
 
 proc toCxxProc*(conf: WrapConf, node: CppNode): CxxProc =
-  result = CxxProc(haxdocIdent: conf.getHaxdoc(@[node]))
-  result.cxxName = @[node["declarator"].getName()]
-
+  result = cxxProc(cxxPair(node["declarator"].getName()))
   result.returnType = conf.toCxxType(node["type"])
 
-
   if node[0].kind == cppTypeQualifier:
-    result.returnType = newCxxType("const", @[result.returnType])
+    result.returnType.flags.incl ctfConst
 
   pointerWraps(node["declarator"], result.returnType)
 
@@ -212,32 +208,29 @@ proc toCxxProc*(conf: WrapConf, node: CppNode): CxxProc =
 
 proc toCxxField*(conf: WrapConf, node: CppNode): CxxField =
   assertKind(node, {cppFieldDeclaration})
+  result = cxxField(
+    cxxPair(getName(node["declarator"])),
+    conf.toCxxType(node["type"]))
 
-  result = CxxField(
-    haxdocIdent: conf.getHaxdoc(@[node]),
-    nimName: getName(node["declarator"])
-  )
-
-
-  var ftype = conf.toCxxType(node["type"])
-  pointerWraps(node["declarator"], ftype)
-  result.nimType = fixType(ftype)
+  pointerWraps(node["declarator"], result.nimType)
 
 proc toCxxObject*(conf: WrapConf, node: CppNode): CxxObject =
-  result = CxxObject(haxdocIdent: conf.getHaxdoc(@[node]))
+  var decl: CxxNamePair
+  if "name" in node:
+    decl = cxxPair(node["name"].strVal())
+
+  result = cxxObject(decl)
 
   case node.kind:
     of cppStructSpecifier:
-      result.kind = gokStruct
+      result.kind = cokStruct
 
     of cppUnionSpecifier:
-      result.kind = gokUnion
+      result.kind = cokUnion
 
     else:
       raise newImplementKindError(node)
 
-  if "name" in node:
-    result.cxxName = @[node["name"].strVal()]
 
   for field in node["body"]:
     case field.kind:
@@ -285,7 +278,8 @@ proc toCxx*(conf: WrapConf, node: CppNode): seq[CxxEntry] =
       result.add toCxxMacro(conf, node).box()
 
     of cppComment:
-      result.add toCxxComment(node.strVal)
+      discard
+      # result.add toCxxComment(node.strVal)
 
     of cppEnumSpecifier:
       result.add toCxxEnum(conf, node).box()
@@ -309,31 +303,25 @@ proc toCxx*(conf: WrapConf, node: CppNode): seq[CxxEntry] =
               of cppSizedTypeSpecifier,
                  cppPrimitiveType
                    :
-                var save = CxxAlias(
-                  haxdocIdent: conf.getHaxdoc(@[]),
-                  baseType: conf.toCxxType(node["type"]),
-                  newAlias: newCxxType(node["declarator"].getName(), @[]))
+                var save = cxxAlias(
+                  conf.toCxxType(node["type"]).toDecl(),
+                  cxxTypeUse(node["declarator"].getName(), @[]))
 
-                pointerWraps(node["declarator"], save.baseType)
+                pointerWraps(node["declarator"], save.oldType)
                 result.add save
 
               of cppStructSpecifier, cppUnionSpecifier:
                 let struct = conf.toCxxObject(node[0])
-                result.add CxxAlias(
-                  haxdocIdent: conf.getHaxdoc(@[]),
-                  baseType: CxxType(kind: ctkIdent, nimName: struct.nimName),
-                  newAlias: conf.toCxxType(node["declarator"])
-                )
+                result.add cxxAlias(
+                  struct.decl, conf.toCxxType(node["declarator"]))
 
               else:
                 raise newImplementKindError(node[0], node.treeRepr())
 
           of cppFunctionDeclarator:
-            result.add CxxAlias(
-              haxdocIdent: conf.getHaxdoc(@[]),
-              baseType: conf.toCxxType(node["type"]),
-              newAlias: newCxxType(node["declarator"].getName(), @[])
-            )
+            result.add cxxAlias(
+              conf.toCxxType(node["type"]).toDecl(),
+              cxxTypeUse(node["declarator"].getName(), @[]))
 
           else:
             raise newImplementKindError(node, node.treeRepr())

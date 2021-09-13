@@ -7,7 +7,7 @@ import
   hmisc/macros/argpass,
   std/[macros, sequtils]
 
-proc toNNode*[N](t: CxxType): N =
+proc toNNode*[N](t: CxxTypeUse): N =
   case t.kind:
     of ctkIdent:
       result = ident(t.nimName)

@@ -244,9 +244,9 @@ type
 
 
   CxxObjectKind* = enum
-    gokUnion
-    gokStruct
-    gokClass
+    cokUnion
+    cokStruct
+    cokClass
 
   CxxObject* = ref object of CxxBase
     decl*: CxxTypeDecl
@@ -512,6 +512,9 @@ func cxxTypeUse*(
   CxxTypeUse(
     kind: ctkIdent, cxxType: cxxTypeRef(head, store), genParams: @genParams)
 
+func toDecl*(use: CxxTypeUse): CxxTypeDecl =
+  raise newImplementError()
+
 func getDecl*(use: CxxTypeUse): CxxTypeDecl =
   assertKind(use, {ctkIdent})
   assert not use.cxxType.isParam
@@ -633,6 +636,9 @@ func cxxTypeUse*(
 func cxxTypeUse*(decl: CxxTypeDecl, store: CxxTypeStore = nil): CxxTypeUse =
   CxxTypeUse(kind: ctkIdent, cxxType: cxxTypeRef(decl.name, store))
 
+func cxxTypeUse*(name: string, args: seq[CxxTypeUse]): CxxTypeUse =
+  cxxTypeUse(cxxPair(name), args)
+
 func cxxObject*(name: CxxNamePair, genParams: CxxGenParams = @[]): CxxObject =
   CxxObject(decl: cxxTypeDecl(name, genParams), haxdocIdent: newJNull())
 
@@ -661,6 +667,8 @@ func cxxProc*(
     arguments: arguments
   )
 
+func cxxMacro*(name: CxxNamePair): CxxMacro =
+  CxxMacro(name: name, haxdocIdent: newJNull())
 
 func add*(pr: var CxxProc, arg: CxxArg) =
   pr.arguments.add arg
