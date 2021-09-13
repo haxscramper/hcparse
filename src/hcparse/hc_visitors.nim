@@ -21,10 +21,9 @@ proc visitMainFile*[T](
   cursor.visitChildren do:
     makeVisitor [callback, mainParent]:
       if isFromMainFile(cursor):
-      # if getDepResolutionKind(cursor) == drkWrapDirectly:
         return callback.impl(cursor, mainParent, addr callback.data)
+
       else:
-        # debug cursor
         return cvrRecurse
 
 #===========  Splitting translation unit into logical chunks  ============#

@@ -1,6 +1,6 @@
 import
-  ./wrap_store,
-  ../hast_common
+  ./interop_ir/wrap_store,
+  hnimast/hast_common
 
 import
   hmisc/core/all,

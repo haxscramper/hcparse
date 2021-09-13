@@ -345,6 +345,7 @@ type
     unit*: CXTranslationUnit
     refidMap*: RefidMap
 
+    # REFACTOR return CxxHeader spec directly
     makeHeader*: proc(cursor: CXCursor, conf: WrapConf): NimHeaderSpec ## |
     ## Generate identifier for `{.header: ... .}`
 
@@ -354,6 +355,8 @@ type
     # ## declaration. The only important things are: `head` name and list of
     # ## generic parameters, so `ntkIdent` is the optimal return kind.
 
+    # REFACTOR move from clang-specific wrap configuration to one that
+    # would be used for CxxT results
     fixTypeName*: proc(ntype: var NimType, conf: WrapConf, idx: int)
     ## Change type name for `ntype`.
     ##
@@ -367,6 +370,7 @@ type
       cxType: CxType, conf: WrapConf, cache: var WrapCache): Option[NimType]
     ## Hard override generated complex types
 
+    # QUESTION is this needed right now?
     getSavePathImpl*: proc(orig: AbsFile, conf: WrapConf): CxxLibImport ## Return
     ## path, *relative to project root* (@field{nimOutDir}) where file
     ## generated from `orig` should be saved.
@@ -397,6 +401,7 @@ type
     isImportcpp*: bool ## Is wrapped code a C++ or C?
     parseConf*: ParseConf
 
+    # REFACTOR move to CxxT code wrapper helpers
     prefixForEnum*: proc(
       enumId: CScopedIdent, conf: WrapConf,
       cache: var WrapCache): string ## Return prefix for enum referred to
@@ -409,11 +414,13 @@ type
     # ## `cursor`. `id` is a fully qualified/namespaced path for definition
     # ## (like `std::vector`)
 
+    # REFACTOR - move to CxxT stage
     userCode*: proc(file: WrappedFile):
       tuple[node: PNode, position: WrappedEntryPos] ## Add
     ## arbitarry user-defined code at the start of generated wrapper for
     ## `source` file.
 
+    # REFACTOR - move to CxxT stage
     newProcCb*: proc(
       genProc: var GenProc, conf: WrapConf, cache: var WrapCache
     ): seq[WrappedEntry] ## Callback invoked after each new procedure is
@@ -422,6 +429,7 @@ type
     ## immediately after proc declaration), or by mutating some external
     ## list of variables.
 
+    # REFACTOR - move to CxxT stage
     isDistinct*: proc(
       ident: CSCopedIdent, conf: WrapConf, cache: var WrapCache): bool ## |
     ## Determine if given `ident` should be wrapped as nim `distinct` type
@@ -429,10 +437,12 @@ type
     ## - WARNING :: Default implementation always returns `false` i.e. all
     ##   types are wrapped as not typesafe aliases.
 
+    # REFACTOR
     codegenDir*: Option[AbsDir] ## Directory to output automatically
                                 ## generated Cxx code
     baseDir*: AbsDir ## Root directory for Cxx sources being wrapped. Used
                      ## for debug comments in generated sources
+    # REFACTOR
     nimOutDir*: AbsDir ## Root directory to write files to
     depsConf*: seq[WrapConf]
     serializeTo*: Option[AbsDir]
@@ -445,7 +455,7 @@ type
 
   WrapEntryPosition = object
     ## Approximate locatino of the wrapped entry declaration
-    file*: AbsFile
+    file*: AbsFile # FIXME replace with CxxLibImport
     line*: int
     column*: int
 
@@ -454,6 +464,7 @@ type
     tukInTypes
 
   WrapCache* = object
+    # FIXME add type store
     hset*: HashSet[Hash]
     visited*: HashSet[cuint]
     enumPrefs*: HashSet[string] ## List of used enum prefixes (to avoid
@@ -1438,12 +1449,12 @@ func `==`*(t1, t2: NimType): bool =
 func hash*(lib: CxxLibImport): Hash =
   !$(hash(lib.library) !& hash(lib.importPath))
 
-func `$`*(lib: CxxLibImport): string =
-  if lib.library.len > 0:
-    result &= lib.library
-    result &= "@"
+# func `$`*(lib: CxxLibImport): string =
+#   if lib.library.len > 0:
+#     result &= lib.library
+#     result &= "@"
 
-  result &= lib.importPath.join("/")
+#   result &= lib.importPath.join("/")
 
 func libImport*(conf: WrapConf, path: seq[string]): CxxLibImport =
   initCxxLibImport(conf.wrapName, path)
