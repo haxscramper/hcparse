@@ -26,15 +26,30 @@ proc toNNode*[N](arg: CxxArg): NIdentDefs[N] =
     toNNode[N](arg.nimType),
     value = some newEmptyNNode[N]())
 
+proc toNNode*[N](field: CxxField): ObjectField[N] =
+  result = ObjectField[N](
+    isTuple: false,
+    name: field.nimName(),
+    isExported: true,
+    docComment: field.docComment.get(""),
+    fldType: toNNode[N](field.getType()))
+
+  let cxx = field.cxxName.cxxStr()
+  if cxx != field.nimName():
+    result.addPragma("importc", newNLit[N, string](field.cxxName.cxxStr()))
+
+
 proc toNNode*[N](header: CxxHeader): N =
   case header.kind:
     of chkGlobal: newNLit[N, string](header.global)
     of chkAbsolute: newNLit[N, string](header.file.string)
     of chkPNode: newNLit[N, string](header.other)
 
-proc toNNode*[N](def: CxxProc, onConstructor: CxxTypeKind = ctkIdent): ProcDecl[N] =
+proc toNNode*[N](
+    def: CxxProc, onConstructor: CxxTypeKind = ctkIdent): ProcDecl[N] =
   result = newProcDecl[N](def.nimName)
   result.exported = true
+  result.docComment = def.docComment.get("")
 
   if cpfExportc in def.flags:
     result.addPragma("exportc", newNLit[N, string](def.cxxName.cxxStr()))
@@ -48,8 +63,12 @@ proc toNNode*[N](def: CxxProc, onConstructor: CxxTypeKind = ctkIdent): ProcDecl[
   if def.isConstructor and onConstructor == ctkIdent:
     result.addPragma("constructor")
 
+
   # nim's overload-resolution-in-generics magic
   proc_decl.`returnType=`(result, toNNode[N](def.getReturn(onConstructor)))
+
+  if def.methodOf.isSome():
+    result.addArgument("this", toNNode[N](def.methodOf.get()))
 
   for arg in def.arguments:
     result.addArgument toNNode[N](arg)
@@ -59,11 +78,16 @@ proc toNNode*[N](entry: CxxEntry): seq[NimDecl[N]] =
     of cekObject:
       let obj = entry.cxxObject
       var res = newObjectDecl[N](obj.nimName)
-
+      res.docComment = obj.docComment.get("")
       res.addPragma("inheritable")
       res.addPragma("byref")
       res.addPragma("header", toNNode[N](obj.header.get()))
       res.addPragma("importcpp", newNLit[N, string](obj.getIcppStr()))
+
+      for field in obj.mfields:
+        res.add toNNode[N](field)
+
+      result.add toNimDecl(res)
 
       for meth in obj.methods:
         result.add toNNode[N](meth, ctkPtr)
@@ -71,7 +95,6 @@ proc toNNode*[N](entry: CxxEntry): seq[NimDecl[N]] =
       for n in obj.nested:
         result.add toNNode[N](n)
 
-      result.add toNimDecl(res)
 
     of cekProc:
       result.add toNNode[N](entry.cxxProc, ctkPtr).toNimDecl()

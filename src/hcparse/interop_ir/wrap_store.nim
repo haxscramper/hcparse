@@ -1,6 +1,7 @@
 import
   hmisc/other/oswrap,
   hmisc/core/all,
+  hmisc/algo/namegen,
   std/[options, macros, json, strutils, strformat, parseutils,
        tables, hashes, sets, sequtils]
 
@@ -63,7 +64,7 @@ type
     icpp*: IcppPattern
     private*: bool
     header*: Option[CxxHeader]
-    docComment*: seq[string]
+    docComment*: Option[string]
     haxdocIdent* #[ {.requiresinit.} ]#: JsonNode
 
     isAnonymous*: bool
@@ -447,7 +448,9 @@ func nimName*(pr: CxxProc): string = pr.head.name.nim
 func nimName*(arg: CxxArg): string = arg.name.nim
 func nimName*(t: CxxTypeUse): string = t.cxxType.name.nim
 func nimName*(obj: CxxObject): string = obj.decl.name.nim
+func nimName*(field: CxxField): string = field.name.nim
 
+func cxxName*(field: CxxField): CxxName = field.name.cxx
 func cxxName*(t: CxxTypeUse): CxxName = t.cxxType.name.cxx
 func cxxName*(t: CxxTypeDecl): CxxName = t.name.cxx
 func cxxName*(pr: CxxProc): CxxName = pr.head.name.cxx
@@ -681,6 +684,12 @@ func add*(pr: var CxxProc, arg: CxxArg) =
 
 func setHeaderRec*(entry: var CxxEntry, header: CxxHeader) =
   case entry.kind:
+    of cekPass, cekForward, cekImport, cekEmpty, cekComment:
+      discard
+
+    of cekTypeGroup, cekMacroGroup, cekMacro:
+      raise newImplementKindError(entry)
+
     of cekEnum: entry.cxxEnum.header = some header
     of cekProc: entry.cxxProc.header = some header
     of cekAlias: entry.cxxAlias.header = some header
@@ -692,8 +701,40 @@ func setHeaderRec*(entry: var CxxEntry, header: CxxHeader) =
       for nest in mitems(entry.cxxObject.nested):
         setHeaderRec(nest, header)
 
+
+func fixIdentsRec*(entry: var CxxEntry, cache: var StringNameCache) =
+  template aux(name: var CxxNamePair): untyped =
+    name.nim = cache.fixIdentName(name.nim, "f")
+
+  template auxType(name: var CxxNamePair): untyped =
+    let first = name.nim[0].toUpperAscii()
+    name.nim = cache.fixIdentName(name.nim, "f")
+    name.nim[0] = first
+
+  func aux(decl: var CxxProc, cache: var StringNameCache) =
+    aux(decl.head.name)
+    for arg in mitems(decl.arguments):
+      aux(arg.name)
+
+
+  case entry.kind:
+    of cekEnum:
+      auxType(entry.cxxEnum.decl.name)
+      for value in mitems(entry.cxxEnum.values): aux(value.name)
+
+    of cekObject:
+      auxType(entry.cxxObject.decl.name)
+      for field in mitems(entry.cxxObject.mfields): aux(field.name)
+      for mproc in mitems(entry.cxxObject.methods): aux(mproc, cache)
+      for nestd in mitems(entry.cxxObject.nested): fixIdentsRec(nestd, cache)
+
+    of cekProc:
+      aux(entry.cxxProc, cache)
+
     else:
-      discard
+      raise newImplementKindError(entry)
+
+
 
 func hasTypeDecl*(entry: CxxEntry): bool =
   entry.kind in {cekEnum, cekForward, cekObject, cekAlias}

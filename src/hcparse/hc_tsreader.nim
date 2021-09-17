@@ -2,7 +2,7 @@ import
   htsparse/cpp/cpp
 
 import
-  std/[json]
+  std/[json, strutils, parseutils]
 
 import
   ./hc_types,
@@ -14,7 +14,26 @@ import
   hmisc/wrappers/[treesitter],
   hmisc/other/oswrap
 
-export parseCppString
+export parseCppString, treeRepr
+
+func stripComment*(text: string): string =
+  const starts = ["/*!", "/*", "*", "//<", "///", "//"]
+  const ends  = ["*/"]
+  for line in text.splitLines():
+    var pos = line.skipWhile({' '})
+    var final = line.high
+    for start in starts:
+      if line[pos .. pos + start.high] == start:
+        pos = pos + start.len
+        break
+
+    for endc in ends:
+      if line[final - endc.high .. final] == endc:
+        final = final - endc.len
+        break
+
+    result.add line[pos .. final]
+    result.add "\n"
 
 proc primitiveName*(node: CppNode): string =
   proc aux(ts: TsCppNode): string =
@@ -186,9 +205,16 @@ proc toCxxArg*(node: CppNode, idx: int): CxxArg =
   result = cxxArg(name, argt)
 
 
-proc toCxxProc*(node: CppNode): CxxProc =
+proc toCxxProc*(
+    node: CppNode,
+    parent: Option[CxxObject] = none(CxxObject)
+  ): CxxProc =
+
   result = cxxProc(cxxPair(node["declarator"].getName()))
   result.returnType = toCxxType(node["type"])
+
+  if parent.isSome():
+    result.methodOf = some parent.get().decl.cxxTypeUse()
 
   if node[0].kind == cppTypeQualifier:
     result.returnType.flags.incl ctfConst
@@ -231,10 +257,14 @@ proc toCxxObject*(node: CppNode): CxxObject =
   for field in node["body"]:
     case field.kind:
       of cppFieldDeclaration:
-        result.mfields.add toCxxField(field)
+        if field["declarator"] of cppFunctionDeclarator:
+          result.methods.add toCxxProc(field, some result)
+
+        else:
+          result.mfields.add toCxxField(field)
 
       of cppComment:
-        result.mfields[^1].docComment.add field.strVal()
+        result.mfields[^1].docComment.mget().add field.strVal().stripComment()
 
       else:
         raise newImplementKindError(field, field.treeRepr())
