@@ -1,7 +1,7 @@
 import
   hmisc/other/oswrap,
   hmisc/core/all,
-  std/[options, macros, json, strutils, strformat,
+  std/[options, macros, json, strutils, strformat, parseutils,
        tables, hashes, sets, sequtils]
 
 import
@@ -64,7 +64,7 @@ type
     private*: bool
     header*: Option[CxxHeader]
     docComment*: seq[string]
-    haxdocIdent* {.requiresinit.}: JsonNode
+    haxdocIdent* #[ {.requiresinit.} ]#: JsonNode
 
     isAnonymous*: bool
     isPromotedForward*: bool
@@ -673,6 +673,9 @@ func cxxProc*(
 func cxxMacro*(name: CxxNamePair): CxxMacro =
   CxxMacro(name: name, haxdocIdent: newJNull())
 
+func cxxFile*(entries: seq[CxxEntry], path: CxxLibImport): CxxFile =
+  CxxFile(savePath: path, entries: entries)
+
 func add*(pr: var CxxProc, arg: CxxArg) =
   pr.arguments.add arg
 
@@ -751,3 +754,57 @@ proc fragmentType*(entry: var CxxEntry):
 
     else:
       discard
+
+import pkg/jsony
+
+proc dumpHook*[I](s: var string, ins: set[I]) =
+  s.add "["
+  for idx, item in pairs(ins):
+    if idx > 0:
+      s.add ","
+
+    s.add $item
+  s.add "]"
+
+proc parseHook*[I](s: string, i: var int, res: var set[I]) =
+  s.eatChar(i, '[')
+  while s[i] != ']':
+    let start = i
+    let pos = skipUntil(s, ',', i)
+    res.incl parseEnum[I](s[start .. pos])
+    i = pos
+    s.eatChar(i, ',')
+    s.eatChar(i, ' ')
+
+  s.eatChar(i, ']')
+
+
+proc dumpFieldLines*[T](s: var string, obj: T)
+proc dumpSeqLines*[T](s: var string, entries: seq[T])
+
+proc dumpHook*(s: var string, entries: seq[CxxEntry]) = dumpSeqLines(s, entries)
+proc dumpHook*(s: var string, procs: seq[CxxProc]) = dumpSeqLines(s, procs)
+proc dumpHook*(s: var string, obj: CxxObject) = dumpFieldLines(s, obj)
+
+
+proc dumpFieldLines*[T](s: var string, obj: T) =
+  s.add "{"
+  for name, value in fieldPairs((when T is object: obj else: obj[])):
+    s.add "\"", name, "\": "
+    dumpHook(s, value)
+    s.add ",\n"
+
+  s.add "}"
+
+proc dumpSeqLines*[T](s: var string, entries: seq[T]) =
+  s.add "["
+  for idx, item in pairs(entries):
+    if idx > 0:
+      s.add ",\n"
+
+    dumpHook(s, item)
+
+  s.add "]"
+
+proc toJson*(file: CxxFile): string =
+  dumpFieldLines(result, file)
