@@ -3,15 +3,20 @@ import
   hcparse/[hc_parsefront, hc_codegen],
   hcparse/interop_ir/wrap_store,
   compiler/[ast, renderer],
-  hnimast/nim_decl
+  hnimast/[nim_decl, object_decl, obj_field_macros, hast_common, proc_decl]
 
 import pkg/jsony
 
-proc convStr(str: string): string =
+func getFields[N](o: ObjectDecl[N]): seq[ObjectField[N]] = getFlatFields(o)
+
+proc convStr(str: string, conf: CodegenConf = cxxCodegenConf): string =
   renderer.`$`(
     nim_decl.toNNode(
       hc_codegen.toNNode[PNode](
-        wrapViaTs(str))))
+        wrapViaTs(str), conf)))
+
+proc convDecls(str: string, conf: CodegenConf = cxxCodegenConf): seq[NimDecl[PNode]] =
+  hc_codegen.toNNode[PNode](wrapViaTs(str), conf)
 
 proc convJson(str: string): string =
   wrapViaTs(str).cxxFile(cxxLibImport("", @[])).
@@ -22,16 +27,41 @@ proc convPPrint(str: string) =
 
 suite "Convert type declarations":
   test "Regular struct":
-    echo convStr("class S {};")
+    check convDecls("class S {};")[0].getObject().getName() == "S"
     echo convJson("class S {};")
 
   test "Struct with fields":
-    echo convStr("struct WithFields { int field; };")
-    echo convStr("struct WithFields { int __field; };")
+    let
+      f1 = convDecls("struct WithFields { int field; };")[0].getObject().getFields()[0]
+      f2 = convDecls("struct WithFields { int __field; };")[0].getObject().getFields()[0]
+
+    check:
+      not f1.hasPragma("importcpp")
+      f1.name == "field"
+
+      f2.hasPragma("importcpp")
+      f2.name == "field"
+      f2.getPragmaArgs("importcpp")[0].getStrVal() == "__field"
 
   test "Class with methods":
-    echo convStr("class A { void get(); };")
+    let
+      decls = convDecls("class A { void get(); void set(int val); };")
+      declA = decls[0].getObject()
+      declGet = decls[1].getProc()
+      declSet = decls[2].getProc()
+
+    check:
+      declA.getName() == "A"
+      declGet.getName() == "get"
+      declGet.argumentNames() == @["this"]
+      declSet.argumentNames() == @["this", "val"]
 
 
   test "Class with documentation":
-    echo convStr("class A { int field; /* doc comment */ };")
+    let
+      decls = convDecls("class A { int field; /* doc comment */ };")
+      declA = decls[0].getObject()
+
+    check:
+      declA.getName() == "A"
+      declA.getFields()[0].getName() == "field"
