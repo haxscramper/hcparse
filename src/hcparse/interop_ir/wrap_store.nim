@@ -702,14 +702,14 @@ func setHeaderRec*(entry: var CxxEntry, header: CxxHeader) =
         setHeaderRec(nest, header)
 
 
-func fixIdentsRec*(entry: var CxxEntry, cache: var StringNameCache) =
+func fixIdentsRec*(
+    entry: var CxxEntry, cache: var StringNameCache, prefix: string) =
+
   template aux(name: var CxxNamePair): untyped =
-    name.nim = cache.fixIdentName(name.nim, "f")
+    name.nim = cache.fixNumerateIdentName(name.nim, prefix)
 
   template auxType(name: var CxxNamePair): untyped =
-    let first = name.nim[0].toUpperAscii()
-    name.nim = cache.fixIdentName(name.nim, "f")
-    name.nim[0] = first
+    name.nim = cache.fixNumerateTypeName(name.nim, prefix)
 
   func aux(decl: var CxxProc, cache: var StringNameCache) =
     aux(decl.head.name)
@@ -726,7 +726,8 @@ func fixIdentsRec*(entry: var CxxEntry, cache: var StringNameCache) =
       auxType(entry.cxxObject.decl.name)
       for field in mitems(entry.cxxObject.mfields): aux(field.name)
       for mproc in mitems(entry.cxxObject.methods): aux(mproc, cache)
-      for nestd in mitems(entry.cxxObject.nested): fixIdentsRec(nestd, cache)
+      for nestd in mitems(entry.cxxObject.nested):
+        fixIdentsRec(nestd, cache, prefix)
 
     of cekProc:
       aux(entry.cxxProc, cache)

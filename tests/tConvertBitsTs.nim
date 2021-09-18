@@ -5,6 +5,8 @@ import
   compiler/[ast, renderer],
   hnimast/[nim_decl, object_decl, obj_field_macros, hast_common, proc_decl]
 
+import std/[strutils]
+
 import pkg/jsony
 
 func getFields[N](o: ObjectDecl[N]): seq[ObjectField[N]] = getFlatFields(o)
@@ -13,22 +15,22 @@ proc convStr(str: string, conf: CodegenConf = cxxCodegenConf): string =
   renderer.`$`(
     nim_decl.toNNode(
       hc_codegen.toNNode[PNode](
-        wrapViaTs(str), conf)))
+        wrapViaTs(str, true), conf)))
 
 proc convDecls(str: string, conf: CodegenConf = cxxCodegenConf): seq[NimDecl[PNode]] =
-  hc_codegen.toNNode[PNode](wrapViaTs(str), conf)
+  hc_codegen.toNNode[PNode](wrapViaTs(str, true), conf)
 
 proc convJson(str: string): string =
-  wrapViaTs(str).cxxFile(cxxLibImport("", @[])).
+  wrapViaTs(str, true).cxxFile(cxxLibImport("", @[])).
     toJson().fromJson(CxxFile).toJson()
 
 proc convPPrint(str: string) =
-  pprint wrapViaTs(str)
+  pprint wrapViaTs(str, true)
 
 suite "Convert type declarations":
   test "Regular struct":
     check convDecls("class S {};")[0].getObject().getName() == "S"
-    echo convJson("class S {};")
+    discard convJson("class S {};")
 
   test "Struct with fields":
     let
@@ -65,3 +67,11 @@ suite "Convert type declarations":
     check:
       declA.getName() == "A"
       declA.getFields()[0].getName() == "field"
+      "doc comment" in declA.getFields()[0].docComment
+
+suite "Repeated names":
+  test "Multiple structs":
+    let decls = convDecls("struct _S {}; struct S{};")[0].getTypes()
+    check:
+      decls[0].getObject().getName() == "S"
+      decls[1].getObject().getName() == "S1"

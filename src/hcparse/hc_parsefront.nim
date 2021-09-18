@@ -159,7 +159,7 @@ proc convertViaTs*(text: string): PNode =
   var cache: StringNameCache
   return parseCppString(addr text).conv(text, cache)
 
-proc wrapViaTs*(str: string): seq[CxxEntry] =
+proc wrapViaTs*(str: string, isCpp: bool): seq[CxxEntry] =
   var str = str
   let node = parseCppString(addr str)
   result = toCxx(node)
@@ -167,7 +167,7 @@ proc wrapViaTs*(str: string): seq[CxxEntry] =
   var cache: StringNameCache
   for item in mitems(result):
     setHeaderRec(item, cxxHeader("?"))
-    fixIdentsRec(item, cache)
+    fixIdentsRec(item, cache, if isCpp: "cxx" else: "c")
 
 proc wrapViaClang*(conf: WrapConf, file: AbsFile): CxxFile =
   var cache: WrapCache
