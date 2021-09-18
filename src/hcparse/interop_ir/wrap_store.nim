@@ -648,6 +648,9 @@ func cxxTypeUse*(name: string, args: seq[CxxTypeUse]): CxxTypeUse =
 func cxxObject*(name: CxxNamePair, genParams: CxxGenParams = @[]): CxxObject =
   CxxObject(decl: cxxTypeDecl(name, genParams), haxdocIdent: newJNull())
 
+func cxxForward*(name: CxxNamePair): CxxForward =
+  CxxForward(decl: cxxTypeDecl(name, @[]), haxdocIdent: newJNull())
+
 func cxxEnum*(name: CxxNamePair): CxxEnum =
   CxxEnum(decl: cxxTypeDecl(name), haxdocIdent: newJNull())
 
@@ -721,6 +724,9 @@ func fixIdentsRec*(
     of cekEnum:
       auxType(entry.cxxEnum.decl.name)
       for value in mitems(entry.cxxEnum.values): aux(value.name)
+
+    of cekForward:
+      auxType(entry.cxxForward.decl.name)
 
     of cekObject:
       auxType(entry.cxxObject.decl.name)

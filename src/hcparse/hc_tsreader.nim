@@ -240,6 +240,9 @@ proc toCxxField*(node: CppNode): CxxField =
 
   pointerWraps(node["declarator"], result.nimType)
 
+proc toCxxForwardType*(node: CppNode): CxxForward =
+  cxxForward(cxxPair(node["name"].strVal()))
+
 proc toCxxObject*(node: CppNode): CxxObject =
   var decl: CxxNamePair
   if "name" in node:
@@ -252,7 +255,6 @@ proc toCxxObject*(node: CppNode): CxxObject =
     of cppUnionSpecifier: result.kind = cokUnion
     of cppClassSpecifier: result.kind = cokClass
     else: raise newUnexpectedKindError(node)
-
 
   for field in node["body"]:
     case field.kind:
@@ -294,7 +296,11 @@ proc toCxx*(node: CppNode): seq[CxxEntry] =
       discard
 
     of cppClassSpecifier, cppStructSpecifier, cppUnionSpecifier:
-      result.add toCxxObject(node)
+      if "body" notin node:
+        result.add toCxxForwardType(node)
+
+      else:
+        result.add toCxxObject(node)
 
     of cppPreprocDef:
       if node.len < 2:
