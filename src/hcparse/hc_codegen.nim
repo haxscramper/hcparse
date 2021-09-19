@@ -19,9 +19,9 @@ const
     isIcpp: true
   )
 
-  cCodegenConf* = CodegenConf(
-    isIcpp: false
-  )
+  cCodegenConf* = cxxCodegenConf.withIt do:
+    it.isIcpp = false
+
 
 func getImport*(conf: CodegenConf): string =
   if conf.isIcpp: "importcpp" else: "importc"
@@ -113,8 +113,9 @@ proc toNNode*[N](entry: CxxEntry, conf: CodegenConf): seq[NimDecl[N]] =
       let obj = entry.cxxObject
       var res = newObjectDecl[N](obj.nimName)
       res.docComment = obj.docComment.get("")
-      res.addPragma("inheritable")
-      res.addPragma("byref")
+      res.addPragma("bycopy")
+      # res.addPragma("inheritable")
+      # res.addPragma("byref")
       res.addPragma("header", toNNode[N](obj.header.get()))
       res.addPragma(conf.getImport(), newNLit[N, string](obj.getIcppStr()))
 

@@ -15,13 +15,14 @@ proc convStr(str: string, conf: CodegenConf = cxxCodegenConf): string =
   renderer.`$`(
     nim_decl.toNNode(
       hc_codegen.toNNode[PNode](
-        wrapViaTs(str, true), conf)))
+        wrapViaTs(str, true, cxxHeader("?")), conf)))
 
-proc convDecls(str: string, conf: CodegenConf = cxxCodegenConf): seq[NimDecl[PNode]] =
-  hc_codegen.toNNode[PNode](wrapViaTs(str, true), conf)
+proc convDecls(
+    str: string, conf: CodegenConf = cxxCodegenConf): seq[NimDecl[PNode]] =
+  hc_codegen.toNNode[PNode](wrapViaTs(str, true, cxxHeader("?")), conf)
 
 proc convJson(str: string): string =
-  wrapViaTs(str, true).cxxFile(cxxLibImport("", @[])).
+  wrapViaTs(str, true, cxxHeader("?")).cxxFile(cxxLibImport("", @[])).
     toJson().fromJson(CxxFile).toJson()
 
 proc convPPrint(str: string) =

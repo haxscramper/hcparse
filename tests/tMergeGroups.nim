@@ -7,7 +7,7 @@ import
 import compiler/[ast, renderer]
 
 proc convFile(str, name: string): CxxFile =
-  wrapViaTs(str, true).cxxFile(cxxLibImport("test", @[name]))
+  wrapViaTs(str, true, cxxHeader(name)).cxxFile(cxxLibImport("test", @[name]))
 
 
 suite "Forward-declare in files":
