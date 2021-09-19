@@ -7,7 +7,7 @@ import
 import
   hmisc/core/all,
   hmisc/macros/argpass,
-  std/[macros, sequtils]
+  std/[macros, sequtils, sets]
 
 type
   CodegenConf* = object
@@ -25,6 +25,15 @@ const
 func getImport*(conf: CodegenConf): string =
   if conf.isIcpp: "importcpp" else: "importc"
 
+func toNNode*[N](lib: CxxLibImport, asImport: bool): N =
+  if asImport:
+    result = newNTree[N](
+      nnkImportStmt,
+      lib.importPath.mapIt(newNIdent[N](it)).
+        foldl(newXCall("/", a, b)))
+
+  else:
+    result = newNTree[N](nnkExportStmt, newNIdent[N](lib.getFilename()))
 
 proc toNNode*[N](t: CxxTypeUse, conf: CodegenConf): NType[N] =
   case t.kind:
@@ -124,6 +133,12 @@ proc toNNode*[N](entry: CxxEntry, conf: CodegenConf): seq[NimDecl[N]] =
       result.add toNNode[N](
         entry.cxxProc, conf, ctkPtr).toNimDecl()
 
+    of cekForward:
+      echov "Found forward node"
+
+    of cekEmpty:
+      discard
+
     else:
       raise newImplementKindError(entry)
 
@@ -140,3 +155,15 @@ proc toNNode*[N](entries: seq[CxxEntry], conf: CodegenConf): seq[NimDecl[N]] =
 
   result.add toNimDecl(types)
   result.add other
+
+proc toNNode*[N](file: CxxFile, conf: CodegenConf): N =
+  result = newNTree[N](nnkStmtList)
+  for imp in items(file.imports):
+    # FIXME account for relative positioning of the generated files
+    result.add toNNode[N](imp, true)
+
+  for exp in items(file.exports):
+    result.add toNNode[N](exp, false)
+
+  for decl in toNNode[N](file.entries, conf):
+    result.add toNNode[N](decl)

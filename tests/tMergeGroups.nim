@@ -4,8 +4,11 @@ import
   hcparse/[hc_parsefront, hc_codegen, hc_grouping],
   hcparse/interop_ir/wrap_store
 
+import compiler/[ast, renderer]
+
 proc convFile(str, name: string): CxxFile =
   wrapViaTs(str, true).cxxFile(cxxLibImport("test", @[name]))
+
 
 suite "Forward-declare in files":
   test "two separate types":
@@ -18,8 +21,6 @@ suite "Forward-declare in files":
 
     let group = updateImports(files)
     for file in group:
-      echo "------------------------"
-      pprint file.savePath
-      for entry in file.entries:
-        pprint entry
+      echov file.savePath
+      echo toNNode[PNode](file, cxxCodegenConf)
     # pprint group
