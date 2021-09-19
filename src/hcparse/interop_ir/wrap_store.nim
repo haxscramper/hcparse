@@ -396,6 +396,60 @@ func `$`*(ct: CxxTypeUse): string =
         result &= "): "
         result &= $ct.returnType
 
+func `$`*(decl: CxxTypeDecl): string =
+  if decl.typeImport.isSome():
+    result.add $decl.typeImport.get()
+    result.add "@"
+
+  else:
+    result.add "?"
+
+
+  result.add $decl.name
+  if decl.genParams.len > 0:
+    result.add "["
+    for idx, (name, default) in decl.genParams:
+      if idx > 0:
+        result.add ", "
+
+      result.add $name
+      if default.isSome():
+        result.add " = "
+        result.add $default.get()
+
+    result.add "]"
+
+
+
+func `$`*(p: CxxProc): string =
+  result = $p.head
+  result.add "("
+  for idx, arg in p.arguments:
+    if idx > 0: result.add ", "
+    result.add $arg
+
+  result.add ")"
+  if notNil(p.returnType):
+    result.add ": "
+    result.add $p.returnType
+
+
+func `$`*(e: CxxEntry): string =
+  case e.kind:
+    of cekEnum: result = "enum!" & $e.cxxEnum.decl
+    of cekObject: result = "object!" & $e.cxxObject.decl
+    of cekProc: result = "proc!" & $e.cxxProc
+    of cekAlias: result = "alias!" & $e.cxxAlias.decl
+    of cekForward: result = "forward!" & $e.cxxForward.decl
+    of cekMacro: result = "macro!" & $e.cxxMacro.name
+
+    else:
+      raise newImplementKindError(e)
+
+func `==`*(n1, n2: CxxName): bool = n1.scopes == n2.scopes
+func `==`*(l1, l2: CxxLibImport): bool =
+  l1.library == l2.library and l1.importPath == l2.importPath
+
 func hash*(name: CxxName): Hash = hash(name.scopes)
 
 func hash*[T](opt: Option[T]): Hash =
@@ -769,7 +823,7 @@ func setTypeStoreRec*(
     of cekProc:
       aux(entry.cxxProc, store)
 
-    of cekPass, cekForward, cekEmpty, cekImport,
+    of cekPass, cekEmpty, cekImport,
        cekMacroGroup, cekMacro, cekComment:
       discard
 
@@ -780,6 +834,9 @@ func setTypeStoreRec*(
     of cekEnum:
       entry.cxxEnum.decl.typeImport = some lib
       store.addDecl(entry.cxxEnum.decl)
+
+    of cekForward:
+      entry.cxxForward.decl.typeImport = some lib
 
     of cekAlias:
       entry.cxxAlias.decl.typeImport = some lib

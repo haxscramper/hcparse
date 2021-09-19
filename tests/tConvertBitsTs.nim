@@ -35,8 +35,10 @@ suite "Convert type declarations":
 
   test "Struct with fields":
     let
-      f1 = convDecls("struct WithFields { int field; };")[0].getObject().getFields()[0]
-      f2 = convDecls("struct WithFields { int __field; };")[0].getObject().getFields()[0]
+      f1 = convDecls(
+        "struct WithFields { int field; };")[0].getObject().getFields()[0]
+      f2 = convDecls(
+        "struct WithFields { int __field; };")[0].getObject().getFields()[0]
 
     check:
       not f1.hasPragma("importcpp")

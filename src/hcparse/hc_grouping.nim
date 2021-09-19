@@ -413,11 +413,9 @@ proc getUsedTypes*(file: CxxFile): UsedGroups =
     e.registerUsedTypes(result)
 
 proc updateImports*(wrapped: seq[CxxFile]): seq[CxxFile] =
-  # Collect all types into single wrapped entry type block. All duplicate
-  # types (caused by forward declarations which is not really possible to
-  # differentiated) will be overwritten. This should be fine I guess,
-  # because you can't declare type again after defining it (I hope), so all
-  # last type encounter will always be it's definition.
+  ## Construct new group of wrapped files based on the input. Group
+  ## mutually recursive types in new temporary files and add needed imports
+  ## and exports.
 
   var usedApis = UsedGroups(inProcs: UsedSet(), inTypes: UsedSet()) # Set of
   # cursors pointing to declarations for different types used in the file
@@ -427,6 +425,10 @@ proc updateImports*(wrapped: seq[CxxFile]): seq[CxxFile] =
     for entry in file.entries:
       registerUsedTypes(entry, usedApis)
 
+  var store: CxxTypeStore
+  for decl, vals in usedApis.inTypes.cursors:
+    if notNil(decl.store): store = decl.store; break
+
   var
     importGraph = newHGraph[CxxLibImport, CxxTypeUse]()
     fileMap: Table[CxxLibImport, CxxFile]
@@ -434,14 +436,18 @@ proc updateImports*(wrapped: seq[CxxFile]): seq[CxxFile] =
   for file in wrapped:
     fileMap[file.savePath] = file
 
-  proc addImports(graph: var HGraph[CxxLibImport, CxxTypeUse], file: CxxFile, used: UsedSet) =
+  proc addImports(
+      graph: var HGraph[CxxLibImport, CxxTypeUse],
+      file: CxxFile, used: UsedSet
+    ) =
+
     block cursorBasedImportrs:
       let user = file.savePath
       for typeCursor, typeSet in used.cursors:
         let dep = typeCursor.getImport()
         if user != dep:
           for item in typeSet:
-            graph.addEdge(
+            graph.addOrGetEdge(
               graph.addOrGetNode(user),
               graph.addOrGetNode(dep),
               item)
@@ -450,7 +456,7 @@ proc updateImports*(wrapped: seq[CxxFile]): seq[CxxFile] =
       let base = file.savePath
       for usedLib, typeSet in used.libs:
         for usedType in typeSet:
-          graph.addEdge(
+          graph.addOrGetEdge(
             graph.addOrGetNode(base),
             graph.addOrGetNode(usedLib),
             usedType)
@@ -488,7 +494,8 @@ proc updateImports*(wrapped: seq[CxxFile]): seq[CxxFile] =
 
 
   let groups = importGraph.findCycles().mergeCycleSets()
-  let clusteredNodes = groups.mapIt(toHashSet(importGraph[it])).foldl(union(a, b))
+  let clusteredNodes = groups.mapIt(
+    toHashSet(importGraph[it])).foldl(union(a, b))
 
 
   proc addImports(
@@ -541,9 +548,17 @@ proc updateImports*(wrapped: seq[CxxFile]): seq[CxxFile] =
       for entry in mitems(file.entries):
         # Split all type declarations in the each file. Re-add procedure
         # declarations back, add type declarations to the global list.
-        let (newDecl, extras) = entry.fragmentType()
-        recycle.add extras
-        mergedTypes.add newDecl
+        if entry of cekForward:
+          if entry.cxxForward.decl.hasImport():
+            entry = cxxEmpty()
+
+          else:
+            raise newImplementError("Promote type declaration")
+
+        else:
+          let (newDecl, extras) = entry.fragmentType()
+          recycle.add extras
+          mergedTypes.add newDecl
 
       file.entries.add recycle
 

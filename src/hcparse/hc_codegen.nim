@@ -136,7 +136,12 @@ proc toNNode*[N](entry: CxxEntry, conf: CodegenConf): seq[NimDecl[N]] =
         entry.cxxProc, conf, ctkPtr).toNimDecl()
 
     of cekForward:
-      echov "Found forward node"
+      raise newUnexpectedKindError(
+        entry,
+        "forward declaration must be converted to pass/import",
+        "or promoted into full type declartions ",
+        "by forward declaration patch stage. This code should",
+        "not be reached. declaration is ", $entry)
 
     of cekEmpty:
       discard
