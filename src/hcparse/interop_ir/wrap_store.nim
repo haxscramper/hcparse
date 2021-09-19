@@ -227,8 +227,8 @@ type
 
   CxxAlias* = object of CxxBase
     isDistinct*: bool
-    newType*: CxxTypeDecl
-    oldType*: CxxTypeUse
+    decl*: CxxTypeDecl
+    baseType*: CxxTypeUse
 
 
   CxxEnumValue* = object
@@ -493,6 +493,17 @@ func cxxHeader*(file: AbsFile): CxxHeader =
 func cxxArg*(name: CxxNamePair, argType: CxxTypeUse): CxxArg =
   CxxArg(nimType: argType, name: name, haxdocIdent: newJNull())
 
+func wrapArray*(size, element: CxxTypeUse): CxxTypeUse =
+  if size.kind == ctkStaticParam:
+    result = CxxTypeUse(kind: ctkFixedArray)
+
+  else:
+    result = CxxTypeUse(kind: ctkDependentArray)
+
+  result.arraySize = size
+  result.arrayElement = element
+
+
 func wrap*(wrapped: CxxTypeUse, kind: CxxTypeKind): CxxTypeUse =
   if kind == ctkIdent:
     result = wrapped
@@ -521,25 +532,38 @@ func cxxTypeUse*(
 func toDecl*(use: CxxTypeUse): CxxTypeDecl =
   raise newImplementError()
 
-func getDecl*(use: CxxTypeUse): CxxTypeDecl =
+func addDecl*(store: var CxxTypeStore, decl: CxxTypeDecl) =
+  store.typeDecls.mgetOrPut(decl.name.cxx, @[]).add decl
+
+func getDecl*(use: CxxTypeUse): Option[CxxTypeDecl] =
+  ## Get first type declaration with matching cxx name. In case of multiple
+  ## identical types present they are disambiguated based on the library
+  ## name if possible.
   assertKind(use, {ctkIdent})
   assert not use.cxxType.isParam
   assertRef use.cxxType.typeStore
-  for decl in use.cxxType.typeStore.typeDecls[use.cxxName()]:
-    if use.cxxType.typeLib.isNone() or decl.typeImport.isNone():
-      return decl
+  if use.cxxName() in use.cxxType.typeStore.typeDecls:
+    for decl in use.cxxType.typeStore.typeDecls[use.cxxName()]:
+      # No library for import, or no library for the type declaration
+      if use.cxxType.typeLib.isNone() or decl.typeImport.isNone():
+        return some decl
 
-    else:
-      if decl.typeImport.get().library == use.cxxType.typeLib.get():
-        return decl
-
-  raise newGetterError("Cannot get import for type use")
+      else:
+        # Has library name for both type declaration and use
+        if decl.typeImport.get().library == use.cxxType.typeLib.get():
+          return some decl
 
 func hasImport*(use: CxxTypeUse): bool =
-  use of ctkIdent and use.getDecl().typeImport.isSome()
+  if use of ctkIdent:
+    let decl = use.getDecl()
+    result = decl.isSome() and decl.get().typeImport.isSome()
+
+  else:
+    result = false
 
 func getImport*(use: CxxTypeUse): CxxLibImport =
-  use.getDecl().typeImport.get()
+  use.getDecl().getOr("cannot determine declaration for type use").
+    typeImport.getOr("missing import for type declarations")
 
 func hasImport*(decl: CxxTypeDecl): bool =
   decl.typeImport.isSome()
@@ -555,6 +579,29 @@ func getFilename*(limport: CxxLibImport): string =
 func getType*(arg: CxxArg): CxxTypeUse = arg.nimType
 func getType*(field: CxxField): CxxTypeUse = field.nimType
 
+template eachIdentAux(inUse, cb, iterateWith: untyped) =
+  case inUse.kind:
+    of ctkWrapKinds: eachIdent(inUse.wrapped, cb)
+    of ctkStaticParam: discard
+    of ctkArrayKinds: eachIdent(inUse.arrayElement, cb)
+    of ctkIdent:
+      cb(inUse)
+      for param in iterateWith(inUse.genParams):
+        eachIdent(param, cb)
+
+    of ctkProc:
+      for arg in iterateWith(inUse.arguments):
+        eachIdent(arg.nimType, cb)
+
+      eachIdent(inUse.returnType, cb)
+
+proc eachIdent*(use: var CxxTypeUse, cb: proc(ident: var CxxTypeUse)) =
+  if isNil(use): return
+  eachIdentAux(use, cb, mitems)
+
+proc eachIdent*(use: CxxTypeUse, cb: proc(ident: CxxTypeUse)) =
+  if isNil(use): return
+  eachIdentAux(use, cb, items)
 
 proc getUsedTypesRec*(
     t: CxxTypeUse, ignoreHead: bool = false): seq[CxxTypeUse] =
@@ -657,8 +704,8 @@ func cxxEnum*(name: CxxNamePair): CxxEnum =
 func cxxField*(name: CxxNamePair, nimType: CxxTypeUse): CxxField =
   CxxField(name: name, nimType: nimType, haxdocIdent: newJNull())
 
-func cxxAlias*(newType: CxxTypeDecl, oldType: CxxTypeUse): CxxAlias =
-  CxxAlias(newType: newType, oldType: oldType, haxdocIdent: newJNull())
+func cxxAlias*(decl: CxxTypeDecl, baseType: CxxTypeUse): CxxAlias =
+  CxxAlias(decl: decl, baseType: baseType, haxdocIdent: newJNull())
 
 func cxxEmpty*(): CxxEntry = CxxEntry(kind: cekEmpty)
 
@@ -704,6 +751,79 @@ func setHeaderRec*(entry: var CxxEntry, header: CxxHeader) =
       for nest in mitems(entry.cxxObject.nested):
         setHeaderRec(nest, header)
 
+func setTypeStoreRec*(
+    entry: var CxxEntry, store: var CxxTypeStore, lib: CxxLibImport) =
+
+  func aux(use: var CxxTypeUse, store: CxxTypeStore)
+
+  func aux(use: var CxxArg, store: CxxTypeStore) =
+    aux(use.nimType, store)
+
+  func aux(use: var CxxTypeUse, store: CxxTypeStore) =
+    eachIdent(use) do (use: var CxxTypeUse):
+      if not use.cxxType.isParam:
+        use.cxxType.typeStore = store
+        use.cxxType.typeLib = some lib.library
+
+    # case use.kind:
+    #   of ctkWrapKinds:
+    #     aux(use.wrapped, store)
+
+    #   of ctkStaticParam:
+    #     discard
+
+    #   of ctkArrayKinds:
+    #     aux(use.arrayElement, store)
+
+    #   of ctkIdent:
+    #     if not use.cxxType.isParam:
+    #       use.cxxType.typeStore = store
+    #       use.cxxType.typeLib = some lib.library
+
+    #     for param in mitems(use.genParams):
+    #       aux(param, store)
+
+    #   of ctkProc:
+    #     for arg in mitems(use.arguments):
+    #       aux(arg, store)
+
+    #     aux(use.returnType, used)
+
+  func aux(decl: var CxxProc, store: var CxxTypeStore) =
+    raise newImplementError()
+
+  case entry.kind:
+    of cekProc:
+      aux(entry.cxxProc, store)
+
+    of cekPass, cekForward, cekEmpty, cekImport,
+       cekMacroGroup, cekMacro, cekComment:
+      discard
+
+    of cekTypeGroup:
+      for decl in mitems(entry.cxxTypes):
+        setTypeStoreRec(entry, store, lib)
+
+    of cekEnum:
+      entry.cxxEnum.decl.typeImport = some lib
+      store.addDecl(entry.cxxEnum.decl)
+
+    of cekAlias:
+      entry.cxxAlias.decl.typeImport = some lib
+      store.addDecl(entry.cxxAlias.decl)
+
+    of cekObject:
+      entry.cxxObject.decl.typeImport = some lib
+      store.addDecl(entry.cxxObject.decl)
+
+      for meth in mitems(entry.cxxObject.methods):
+        aux(meth, store)
+
+      for field in mitems(entry.cxxObject.mfields):
+        aux(field.nimType, store)
+
+      for nest in mitems(entry.cxxObject.nested):
+        setTypeStoreRec(entry, store, lib)
 
 func fixIdentsRec*(
     entry: var CxxEntry, cache: var StringNameCache, prefix: string) =
@@ -750,7 +870,7 @@ func getTypeDecl*(entry: CxxEntry): CxxTypeDecl =
   case entry.kind:
     of cekEnum: result = entry.cxxEnum.decl
     of cekObject: result = entry.cxxEnum.decl
-    of cekAlias: result = entry.cxxAlias.newType
+    of cekAlias: result = entry.cxxAlias.decl
     of cekForward: result = entry.cxxForward.decl
     else: raise newUnexpectedKindError(entry)
 

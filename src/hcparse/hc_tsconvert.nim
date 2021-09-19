@@ -22,6 +22,14 @@ export parseCppString
 proc getIdent*(node: CppNode, c: var StringNameCache): PNode =
   newPIdent(c.fixIdentName(node.strVal(), "f"))
 
+proc wrap*(ntype: NType[PNode], kind: CxxTypeKind): NType[PNode] =
+  case kind:
+    of ctkPtr:
+       return newNType("ptr", @[ntype])
+
+    else:
+      raise newImplementKindError(kind)
+
 initPointerWraps(newPType, NType[PNode])
 
 proc toPType*(node: CppNode): NType[PNode] =

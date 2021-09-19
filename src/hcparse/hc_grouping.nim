@@ -66,23 +66,6 @@ proc getTypeGraph(wrapped: var seq[CxxFile]): TypeGraph =
 
           procTypes.add entry.cxxProc.getReturn()
 
-          # for it in procTypes:
-          #   for used in it.getUsedTypesRec():
-          #     let decl = used.getDecl()
-          #     if decl.cxKind() in {ckEnumDecl} and decl.isForward():
-          #       cdecl[] = entry.cdecl()[]
-          #       cdecl.cursor = decl
-          #       let
-          #         loc = decl.getSpellingLocation().get()
-          #         path = conf.getImport(
-          #           loc.file, conf.getBaseFile(file), false).importPath
-          #         node = initTypeNode(
-          #           used.nimName, path,
-          #           cdecl.cursor, isDef = false)
-
-          #       let enumNode = result.addOrGetNode(node)
-
-
         of cekObject:
           # Get node for current type
           var objectNode = result.addOrGetNode(initTypeNode(entry.cxxObject.decl))
@@ -93,13 +76,17 @@ proc getTypeGraph(wrapped: var seq[CxxFile]): TypeGraph =
             for used in field.getType().getUsedTypesRec():
               if not used.isPod():
                 let decl = used.getDecl()
-                let node = initTypeNode(decl)
-
-                discard result.addOrGetEdge(
-                  objectNode,
-                  result.addOrGetNode(node),
-                  if decl.isForward: forward else: direct
-                )
+                if decl.isSome(): # REVIEW do I need to handle missing type
+                                  # declarations explicitly? Ideally I
+                                  # should, this would make debugging
+                                  # thigns much easier.
+                  let decl = decl.get()
+                  let node = initTypeNode(decl)
+                  discard result.addOrGetEdge(
+                    objectNode,
+                    result.addOrGetNode(node),
+                    if decl.isForward: forward else: direct
+                  )
 
         of cekForward:
           discard
@@ -365,7 +352,7 @@ iterator pairs*[K, V](s1, s2: Table[K, V]): (K, V) =
   for it in pairs(s2): yield it
 
 type
-  UsedSet = object
+  UsedSet {.requiresinit.} = ref object
     cursors: Table[CxxTypeDecl, HashSet[CxxTypeUse]]
     libs: Table[CxxLibImport, HashSet[CxxTypeUse]]
 
@@ -380,46 +367,57 @@ func mgetOrDefault*[K, V](table: var Table[K, V], key: K): var V =
   return table[key]
 
 proc registerUse*(ctype: CxxTypeUse, used: var UsedSet) =
-  when false:
-    if isNil(ctype):
-      return
+  if isNil(ctype): return
+  var used = used
 
-    if ctype.fromCxType:
-      let cxDecl = ctype.cxType.getTypeDeclaration()
-      if cxDecl.kind notin {ckNoDeclFound}:
-        used.cursors.mgetOrDefault(cxDecl).incl ctype
+  eachIdent(ctype) do (use: CxxTypeUse):
+    let decl = use.getDecl()
+    if decl.isSome():
+      used.cursors.mgetOrDefault(decl.get()).incl use
 
-    else:
-      used.libs.mgetOrDefault(ctype.typeImport).incl ctype
+  # case ctype.kind:
+  #   of ctkWrapKinds:
+  #     registerUse(ctype.wrapped, used)
 
-    if ctype.fullIdent.isSome():
-      let last = ctype.fullIdent.get()[^1]
-      if not last.isGenerated:
-        used.cursors.mgetOrDefault(last.cursor).incl ctype
+  #   of ctkStaticParam:
+  #     discard
 
-      for param in last.genParams:
-        if param.len > 0 and param[^1].isGenerated.not():
-          let lastParam = param[^1]
-          if lastParam.cursor.kind notin { ckTemplateTypeParameter }:
-            conf.dump param, lastParam.cursor.cxKind()
+  #   of ctkArrayKinds:
+  #     registerUse(ctype.arrayElement, used)
 
-    case ctype.kind:
-      of ctkPtr:
-        registerUse(ctype.wrapped, used, conf)
+  #   of ctkIdent:
+  #     let decl = ctype.getDecl()
+  #     if decl.isSome():
+  #       used.cursors.mgetOrDefault(decl.get()).incl ctype
 
-      of ctkIdent:
-        if ctype.defaultType.isSome():
-          registerUse(ctype.defaultType.get(), used, conf)
+  #     for param in ctype.genParams:
+  #       registerUse(param, used)
 
-        for param in ctype.genParams:
-          registerUse(param, used, conf)
+  #   of ctkProc:
+  #     for arg in ctype.arguments:
+  #       registerUse(arg.nimType, used)
 
-      of ctkProc:
-        for arg in ctype.arguments:
-          if not arg.isRaw:
-            registerUse(arg.ctype, used, conf)
+  #     registerUse(ctype.returnType, used)
 
-        registerUse(ctype.returnType, used, conf)
+  # if ctype.fromCxType:
+  #   let cxDecl = ctype.cxType.getTypeDeclaration()
+  #   if cxDecl.kind notin {ckNoDeclFound}:
+  #     used.cursors.mgetOrDefault(cxDecl).incl ctype
+
+  # else:
+  #   used.libs.mgetOrDefault(ctype.typeImport).incl ctype
+
+  # if ctype.fullIdent.isSome():
+  #   let last = ctype.fullIdent.get()[^1]
+  #   if not last.isGenerated:
+  #     used.cursors.mgetOrDefault(last.cursor).incl ctype
+
+  #   for param in last.genParams:
+  #     if param.len > 0 and param[^1].isGenerated.not():
+  #       let lastParam = param[^1]
+  #       if lastParam.cursor.kind notin { ckTemplateTypeParameter }:
+  #         conf.dump param, lastParam.cursor.cxKind()
+
 
 
 proc registerUsedTypes*(genProc: CxxProc, used: var UsedSet) =
@@ -448,12 +446,13 @@ proc registerUsedTypes*(entry: CxxEntry, used: var UsedGroups) =
         registerUsedTypes(nested, used)
 
     of cekAlias:
-      registerUse(entry.cxxAlias.oldType, used.inTypes)
+      registerUse(entry.cxxAlias.baseType, used.inTypes)
 
     of cekPass, cekImport, cekForward, cekEmpty:
       discard
 
 proc getUsedTypes*(file: CxxFile): UsedGroups =
+  result = UsedGroups(inProcs: UsedSet(), inTypes: UsedSet())
   for e in file.entries:
     e.registerUsedTypes(result)
 
@@ -464,9 +463,9 @@ proc updateImports*(wrapped: seq[CxxFile]): seq[CxxFile] =
   # because you can't declare type again after defining it (I hope), so all
   # last type encounter will always be it's definition.
 
-  var usedApis: UsedGroups # Set of cursors pointing to declarations for
-  # different types used in the file entries (procedure argument and
-  # return, field, global variable types).
+  var usedApis = UsedGroups(inProcs: UsedSet(), inTypes: UsedSet()) # Set of
+  # cursors pointing to declarations for different types used in the file
+  # entries (procedure argument and return, field, global variable types).
 
   for file in wrapped:
     for entry in file.entries:
@@ -506,11 +505,11 @@ proc updateImports*(wrapped: seq[CxxFile]): seq[CxxFile] =
       onlyProcs = newHGraph[CxxLibImport, CxxTypeUse]()
 
     for file in wrapped:
-      onlyTypes.addImports file, usedApis.inTypes
-      onlyProcs.addImports file, usedApis.inProcs
+      onlyTypes.addImports(file, usedApis.inTypes)
+      onlyProcs.addImports(file, usedApis.inProcs)
 
-      importGraph.addImports file, usedApis.inTypes
-      importGraph.addImports file, usedApis.inProcs
+      importGraph.addImports(file, usedApis.inTypes)
+      importGraph.addImports(file, usedApis.inProcs)
 
     onlyTypes.
       dotRepr(

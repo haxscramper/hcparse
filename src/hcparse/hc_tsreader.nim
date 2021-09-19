@@ -134,7 +134,7 @@ template initPointerWraps*(newName, Type: untyped): untyped =
   proc pointerWraps(node: CppNode, ftype: var TYpe) =
     case node.kind:
       of cppPointerDeclarator:
-        ftype = newName("ptr", @[ftype])
+        ftype = ftype.wrap(ctkPtr)
         if node[0] of cppTypeQualifier:
           pointerWraps(node[1], ftype)
 
@@ -142,7 +142,7 @@ template initPointerWraps*(newName, Type: untyped): untyped =
           pointerWraps(node[0], ftype)
 
       of cppArrayDeclarator:
-        ftype = newName("array", @[ftype])
+        ftype = ftype.wrap(ctkDynamicArray)
         pointerWraps(node[0], ftype)
 
       of cppInitDeclarator,
@@ -150,7 +150,7 @@ template initPointerWraps*(newName, Type: untyped): untyped =
         pointerWraps(node[0], ftype)
 
       of cppAbstractPointerDeclarator:
-        ftype = newName("ptr", @[ftype])
+        ftype = ftype.wrap(ctkPtr)
         if node.len > 0:
           pointerWraps(node[0], ftype)
 
@@ -342,7 +342,7 @@ proc toCxx*(node: CppNode): seq[CxxEntry] =
                   toCxxType(node["type"]).toDecl(),
                   cxxTypeUse(node["declarator"].getName(), @[]))
 
-                pointerWraps(node["declarator"], save.oldType)
+                pointerWraps(node["declarator"], save.baseType)
                 result.add save
 
               of cppStructSpecifier, cppUnionSpecifier:

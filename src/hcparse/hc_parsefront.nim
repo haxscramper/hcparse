@@ -174,3 +174,9 @@ proc wrapViaClang*(conf: WrapConf, file: AbsFile): CxxFile =
   let parsed = parseFile(file, conf, cache)
   conf.unit = parsed.unit
   toCxxFile(parsed, conf, cache)
+
+proc registerTypes*(files: var seq[CxxFile]) =
+  var store = CxxTypeStore()
+  for file in mitems(files):
+    for entry in mitems(file.entries):
+      setTypeStoreRec(entry, store, file.savePath)
