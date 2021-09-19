@@ -580,6 +580,12 @@ func getFilename*(limport: CxxLibImport): string =
   if idx != -1:
     result = result[0 ..< idx]
 
+func getFile*(lib: CxxLibImport): RelFile =
+  assert lib.importPath.len > 0
+  result = RelFile(lib.importPath.join("/"))
+
+func getFile*(file: CxxFile): RelFile = file.savePath.getFile()
+
 func getFilename*(file: CxxFile): string = file.savePath.getFilename()
 
 func getType*(arg: CxxArg): CxxTypeUse = arg.nimType

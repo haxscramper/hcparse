@@ -7,6 +7,7 @@ import
 import
   hmisc/core/all,
   hmisc/macros/argpass,
+  hmisc/other/oswrap,
   std/[macros, sequtils, sets]
 
 type
@@ -158,9 +159,22 @@ proc toNNode*[N](entries: seq[CxxEntry], conf: CodegenConf): seq[NimDecl[N]] =
 
 proc toNNode*[N](file: CxxFile, conf: CodegenConf): N =
   result = newNTree[N](nnkStmtList)
-  for imp in items(file.imports):
-    # FIXME account for relative positioning of the generated files
-    result.add toNNode[N](imp, true)
+  for dep in items(file.imports):
+    if dep.getLibrary() == file.getLibrary():
+      let (pDep, pFile) = (dep.getFile(), file.getFile())
+      let (depth, parts) = importSplit(
+        AbsDir"/tmp" / pFile, AbsDir"/tmp" / pDep)
+
+      let depthDots = tern(depth == 0, @["."], mapIt(0 ..< depth, ".."))
+      let newImp = cxxLibImport(file.getLibrary(), depthDots & parts)
+
+      result.add toNNode[N](newImp, true)
+
+    else:
+      let newImp = cxxLibImport(
+        dep.getLibrary(), dep.getLibrary() & dep.importPath)
+
+      result.add toNNode[N](newImp, true)
 
   for exp in items(file.exports):
     result.add toNNode[N](exp, false)
