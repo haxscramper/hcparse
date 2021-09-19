@@ -29,11 +29,11 @@ proc nodeImport(graph: TypeGraph, node: HNode): CxxLibImport =
   graph[node].decl.getImport()
 
 proc groupFile(group: TypeGroup, graph: TypeGraph): string =
-    var files: HashSet[string]
-    for node in group.nodes:
-      files.incl graph[node].decl.getImport().getFilename()
+  var files: HashSet[string]
+  for node in group.nodes:
+    files.incl graph[node].decl.getImport().getFilename()
 
-    result = toSeq(files).sorted().join("_")
+  result = toSeq(files).sorted().join("_")
 
 func hash(typeNode: TypeNode): Hash = hash(typeNode.decl)
 
@@ -523,10 +523,17 @@ proc updateImports*(wrapped: seq[CxxFile]): seq[CxxFile] =
   for group in groups:
     var
       mergedFiles: seq[CxxFile] = mapIt(group, fileMap[importGraph[it]])
-      generatedFile: CxxLibImport = cxxLibImport("", @[
-        group.mapIt(importGraph[it].importPath[^1]).sorted().join("_")])
+      mergedLib: string = mergedFiles.mapIt(
+        it.getLibrary()).toHashSet().toSeq()[0] # HACK - does not account
+        # for type graphs that spans multiple packages. This is unlikely,
+        # but possible in case of inter-*project* circular dependencies.
 
-      ignoreImports: HashSet[CxxLibImport] = mapIt(group, importGraph[it]).toHashSet()
+      generatedFile: CxxLibImport = cxxLibImport(mergedLib, @[
+        mergedFiles.mapIt(it.getFilename()).sorted().join("_")])
+
+      ignoreImports: HashSet[CxxLibImport] = mapIt(
+        group, importGraph[it]).toHashSet()
+
       mergedTypes: seq[CxxEntry]
 
     for file in mitems(mergedFiles):

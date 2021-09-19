@@ -572,9 +572,15 @@ func cxxLibImport*(library: string, path: seq[string]): CxxLibImport =
   CxxLibImport(library: library, importPath: path)
 
 func getImport*(decl: CxxTypeDecl): CxxLibImport = decl.typeImport.get()
+func getLibrary*(imp: CxxLibImport): string = imp.library
+func getLibrary*(file: CxxFile): string = file.savePath.library
 func getFilename*(limport: CxxLibImport): string =
-  limport.importPath[^1] # TODO drop extension
+  result = limport.importPath[^1]
+  let idx = result.find('.')
+  if idx != -1:
+    result = result[0 ..< idx]
 
+func getFilename*(file: CxxFile): string = file.savePath.getFilename()
 
 func getType*(arg: CxxArg): CxxTypeUse = arg.nimType
 func getType*(field: CxxField): CxxTypeUse = field.nimType

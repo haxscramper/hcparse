@@ -17,3 +17,9 @@ suite "Forward-declare in files":
     registerTypes(files)
 
     let group = updateImports(files)
+    for file in group:
+      echo "------------------------"
+      pprint file.savePath
+      for entry in file.entries:
+        pprint entry
+    # pprint group
