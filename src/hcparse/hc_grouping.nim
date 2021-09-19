@@ -375,50 +375,6 @@ proc registerUse*(ctype: CxxTypeUse, used: var UsedSet) =
     if decl.isSome():
       used.cursors.mgetOrDefault(decl.get()).incl use
 
-  # case ctype.kind:
-  #   of ctkWrapKinds:
-  #     registerUse(ctype.wrapped, used)
-
-  #   of ctkStaticParam:
-  #     discard
-
-  #   of ctkArrayKinds:
-  #     registerUse(ctype.arrayElement, used)
-
-  #   of ctkIdent:
-  #     let decl = ctype.getDecl()
-  #     if decl.isSome():
-  #       used.cursors.mgetOrDefault(decl.get()).incl ctype
-
-  #     for param in ctype.genParams:
-  #       registerUse(param, used)
-
-  #   of ctkProc:
-  #     for arg in ctype.arguments:
-  #       registerUse(arg.nimType, used)
-
-  #     registerUse(ctype.returnType, used)
-
-  # if ctype.fromCxType:
-  #   let cxDecl = ctype.cxType.getTypeDeclaration()
-  #   if cxDecl.kind notin {ckNoDeclFound}:
-  #     used.cursors.mgetOrDefault(cxDecl).incl ctype
-
-  # else:
-  #   used.libs.mgetOrDefault(ctype.typeImport).incl ctype
-
-  # if ctype.fullIdent.isSome():
-  #   let last = ctype.fullIdent.get()[^1]
-  #   if not last.isGenerated:
-  #     used.cursors.mgetOrDefault(last.cursor).incl ctype
-
-  #   for param in last.genParams:
-  #     if param.len > 0 and param[^1].isGenerated.not():
-  #       let lastParam = param[^1]
-  #       if lastParam.cursor.kind notin { ckTemplateTypeParameter }:
-  #         conf.dump param, lastParam.cursor.cxKind()
-
-
 
 proc registerUsedTypes*(genProc: CxxProc, used: var UsedSet) =
   for arg in genProc.arguments:

@@ -605,30 +605,15 @@ proc eachIdent*(use: CxxTypeUse, cb: proc(ident: CxxTypeUse)) =
 
 proc getUsedTypesRec*(
     t: CxxTypeUse, ignoreHead: bool = false): seq[CxxTypeUse] =
+  var res: seq[CxxTypeUse]
   if not ignoreHead:
-    result.add t
+    res.add t
 
-  case t.kind:
-    of ctkWrapKinds:
-      result.add getUsedTypesRec(t.wrapped)
+  eachIdent(t) do(t: CxxTypeUse):
+    if notNil(t): res.add t
+    res.add getUsedTypesRec(t, ignoreHead = false)
 
-    of ctkArrayKinds:
-      result.add getUsedTypesRec(t.arrayElement)
-
-    of ctkStaticParam:
-      discard
-
-    of ctkIdent:
-      for param in t.genParams:
-        result.add getUsedTypesRec(param)
-
-    of ctkProc:
-      if notNil t.returnType:
-        result.add t.returnType
-
-      for argument in t.arguments:
-        result.add getUsedTypesRec(argument.getType())
-
+  return res
 
 func getReturn*(
     pr: CxxProc, onConstructor: CxxTypeKind = ctkIdent): CxxTypeUse =
@@ -764,30 +749,6 @@ func setTypeStoreRec*(
       if not use.cxxType.isParam:
         use.cxxType.typeStore = store
         use.cxxType.typeLib = some lib.library
-
-    # case use.kind:
-    #   of ctkWrapKinds:
-    #     aux(use.wrapped, store)
-
-    #   of ctkStaticParam:
-    #     discard
-
-    #   of ctkArrayKinds:
-    #     aux(use.arrayElement, store)
-
-    #   of ctkIdent:
-    #     if not use.cxxType.isParam:
-    #       use.cxxType.typeStore = store
-    #       use.cxxType.typeLib = some lib.library
-
-    #     for param in mitems(use.genParams):
-    #       aux(param, store)
-
-    #   of ctkProc:
-    #     for arg in mitems(use.arguments):
-    #       aux(arg, store)
-
-    #     aux(use.returnType, used)
 
   func aux(decl: var CxxProc, store: var CxxTypeStore) =
     raise newImplementError()
