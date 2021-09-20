@@ -17,8 +17,9 @@ import
 export parseCppString, treeRepr
 
 func stripComment*(text: string): string =
-  const starts = ["/*!", "/*", "*", "//<", "///", "//"]
+  const starts = ["/*!", "/**<", "/**", "/*", "*", "//<", "///", "//"]
   const ends  = ["*/"]
+  var idx = 0
   for line in text.splitLines():
     var pos = line.skipWhile({' '})
     var final = line.high
@@ -32,8 +33,9 @@ func stripComment*(text: string): string =
         final = final - endc.len
         break
 
+    if idx != 0: result.add "\n"
+    inc idx
     result.add line[pos .. final]
-    result.add "\n"
 
 proc primitiveName*(node: CppNode): string =
   proc aux(ts: TsCppNode): string =
@@ -79,6 +81,9 @@ proc toCxxType*(node: CppNode): CxxTypeUse =
       result = cxxTypeUse(cxxPair(
         mapTypeName(node),
         cxxName(@[node.strVal()])))
+
+    of cppStructSpecifier, cppEnumSpecifier, cppUnionSpecifier:
+      result = toCxxType(node[0])
 
     else:
       raise newImplementKindError(node, node.treeRepr())
@@ -288,8 +293,7 @@ proc toCxx*(node: CppNode): seq[CxxEntry] =
     of cppIdentifier,
        cppStringLiteral,
        cppPreprocInclude,
-       cppParenthesizedExpression
-         :
+       cppParenthesizedExpression:
       discard
 
     of cppPreprocCall:
@@ -312,6 +316,9 @@ proc toCxx*(node: CppNode): seq[CxxEntry] =
     of cppPreprocFunctionDef:
       result.add toCxxMacro(node).box()
 
+    of cppPreprocDefined, cppPreprocElif:
+      discard
+
     of cppComment:
       discard
       # result.add toCxxComment(node.strVal)
@@ -332,26 +339,54 @@ proc toCxx*(node: CppNode): seq[CxxEntry] =
         case node[1].kind:
           of cppTypeIdentifier,
              cppPointerDeclarator,
-             cppPrimitiveType
-               :
-            case node[0].kind:
-              of cppSizedTypeSpecifier,
-                 cppPrimitiveType
-                   :
-                var save = cxxAlias(
-                  toCxxType(node["type"]).toDecl(),
-                  cxxTypeUse(node["declarator"].getName(), @[]))
+             cppPrimitiveType:
+            let newType = toCxxType(node["declarator"]).toDecl()
+            let baseBody = node[0]
+            if baseBody of {
+              cppSizedTypeSpecifier, cppPrimitiveType, cppTypeIdentifier
+            } or (
+              baseBody of {
+                cppStructSpecifier, cppUnionSpecifier, cppEnumSpecifier} and
+              "body" notin baseBody
+            ):
+              var alias = cxxAlias(newType, toCxxType(node["type"]))
+              pointerWraps(node["declarator"], alias.baseType)
 
-                pointerWraps(node["declarator"], save.baseType)
-                result.add save
-
-              of cppStructSpecifier, cppUnionSpecifier:
-                let struct = toCxxObject(node[0])
-                result.add cxxAlias(
-                  struct.decl, toCxxType(node["declarator"]))
+              if alias.baseType of ctkIdent and
+                alias.decl.cxxName() == alias.baseType.cxxName():
+                # `typedef struct T T;`
+                discard
 
               else:
-                raise newImplementKindError(node[0], node.treeRepr())
+                result.add alias
+
+            elif baseBody of {cppStructSpecifier, cppUnionSpecifier}:
+              # FIXME handle multiple trailing typedefs
+              var struct = toCxxObject(baseBody)
+              if struct.cxxName().isEmpty():
+                # Handle `typedef struct {} struct_name;` 
+                struct.name = newType.name
+                result.add struct
+
+              else:
+                result.add struct
+                if struct.cxxName() != newType.cxxName():
+                  result.add cxxAlias(newType, struct.decl.cxxTypeUse())
+
+            elif baseBody of {cppEnumSpecifier}:
+              var enumd = toCxxEnum(node[0])
+              if enumd.cxxName().isEmpty():
+                enumd.name = newType.name
+                result.add enumd
+
+              else:
+                result.add enumd
+                if enumd.cxxName() != newType.cxxName():
+                  result.add cxxAlias(newType, enumd.decl.cxxTypeUse())
+
+            else:
+              raise newImplementKindError(
+                baseBody, $node & " " & node.treeRepr())
 
           of cppFunctionDeclarator:
             result.add cxxAlias(
@@ -372,6 +407,11 @@ proc toCxx*(node: CppNode): seq[CxxEntry] =
         else:
           raise newImplementKindError(node[1], node.treeRepr())
 
+    of cppTypeIdentifier:
+      discard
+
     else:
-      raise newImplementKindError(node, node.treeRepr(
-        opts = hdisplay(maxlen = 10, maxdepth = 3)))
+      raise newImplementKindError(
+        node,
+        node.strVal() & "\n" &
+          node.treeRepr(opts = hdisplay(maxlen = 10, maxdepth = 3)))

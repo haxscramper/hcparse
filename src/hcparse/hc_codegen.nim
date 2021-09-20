@@ -47,6 +47,11 @@ proc toNNode*[N](t: CxxTypeUse, conf: CodegenConf): NType[N] =
     else:
       raise newImplementKindError(t)
 
+proc toNNode*[N](t: CxxTypeDecl, conf: CodegenConf): NType[N] =
+  newNType[N](
+    t.nimName,
+    t.genParams.mapIt(newNNType[N](it.name.nim, @[])))
+
 proc toNNode*[N](arg: CxxArg, conf: CodegenConf): NIdentDefs[N] =
   newNIdentDefs[N](
     arg.nimName,
@@ -72,6 +77,9 @@ proc toNNode*[N](header: CxxHeader): N =
     of chkGlobal: newNLit[N, string](header.global)
     of chkAbsolute: newNLit[N, string](header.file.string)
     of chkPNode: newNLit[N, string](header.other)
+
+proc toNNode*[N](def: CxxAlias, conf: CodegenConf): AliasDecl[N] =
+  newAliasDecl(toNNode[N](def.decl, conf), toNNode[N](def.baseType, conf))
 
 proc toNNode*[N](
     def: CxxProc,
@@ -107,29 +115,36 @@ proc toNNode*[N](
   for arg in def.arguments:
     result.addArgument toNNode[N](arg, conf)
 
+proc toNNode*[N](obj: CxxObject, conf: CodegenConf): seq[NimDecl[N]] = 
+  var res = newObjectDecl[N](obj.nimName)
+  res.docComment = obj.docComment.get("")
+  res.addPragma("bycopy")
+  # res.addPragma("inheritable")
+  # res.addPragma("byref")
+  res.addPragma("header", toNNode[N](obj.header.get()))
+  res.addPragma(conf.getImport(), newNLit[N, string](obj.getIcppStr()))
+
+  for field in obj.mfields:
+    res.add toNNode[N](field, conf)
+
+  result.add toNimDecl(res)
+
+  for meth in obj.methods:
+    result.add toNNode[N](meth, conf, ctkPtr)
+
+  for n in obj.nested:
+    result.add toNNode[N](n, conf)
+
+proc toNNode*[N](en: CxxEnum, conf: CodegenConf): EnumDecl[N] =
+  result = newEnumDecl[N](en.nimName)
+
 proc toNNode*[N](entry: CxxEntry, conf: CodegenConf): seq[NimDecl[N]] =
   case entry.kind:
     of cekObject:
-      let obj = entry.cxxObject
-      var res = newObjectDecl[N](obj.nimName)
-      res.docComment = obj.docComment.get("")
-      res.addPragma("bycopy")
-      # res.addPragma("inheritable")
-      # res.addPragma("byref")
-      res.addPragma("header", toNNode[N](obj.header.get()))
-      res.addPragma(conf.getImport(), newNLit[N, string](obj.getIcppStr()))
+      result.add toNNode[N](entry.cxxObject, conf)
 
-      for field in obj.mfields:
-        res.add toNNode[N](field, conf)
-
-      result.add toNimDecl(res)
-
-      for meth in obj.methods:
-        result.add toNNode[N](meth, conf, ctkPtr)
-
-      for n in obj.nested:
-        result.add toNNode[N](n, conf)
-
+    of cekEnum:
+      result.add toNNode[N](entry.cxxEnum, conf).toNimDecl()
 
     of cekProc:
       result.add toNNode[N](
@@ -145,6 +160,9 @@ proc toNNode*[N](entry: CxxEntry, conf: CodegenConf): seq[NimDecl[N]] =
 
     of cekEmpty:
       discard
+
+    of cekAlias:
+      result.add toNNode[N](entry.cxxAlias, conf).toNimDecl()
 
     else:
       raise newImplementKindError(entry)

@@ -569,11 +569,14 @@ func mapPrimitiveName*(name: string): string =
     of "char": "char"
     of "unsigned", "unsigned int": "cuint"
     of "float": "cfloat"
-    of "uint8_t": "uint8"
-    of "uint16_t": "uint16"
-    of "int16_t": "int16"
     of "bool": "bool"
     of "size_t": "size_t"
+
+    of "int16_t": "int16"
+
+    of "uint8_t": "uint8"
+    of "uint16_t": "uint16"
+    of "uint64_t": "uint64"
     # of tkBool:       ("bool")
     # of tkint:        ("cint")
     # of tkvoid:       ("void")

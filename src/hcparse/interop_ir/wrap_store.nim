@@ -335,7 +335,7 @@ func `$`*(cxx: CxxLibImport): string =
 
 func cxxStr*(name: CxxName): string = name.scopes.join("::")
 func `$`*(name: CxxName): string = name.cxxStr()
-func `$`*(name: CxxNamePair): string = $name.cxx
+func `$`*(name: CxxNamePair): string = $name.nim & "/" & $name.cxx
 func `$`*(expr: CxxExpr): string = raise newImplementError()
 
 func `$`*(tref: CxxTypeRef): string =
@@ -433,13 +433,15 @@ func `$`*(p: CxxProc): string =
     result.add ": "
     result.add $p.returnType
 
+func `$`*(alias: CxxAlias): string =
+  $alias.decl & " = " & $alias.baseType
 
 func `$`*(e: CxxEntry): string =
   case e.kind:
     of cekEnum: result = "enum!" & $e.cxxEnum.decl
     of cekObject: result = "object!" & $e.cxxObject.decl
     of cekProc: result = "proc!" & $e.cxxProc
-    of cekAlias: result = "alias!" & $e.cxxAlias.decl
+    of cekAlias: result = "alias!" & $e.cxxAlias
     of cekForward: result = "forward!" & $e.cxxForward.decl
     of cekMacro: result = "macro!" & $e.cxxMacro.name
 
@@ -497,18 +499,29 @@ func hash*(decl: CxxTypeDecl): Hash =
 func `nimName=`*(pr: var CxxProc, name: string) =
   pr.head.name.nim = name
 
+func `name=`*(en: var CxxEnum, name: CxxNamePair) = en.decl.name = name
+func `name=`*(obj: var CxxObject, name: CxxNamePair) = obj.decl.name = name
+
+func `name`*(use: CxxTypeUse): CxxNamePair =
+  assertKind(use, {ctkIdent})
+  result = use.cxxType.name
+
 
 func nimName*(pr: CxxProc): string = pr.head.name.nim
 func nimName*(arg: CxxArg): string = arg.name.nim
 func nimName*(t: CxxTypeUse): string = t.cxxType.name.nim
 func nimName*(obj: CxxObject): string = obj.decl.name.nim
+func nimName*(obj: CxxEnum): string = obj.decl.name.nim
 func nimName*(field: CxxField): string = field.name.nim
+func nimName*(t: CxxTypeDecl): string = t.name.nim
 
 func cxxName*(field: CxxField): CxxName = field.name.cxx
 func cxxName*(t: CxxTypeUse): CxxName = t.cxxType.name.cxx
 func cxxName*(t: CxxTypeDecl): CxxName = t.name.cxx
 func cxxName*(pr: CxxProc): CxxName = pr.head.name.cxx
 func cxxName*(obj: CxxObject): CxxName = obj.decl.name.cxx
+func cxxName*(obj: CxxEnum): CxxName = obj.decl.name.cxx
+func cxxName*(alias: CxxAlias): CxxName = alias.decl.name.cxx
 func cxxName*(name: string): CxxName = CxxName(scopes: @[name])
 func cxxName*(scopes: seq[string]): CxxName = CxxName(scopes: scopes)
 
@@ -521,6 +534,9 @@ func isConst*(pr: CxxProc): bool = cpfConst in pr.flags
 func isConstructor*(pr: CxxProc): bool = pr.constructorOf.isSome()
 func isMethod*(pr: CxxProc): bool = pr.methodOf.isSome()
 
+func isEmpty*(name: CxxName): bool =
+  name.scopes.len == 0 or
+  (name.scopes.len == 1 and name.scopes[0].len == 0)
 
 func isPOD*(use: CxxTypeUse): bool = ctfIsPodType in use.flags
 
@@ -584,7 +600,8 @@ func cxxTypeUse*(
     kind: ctkIdent, cxxType: cxxTypeRef(head, store), genParams: @genParams)
 
 func toDecl*(use: CxxTypeUse): CxxTypeDecl =
-  raise newImplementError()
+  assertKind(use, {ctkIdent})
+  return cxxTypeDecl(use.cxxType.name)
 
 func addDecl*(store: var CxxTypeStore, decl: CxxTypeDecl) =
   store.typeDecls.mgetOrPut(decl.name.cxx, @[]).add decl
@@ -645,7 +662,7 @@ func getFilename*(file: CxxFile): string = file.savePath.getFilename()
 func getType*(arg: CxxArg): CxxTypeUse = arg.nimType
 func getType*(field: CxxField): CxxTypeUse = field.nimType
 
-template eachIdentAux(inUse, cb, iterateWith: untyped) =
+template eachIdentAux*(inUse, cb, iterateWith: untyped) =
   case inUse.kind:
     of ctkWrapKinds: eachIdent(inUse.wrapped, cb)
     of ctkStaticParam: discard
@@ -855,43 +872,80 @@ func setTypeStoreRec*(
       for nest in mitems(entry.cxxObject.nested):
         setTypeStoreRec(entry, store, lib)
 
-func fixIdentsRec*(
-    entry: var CxxEntry, cache: var StringNameCache, prefix: string) =
+
+proc fixIdentsRec*(
+    entry: var CxxEntry, cache: var StringNameCache, 
+    prefix: string,
+    fixWith: NameFixImpl = nil
+  ) =
+
+  let identFixConf = NameFixConf(
+    fixWith: fixWith,
+    prefix: prefix,
+    toCamel: true,
+    strat: nfsNumerateNew
+  )
+
+  let typeFixConf = identFixConf.withIt do:
+    it.isType = true
 
   template aux(name: var CxxNamePair): untyped =
-    name.nim = cache.fixNumerateIdentName(name.nim, prefix)
+    name.nim = cache.fixName(name.nim, identFixConf)
 
   template auxType(name: var CxxNamePair): untyped =
-    name.nim = cache.fixNumerateTypeName(name.nim, prefix)
+    name.nim = cache.fixName(name.nim, typeFixConf)
 
-  func aux(decl: var CxxProc, cache: var StringNameCache) =
+  proc aux(decl: var CxxTypeDecl, cache: var StringNameCache) =
+    auxType(decl.name)
+
+  proc aux(use: var CxxTypeUse, cache: var StringNameCache) =
+    var cache {.byaddr1.} = cache
+
+    eachIdent(use) do (use: var CxxTypeUse):
+      auxType(use.cxxType.name)
+
+  proc aux(decl: var CxxProc, cache: var StringNameCache) =
+    if decl.isMethod(): aux(decl.methodOf.get(), cache)
+    if decl.isConstructor(): aux(decl.constructorOf.get(), cache)
+
     aux(decl.head.name)
     for arg in mitems(decl.arguments):
       aux(arg.name)
+      aux(arg.nimType, cache)
+
+  proc aux(entry: var CxxEntry, cache: var StringNameCache) =
+    case entry.kind:
+      of cekEnum:
+        auxType(entry.cxxEnum.decl.name)
+        for value in mitems(entry.cxxEnum.values): aux(value.name)
+
+      of cekForward:
+        auxType(entry.cxxForward.decl.name)
+
+      of cekObject:
+        auxType(entry.cxxObject.decl.name)
+        for field in mitems(entry.cxxObject.mfields):
+          aux(field.name)
+          aux(field.nimType, cache)
+
+        for mproc in mitems(entry.cxxObject.methods):
+          aux(mproc, cache)
+
+        for nestd in mitems(entry.cxxObject.nested):
+          aux(nestd, cache)
+
+      of cekProc:
+        aux(entry.cxxProc, cache)
+
+      of cekAlias:
+        aux(entry.cxxAlias.decl, cache)
+        aux(entry.cxxAlias.baseType, cache)
+
+      else:
+        raise newImplementKindError(entry)
 
 
-  case entry.kind:
-    of cekEnum:
-      auxType(entry.cxxEnum.decl.name)
-      for value in mitems(entry.cxxEnum.values): aux(value.name)
-
-    of cekForward:
-      auxType(entry.cxxForward.decl.name)
-
-    of cekObject:
-      auxType(entry.cxxObject.decl.name)
-      for field in mitems(entry.cxxObject.mfields): aux(field.name)
-      for mproc in mitems(entry.cxxObject.methods): aux(mproc, cache)
-      for nestd in mitems(entry.cxxObject.nested):
-        fixIdentsRec(nestd, cache, prefix)
-
-    of cekProc:
-      aux(entry.cxxProc, cache)
-
-    else:
-      raise newImplementKindError(entry)
-
-
+  aux(entry, cache)
 
 func hasTypeDecl*(entry: CxxEntry): bool =
   entry.kind in {cekEnum, cekForward, cekObject, cekAlias}
