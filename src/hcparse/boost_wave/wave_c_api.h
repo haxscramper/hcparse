@@ -254,11 +254,12 @@ TYPE enum TokId {
     tokId_OPTPARAMETERBASE,
 } TYPE_NAME(TokId);
 
-
-TYPE struct MethodImpl {
-    void* impl;
-    void* payload;
-} TYPE_NAME(MethodImpl);
+enum EntryHandling
+{
+    EntryHandlingSkip,
+    EntryHandlingProcess,
+    EntryHandlingRaise
+};
 
 TYPE struct WaveProcessingHooks TYPE_NAME(WaveProcessingHooks);
 TYPE struct WaveToken           TYPE_NAME(WaveToken);

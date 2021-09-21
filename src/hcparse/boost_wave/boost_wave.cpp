@@ -1,42 +1,41 @@
 #include "boost_wave.hpp"
-#include "wave_c_api.h"
 
-#include <iostream>
-#include <string>
 
-#include <boost/wave/cpp_context.hpp>
-#include <boost/wave/cpplexer/cpp_lex_iterator.hpp>
-#include <boost/wave/cpplexer/cpp_lex_token.hpp>
-#include <boost/wave/preprocessing_hooks.hpp>
-#include <boost/wave/util/file_position.hpp>
-
-using namespace boost::wave;
-
-struct WaveProcessingHooks
-    : context_policies::default_preprocessing_hooks {
-    WaveProcessingHooks() {
+const char* to_string(EntryHandling handling) {
+    switch (handling) {
+        case EntryHandlingSkip: return "skip";
+        case EntryHandlingProcess: return "skip";
+        case EntryHandlingRaise: return "skip";
     }
-};
-
-WaveProcessingHooks* wave_newProcessingHooks() {
-    return new WaveProcessingHooks();
-}
-
-void wave_destroyProcessingHooks(WaveProcessingHooks* hooks) {
-    delete hooks;
 }
 
 
-typedef boost::wave::cpplexer::lex_token<>              token_type;
-typedef boost::wave::cpplexer::lex_iterator<token_type> lex_iterator_type;
+bool WaveHooksImpl::found_warning_directive(
+    context_type const& ctx,
+    list_type const&    message) {
+    if (found_warning_directive_impl.isActive()) {
+        auto handling = found_warning_directive_impl(ctx, message);
+
+        switch (handling) {
+            case EntryHandlingRaise: return false;
+            case EntryHandlingSkip: return true;
+            default:
+                throw std::logic_error(
+                    std::string("'found_warning_directive_impl' returned "
+                                "unexpected "
+                                "entry handling value - wanted 'raise' or "
+                                "'skip', but "
+                                "got ")
+                    + to_string(handling));
+        }
+    } else {
+        return false;
+    }
+}
 
 struct WaveToken {
-    token_type tok;
+    WaveTokenT tok;
 };
-
-const char* wave_tokGetValue(WaveToken* tok) {
-    return tok->tok.get_value().c_str();
-}
 
 
 TokId wave_tokGetId(WaveToken* tok) {
@@ -281,12 +280,6 @@ TokId wave_tokGetId(WaveToken* tok) {
 }
 
 
-using context_type = context<
-    std::string::iterator,
-    lex_iterator_type,
-    iteration_context_policies::load_file_to_string,
-    WaveProcessingHooks>;
-
 struct WaveIterator {
     context_type::iterator_type iter;
 };
@@ -308,25 +301,28 @@ void wave_advanceIterator(WaveIterator* iter) {
     ++(iter->iter);
 }
 
-struct WaveContext {
-    context_type context;
-    std::string  text;
 
-    WaveContext(std::string&& _text, const char* filename)
-        : context(_text.begin(), _text.end(), filename) {
-        text = _text;
-        std::cout << "1\n";
+void WaveContext::set_found_warning_directive_impl(
+    found_warning_directive_impl_type impl) {
+    context.get_hooks().found_warning_directive_impl = impl;
+}
 
-        auto first = context.begin(text.begin(), text.end());
-        auto last  = context.end();
-        std::cout << "1\n";
 
-        while (first != last) {
-            std::cout << (*first).get_value();
-            ++first;
-        }
+WaveContext::WaveContext(std::string&& _text, const char* filename)
+    : context(_text.begin(), _text.end(), filename) {
+    text = _text;
+}
+
+void WaveContext::processAll() {
+    auto first = context.begin(text.begin(), text.end());
+    auto last  = context.end();
+
+    while (first != last) {
+        current_position = (*first).get_position();
+        std::cout << (*first).get_value();
+        ++first;
     }
-};
+}
 
 WaveIterator* wave_beginIterator(WaveContext* context) {
     return new WaveIterator{context->context.begin()};
@@ -343,6 +339,4 @@ WaveContext* wave_newWaveContext(
     return new WaveContext(std::string(instring), filename);
 }
 
-void wave_destroyContext(WaveContext* context) {
-    delete context;
-}
+void wave_destroyContext(WaveContext* context) { delete context; }
