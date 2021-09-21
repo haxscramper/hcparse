@@ -1,4 +1,5 @@
 #include "boost_wave.hpp"
+#include <memory>
 
 
 const char* to_string(EntryHandling handling) {
@@ -33,13 +34,8 @@ bool WaveHooksImpl::found_warning_directive(
     }
 }
 
-struct WaveToken {
-    WaveTokenT tok;
-};
-
-
 CWaveTokId wave_tokGetId(WaveToken* tok) {
-    switch (tok->tok.operator boost::wave::token_id()) {
+    switch (tok->operator boost::wave::token_id()) {
         case T_UNKNOWN: return tokId_UNKNOWN;
         case T_FIRST_TOKEN: return tokId_FIRST_TOKEN;
         case T_AND: return tokId_AND;
@@ -279,43 +275,43 @@ CWaveTokId wave_tokGetId(WaveToken* tok) {
     }
 }
 
-
-struct WaveIterator {
-    WaveContextImpl::iterator_type iter;
-};
-
-WaveToken* wave_iterGetTok(WaveIterator* iter) {
-    return new WaveToken{*iter->iter};
+const char* wave_tokGetValue(CWaveToken* tok) {
+    return toCxx(tok)->get_value().c_str();
 }
 
 
-bool wave_neqIterator(WaveIterator* iter1, WaveIterator* iter2) {
-    std::cout << "Called neq iterator lhs: [" << iter1->iter->get_value()
-              << "]\n";
-    return iter1->iter != iter2->iter;
+CWaveToken wave_iterGetTok(CWaveIterator* iter) {
+    std::cout << sizeof(WaveToken) << std::endl;
+    return nuclear_cast<CWaveToken>(*iter);
 }
 
-void wave_advanceIterator(WaveIterator* iter) {
-    std::cout << "Called advance on iterator, from token ["
-              << iter->iter->get_value() << "]\n";
-    ++(iter->iter);
+bool wave_neqIterator(CWaveIterator* iter1, CWaveIterator* iter2) {
+    const WaveIterator* it1 = toCxx(iter1);
+    const WaveIterator* it2 = toCxx(iter2);
+    return *it1 != *it2;
+}
+
+void wave_advanceIterator(CWaveIterator* iter) {
+    auto it = toCxx(iter);
+    ++it;
 }
 
 
 void WaveContext::set_found_warning_directive_impl(
     FoundWarningDirectiveCbType impl) {
-    context.get_hooks().found_warning_directive_impl = impl;
+    context->get_hooks().found_warning_directive_impl = impl;
 }
 
 
-WaveContext::WaveContext(std::string&& _text, const char* filename)
-    : context(_text.begin(), _text.end(), filename) {
-    text = _text;
+WaveContext::WaveContext(std::string _text, const char* filename) {
+    text    = _text;
+    context = std::make_unique<WaveContextImpl>(
+        text.begin(), text.end(), filename);
 }
 
 void WaveContext::processAll() {
-    auto first = context.begin(text.begin(), text.end());
-    auto last  = context.end();
+    auto first = context->begin(text.begin(), text.end());
+    auto last  = context->end();
 
     while (first != last) {
         current_position = (*first).get_position();
@@ -324,12 +320,12 @@ void WaveContext::processAll() {
     }
 }
 
-WaveIterator* wave_beginIterator(WaveContext* context) {
-    return new WaveIterator{context->context.begin()};
+CWaveIterator wave_beginIterator(CWaveContext* context) {
+    return nuclear_cast<CWaveIterator>(toCxx(context)->context->begin());
 }
 
-WaveIterator* wave_endIterator(WaveContext* context) {
-    return new WaveIterator{context->context.end()};
+CWaveIterator wave_endIterator(CWaveContext* context) {
+    return nuclear_cast<CWaveIterator>(toCxx(context)->context->end());
 }
 
 CWaveContext* wave_newWaveContext(

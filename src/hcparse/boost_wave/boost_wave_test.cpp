@@ -11,20 +11,32 @@ EntryHandling found_warning_directive_impl(
 
 
 int main() {
-    CWaveContext* context = wave_newWaveContext(
-        "#pragma once\n"
-        "#warning \"asdfasdf\"\n"
-        "#warning \"zzzz\"\n",
-        "file");
+    const char* text
+        = "#pragma once\n"
+          "#warning \"asdfasdf\"\n"
+          "#warning \"zzzz\"\n";
+
+    CWaveContext* context = wave_newWaveContext(text, "file");
 
     wave_setFoundWarningDirective(context, &found_warning_directive_impl);
 
+    std::string text1(text);
+
+    WaveContext ctx(text1, "file");
+
+
+    WaveIterator beginInit = ctx.context->begin();
+    WaveIterator endInit   = ctx.context->end();
+
 
     try {
-        wave_processAll(context);
+        while (beginInit != endInit) {
+            ++beginInit;
+        }
     } catch (cpplexer::lexing_exception const& e) {
         std::cerr << e.file_name() << "(" << e.line_no()
                   << "): " << e.description() << std::endl;
+        return 1;
 
     } catch (cpp_exception const& e) {
         std::cerr << e.file_name() << "(" << e.line_no()

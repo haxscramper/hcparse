@@ -264,9 +264,20 @@ enum EntryHandling
 #define DECL_STRUCT(name) TYPE struct name TYPE_NAME(name);
 
 DECL_STRUCT(CWaveProcessingHooks);
-DECL_STRUCT(CWaveToken);
 DECL_STRUCT(CWaveContext);
 DECL_STRUCT(CWaveIterator);
+
+#define WAVE_TOKEN_OBJECT_SIZE 48
+TYPE struct CWaveToken {
+    unsigned char __size[WAVE_TOKEN_OBJECT_SIZE];
+} TYPE_NAME(CWaveIterator);
+
+
+#define WAVE_ITERATOR_OBJECT_SIZE 48
+TYPE struct CWaveIterator {
+    unsigned char __size[WAVE_ITERATOR_OBJECT_SIZE];
+} TYPE_NAME(CWaveIterator);
+
 DECL_STRUCT(CWaveToken);
 DECL_STRUCT(CWaveContextImpl);
 DECL_STRUCT(CWaveTokenList);
@@ -294,17 +305,17 @@ BOOST_WAVE_EXPORT void wave_setFoundWarningDirective(
 
 BOOST_WAVE_EXPORT void wave_destroyContext(CWaveContext* context);
 
-BOOST_WAVE_EXPORT CWaveIterator* wave_beginIterator(CWaveContext* context);
-BOOST_WAVE_EXPORT CWaveIterator* wave_endIterator(CWaveContext* context);
-BOOST_WAVE_EXPORT void           wave_destroyIterator(CWaveIterator* iter);
-BOOST_WAVE_EXPORT void           wave_advanceIterator(CWaveIterator* iter);
-BOOST_WAVE_EXPORT bool           wave_neqIterator(
-              CWaveIterator* iter1,
-              CWaveIterator* iter2);
+BOOST_WAVE_EXPORT CWaveIterator wave_beginIterator(CWaveContext* context);
+BOOST_WAVE_EXPORT CWaveIterator wave_endIterator(CWaveContext* context);
+BOOST_WAVE_EXPORT void          wave_advanceIterator(CWaveIterator* iter);
+BOOST_WAVE_EXPORT bool          wave_neqIterator(
+             CWaveIterator* iter1,
+             CWaveIterator* iter2);
 
-BOOST_WAVE_EXPORT CWaveToken* wave_iterGetTok(CWaveIterator* iter);
-BOOST_WAVE_EXPORT const char* wave_tokGetValue(CWaveToken* tok);
+BOOST_WAVE_EXPORT CWaveToken wave_iterGetTok(CWaveIterator* iter);
+
 BOOST_WAVE_EXPORT CWaveTokId  wave_tokGetId(CWaveToken* tok);
+BOOST_WAVE_EXPORT const char* wave_tokGetValue(CWaveToken* tok);
 
 
 #ifdef __cplusplus
