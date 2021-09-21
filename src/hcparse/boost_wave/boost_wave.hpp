@@ -42,43 +42,52 @@ struct WaveHooksImpl;
 
 using WaveTokenT = cpplexer::lex_token<>;
 
-using list_type = std::list<
+using WaveTokenList = std::list<
     WaveTokenT,
     boost::fast_pool_allocator<
         cpplexer::lex_token<>,
         boost::default_user_allocator_new_delete>>;
 
-using context_type = context<
+using WaveContextImpl = context<
     std::string::iterator,
     cpplexer::lex_iterator<WaveTokenT>,
     iteration_context_policies::load_file_to_string,
     WaveHooksImpl>;
 
-
-using found_warning_directive_impl_type = method_impl<
+using FoundWarningDirectiveCbType = method_impl<
     EntryHandling,
-    context_type const&,
-    list_type const&>;
+    const WaveContextImpl*,
+    const WaveTokenList*>;
 
 struct WaveHooksImpl
     : public context_policies::default_preprocessing_hooks {
-    found_warning_directive_impl_type found_warning_directive_impl;
-    inline bool                       found_warning_directive(
-                              context_type const& ctx,
-                              list_type const&    message);
+    FoundWarningDirectiveCbType found_warning_directive_impl;
+    inline bool                 found_warning_directive(
+                        WaveContextImpl const& ctx,
+                        WaveTokenList const&   message);
 };
 
+
 struct WaveContext {
-    context_type             context;
+    WaveContextImpl          context;
     std::string              text;
     util::file_position_type current_position;
 
     void set_found_warning_directive_impl(
-        found_warning_directive_impl_type impl);
+        FoundWarningDirectiveCbType impl);
 
 
     WaveContext(std::string&& _text, const char* filename);
     void processAll();
 };
+
+
+inline WaveContext* toCxx(CWaveContext* context) {
+    return (WaveContext*)(context);
+}
+
+inline const WaveTokenList* toCxx(const CWaveTokenList* context) {
+    return (WaveTokenList*)(context);
+}
 
 #endif // BOOST_WAVE_HPP

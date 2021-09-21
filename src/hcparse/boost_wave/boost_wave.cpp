@@ -11,10 +11,10 @@ const char* to_string(EntryHandling handling) {
 
 
 bool WaveHooksImpl::found_warning_directive(
-    context_type const& ctx,
-    list_type const&    message) {
+    WaveContextImpl const& ctx,
+    WaveTokenList const&   message) {
     if (found_warning_directive_impl.isActive()) {
-        auto handling = found_warning_directive_impl(ctx, message);
+        auto handling = found_warning_directive_impl(&ctx, &message);
 
         switch (handling) {
             case EntryHandlingRaise: return false;
@@ -38,7 +38,7 @@ struct WaveToken {
 };
 
 
-TokId wave_tokGetId(WaveToken* tok) {
+CWaveTokId wave_tokGetId(WaveToken* tok) {
     switch (tok->tok.operator boost::wave::token_id()) {
         case T_UNKNOWN: return tokId_UNKNOWN;
         case T_FIRST_TOKEN: return tokId_FIRST_TOKEN;
@@ -281,7 +281,7 @@ TokId wave_tokGetId(WaveToken* tok) {
 
 
 struct WaveIterator {
-    context_type::iterator_type iter;
+    WaveContextImpl::iterator_type iter;
 };
 
 WaveToken* wave_iterGetTok(WaveIterator* iter) {
@@ -303,7 +303,7 @@ void wave_advanceIterator(WaveIterator* iter) {
 
 
 void WaveContext::set_found_warning_directive_impl(
-    found_warning_directive_impl_type impl) {
+    FoundWarningDirectiveCbType impl) {
     context.get_hooks().found_warning_directive_impl = impl;
 }
 
@@ -332,11 +332,24 @@ WaveIterator* wave_endIterator(WaveContext* context) {
     return new WaveIterator{context->context.end()};
 }
 
-WaveContext* wave_newWaveContext(
+CWaveContext* wave_newWaveContext(
     const char* instring,
     const char* filename) {
 
-    return new WaveContext(std::string(instring), filename);
+    return (
+        CWaveContext*)(new WaveContext(std::string(instring), filename));
+}
+
+
+void wave_processAll(CWaveContext* context) {
+    toCxx(context)->processAll();
+}
+
+void wave_setFoundWarningDirective(
+    CWaveContext*                context,
+    CFoundWarningDirectiveCbType impl) {
+    toCxx(context)->set_found_warning_directive_impl((EntryHandling(*)(
+        const WaveContextImpl*, const WaveTokenList*, void*))(impl));
 }
 
 void wave_destroyContext(WaveContext* context) { delete context; }
