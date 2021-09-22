@@ -12,6 +12,7 @@
 
 #include <iostream>
 #include <memory>
+#include <queue>
 #include <string>
 
 template <std::size_t ExpectedSize, std::size_t RealSize>
@@ -19,8 +20,6 @@ void check_size() {
     static_assert(
         ExpectedSize == RealSize,
         "Cannot nuclear cast two objects of different size");
-    std::cerr << "ExpectedSize = " << ExpectedSize
-              << ", RealSize = " << RealSize << std::endl;
 }
 
 template <typename Out, typename In>
@@ -42,6 +41,13 @@ Out nuclear_cast(In in) {
     return result;
 }
 
+
+inline char* copyalloc(const char* in) {
+    int   len = strlen(in);
+    char* res = (char*)std::malloc(sizeof(char) * (len + 1));
+    std::memcpy(res, in, len);
+    return res;
+}
 
 template <typename ResultT, typename... Arguments>
 struct method_impl {
@@ -84,18 +90,47 @@ using WaveContextImpl = context<
     iteration_context_policies::load_file_to_string,
     WaveHooksImpl>;
 
-
-using FoundWarningDirectiveCbType = method_impl<
-    EntryHandling,
-    const WaveContextImpl*,
-    const WaveTokenList*>;
+struct WaveContext;
 
 struct WaveHooksImpl
     : public context_policies::default_preprocessing_hooks {
-    FoundWarningDirectiveCbType found_warning_directive_impl;
-    inline bool                 found_warning_directive(
-                        WaveContextImpl const& ctx,
-                        WaveTokenList const&   message);
+
+    WaveContext* context = nullptr;
+
+    // FoundWarningDirectiveCbType
+    method_impl<
+        EntryHandling,
+        const WaveContextImpl*,
+        const WaveTokenList*>
+         found_warning_directive_impl;
+    bool found_warning_directive(
+        WaveContextImpl const& ctx,
+        WaveTokenList const&   message);
+
+
+    // FoundDirectiveCbType
+    method_impl<EntryHandling, const WaveContextImpl*, const WaveToken*>
+         found_directive_impl;
+    bool found_directive(
+        WaveContextImpl const& ctx,
+        WaveToken const&       token);
+
+
+    // FoundUnknownDirectiveCbType
+    method_impl<
+        EntryHandling,
+        const WaveContextImpl*,
+        const WaveTokenList*,
+        WaveTokenList*>
+         found_unknown_directive_impl;
+    bool found_unknown_directive(
+        WaveContextImpl const& ctx,
+        WaveTokenList const&   line,
+        WaveTokenList&         pending);
+
+    void throw_exception(
+        WaveContextImpl const& ctx,
+        std::exception const&  e);
 };
 
 using WaveIterator = WaveContextImpl::iterator_type;
@@ -105,29 +140,60 @@ struct WaveContext {
     std::string                      text;
     util::file_position_type         current_position;
 
-    void set_found_warning_directive_impl(
-        FoundWarningDirectiveCbType impl);
+    bool hasError = false;
 
+    std::queue<WaveDiagnostics> diagnostics;
 
     WaveContext(std::string _text, const char* filename);
     void processAll();
 };
 
+// DECL_STRUCT(CWaveProcessingHooks);
+// DECL_STRUCT(CWaveContext);
+// DECL_STRUCT(CWaveIterator);
+// DECL_STRUCT(CWaveToken);
+// DECL_STRUCT(CWaveIterator);
+// DECL_STRUCT(CWaveToken);
+// DECL_STRUCT(CWaveContextImpl);
 
-inline WaveContext* toCxx(CWaveContext* context) {
-    return (WaveContext*)(context);
+struct CxxWaveToken {
+    WaveToken d;
+};
+
+struct CxxWaveTokenList {
+    WaveTokenList d;
+};
+
+struct CxxWaveIterator {
+    WaveIterator d;
+};
+
+struct CxxWaveContext {
+    WaveContext d;
+};
+
+inline CxxWaveContext* toCxx(CWaveContext* context) {
+    return (CxxWaveContext*)(context);
 }
 
-inline const WaveTokenList* toCxx(const CWaveTokenList* context) {
-    return (WaveTokenList*)(context);
+inline CxxWaveTokenList* toCxx(CWaveTokenList* context) {
+    return (CxxWaveTokenList*)(context);
 }
 
-inline const WaveIterator* toCxx(const CWaveIterator* context) {
-    return (WaveIterator*)(context);
+inline const CxxWaveTokenList* toCxx(const CWaveTokenList* context) {
+    return (CxxWaveTokenList*)(context);
 }
 
-inline WaveToken* toCxx(const CWaveToken* tok) {
-    return (WaveToken*)(tok);
+inline CxxWaveIterator* toCxx(CWaveIterator* context) {
+    return (CxxWaveIterator*)(context);
+}
+
+inline const CxxWaveIterator* toCxx(const CWaveIterator* context) {
+    return (CxxWaveIterator*)(context);
+}
+
+inline CxxWaveToken* toCxx(const CWaveToken* tok) {
+    return (CxxWaveToken*)(tok);
 }
 
 #endif // BOOST_WAVE_HPP

@@ -254,30 +254,80 @@ TYPE enum CWaveTokId {
     tokId_OPTPARAMETERBASE,
 } TYPE_NAME(CWaveTokId);
 
-enum EntryHandling
-{
+TYPE enum WaveErrorCode {
+    wekNoError = 0,
+    wekUnexpectedError,
+    wekMacroRedefinition,
+    wekMacroInsertionError,
+    wekBadIncludeFile,
+    wekBadIncludeStatement,
+    wekIllFormedDirective,
+    wekErrorDirective,
+    wekWarningDirective,
+    wekIllFormedExpression,
+    wekMissingMatchingIf,
+    wekMissingMatchingEndif,
+    wekIllFormedOperator,
+    wekBadDefineStatement,
+    wekBadDefineStatementVaArgs,
+    wekTooFewMacroarguments,
+    wekTooManyMacroarguments,
+    wekEmptyMacroarguments,
+    wekImproperlyTerminatedMacro,
+    wekBadLineStatement,
+    wekBadLineNumber,
+    wekBadLineFilename,
+    wekBadUndefineStatement,
+    wekBadMacroDefinition,
+    wekIllegalRedefinition,
+    wekDuplicateParameterName,
+    wekInvalidConcat,
+    wekLastLineNotTerminated,
+    wekIllFormedPragmaOption,
+    wekIncludeNestingTooDeep,
+    wekMisplacedOperator,
+    wekAlreadydefinedName,
+    wekUndefinedMacroname,
+    wekInvalidMacroname,
+    wekUnexpectedQualifiedName,
+    wekDivisionByZero,
+    wekIntegerOverflow,
+    wekIllegalOperatorRedefinition,
+    wekIllFormedIntegerLiteral,
+    wekIllFormedCharacterLiteral,
+    wekUnbalancedIfEndif,
+    wekCharacterLiteralOutOfRange,
+    wekCouldNotOpenOutputFile,
+    wekIncompatibleConfig,
+    wekIllFormedPragmaMessage,
+    wekPragmaMessageDirective,
+    wekLastErrorNumber = wekPragmaMessageDirective
+} TYPE_NAME(WaveErrorCode);
+
+TYPE enum WaveSeverityLevel {
+    wslRemark,
+    wslWarning,
+    wslError,
+    wslFatal,
+    wslCommandlineError,
+    wslLastCode = wslCommandlineError
+} TYPE_NAME(WaveSeverityLevel);
+
+
+TYPE enum EntryHandling {
     EntryHandlingSkip,
     EntryHandlingProcess,
     EntryHandlingRaise
-};
+} TYPE_NAME(EntryHandling);
+
 
 #define DECL_STRUCT(name) TYPE struct name TYPE_NAME(name);
 
 DECL_STRUCT(CWaveProcessingHooks);
 DECL_STRUCT(CWaveContext);
 DECL_STRUCT(CWaveIterator);
-
-#define WAVE_TOKEN_OBJECT_SIZE 48
-TYPE struct CWaveToken {
-    unsigned char __size[WAVE_TOKEN_OBJECT_SIZE];
-} TYPE_NAME(CWaveIterator);
-
-
-#define WAVE_ITERATOR_OBJECT_SIZE 48
-TYPE struct CWaveIterator {
-    unsigned char __size[WAVE_ITERATOR_OBJECT_SIZE];
-} TYPE_NAME(CWaveIterator);
-
+DECL_STRUCT(CWaveToken);
+DECL_STRUCT(CWaveIterator);
 DECL_STRUCT(CWaveToken);
 DECL_STRUCT(CWaveContextImpl);
 DECL_STRUCT(CWaveTokenList);
@@ -302,17 +352,57 @@ BOOST_WAVE_EXPORT void wave_setFoundWarningDirective(
     CWaveContext*                context,
     CFoundWarningDirectiveCbType impl);
 
+typedef EntryHandling (*CFoundUnknownDirectiveCbType)(
+    CWaveContextImpl* ctx,
+    CWaveTokenList*   line,
+    CWaveTokenList*   pending,
+    void*             env);
+
+
+BOOST_WAVE_EXPORT void wave_setFoundUnknownDirective(
+    CWaveContext*                context,
+    CFoundUnknownDirectiveCbType impl);
+
+typedef EntryHandling (*CFoundDirectiveCbType)(
+    CWaveContextImpl* ctx,
+    CWaveToken*       tok,
+    void*             env);
+
+
+BOOST_WAVE_EXPORT void wave_setFoundDirective(
+    CWaveContext*         context,
+    CFoundDirectiveCbType impl);
+
 
 BOOST_WAVE_EXPORT void wave_destroyContext(CWaveContext* context);
 
-BOOST_WAVE_EXPORT CWaveIterator wave_beginIterator(CWaveContext* context);
-BOOST_WAVE_EXPORT CWaveIterator wave_endIterator(CWaveContext* context);
-BOOST_WAVE_EXPORT void          wave_advanceIterator(CWaveIterator* iter);
-BOOST_WAVE_EXPORT bool          wave_neqIterator(
-             CWaveIterator* iter1,
-             CWaveIterator* iter2);
+TYPE struct WaveDiagnostics {
+    int               line;
+    int               column;
+    WaveErrorCode     code;
+    WaveSeverityLevel level;
 
-BOOST_WAVE_EXPORT CWaveToken wave_iterGetTok(CWaveIterator* iter);
+    char* filename;
+    char* errorText;
+} TYPE_NAME(WaveDiagnostics);
+
+
+BOOST_WAVE_EXPORT bool wave_contextHasError(CWaveContext* context);
+BOOST_WAVE_EXPORT bool wave_contextHasWarnings(CWaveContext* context);
+BOOST_WAVE_EXPORT void wave_deleteDiagnostics(WaveDiagnostics* diag);
+BOOST_WAVE_EXPORT WaveDiagnostics
+    wave_contextPopWarning(CWaveContext* context);
+
+
+BOOST_WAVE_EXPORT CWaveIterator* wave_beginIterator(CWaveContext* context);
+BOOST_WAVE_EXPORT CWaveIterator* wave_endIterator(CWaveContext* context);
+BOOST_WAVE_EXPORT void           wave_advanceIterator(CWaveIterator* iter);
+BOOST_WAVE_EXPORT bool           wave_neqIterator(
+              CWaveIterator* iter1,
+              CWaveIterator* iter2);
+
+BOOST_WAVE_EXPORT CWaveToken* wave_iterGetTok(CWaveIterator* iter);
+BOOST_WAVE_EXPORT void        wave_deleteTok(CWaveToken* tok);
 
 BOOST_WAVE_EXPORT CWaveTokId  wave_tokGetId(CWaveToken* tok);
 BOOST_WAVE_EXPORT const char* wave_tokGetValue(CWaveToken* tok);

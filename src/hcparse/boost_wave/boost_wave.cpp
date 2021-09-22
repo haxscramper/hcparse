@@ -34,8 +34,87 @@ bool WaveHooksImpl::found_warning_directive(
     }
 }
 
-CWaveTokId wave_tokGetId(WaveToken* tok) {
-    switch (tok->operator boost::wave::token_id()) {
+bool WaveHooksImpl::found_directive(
+    const WaveContextImpl& ctx,
+    const WaveToken&       token) {
+    if (found_directive_impl.isActive()) {
+        auto handling = found_directive_impl(&ctx, &token);
+
+        switch (handling) {
+            case EntryHandlingProcess: return false;
+            case EntryHandlingSkip: return true;
+            default:
+                throw std::logic_error(
+                    std::string(
+                        "'found_directive_impl' returned "
+                        "unexpected "
+                        "entry handling value - wanted 'process' or "
+                        "'skip', but "
+                        "got ")
+                    + to_string(handling));
+        }
+    } else {
+        return false;
+    }
+}
+
+bool WaveHooksImpl::found_unknown_directive(
+    const WaveContextImpl& ctx,
+    const WaveTokenList&   line,
+    WaveTokenList&         pending) {
+    if (found_unknown_directive_impl.isActive()) {
+        auto handling = found_unknown_directive_impl(
+            &ctx, &line, &pending);
+
+        switch (handling) {
+            case EntryHandlingProcess: return false;
+            case EntryHandlingSkip: return true;
+            default:
+                throw std::logic_error(
+                    std::string(
+                        "'found_directive_impl' returned "
+                        "unexpected "
+                        "entry handling value - wanted 'process' or "
+                        "'skip', but "
+                        "got ")
+                    + to_string(handling));
+        }
+    } else {
+        return false;
+    }
+}
+
+void WaveHooksImpl::throw_exception(
+    const WaveContextImpl& ctx,
+    const std::exception&  e) {
+
+    bool isError = false;
+
+    if (const cpp_exception* exception = dynamic_cast<
+            const cpp_exception*>(&e)) {
+        const char* filename    = exception->file_name();
+        const char* description = exception->description();
+
+        auto diag = WaveDiagnostics{
+            (int)exception->line_no(),
+            (int)exception->column_no(),
+            (WaveErrorCode)exception->get_errorcode(),
+            (WaveSeverityLevel)exception->get_severity(),
+            copyalloc(filename),
+            copyalloc(description),
+        };
+
+        this->context->diagnostics.push(diag);
+    }
+
+
+    if (isError) {
+        this->context->hasError = true;
+    }
+}
+
+CWaveTokId wave_tokGetId(CWaveToken* tok) {
+    switch (toCxx(tok)->d.operator boost::wave::token_id()) {
         case T_UNKNOWN: return tokId_UNKNOWN;
         case T_FIRST_TOKEN: return tokId_FIRST_TOKEN;
         case T_AND: return tokId_AND;
@@ -276,30 +355,25 @@ CWaveTokId wave_tokGetId(WaveToken* tok) {
 }
 
 const char* wave_tokGetValue(CWaveToken* tok) {
-    return toCxx(tok)->get_value().c_str();
+    return toCxx(tok)->d.get_value().c_str();
 }
 
 
-CWaveToken wave_iterGetTok(CWaveIterator* iter) {
-    std::cout << sizeof(WaveToken) << std::endl;
-    return nuclear_cast<CWaveToken>(*iter);
+CWaveToken* wave_iterGetTok(CWaveIterator* iter) {
+    return (CWaveToken*)(new CxxWaveToken{*(toCxx(iter)->d)});
 }
+
+void wave_deleteTok(CWaveToken* tok) { delete (CxxWaveToken*)(tok); }
 
 bool wave_neqIterator(CWaveIterator* iter1, CWaveIterator* iter2) {
-    const WaveIterator* it1 = toCxx(iter1);
-    const WaveIterator* it2 = toCxx(iter2);
-    return *it1 != *it2;
+    const CxxWaveIterator* it1 = toCxx(iter1);
+    const CxxWaveIterator* it2 = toCxx(iter2);
+    return it1->d != it2->d;
 }
 
 void wave_advanceIterator(CWaveIterator* iter) {
-    auto it = toCxx(iter);
-    ++it;
-}
-
-
-void WaveContext::set_found_warning_directive_impl(
-    FoundWarningDirectiveCbType impl) {
-    context->get_hooks().found_warning_directive_impl = impl;
+    CxxWaveIterator* it = toCxx(iter);
+    ++(it->d);
 }
 
 
@@ -320,32 +394,71 @@ void WaveContext::processAll() {
     }
 }
 
-CWaveIterator wave_beginIterator(CWaveContext* context) {
-    return nuclear_cast<CWaveIterator>(toCxx(context)->context->begin());
+CWaveIterator* wave_beginIterator(CWaveContext* context) {
+    return (CWaveIterator*)(new CxxWaveIterator{
+        toCxx(context)->d.context->begin()});
 }
 
-CWaveIterator wave_endIterator(CWaveContext* context) {
-    return nuclear_cast<CWaveIterator>(toCxx(context)->context->end());
+CWaveIterator* wave_endIterator(CWaveContext* context) {
+    return (CWaveIterator*)(new CxxWaveIterator{
+        toCxx(context)->d.context->end()});
 }
 
 CWaveContext* wave_newWaveContext(
     const char* instring,
     const char* filename) {
-
-    return (
-        CWaveContext*)(new WaveContext(std::string(instring), filename));
+    auto res = new WaveContext(std::string(instring), filename);
+    res->context->get_hooks().context = res;
+    return (CWaveContext*)(res);
 }
 
 
+bool wave_contextHasError(CWaveContext* context) {
+    return toCxx(context)->d.hasError;
+}
+
+bool wave_contextHasWarnings(CWaveContext* context) {
+    return toCxx(context)->d.diagnostics.size() > 0;
+}
+
+WaveDiagnostics wave_contextPopWarning(CWaveContext* context) {
+    auto res = toCxx(context)->d.diagnostics.front();
+    toCxx(context)->d.diagnostics.pop();
+    return res;
+}
+
+void wave_deleteDiagnostics(WaveDiagnostics diag) {
+    std::free(diag.filename);
+    std::free(diag.errorText);
+}
+
 void wave_processAll(CWaveContext* context) {
-    toCxx(context)->processAll();
+    toCxx(context)->d.processAll();
 }
 
 void wave_setFoundWarningDirective(
     CWaveContext*                context,
     CFoundWarningDirectiveCbType impl) {
-    toCxx(context)->set_found_warning_directive_impl((EntryHandling(*)(
-        const WaveContextImpl*, const WaveTokenList*, void*))(impl));
+    toCxx(context)->d.context->get_hooks().found_warning_directive_impl = (EntryHandling(*)(
+        const WaveContextImpl*, const WaveTokenList*, void*))(impl);
+}
+
+
+void wave_setFoundUnknonwDirective(
+    CWaveContext*                context,
+    CFoundUnknownDirectiveCbType impl) {
+    toCxx(context)->d.context->get_hooks().found_unknown_directive_impl = (EntryHandling(*)(
+        const WaveContextImpl*,
+        const WaveTokenList*,
+        WaveTokenList*,
+        void*))(impl);
+}
+
+void wave_setFoundWarningDirective(
+    CWaveContext*         context,
+    CFoundDirectiveCbType impl) {
+    toCxx(context)->d.context->get_hooks().found_directive_impl = (EntryHandling(*)(
+        const WaveContextImpl*, const WaveToken*, void*))(impl);
 }
 
 void wave_destroyContext(WaveContext* context) { delete context; }

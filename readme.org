@@ -119,6 +119,8 @@ exclusive requirements.
       track /actually used types/ - doing so would require reimplementing
       all of the C++ bookeeping - ~using~ declarations, type aliases,
       active namespaces and so on.
+  - extra ::
+    - Why not use clang preprocessor callbacks? TODO explain
 - libclang ::
   - advantages ::
     - Expands all macros itself, operate on stable AST, so no code

@@ -5,41 +5,39 @@ EntryHandling found_warning_directive_impl(
     const CWaveTokenList*   message,
     void*                   env) {
     std::cout << "Found warning directive with message [["
-              << util::impl::as_string(*toCxx(message)) << "]]\n";
+              << util::impl::as_string(toCxx(message)->d) << "]]\n";
     return EntryHandlingSkip;
 }
 
 
 int main() {
-    const char* text = "#pragma once\n";
+    const char* text = "test()\n#warning \"qwe\"";
 
     CWaveContext* context = wave_newWaveContext(text, "file");
 
     wave_setFoundWarningDirective(context, &found_warning_directive_impl);
 
-    WaveIterator beginInit = toCxx(context)->context->begin();
-    WaveIterator endInit   = toCxx(context)->context->end();
+    CWaveIterator* begin = wave_beginIterator(context);
+    CWaveIterator* end   = wave_endIterator(context);
 
-    CWaveIterator beginCopy = nuclear_cast<CWaveIterator>(beginInit);
-    CWaveIterator endCopy   = nuclear_cast<CWaveIterator>(endInit);
+    while (!wave_contextHasError(context)
+           && wave_neqIterator(begin, end)) {
+        CWaveToken* tok = wave_iterGetTok(begin);
+        std::cout << "token " << wave_tokGetValue(tok) << "\n";
+        wave_advanceIterator(begin);
 
-    WaveIterator* beginPtr = (WaveIterator*)(&beginCopy);
-    WaveIterator* endPtr   = (WaveIterator*)(&endCopy);
-
-    CWaveIterator beginC = wave_beginIterator(context);
-    CWaveIterator endC   = wave_endIterator(context);
-
-    if (beginInit != endInit) {
-        ++beginInit;
+        wave_deleteTok(tok);
     }
 
-    if (*beginPtr != *endPtr) {
-        ++*beginPtr;
+    if (wave_contextHasError(context)) {
+        std::cout << "Error encountered during parsing\n";
     }
 
-    while (wave_neqIterator(&beginC, &endC)) {
-        std::cout << "token" << std::endl;
-        wave_advanceIterator(&beginC);
+    if (wave_contextHasWarnings(context)) {
+        std::cout << "Warning encountered during parsing\n";
+        auto warn = wave_contextPopWarning(context);
+        std::cout << "> " << warn.errorText << " in " << warn.filename
+                  << "\n";
     }
 
     std::cout << "Done\n";
