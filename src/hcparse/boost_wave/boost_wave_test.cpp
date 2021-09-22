@@ -11,36 +11,36 @@ EntryHandling found_warning_directive_impl(
 
 
 int main() {
-    const char* text
-        = "#pragma once\n"
-          "#warning \"asdfasdf\"\n"
-          "#warning \"zzzz\"\n";
+    const char* text = "#pragma once\n";
 
     CWaveContext* context = wave_newWaveContext(text, "file");
 
     wave_setFoundWarningDirective(context, &found_warning_directive_impl);
 
-    std::string text1(text);
+    WaveIterator beginInit = toCxx(context)->context->begin();
+    WaveIterator endInit   = toCxx(context)->context->end();
 
-    WaveContext ctx(text1, "file");
+    CWaveIterator beginCopy = nuclear_cast<CWaveIterator>(beginInit);
+    CWaveIterator endCopy   = nuclear_cast<CWaveIterator>(endInit);
 
+    WaveIterator* beginPtr = (WaveIterator*)(&beginCopy);
+    WaveIterator* endPtr   = (WaveIterator*)(&endCopy);
 
-    WaveIterator beginInit = ctx.context->begin();
-    WaveIterator endInit   = ctx.context->end();
+    CWaveIterator beginC = wave_beginIterator(context);
+    CWaveIterator endC   = wave_endIterator(context);
 
-
-    try {
-        while (beginInit != endInit) {
-            ++beginInit;
-        }
-    } catch (cpplexer::lexing_exception const& e) {
-        std::cerr << e.file_name() << "(" << e.line_no()
-                  << "): " << e.description() << std::endl;
-        return 1;
-
-    } catch (cpp_exception const& e) {
-        std::cerr << e.file_name() << "(" << e.line_no()
-                  << "): " << e.description() << std::endl;
-        return 2;
+    if (beginInit != endInit) {
+        ++beginInit;
     }
+
+    if (*beginPtr != *endPtr) {
+        ++*beginPtr;
+    }
+
+    while (wave_neqIterator(&beginC, &endC)) {
+        std::cout << "token" << std::endl;
+        wave_advanceIterator(&beginC);
+    }
+
+    std::cout << "Done\n";
 }
