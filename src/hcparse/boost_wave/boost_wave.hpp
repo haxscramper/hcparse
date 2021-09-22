@@ -84,6 +84,9 @@ using WaveTokenList = std::list<
         cpplexer::lex_token<>,
         boost::default_user_allocator_new_delete>>;
 
+using WaveTokenVector     = std::vector<WaveToken>;
+using WaveTokenListVector = std::vector<WaveTokenList>;
+
 using WaveContextImpl = context<
     std::string::iterator,
     cpplexer::lex_iterator<WaveToken>,
@@ -131,6 +134,60 @@ struct WaveHooksImpl
     void throw_exception(
         WaveContextImpl const& ctx,
         std::exception const&  e);
+
+
+    method_impl<bool, const WaveContextImpl*, WaveToken*, bool*>
+         may_skip_whitespace_impl;
+    bool may_skip_whitespace(
+        WaveContextImpl const& ctx,
+        WaveToken&             token,
+        bool&                  skipped_newline);
+
+    method_impl<
+        bool,
+        const WaveContextImpl*,
+        const WaveToken*,
+        const WaveTokenList*,
+        bool>
+         evaluated_conditional_expression_impl;
+    bool evaluated_conditional_expression(
+        WaveContextImpl const& ctx,
+        WaveToken const&       directive,
+        WaveTokenList const&   expression,
+        bool                   expression_value);
+
+
+    method_impl<void, const WaveContextImpl*, const WaveToken*>
+         skipped_token_impl;
+    void skipped_token(WaveContextImpl const& ctx, WaveToken const& token);
+
+    method_impl<WaveToken, const WaveContextImpl*, const WaveToken*>
+              generated_token_impl;
+    WaveToken generated_token(
+        WaveContextImpl const& ctx,
+        WaveToken const&       token);
+
+    method_impl<
+        bool,
+        CWaveContextImpl const*,
+        CWaveToken const*,
+        std::vector<WaveToken> const*,
+        CWaveTokenList const*,
+        CWaveToken const*,
+        std::vector<WaveTokenList> const*,
+        WaveContextImpl::iterator_type const*,
+        WaveContextImpl::iterator_type const*>
+        expanding_function_like_macro_impl;
+
+    bool expanding_function_like_macro(
+        WaveContextImpl const&                ctx,
+        WaveToken const&                      macrodef,
+        WaveTokenVector const&                formal_args,
+        WaveTokenList const&                  definition,
+        WaveToken const&                      macrocall,
+        WaveTokenListVector const&            arguments,
+        WaveContextImpl::iterator_type const& seqstart,
+        WaveContextImpl::iterator_type const& seqend);
 };
 
 using WaveIterator = WaveContextImpl::iterator_type;
@@ -139,10 +196,9 @@ struct WaveContext {
     std::unique_ptr<WaveContextImpl> context;
     std::string                      text;
     util::file_position_type         current_position;
-
-    bool hasError = false;
-
-    std::queue<WaveDiagnostics> diagnostics;
+    void*                            contextData = nullptr;
+    bool                             hasError    = false;
+    std::queue<WaveDiagnostics>      diagnostics;
 
     WaveContext(std::string _text, const char* filename);
     void processAll();

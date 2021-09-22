@@ -84,6 +84,80 @@ bool WaveHooksImpl::found_unknown_directive(
     }
 }
 
+bool WaveHooksImpl::may_skip_whitespace(
+    WaveContextImpl const& ctx,
+    WaveToken&             token,
+    bool&                  skipped_newline) {
+    if (may_skip_whitespace_impl.isActive()) {
+        return may_skip_whitespace_impl(&ctx, &token, &skipped_newline);
+    } else {
+        return false;
+    }
+}
+
+void WaveHooksImpl::skipped_token(
+    WaveContextImpl const& ctx,
+    WaveToken const&       token) {
+    if (skipped_token_impl.isActive()) {
+        skipped_token_impl(&ctx, &token);
+    }
+}
+
+
+bool WaveHooksImpl::evaluated_conditional_expression(
+    WaveContextImpl const& ctx,
+    WaveToken const&       directive,
+    WaveTokenList const&   expression,
+    bool                   expression_value) {
+    if (evaluated_conditional_expression_impl.isActive()) {
+        return evaluated_conditional_expression_impl(
+            &ctx, &directive, &expression, expression_value);
+    } else {
+        return false;
+    }
+}
+
+
+bool WaveHooksImpl::expanding_function_like_macro(
+    WaveContextImpl const&                ctx,
+    WaveToken const&                      macrodef,
+    WaveTokenVector const&                formal_args,
+    WaveTokenList const&                  definition,
+    WaveToken const&                      macrocall,
+    WaveTokenListVector const&            arguments,
+    WaveContextImpl::iterator_type const& seqstart,
+    WaveContextImpl::iterator_type const& seqend) {
+
+
+    if (expanding_function_like_macro_impl.isActive()) {
+        CxxWaveToken*     macrodef_c   = new CxxWaveToken{macrodef};
+        CxxWaveToken*     macrocall_c  = new CxxWaveToken{macrocall};
+        CxxWaveTokenList* definition_c = new CxxWaveTokenList{definition};
+        CxxWaveIterator*  seqstart_c   = new CxxWaveIterator{seqstart};
+        CxxWaveIterator*  seqend_c     = new CxxWaveIterator{seqend};
+
+        return expanding_function_like_macro_impl(
+            &ctx,                      // ctx,
+            (CWaveToken*)macrodef_c,   // macrodef,
+            NULL,                      // formal_args,
+            (CWaveToken*)definition_c, // definition,
+            (CWaveToken*)macrocall_c,  // macrocall,
+            NULL,                      // arguments,
+            (CWaveToken*)seqstart_c,   // seqstart,
+            (CWaveToken*)seqend_c      // seqend
+
+        );
+
+        delete macrodef_c;
+        delete macrocall_c;
+        delete definition_c;
+        delete seqstart_c;
+        delete seqend_c;
+    } else {
+        return false;
+    }
+}
+
 void WaveHooksImpl::throw_exception(
     const WaveContextImpl& ctx,
     const std::exception&  e) {
@@ -427,10 +501,20 @@ WaveDiagnostics wave_contextPopWarning(CWaveContext* context) {
     return res;
 }
 
+void wave_contextSetData(CWaveContext* context, void* data) {
+    toCxx(context)->d.contextData = data;
+}
+
+void* wave_contextGetData(CWaveContext* context) {
+    return toCxx(context)->d.contextData;
+}
+
+
 void wave_deleteDiagnostics(WaveDiagnostics diag) {
     std::free(diag.filename);
     std::free(diag.errorText);
 }
+
 
 void wave_processAll(CWaveContext* context) {
     toCxx(context)->d.processAll();

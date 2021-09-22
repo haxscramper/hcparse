@@ -387,9 +387,13 @@ TYPE struct WaveDiagnostics {
 } TYPE_NAME(WaveDiagnostics);
 
 
-BOOST_WAVE_EXPORT bool wave_contextHasError(CWaveContext* context);
-BOOST_WAVE_EXPORT bool wave_contextHasWarnings(CWaveContext* context);
-BOOST_WAVE_EXPORT void wave_deleteDiagnostics(WaveDiagnostics* diag);
+BOOST_WAVE_EXPORT void wave_contextSetData(
+    CWaveContext* context,
+    void*         data);
+BOOST_WAVE_EXPORT void* wave_contextGetData(CWaveContext* context);
+BOOST_WAVE_EXPORT bool  wave_contextHasError(CWaveContext* context);
+BOOST_WAVE_EXPORT bool  wave_contextHasWarnings(CWaveContext* context);
+BOOST_WAVE_EXPORT void  wave_deleteDiagnostics(WaveDiagnostics* diag);
 BOOST_WAVE_EXPORT WaveDiagnostics
     wave_contextPopWarning(CWaveContext* context);
 
