@@ -25,21 +25,6 @@ add_executable(boost_wave_test
   scratch.cpp
 )
 
-
-set(NIM_OUT_DIR "${CMAKE_BINARY_DIR}/nim_source_dir")
-
-execute_process(
-  COMMAND nim compile --noLinking --nimcache:${NIM_OUT_DIR} "boost_wave_test.nim"
-  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-)
-
-
-file(GLOB NIM_OUT_SOURCES "${NIM_OUT_DIR}/*.c")
-add_executable(boost_wave_nim ${NIM_OUT_SOURCES})
-target_sources(boost_wave_nim PUBLIC ${NIM_OUT_SOURCES})
-target_include_directories(boost_wave_nim PUBLIC ${NIM_INCLUDE_DIRS})
-
-
 target_link_libraries(boost_wave
   ${Boost_FILESYSTEM_LIBRARY}
   ${Boost_SYSTEM_LIBRARY}
@@ -54,6 +39,22 @@ target_link_libraries(boost_wave_test
   ${Boost_THREAD_LIBRARY}
 )
 
+file(GLOB NIM_IN_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.nim")
+
+add_custom_target(
+    boost_wave_nim ALL
+    COMMAND
+        nim c
+            --nimcache:"${CMAKE_BINARY_DIR}/nim_source_dir"
+            --out:"${CMAKE_CURRENT_SOURCE_DIR}/boost_wave_nim"
+            "boost_wave_test.nim"
+
+    SOURCES ${NIM_IN_SOURCES}
+    COMMENT "Build nim test file"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+
 
 target_compile_definitions(boost_wave PRIVATE BOOST_WAVE_LIBRARY)
 
@@ -61,3 +62,5 @@ set_target_properties(boost_wave
     PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
+
+add_dependencies(boost_wave_nim boost_wave)

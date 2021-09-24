@@ -11,40 +11,40 @@ const so = "./libboost_wave.so"
 
 
 type
-  MethodImpl {.header: hdr, importc.} = object
+  MethodImpl* {.header: hdr, importc.} = object
     impl: pointer
     payload: pointer
 
 
 type
-  WaveToken {.apiPtr.} = object
-  PWaveToken = ptr WaveToken
+  CWaveToken* {.apiPtr.} = object
+  PWaveToken* = ptr CWaveToken
 
-proc getValue(tok: PWaveToken): cstring {.apiProc, importc: "wave_tokGetValue".}
-proc getIdRaw(tok: PWaveToken): cint {.apiProc, importc: "wave_tokGetId".}
+proc getValue*(tok: PWaveToken): cstring {.apiProc, importc: "wave_tokGetValue".}
+proc getIdRaw*(tok: PWaveToken): cint {.apiProc, importc: "wave_tokGetId".}
 
-proc getId(tok: PWaveToken): WaveTokenId = 
-  tok.getIdRaw().WaveTokenId()
-
-type
-  WaveIterator {.apiPtr.} = object
-  PWaveIterator = ptr WaveIterator
-
-proc getTok(iter: PWaveIterator): PWaveToken {.apiProc, importc: "wave_iterGetTok".}
-proc advance(iter: PWaveIterator) {.apiProc, importc: "wave_advanceIterator".}
-proc `!=`(iter1, iter2: PWaveIterator): bool {.apiProc, importc: "wave_neqIterator".}
-proc `==`(iter1, iter2: PWaveIterator): bool {.error.}
+proc getId*(tok: PWaveToken): WaveTokId =
+  tok.getIdRaw().WaveTokId()
 
 type
-  WaveContext {.apiPtr.} = object
-  PWaveContext = ptr WaveContext
+  CWaveIterator* {.apiPtr.} = object
+  PWaveIterator* = ptr CWaveIterator
+
+proc getTok*(iter: PWaveIterator): PWaveToken {.apiProc, importc: "wave_iterGetTok".}
+proc advance*(iter: PWaveIterator) {.apiProc, importc: "wave_advanceIterator".}
+proc `!=`*(iter1, iter2: PWaveIterator): bool {.apiProc, importc: "wave_neqIterator".}
+proc `==`*(iter1, iter2: PWaveIterator): bool {.error.}
+
+type
+  CWaveContext {.apiPtr.} = object
+  PWaveContext = ptr CWaveContext
 
 
-proc newWaveContext(str, filename: cstring): PWaveContext {.apiProc, importc: "wave_newWaveContext".}
-proc destroyContext(ctx: PWaveContext) {.apiProc, importc: "wave_destroyContext".}
+proc newWaveContext*(str, filename: cstring): PWaveContext {.apiProc, importc: "wave_newWaveContext".}
+proc destroyContext*(ctx: PWaveContext) {.apiProc, importc: "wave_destroyContext".}
 
-proc first(ctx: PWaveContext): PWaveIterator {.apiProc, importc: "wave_beginIterator".}
-proc last(ctx: PWaveContext): PWaveIterator {.apiProc, importc: "wave_endIterator".}
+proc first*(ctx: PWaveContext): PWaveIterator {.apiProc, importc: "wave_beginIterator".}
+proc last*(ctx: PWaveContext): PWaveIterator {.apiProc, importc: "wave_endIterator".}
 
 
 type
@@ -55,15 +55,4 @@ type
 
 
 
-
-proc main() =
-  let ctx = newWaveContext(allocCStringArray(["int main() {}"])[0], "<Unknown>".cstring)
-
-  var first: PWaveIterator = ctx.first()
-  while first != ctx.last():
-    # echo "TOK: ", first.getTok().getValue(), " ", first.getTok().getId()
-    first.advance()
-
-when isMainModule:
-  main()
 
