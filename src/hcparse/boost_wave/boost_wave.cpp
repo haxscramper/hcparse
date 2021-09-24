@@ -135,33 +135,6 @@ WaveToken WaveHooksImpl::generated_token(
 }
 
 
-bool WaveHooksImpl::expanding_function_like_macro(
-    WaveContextImpl const&     ctx,
-    WaveToken const&           macrodef,
-    WaveTokenVector const&     formal_args,
-    WaveTokenList const&       definition,
-    WaveToken const&           macrocall,
-    WaveTokenListVector const& arguments,
-    WaveUnputIterator const&   seqstart,
-    WaveUnputIterator const&   seqend) {
-
-
-    if (expanding_function_like_macro_impl.isActive()) {
-        return expanding_function_like_macro_impl(
-            &ctx,         // ctx,
-            &macrodef,    // macrodef,
-            &formal_args, // formal_args,
-            &definition,  // definition,
-            &macrocall,   // macrocall,
-            &arguments,   // arguments,
-            &seqstart,    // seqstart,
-            &seqstart     // seqend
-        );
-    } else {
-        return false;
-    }
-}
-
 bool WaveHooksImpl::expanding_object_like_macro(
     const WaveContextImpl& ctx,
     const WaveToken&       macro,

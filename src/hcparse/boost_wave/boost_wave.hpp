@@ -92,8 +92,6 @@ using WaveContextImpl = context<
     iteration_context_policies::load_file_to_string,
     WaveHooksImpl>;
 
-using WaveUnputIterator = WaveTokenList::const_iterator;
-
 struct WaveContext;
 
 struct WaveHooksImpl
@@ -159,17 +157,9 @@ struct WaveHooksImpl
         WaveToken const&       token);
 
 
-    method_impl<
-        bool,
-        WaveContextImpl const*,
-        WaveToken const*,
-        std::vector<WaveToken> const*,
-        WaveTokenList const*,
-        WaveToken const*,
-        std::vector<WaveTokenList> const*,
-        WaveUnputIterator const*,
-        WaveUnputIterator const*>
-         expanding_function_like_macro_impl;
+    method_impl<bool, void*> expanding_function_like_macro_impl;
+
+    template <typename Iterator>
     bool expanding_function_like_macro(
         WaveContextImpl const&     ctx,
         WaveToken const&           macrodef,
@@ -177,8 +167,8 @@ struct WaveHooksImpl
         WaveTokenList const&       definition,
         WaveToken const&           macrocall,
         WaveTokenListVector const& arguments,
-        WaveUnputIterator const&   seqstart,
-        WaveUnputIterator const&   seqend);
+        Iterator const&            seqstart,
+        Iterator const&            seqend);
 
     method_impl<
         EntryHandling,
@@ -410,5 +400,48 @@ inline CxxWaveToken* toCxx(const CWaveToken* tok) {
     return (CxxWaveToken*)(tok);
 }
 
+template <typename Iterator>
+bool WaveHooksImpl::expanding_function_like_macro(
+    WaveContextImpl const&     ctx,
+    WaveToken const&           macrodef,
+    WaveTokenVector const&     formal_args,
+    WaveTokenList const&       definition,
+    WaveToken const&           macrocall,
+    WaveTokenListVector const& arguments,
+    const Iterator&            seqstart,
+    const Iterator&            seqend) {
+
+
+    if (expanding_function_like_macro_impl.isActive()) {
+        method_impl<
+            bool,
+            WaveContextImpl const*,
+            WaveToken const*,
+            std::vector<WaveToken> const*,
+            WaveTokenList const*,
+            WaveToken const*,
+            std::vector<WaveTokenList> const*,
+            void*,
+            void*>
+            real_impl;
+
+        real_impl.impl = (decltype(real_impl.impl))
+                             expanding_function_like_macro_impl.impl;
+        real_impl.env = expanding_function_like_macro_impl.env;
+
+        return real_impl(
+            &ctx,             // ctx,
+            &macrodef,        // macrodef,
+            &formal_args,     // formal_args,
+            &definition,      // definition,
+            &macrocall,       // macrocall,
+            &arguments,       // arguments,
+            (void*)&seqstart, // seqstart,
+            (void*)&seqstart  // seqend
+        );
+    } else {
+        return false;
+    }
+}
 
 #endif // BOOST_WAVE_HPP

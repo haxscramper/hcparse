@@ -11,7 +11,7 @@ EntryHandling found_warning_directive_impl(
 
 
 int main() {
-    const char* text = "test()\n#warning \"qwe\"";
+    const char* text = "test()\n#warning \"qwe\"\n";
 
     CWaveContext* context = wave_newWaveContext(text, "file");
 
