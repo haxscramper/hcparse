@@ -5,10 +5,14 @@ import ./boost_wave_tokens
 const hdr = "wave_c_api.h"
 const so = "./libboost_wave.so"
 
-
 {.pragma: apiPtr, header: hdr, requiresinit, bycopy.}
 {.pragma: apiProc, dynlib: so, cdecl.}
 
+type
+  EntryHandling* = enum
+    ehSkip
+    ehProcess
+    ehRaise
 
 type
   MethodImpl* {.header: hdr, importc.} = object
@@ -36,8 +40,37 @@ proc `!=`*(iter1, iter2: PWaveIterator): bool {.apiProc, importc: "wave_neqItera
 proc `==`*(iter1, iter2: PWaveIterator): bool {.error.}
 
 type
-  CWaveContext {.apiPtr.} = object
-  PWaveContext = ptr CWaveContext
+  CWaveContext* {.apiPtr.} = object
+  CWaveContextImpl* {.apiPtr.} = object
+  CWaveTokenList* {.apiPtr.} = object
+  PWaveContext* = ptr CWaveContext
+
+  FoundWarningDirectiveCb = proc(
+    ctx: ptr CWaveContextImpl,
+    message: ptr CWaveTokenList): EntryHandling
+
+  FoundWarningDirectiveImpl = proc(
+    ctx: ptr CWaveContextImpl,
+    message: ptr CWaveTokenList,
+    env: pointer
+  ): EntryHandling {.cdecl.}
+
+proc setFoundWarningDirective*(
+    ctx: PWaveContext,
+    impl: FoundWarningDirectiveImpl,
+    env: pointer
+  ) {.apiProc, importc: "wave_setFoundWarningDirective".}
+
+
+
+proc setFoundWarningDirective*(
+    ctx: PWaveContext,
+    impl: FoundWarningDirectiveCb) =
+
+  let env = rawEnv(impl)
+  let impl = rawProc(impl)
+  ctx.setFoundWarningDirective(cast[FoundWarningDirectiveImpl](impl), env)
+
 
 
 proc newWaveContext*(str, filename: cstring): PWaveContext {.apiProc, importc: "wave_newWaveContext".}

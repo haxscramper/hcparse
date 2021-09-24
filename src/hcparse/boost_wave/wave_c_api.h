@@ -350,7 +350,8 @@ typedef EntryHandling (*CFoundWarningDirectiveCbType)(
 
 BOOST_WAVE_EXPORT void wave_setFoundWarningDirective(
     CWaveContext*                context,
-    CFoundWarningDirectiveCbType impl);
+    CFoundWarningDirectiveCbType impl,
+    void*                        env);
 
 typedef EntryHandling (*CFoundUnknownDirectiveCbType)(
     CWaveContextImpl* ctx,

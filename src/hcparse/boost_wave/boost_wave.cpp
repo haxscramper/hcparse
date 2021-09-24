@@ -735,9 +735,11 @@ void wave_processAll(CWaveContext* context) {
 
 void wave_setFoundWarningDirective(
     CWaveContext*                context,
-    CFoundWarningDirectiveCbType impl) {
-    toCxx(context)->context->get_hooks().found_warning_directive_impl = (EntryHandling(*)(
+    CFoundWarningDirectiveCbType impl,
+    void*                        env) {
+    toCxx(context)->context->get_hooks().found_warning_directive_impl.impl = (EntryHandling(*)(
         const WaveContextImpl*, const WaveTokenList*, void*))(impl);
+    toCxx(context)->context->get_hooks().found_warning_directive_impl.env = env;
 }
 
 

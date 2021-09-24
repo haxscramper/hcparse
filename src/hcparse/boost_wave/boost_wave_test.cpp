@@ -15,7 +15,7 @@ int main() {
     CWaveContext* context = wave_newWaveContext(text, "file");
 
     //    wave_setFoundWarningDirective(context,
-    //    &found_warning_directive_impl);
+    //    &found_warning_directive_impl, NULL);
 
 
     CWaveIterator* begin = wave_beginIterator(context);

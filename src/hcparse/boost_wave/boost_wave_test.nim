@@ -1,7 +1,12 @@
 import ./boost_wave
 
 proc main() =
-  let ctx = newWaveContext(allocCStringArray(["int main() {}"])[0], "<Unknown>".cstring)
+  var ctx = newWaveContext(allocCStringArray(["#warning \"123\"\n"])[0], "<Unknown>".cstring)
+  ctx.setFoundWarningDirective(
+    proc(ctx: ptr CWaveContextImpl, message: ptr CWaveTokenList): EntryHandling =
+      echo "Found warning directive"
+      return ehSkip
+  )
 
   var first: PWaveIterator = ctx.first()
   while first != ctx.last():
