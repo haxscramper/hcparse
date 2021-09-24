@@ -11,20 +11,7 @@ EntryHandling found_warning_directive_impl(
 
 
 int main() {
-    const char* text = "test()\n";
-
-    std::string text1(text);
-
-    WaveContextImpl ctx(text1.begin(), text1.end(), "file");
-
-    auto first = ctx.begin();
-    auto last  = ctx.end();
-
-    while (first != last) {
-        std::cout << (*first).get_value() << std::endl;
-        ++first;
-    }
-
+    const char*   text    = "test()\n";
     CWaveContext* context = wave_newWaveContext(text, "file");
 
     //    wave_setFoundWarningDirective(context,
@@ -34,14 +21,11 @@ int main() {
     CWaveIterator* begin = wave_beginIterator(context);
     CWaveIterator* end   = wave_endIterator(context);
 
-    CxxWaveIterator* beginCxx = toCxx(begin);
-    CxxWaveIterator* endCxx   = toCxx(end);
-
-    while (!wave_contextHasError(context) && beginCxx->d != endCxx->d) {
+    while (!wave_contextHasError(context)
+           && wave_neqIterator(begin, end)) {
         CWaveToken* tok = wave_iterGetTok(begin);
         std::cout << "token " << wave_tokGetValue(tok) << "\n";
         wave_advanceIterator(begin);
-
         wave_deleteTok(tok);
     }
 
