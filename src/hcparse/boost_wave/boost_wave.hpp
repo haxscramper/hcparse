@@ -100,59 +100,60 @@ struct WaveHooksImpl
     WaveContext* context = nullptr;
 
 
-    // FoundDirectiveCbType
-    method_impl<EntryHandling, const WaveContextImpl*, const WaveToken*>
-         found_directive_impl;
-    bool found_directive(
-        WaveContextImpl const& ctx,
-        WaveToken const&       token);
+    //    // FoundDirectiveCbType
+    //    method_impl<EntryHandling, const WaveContextImpl*, const
+    //    WaveToken*>
+    //         found_directive_impl;
+    //    bool found_directive(
+    //        WaveContextImpl const& ctx,
+    //        WaveToken const&       token);
 
 
-    // FoundUnknownDirectiveCbType
-    method_impl<
-        EntryHandling,
-        const WaveContextImpl*,
-        const WaveTokenList*,
-        WaveTokenList*>
-         found_unknown_directive_impl;
-    bool found_unknown_directive(
-        WaveContextImpl const& ctx,
-        WaveTokenList const&   line,
-        WaveTokenList&         pending);
+    //    // FoundUnknownDirectiveCbType
+    //    method_impl<
+    //        EntryHandling,
+    //        const WaveContextImpl*,
+    //        const WaveTokenList*,
+    //        WaveTokenList*>
+    //         found_unknown_directive_impl;
+    //    bool found_unknown_directive(
+    //        WaveContextImpl const& ctx,
+    //        WaveTokenList const&   line,
+    //        WaveTokenList&         pending);
 
-    void throw_exception(
-        WaveContextImpl const& ctx,
-        std::exception const&  e);
+    //    void throw_exception(
+    //        WaveContextImpl const& ctx,
+    //        std::exception const&  e);
 
 
-    method_impl<bool, const WaveContextImpl*, WaveToken*, bool*>
-         may_skip_whitespace_impl;
-    bool may_skip_whitespace(
-        WaveContextImpl const& ctx,
-        WaveToken&             token,
-        bool&                  skipped_newline);
+    //    method_impl<bool, const WaveContextImpl*, WaveToken*, bool*>
+    //         may_skip_whitespace_impl;
+    //    bool may_skip_whitespace(
+    //        WaveContextImpl const& ctx,
+    //        WaveToken&             token,
+    //        bool&                  skipped_newline);
 
-    method_impl<
-        bool,
-        const WaveContextImpl*,
-        const WaveToken*,
-        const WaveTokenList*,
-        bool>
-         evaluated_conditional_expression_impl;
-    bool evaluated_conditional_expression(
-        WaveContextImpl const& ctx,
-        WaveToken const&       directive,
-        WaveTokenList const&   expression,
-        bool                   expression_value);
+    //    method_impl<
+    //        bool,
+    //        const WaveContextImpl*,
+    //        const WaveToken*,
+    //        const WaveTokenList*,
+    //        bool>
+    //         evaluated_conditional_expression_impl;
+    //    bool evaluated_conditional_expression(
+    //        WaveContextImpl const& ctx,
+    //        WaveToken const&       directive,
+    //        WaveTokenList const&   expression,
+    //        bool                   expression_value);
 
 
     method_impl<void, const WaveContextImpl*, const WaveToken*>
          skipped_token_impl;
     void skipped_token(WaveContextImpl const& ctx, WaveToken const& token);
 
-    method_impl<WaveToken, const WaveContextImpl*, const WaveToken*>
-              generated_token_impl;
-    WaveToken generated_token(
+    method_impl<const WaveToken*, const WaveContextImpl*, const WaveToken*>
+                     generated_token_impl;
+    WaveToken const& generated_token(
         WaveContextImpl const& ctx,
         WaveToken const&       token);
 
@@ -170,125 +171,163 @@ struct WaveHooksImpl
         Iterator const&            seqstart,
         Iterator const&            seqend);
 
-    method_impl<
-        EntryHandling,
-        const WaveContextImpl*,
-        const WaveToken*,
-        const WaveTokenList*,
-        const WaveToken*>
-         expanding_object_like_macro_impl;
-    bool expanding_object_like_macro(
-        WaveContextImpl const& ctx,
-        WaveToken const&       macro,
-        WaveTokenList const&   definition,
-        WaveToken const&       macrocall);
+    //    method_impl<
+    //        EntryHandling,
+    //        const WaveContextImpl*,
+    //        const WaveToken*,
+    //        const WaveTokenList*,
+    //        const WaveToken*>
+    //         expanding_object_like_macro_impl;
+    //    bool expanding_object_like_macro(
+    //        WaveContextImpl const& ctx,
+    //        WaveToken const&       macro,
+    //        WaveTokenList const&   definition,
+    //        WaveToken const&       macrocall);
 
-    method_impl<void, const WaveContextImpl*, const WaveTokenList*>
-         expanded_macro_impl;
-    void expanded_macro(
-        WaveContextImpl const& ctx,
-        WaveTokenList const&   result);
+    //    method_impl<void, const WaveContextImpl*, const WaveTokenList*>
+    //         expanded_macro_impl;
+    //    void expanded_macro(
+    //        WaveContextImpl const& ctx,
+    //        WaveTokenList const&   result);
 
-    method_impl<void, const WaveContextImpl*, const WaveTokenList*>
-         rescanned_macro_impl;
-    void rescanned_macro(
-        WaveContextImpl const& ctx,
-        WaveTokenList const&   result);
+    //    method_impl<void, const WaveContextImpl*, const WaveTokenList*>
+    //         rescanned_macro_impl;
+    //    void rescanned_macro(
+    //        WaveContextImpl const& ctx,
+    //        WaveTokenList const&   result);
 
-    method_impl<EntryHandling, const WaveContextImpl*, const char*, bool>
-         found_include_directive_impl;
-    bool found_include_directive(
-        WaveContextImpl const& ctx,
-        std::string const&     filename,
-        bool                   include_next);
+    //    method_impl<EntryHandling, const WaveContextImpl*, const char*,
+    //    bool>
+    //         found_include_directive_impl;
+    //    bool found_include_directive(
+    //        WaveContextImpl const& ctx,
+    //        std::string const&     filename,
+    //        bool                   include_next);
 
-    method_impl<
-        EntryHandling,
-        WaveContextImpl*,
-        char*,
-        bool,
-        char const*,
-        char*,
-        char*>
-         locate_include_file_impl;
-    bool locate_include_file(
-        WaveContextImpl& ctx,
-        std::string&     file_path,
-        bool             is_system,
-        char const*      current_name,
-        std::string&     dir_path,
-        std::string&     native_name);
+    //    method_impl<
+    //        EntryHandling,
+    //        WaveContextImpl*,
+    //        char*,
+    //        bool,
+    //        char const*,
+    //        char*,
+    //        char*>
+    //         locate_include_file_impl;
+    //    bool locate_include_file(
+    //        WaveContextImpl& ctx,
+    //        std::string&     file_path,
+    //        bool             is_system,
+    //        char const*      current_name,
+    //        std::string&     dir_path,
+    //        std::string&     native_name);
 
-    method_impl<
-        void,
-        WaveContextImpl const*,
-        const char*,
-        const char*,
-        bool>
-         opened_include_file_impl;
-    void opened_include_file(
-        WaveContextImpl const& ctx,
-        std::string const&     rel_filename,
-        std::string const&     abs_filename,
-        bool                   is_system_include);
-
-
-    method_impl<void, WaveContextImpl const*>
-         returning_from_include_file_impl;
-    void returning_from_include_file(WaveContextImpl const& ctx);
-
-    method_impl<void, WaveContextImpl const*, const char*, const char*>
-         detected_include_guard_impl;
-    void detected_include_guard(
-        WaveContextImpl const& ctx,
-        std::string const&     filename,
-        std::string const&     include_guard);
-
-    method_impl<
-        void,
-        const WaveContextImpl*,
-        const WaveToken*,
-        const char*>
-         detected_pragma_once_impl;
-    void detected_pragma_once(
-        WaveContextImpl const& ctx,
-        WaveToken const&       pragma_token,
-        std::string const&     filename);
-
-    method_impl<
-        bool,
-        WaveContextImpl const*,
-        WaveTokenList*,
-        WaveToken const*,
-        WaveTokenList const*,
-        WaveToken const*>
-         interpret_pragma_impl;
-    bool interpret_pragma(
-        WaveContextImpl const& ctx,
-        WaveTokenList&         pending,
-        WaveToken const&       option,
-        WaveTokenList const&   values,
-        WaveToken const&       pragma_token);
-
-    //    template <
-    //        typename ContextT,
-    //        typename TokenT,
-    //        typename ParametersT,
-    //        typename DefinitionT>
-    //    void defined_macro(
-    //        ContextT const&    ctx,
-    //        TokenT const&      name,
-    //        bool               is_functionlike,
-    //        ParametersT const& parameters,
-    //        DefinitionT const& definition,
-    //        bool               is_predefined);
+    //    method_impl<
+    //        void,
+    //        WaveContextImpl const*,
+    //        const char*,
+    //        const char*,
+    //        bool>
+    //         opened_include_file_impl;
+    //    void opened_include_file(
+    //        WaveContextImpl const& ctx,
+    //        std::string const&     rel_filename,
+    //        std::string const&     abs_filename,
+    //        bool                   is_system_include);
 
 
-    method_impl<void, WaveContextImpl const*, WaveToken const*>
-         undefined_macro_impl;
-    void undefined_macro(
-        WaveContextImpl const& ctx,
-        WaveToken const&       name);
+    //    method_impl<void, WaveContextImpl const*>
+    //         returning_from_include_file_impl;
+    //    void returning_from_include_file(WaveContextImpl const& ctx);
+
+    //    method_impl<void, WaveContextImpl const*, const char*, const
+    //    char*>
+    //         detected_include_guard_impl;
+    //    void detected_include_guard(
+    //        WaveContextImpl const& ctx,
+    //        std::string const&     filename,
+    //        std::string const&     include_guard);
+
+    //    method_impl<
+    //        void,
+    //        const WaveContextImpl*,
+    //        const WaveToken*,
+    //        const char*>
+    //         detected_pragma_once_impl;
+    //    void detected_pragma_once(
+    //        WaveContextImpl const& ctx,
+    //        WaveToken const&       pragma_token,
+    //        std::string const&     filename);
+
+    //    method_impl<
+    //        bool,
+    //        WaveContextImpl const*,
+    //        WaveTokenList*,
+    //        WaveToken const*,
+    //        WaveTokenList const*,
+    //        WaveToken const*>
+    //         interpret_pragma_impl;
+    //    bool interpret_pragma(
+    //        WaveContextImpl const& ctx,
+    //        WaveTokenList&         pending,
+    //        WaveToken const&       option,
+    //        WaveTokenList const&   values,
+    //        WaveToken const&       pragma_token);
+
+    //    //    template <
+    //    //        typename ContextT,
+    //    //        typename TokenT,
+    //    //        typename ParametersT,
+    //    //        typename DefinitionT>
+    //    //    void defined_macro(
+    //    //        ContextT const&    ctx,
+    //    //        TokenT const&      name,
+    //    //        bool               is_functionlike,
+    //    //        ParametersT const& parameters,
+    //    //        DefinitionT const& definition,
+    //    //        bool               is_predefined);
+
+
+    //    method_impl<void, WaveContextImpl const*, WaveToken const*>
+    //         undefined_macro_impl;
+    //    void undefined_macro(
+    //        WaveContextImpl const& ctx,
+    //        WaveToken const&       name);
+
+
+    //    // FoundWarningDirectiveCbType
+    //    method_impl<
+    //        EntryHandling,
+    //        const WaveContextImpl*,
+    //        const WaveTokenList*>
+    //         found_error_directive_impl;
+    //    bool found_error_directive(
+    //        WaveContextImpl const& ctx,
+    //        WaveTokenList const&   message);
+
+    //    // FoundWarningDirectiveCbType
+    //    method_impl<
+    //        EntryHandling,
+    //        const WaveContextImpl*,
+    //        const WaveTokenList*,
+    //        unsigned int,
+    //        const char*>
+    //         found_line_directive_impl;
+    //    void found_line_directive(
+    //        WaveContextImpl const& ctx,
+    //        WaveTokenList const&   arguments,
+    //        unsigned int           line,
+    //        std::string const&     filename);
+
+    //    method_impl<
+    //        EntryHandling,
+    //        WaveContextImpl const*,
+    //        WaveTokenList*,
+    //        WaveToken const*>
+    //         emit_line_directive_impl;
+    //    bool emit_line_directive(
+    //        WaveContextImpl const& ctx,
+    //        WaveTokenList&         pending,
+    //        WaveToken const&       act_token);
 
 
     // FoundWarningDirectiveCbType
@@ -300,41 +339,6 @@ struct WaveHooksImpl
     bool found_warning_directive(
         WaveContextImpl const& ctx,
         WaveTokenList const&   message);
-
-    // FoundWarningDirectiveCbType
-    method_impl<
-        EntryHandling,
-        const WaveContextImpl*,
-        const WaveTokenList*>
-         found_error_directive_impl;
-    bool found_error_directive(
-        WaveContextImpl const& ctx,
-        WaveTokenList const&   message);
-
-    // FoundWarningDirectiveCbType
-    method_impl<
-        EntryHandling,
-        const WaveContextImpl*,
-        const WaveTokenList*,
-        unsigned int,
-        const char*>
-         found_line_directive_impl;
-    void found_line_directive(
-        WaveContextImpl const& ctx,
-        WaveTokenList const&   arguments,
-        unsigned int           line,
-        std::string const&     filename);
-
-    method_impl<
-        EntryHandling,
-        WaveContextImpl const*,
-        WaveTokenList*,
-        WaveToken const*>
-         emit_line_directive_impl;
-    bool emit_line_directive(
-        WaveContextImpl const& ctx,
-        WaveTokenList&         pending,
-        WaveToken const&       act_token);
 };
 
 
@@ -372,12 +376,9 @@ struct CxxWaveIterator {
     WaveIterator d;
 };
 
-struct CxxWaveContext {
-    WaveContext d;
-};
 
-inline CxxWaveContext* toCxx(CWaveContext* context) {
-    return (CxxWaveContext*)(context);
+inline WaveContext* toCxx(CWaveContext* context) {
+    return (WaveContext*)(context);
 }
 
 inline CxxWaveTokenList* toCxx(CWaveTokenList* context) {
@@ -440,7 +441,15 @@ bool WaveHooksImpl::expanding_function_like_macro(
             (void*)&seqstart  // seqend
         );
     } else {
-        return false;
+        return default_preprocessing_hooks::expanding_function_like_macro(
+            ctx,
+            macrodef,
+            formal_args,
+            definition,
+            macrocall,
+            arguments,
+            seqstart,
+            seqend);
     }
 }
 
