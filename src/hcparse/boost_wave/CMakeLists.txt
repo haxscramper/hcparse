@@ -36,6 +36,7 @@ execute_process(
 
 file(GLOB NIM_OUT_SOURCES "${NIM_OUT_DIR}/*.c")
 add_executable(boost_wave_nim ${NIM_OUT_SOURCES})
+target_sources(boost_wave_nim PUBLIC ${NIM_OUT_SOURCES})
 target_include_directories(boost_wave_nim PUBLIC ${NIM_INCLUDE_DIRS})
 
 
