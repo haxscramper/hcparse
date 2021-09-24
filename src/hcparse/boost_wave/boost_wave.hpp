@@ -59,7 +59,6 @@ struct method_impl {
         impl = nullptr;
     };
 
-
     method_impl(
         ResultT (*_impl)(Arguments..., void* env),
         void* _env = nullptr)
@@ -93,22 +92,14 @@ using WaveContextImpl = context<
     iteration_context_policies::load_file_to_string,
     WaveHooksImpl>;
 
+using WaveUnputIterator = WaveTokenList::const_iterator;
+
 struct WaveContext;
 
 struct WaveHooksImpl
     : public context_policies::default_preprocessing_hooks {
 
     WaveContext* context = nullptr;
-
-    // FoundWarningDirectiveCbType
-    method_impl<
-        EntryHandling,
-        const WaveContextImpl*,
-        const WaveTokenList*>
-         found_warning_directive_impl;
-    bool found_warning_directive(
-        WaveContextImpl const& ctx,
-        WaveTokenList const&   message);
 
 
     // FoundDirectiveCbType
@@ -167,28 +158,195 @@ struct WaveHooksImpl
         WaveContextImpl const& ctx,
         WaveToken const&       token);
 
+
     method_impl<
         bool,
-        CWaveContextImpl const*,
-        CWaveToken const*,
+        WaveContextImpl const*,
+        WaveToken const*,
         std::vector<WaveToken> const*,
-        CWaveTokenList const*,
-        CWaveToken const*,
+        WaveTokenList const*,
+        WaveToken const*,
         std::vector<WaveTokenList> const*,
-        WaveContextImpl::iterator_type const*,
-        WaveContextImpl::iterator_type const*>
-        expanding_function_like_macro_impl;
-
+        WaveUnputIterator const*,
+        WaveUnputIterator const*>
+         expanding_function_like_macro_impl;
     bool expanding_function_like_macro(
-        WaveContextImpl const&                ctx,
-        WaveToken const&                      macrodef,
-        WaveTokenVector const&                formal_args,
-        WaveTokenList const&                  definition,
-        WaveToken const&                      macrocall,
-        WaveTokenListVector const&            arguments,
-        WaveContextImpl::iterator_type const& seqstart,
-        WaveContextImpl::iterator_type const& seqend);
+        WaveContextImpl const&     ctx,
+        WaveToken const&           macrodef,
+        WaveTokenVector const&     formal_args,
+        WaveTokenList const&       definition,
+        WaveToken const&           macrocall,
+        WaveTokenListVector const& arguments,
+        WaveUnputIterator const&   seqstart,
+        WaveUnputIterator const&   seqend);
+
+    method_impl<
+        EntryHandling,
+        const WaveContextImpl*,
+        const WaveToken*,
+        const WaveTokenList*,
+        const WaveToken*>
+         expanding_object_like_macro_impl;
+    bool expanding_object_like_macro(
+        WaveContextImpl const& ctx,
+        WaveToken const&       macro,
+        WaveTokenList const&   definition,
+        WaveToken const&       macrocall);
+
+    method_impl<void, const WaveContextImpl*, const WaveTokenList*>
+         expanded_macro_impl;
+    void expanded_macro(
+        WaveContextImpl const& ctx,
+        WaveTokenList const&   result);
+
+    method_impl<void, const WaveContextImpl*, const WaveTokenList*>
+         rescanned_macro_impl;
+    void rescanned_macro(
+        WaveContextImpl const& ctx,
+        WaveTokenList const&   result);
+
+    method_impl<EntryHandling, const WaveContextImpl*, const char*, bool>
+         found_include_directive_impl;
+    bool found_include_directive(
+        WaveContextImpl const& ctx,
+        std::string const&     filename,
+        bool                   include_next);
+
+    method_impl<
+        EntryHandling,
+        WaveContextImpl*,
+        char*,
+        bool,
+        char const*,
+        char*,
+        char*>
+         locate_include_file_impl;
+    bool locate_include_file(
+        WaveContextImpl& ctx,
+        std::string&     file_path,
+        bool             is_system,
+        char const*      current_name,
+        std::string&     dir_path,
+        std::string&     native_name);
+
+    method_impl<
+        void,
+        WaveContextImpl const*,
+        const char*,
+        const char*,
+        bool>
+         opened_include_file_impl;
+    void opened_include_file(
+        WaveContextImpl const& ctx,
+        std::string const&     rel_filename,
+        std::string const&     abs_filename,
+        bool                   is_system_include);
+
+
+    method_impl<void, WaveContextImpl const*>
+         returning_from_include_file_impl;
+    void returning_from_include_file(WaveContextImpl const& ctx);
+
+    method_impl<void, WaveContextImpl const*, const char*, const char*>
+         detected_include_guard_impl;
+    void detected_include_guard(
+        WaveContextImpl const& ctx,
+        std::string const&     filename,
+        std::string const&     include_guard);
+
+    method_impl<
+        void,
+        const WaveContextImpl*,
+        const WaveToken*,
+        const char*>
+         detected_pragma_once_impl;
+    void detected_pragma_once(
+        WaveContextImpl const& ctx,
+        WaveToken const&       pragma_token,
+        std::string const&     filename);
+
+    method_impl<
+        bool,
+        WaveContextImpl const*,
+        WaveTokenList*,
+        WaveToken const*,
+        WaveTokenList const*,
+        WaveToken const*>
+         interpret_pragma_impl;
+    bool interpret_pragma(
+        WaveContextImpl const& ctx,
+        WaveTokenList&         pending,
+        WaveToken const&       option,
+        WaveTokenList const&   values,
+        WaveToken const&       pragma_token);
+
+    //    template <
+    //        typename ContextT,
+    //        typename TokenT,
+    //        typename ParametersT,
+    //        typename DefinitionT>
+    //    void defined_macro(
+    //        ContextT const&    ctx,
+    //        TokenT const&      name,
+    //        bool               is_functionlike,
+    //        ParametersT const& parameters,
+    //        DefinitionT const& definition,
+    //        bool               is_predefined);
+
+
+    method_impl<void, WaveContextImpl const*, WaveToken const*>
+         undefined_macro_impl;
+    void undefined_macro(
+        WaveContextImpl const& ctx,
+        WaveToken const&       name);
+
+
+    // FoundWarningDirectiveCbType
+    method_impl<
+        EntryHandling,
+        const WaveContextImpl*,
+        const WaveTokenList*>
+         found_warning_directive_impl;
+    bool found_warning_directive(
+        WaveContextImpl const& ctx,
+        WaveTokenList const&   message);
+
+    // FoundWarningDirectiveCbType
+    method_impl<
+        EntryHandling,
+        const WaveContextImpl*,
+        const WaveTokenList*>
+         found_error_directive_impl;
+    bool found_error_directive(
+        WaveContextImpl const& ctx,
+        WaveTokenList const&   message);
+
+    // FoundWarningDirectiveCbType
+    method_impl<
+        EntryHandling,
+        const WaveContextImpl*,
+        const WaveTokenList*,
+        unsigned int,
+        const char*>
+         found_line_directive_impl;
+    void found_line_directive(
+        WaveContextImpl const& ctx,
+        WaveTokenList const&   arguments,
+        unsigned int           line,
+        std::string const&     filename);
+
+    method_impl<
+        EntryHandling,
+        WaveContextImpl const*,
+        WaveTokenList*,
+        WaveToken const*>
+         emit_line_directive_impl;
+    bool emit_line_directive(
+        WaveContextImpl const& ctx,
+        WaveTokenList&         pending,
+        WaveToken const&       act_token);
 };
+
 
 using WaveIterator = WaveContextImpl::iterator_type;
 
@@ -251,5 +409,6 @@ inline const CxxWaveIterator* toCxx(const CWaveIterator* context) {
 inline CxxWaveToken* toCxx(const CWaveToken* tok) {
     return (CxxWaveToken*)(tok);
 }
+
 
 #endif // BOOST_WAVE_HPP

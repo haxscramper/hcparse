@@ -11,29 +11,6 @@ const char* to_string(EntryHandling handling) {
 }
 
 
-bool WaveHooksImpl::found_warning_directive(
-    WaveContextImpl const& ctx,
-    WaveTokenList const&   message) {
-    if (found_warning_directive_impl.isActive()) {
-        auto handling = found_warning_directive_impl(&ctx, &message);
-
-        switch (handling) {
-            case EntryHandlingRaise: return false;
-            case EntryHandlingSkip: return true;
-            default:
-                throw std::logic_error(
-                    std::string("'found_warning_directive_impl' returned "
-                                "unexpected "
-                                "entry handling value - wanted 'raise' or "
-                                "'skip', but "
-                                "got ")
-                    + to_string(handling));
-        }
-    } else {
-        return false;
-    }
-}
-
 bool WaveHooksImpl::found_directive(
     const WaveContextImpl& ctx,
     const WaveToken&       token) {
@@ -118,46 +95,6 @@ bool WaveHooksImpl::evaluated_conditional_expression(
 }
 
 
-bool WaveHooksImpl::expanding_function_like_macro(
-    WaveContextImpl const&                ctx,
-    WaveToken const&                      macrodef,
-    WaveTokenVector const&                formal_args,
-    WaveTokenList const&                  definition,
-    WaveToken const&                      macrocall,
-    WaveTokenListVector const&            arguments,
-    WaveContextImpl::iterator_type const& seqstart,
-    WaveContextImpl::iterator_type const& seqend) {
-
-
-    if (expanding_function_like_macro_impl.isActive()) {
-        CxxWaveToken*     macrodef_c   = new CxxWaveToken{macrodef};
-        CxxWaveToken*     macrocall_c  = new CxxWaveToken{macrocall};
-        CxxWaveTokenList* definition_c = new CxxWaveTokenList{definition};
-        CxxWaveIterator*  seqstart_c   = new CxxWaveIterator{seqstart};
-        CxxWaveIterator*  seqend_c     = new CxxWaveIterator{seqend};
-
-        return expanding_function_like_macro_impl(
-            &ctx,                      // ctx,
-            (CWaveToken*)macrodef_c,   // macrodef,
-            NULL,                      // formal_args,
-            (CWaveToken*)definition_c, // definition,
-            (CWaveToken*)macrocall_c,  // macrocall,
-            NULL,                      // arguments,
-            (CWaveToken*)seqstart_c,   // seqstart,
-            (CWaveToken*)seqend_c      // seqend
-
-        );
-
-        delete macrodef_c;
-        delete macrocall_c;
-        delete definition_c;
-        delete seqstart_c;
-        delete seqend_c;
-    } else {
-        return false;
-    }
-}
-
 void WaveHooksImpl::throw_exception(
     const WaveContextImpl& ctx,
     const std::exception&  e) {
@@ -184,6 +121,280 @@ void WaveHooksImpl::throw_exception(
 
     if (isError) {
         this->context->hasError = true;
+    }
+}
+
+WaveToken WaveHooksImpl::generated_token(
+    WaveContextImpl const& ctx,
+    WaveToken const&       token) {
+    if (generated_token_impl.isActive()) {
+        return generated_token_impl(&ctx, &token);
+    } else {
+        return token;
+    }
+}
+
+
+bool WaveHooksImpl::expanding_function_like_macro(
+    WaveContextImpl const&     ctx,
+    WaveToken const&           macrodef,
+    WaveTokenVector const&     formal_args,
+    WaveTokenList const&       definition,
+    WaveToken const&           macrocall,
+    WaveTokenListVector const& arguments,
+    WaveUnputIterator const&   seqstart,
+    WaveUnputIterator const&   seqend) {
+
+
+    if (expanding_function_like_macro_impl.isActive()) {
+        return expanding_function_like_macro_impl(
+            &ctx,         // ctx,
+            &macrodef,    // macrodef,
+            &formal_args, // formal_args,
+            &definition,  // definition,
+            &macrocall,   // macrocall,
+            &arguments,   // arguments,
+            &seqstart,    // seqstart,
+            &seqstart     // seqend
+        );
+    } else {
+        return false;
+    }
+}
+
+bool WaveHooksImpl::expanding_object_like_macro(
+    const WaveContextImpl& ctx,
+    const WaveToken&       macro,
+    const WaveTokenList&   definition,
+    const WaveToken&       macrocall) {
+    if (expanding_object_like_macro_impl.isActive()) {
+
+        auto handling = expanding_object_like_macro_impl(
+            &ctx, &macro, &definition, &macrocall);
+
+        switch (handling) {
+            case EntryHandlingProcess: return false;
+            case EntryHandlingSkip: return true;
+            default:
+                throw std::logic_error(
+                    std::string(
+                        "'expanding_object_like_macro' returned "
+                        "unexpected "
+                        "entry handling value - wanted 'process' or "
+                        "'skip', but "
+                        "got ")
+                    + to_string(handling));
+        }
+    } else {
+        return false;
+    }
+}
+
+void WaveHooksImpl::expanded_macro(
+    WaveContextImpl const& ctx,
+    WaveTokenList const&   result) {
+    if (expanded_macro_impl.isActive()) {
+        expanded_macro_impl(&ctx, &result);
+    }
+}
+
+void WaveHooksImpl::rescanned_macro(
+    const WaveContextImpl& ctx,
+    const WaveTokenList&   result) {
+    if (rescanned_macro_impl.isActive()) {
+        rescanned_macro_impl(&ctx, &result);
+    }
+}
+
+bool WaveHooksImpl::found_include_directive(
+    const WaveContextImpl& ctx,
+    const std::string&     filename,
+    bool                   include_next) {
+    if (found_include_directive_impl.isActive()) {
+        auto handling = found_include_directive_impl(
+            &ctx, filename.c_str(), include_next);
+
+        switch (handling) {
+            case EntryHandlingProcess: return false;
+            case EntryHandlingSkip: return true;
+            default:
+                throw std::logic_error(
+                    std::string(
+                        "'found_include_directive' returned "
+                        "unexpected "
+                        "entry handling value - wanted 'process' or "
+                        "'skip', but "
+                        "got ")
+                    + to_string(handling));
+        }
+    } else {
+        return false;
+    }
+}
+
+bool WaveHooksImpl::locate_include_file(
+    WaveContextImpl& ctx,
+    std::string&     file_path,
+    bool             is_system,
+    const char*      current_name,
+    std::string&     dir_path,
+    std::string&     native_name) {
+    if (locate_include_file_impl.isActive()) {
+        // FIXME `dir_path` and other mutable strings might need to be
+        // corrected for length.
+        return locate_include_file_impl(
+            &ctx,
+            file_path.data(),
+            is_system,
+            current_name,
+            dir_path.data(),
+            native_name.data());
+    } else {
+        return default_preprocessing_hooks::locate_include_file(
+            ctx,
+            file_path,
+            is_system,
+            current_name,
+            dir_path,
+            native_name);
+    }
+}
+
+void WaveHooksImpl::opened_include_file(
+    const WaveContextImpl& ctx,
+    const std::string&     rel_filename,
+    const std::string&     abs_filename,
+    bool                   is_system_include) {
+    if (opened_include_file_impl.isActive()) {
+        opened_include_file_impl(
+            &ctx,
+            rel_filename.data(),
+            abs_filename.data(),
+            is_system_include);
+    }
+}
+
+void WaveHooksImpl::returning_from_include_file(
+    const WaveContextImpl& ctx) {
+    if (returning_from_include_file_impl.isActive()) {
+        returning_from_include_file_impl(&ctx);
+    }
+}
+
+void WaveHooksImpl::detected_include_guard(
+    const WaveContextImpl& ctx,
+    const std::string&     filename,
+    const std::string&     include_guard) {
+    if (detected_include_guard_impl.isActive()) {
+        detected_include_guard_impl(
+            &ctx, filename.data(), include_guard.data());
+    }
+}
+
+void WaveHooksImpl::detected_pragma_once(
+    const WaveContextImpl& ctx,
+    const WaveToken&       pragma_token,
+    const std::string&     filename) {
+    if (detected_pragma_once_impl.isActive()) {
+        detected_pragma_once_impl(&ctx, &pragma_token, filename.data());
+    }
+}
+
+bool WaveHooksImpl::interpret_pragma(
+    const WaveContextImpl& ctx,
+    WaveTokenList&         pending,
+    const WaveToken&       option,
+    const WaveTokenList&   values,
+    const WaveToken&       pragma_token) {
+    if (interpret_pragma_impl.isActive()) {
+        return interpret_pragma_impl(
+            &ctx, &pending, &option, &values, &pragma_token);
+
+    } else {
+        return default_preprocessing_hooks::interpret_pragma(
+            ctx, pending, option, values, pragma_token);
+    }
+}
+
+void WaveHooksImpl::undefined_macro(
+    const WaveContextImpl& ctx,
+    const WaveToken&       name) {
+    if (undefined_macro_impl.isActive()) {
+        undefined_macro_impl(&ctx, &name);
+    }
+}
+
+
+bool WaveHooksImpl::found_warning_directive(
+    WaveContextImpl const& ctx,
+    WaveTokenList const&   message) {
+    if (found_warning_directive_impl.isActive()) {
+        auto handling = found_warning_directive_impl(&ctx, &message);
+
+        switch (handling) {
+            case EntryHandlingRaise: return false;
+            case EntryHandlingSkip: return true;
+            default:
+                throw std::logic_error(
+                    std::string("'found_warning_directive_impl' returned "
+                                "unexpected "
+                                "entry handling value - wanted 'raise' or "
+                                "'skip', but "
+                                "got ")
+                    + to_string(handling));
+        }
+    } else {
+        return false;
+    }
+}
+
+
+bool WaveHooksImpl::found_error_directive(
+    WaveContextImpl const& ctx,
+    WaveTokenList const&   message) {
+    if (found_error_directive_impl.isActive()) {
+        auto handling = found_error_directive_impl(&ctx, &message);
+
+        switch (handling) {
+            case EntryHandlingRaise: return false;
+            case EntryHandlingSkip: return true;
+            default:
+                throw std::logic_error(
+                    std::string("'found_error_directive' returned "
+                                "unexpected "
+                                "entry handling value - wanted 'raise' or "
+                                "'skip', but "
+                                "got ")
+                    + to_string(handling));
+        }
+    } else {
+        return false;
+    }
+}
+
+void WaveHooksImpl::found_line_directive(
+    const WaveContextImpl& ctx,
+    const WaveTokenList&   arguments,
+    unsigned int           line,
+    const std::string&     filename) {
+    if (found_line_directive_impl.isActive()) {
+        found_line_directive_impl(&ctx, &arguments, line, filename.data());
+    } else {
+        default_preprocessing_hooks::found_line_directive(
+            ctx, arguments, line, filename);
+    }
+}
+
+bool WaveHooksImpl::emit_line_directive(
+    const WaveContextImpl& ctx,
+    WaveTokenList&         pending,
+    const WaveToken&       act_token) {
+    if (emit_line_directive_impl.isActive()) {
+        return emit_line_directive_impl(&ctx, &pending, &act_token);
+
+    } else {
+        return default_preprocessing_hooks::emit_line_directive(
+            ctx, pending, act_token);
     }
 }
 

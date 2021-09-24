@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.14)
 project(boost_wave LANGUAGES CXX)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Boost COMPONENTS system filesystem thread wave REQUIRED)
 
@@ -18,6 +18,7 @@ add_executable(boost_wave_test
   boost_wave_test.cpp
   boost_wave.cpp
   boost_wave.hpp
+  scratch.cpp
 )
 
 
