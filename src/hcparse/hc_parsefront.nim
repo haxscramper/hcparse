@@ -161,7 +161,7 @@ proc convertViaTs*(text: string): PNode =
 
 proc wrapViaTs*(
     str: string, isCpp: bool,
-    header: CxxHeader,
+    header: CxxBind,
     nameFix: NameFixImpl = nil
   ): seq[CxxEntry] =
   var str = str

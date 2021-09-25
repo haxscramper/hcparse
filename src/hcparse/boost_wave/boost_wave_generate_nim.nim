@@ -6,10 +6,8 @@ import
 
 let code = expandViaCc(cwd() /. "wave_c_api.h", baseCParseConf)
 
-echo toNumerated(code, 300 .. 320)
-
 var conf = cCodegenConf
 
 echo code.
-  wrapViaTs(false, cxxHeader("wave_c_api.h"), dropPrefix("wave")).
+  wrapViaTs(false, cxxDynlib("libbost_wave.so"), dropPrefix("wave")).
   toString(conf)

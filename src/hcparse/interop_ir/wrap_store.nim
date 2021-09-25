@@ -34,40 +34,46 @@ type
     line*, column*: int
 
 
-  CxxHeaderKind* = enum
+  CxxBindKind* = enum
     ## Kind of the nim input header
-    chkGlobal ## Global header file, must be installed and accessible via
+    cbkNone
+    cbkGlobal ## Global header file, must be installed and accessible via
     ## `includepath` when wrappers are compiled
-    chkAbsolute ## Absolute path to the base header file
-    chkPNode ## Unconstrained PNode - can be anything
-    chkDynamic
+    cbkAbsolute ## Absolute path to the base header file
+    cbkPNode ## Unconstrained PNode - can be anything
+    cbkDynamicPatt
+    cbkDynamicExpr
 
   CxxLibImport* = object
     library*: string
     importPath*: seq[string]
 
-  CxxHeader* = object
-    case kind*: CxxHeaderKind
-      of chkGlobal:
+  CxxBind* = object
+    icpp*: IcppPattern
+    case kind*: CxxBindKind
+      of cbkNone:
+        discard
+
+      of cbkGlobal:
         global*: string
 
-      of chkAbsolute:
+      of cbkAbsolute:
         file*: AbsFile
 
-      of chkPNode:
+      of cbkPNode:
         other*: string
 
-      of chkDynamic:
-        discard
+      of cbkDynamicPatt:
+        dynPattern*: string
+
+      of cbkDynamicExpr:
+        dynExpr*: string
 
   CxxBase* = object of RootObj
     iinfo*: LineInfo
     spellingLocation*: Option[CxxSpellingLocation]
-    # nimName*: string
-    # cxxName*: seq[string]
-    icpp*: IcppPattern
+    cbind*: CxxBind
     private*: bool
-    header*: Option[CxxHeader]
     docComment*: Option[string]
     haxdocIdent* #[ {.requiresinit.} ]#: JsonNode
 
@@ -558,11 +564,14 @@ func getIcppName*(pr: CxxProc, asMethod: bool = false): string =
   else:
     pr.cxxName.scopes.join("::")
 
-func cxxHeader*(global: string): CxxHeader =
-  CxxHeader(global: global, kind: chkGlobal)
+func cxxDynlib*(dyn: string): CxxBind =
+  CxxBind(dynPattern: dyn, kind: cbkDynamicPatt)
 
-func cxxHeader*(file: AbsFile): CxxHeader =
-  CxxHeader(kind: chkAbsolute, file: file)
+func cxxHeader*(global: string): CxxBind =
+  CxxBind(global: global, kind: cbkGlobal)
+
+func cxxHeader*(file: AbsFile): CxxBind =
+  CxxBind(kind: cbkAbsolute, file: file)
 
 func cxxArg*(name: CxxNamePair, argType: CxxTypeUse): CxxArg =
   CxxArg(nimType: argType, name: name, haxdocIdent: newJNull())
@@ -712,25 +721,13 @@ func getReturn*(
     assertRef pr.returnType
     result = pr.returnType
 
+func `icpp=`*(pr: var CxxProc, icpp: IcppPattern) = pr.cbind.icpp = icpp
+
 func getIcpp*(
     pr: CxxProc, onConstructor: CxxTypeKind = ctkIdent): IcppPattern =
+  assert pr.cbind.icpp.len > 0
+  return pr.cbind.icpp
 
-  if pr.icpp.len > 0:
-    return pr.icpp
-
-  else:
-    if pr.isConstructor:
-      case onConstructor:
-        of ctkIdent: result.standaloneProc(pr.getIcppName())
-        of ctkPtr: result.standaloneProc("new " & pr.getIcppName())
-        else: raise newUnexpectedKindError(onConstructor)
-
-    else:
-      if pr.isMethod:
-        result.dotMethod(pr.getIcppName())
-
-      else:
-        result.standaloneProc(pr.getIcppName())
 
 func getIcppStr*(
     pr: CxxProc, onConstructor: CxxTypeKind = ctkIdent): string =
@@ -738,8 +735,8 @@ func getIcppStr*(
 
 
 func getIcpp*(pr: CxxObject): IcppPattern =
-  if pr.icpp.len > 0:
-    return pr.icpp
+  if pr.cbind.icpp.len > 0:
+    return pr.cbind.icpp
 
   else:
     result.ctype(pr.cxxName.scopes.join("::"))
@@ -749,8 +746,7 @@ func getIcppStr*(pr: CxxObject): string = $getIcpp(pr)
 
 func initIcpp*(
     pr: var CxxProc, onConstructor: CxxTypeKind = ctkIdent) =
-
-  pr.icpp = getIcpp(pr, onConstructor)
+  pr.cbind.icpp = getIcpp(pr, onConstructor)
 
 
 func cxxTypeUse*(
@@ -804,7 +800,13 @@ func cxxFile*(entries: seq[CxxEntry], path: CxxLibImport): CxxFile =
 func add*(pr: var CxxProc, arg: CxxArg) =
   pr.arguments.add arg
 
-func setHeaderRec*(entry: var CxxEntry, header: CxxHeader) =
+func setCxxBind*(target: var CxxBind, source: CxxBind) =
+  let icpp = target.icpp
+  target = source
+  target.icpp = icpp
+
+
+func setHeaderRec*(entry: var CxxEntry, header: CxxBind) =
   case entry.kind:
     of cekPass, cekForward, cekImport, cekEmpty, cekComment:
       discard
@@ -812,16 +814,47 @@ func setHeaderRec*(entry: var CxxEntry, header: CxxHeader) =
     of cekTypeGroup, cekMacroGroup, cekMacro:
       raise newImplementKindError(entry)
 
-    of cekEnum: entry.cxxEnum.header = some header
-    of cekProc: entry.cxxProc.header = some header
-    of cekAlias: entry.cxxAlias.header = some header
+    of cekEnum: entry.cxxEnum.cbind.setCxxBind(header)
+    of cekProc: entry.cxxProc.cbind.setCxxBind(header)
+    of cekAlias: entry.cxxAlias.cbind.setCxxBind(header)
     of cekObject:
-      entry.cxxObject.header = some header
+      entry.cxxObject.cbind.setCxxBind(header)
       for meth in mitems(entry.cxxObject.methods):
-        meth.header = some header
+        meth.cbind.setCxxBind(header)
 
       for nest in mitems(entry.cxxObject.nested):
         setHeaderRec(nest, header)
+
+func getCbindAs*(pr: CxxProc, onConstructor: CxxTypeKind): CxxBind =
+  result = pr.cbind
+  if result.icpp.len == 0:
+    if pr.isConstructor:
+      case onConstructor:
+        of ctkIdent: result.icpp.standaloneProc(pr.getIcppName())
+        of ctkPtr: result.icpp.standaloneProc("new " & pr.getIcppName())
+        else: raise newUnexpectedKindError(onConstructor)
+
+    else:
+      if pr.isMethod:
+        result.icpp.dotMethod(pr.getIcppName())
+
+      else:
+        result.icpp.standaloneProc(pr.getIcppName())
+
+
+  # case entry.kind:
+  #   of cekProc:
+  #     aux(entry.cxxProc)
+
+  #   of cekObject:
+  #     for meth in mitems(entry.cxxObject.methods):
+  #       aux(meth)
+
+  #     for nest in mitems(entry.cxxObject.nested):
+  #       fixIcpp(nest)
+
+  #   else:
+  #     discard
 
 func setTypeStoreRec*(
     entry: var CxxEntry, store: var CxxTypeStore, lib: CxxLibImport) =

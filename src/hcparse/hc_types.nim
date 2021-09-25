@@ -302,15 +302,18 @@ type
 
   NimHeaderSpec* = object
     ## Configuration for `>header.` generation
-    case kind*: CxxHeaderKind
-      of chkGlobal:
+    case kind*: CxxBindKind
+      of cbkGlobal:
         global*: string ## Global include like `<string>`
 
-      of chkAbsolute:
+      of cbkAbsolute:
         file*: AbsFile ## Absolute path to header file
 
-      of chkPNode:
+      of cbkPNode:
         pnode*: PNode ## Anything else
+
+      else:
+        discard
 
   NimImportSpec* = object
     ## Configuration for import of the other files
@@ -1238,13 +1241,13 @@ proc setPrefixForEnum*(
         cache.enumPrefs.incl result
 
 proc initHeaderSpec*(file: AbsFile): NimHeaderSpec =
-  NimHeaderSpec(kind: chkAbsolute, file: file)
+  NimHeaderSpec(kind: cbkAbsolute, file: file)
 
 proc initHeaderSpec*(global: string): NimHeaderSpec =
-  NimHeaderSpec(kind: chkGlobal, global: global)
+  NimHeaderSpec(kind: cbkGlobal, global: global)
 
 proc initHeaderSpec*(pnode: PNode): NimHeaderSpec =
-  NimHeaderSpec(kind: chkPNode, pnode: pnode)
+  NimHeaderSpec(kind: cbkPNode, pnode: pnode)
 
 func `$`*(we: WrappedEntry): string = $we.decl
 func `$`*(we: seq[WrappedEntry]): string =
@@ -1254,9 +1257,10 @@ func `$`*(we: seq[WrappedEntry]): string =
 func `==`*(a, b: NimHeaderSpec): bool =
   a.kind == b.kind and ((
     case a.kind:
-      of chkGlobal: a.global == b.global
-      of chkAbsolute: a.file == b.file
-      of chkPNode: a.pnode == b.pnode
+      of cbkGlobal: a.global == b.global
+      of cbkAbsolute: a.file == b.file
+      of cbkPNode: a.pnode == b.pnode
+      else: raise newImplementError()
   ))
 
 func `==`*(a, b: CArg): bool =
@@ -1755,16 +1759,16 @@ proc getNimName*(
 proc initEnFieldVal*(v: BiggestInt): EnFieldVal =
   EnFieldVal(isRefOther: false, value: v)
 
-func toNNode*(nhs: NimHeaderSpec): PNode =
-  case nhs.kind:
-    of chkPNode:
-      nhs.pnode
+# func toNNode*(nhs: NimHeaderSpec): PNode =
+#   case nhs.kind:
+#     of cbkPNode:
+#       nhs.pnode
 
-    of chkAbsolute:
-      newRStrLit("\"" & nhs.file.getStr() & "\"")
+#     of cbkAbsolute:
+#       newRStrLit("\"" & nhs.file.getStr() & "\"")
 
-    of chkGlobal:
-      newRStrLit("<" & nhs.global & ">")
+#     of cbkGlobal:
+#       newRStrLit("<" & nhs.global & ">")
 
 
 

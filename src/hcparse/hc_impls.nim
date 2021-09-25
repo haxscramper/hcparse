@@ -332,10 +332,10 @@ let baseCppWrapConf* = WrapConf(
     proc(cursor: CXCursor, conf: WrapConf): NimHeaderSpec {.closure.} =
       let file = cursor.asGlobalInclude(conf)
       if file.startsWith("/"):
-        NimHeaderSpec(kind: chkAbsolute, file: AbsFile(file))
+        NimHeaderSpec(kind: cbkAbsolute, file: AbsFile(file))
 
       else:
-        NimHeaderSpec(kind: chkGlobal, global: file)
+        NimHeaderSpec(kind: cbkGlobal, global: file)
   ),
   getSavePathImpl: (
     proc(orig: AbsFile, conf: WrapConf): CxxLibImport =

@@ -1,5 +1,5 @@
 import
-  ./interop_ir/wrap_store,
+  ./interop_ir/[wrap_store, wrap_icpp],
   hnimast/hast_common,
   hnimast,
   hnimast/[proc_decl, nim_decl]
@@ -72,11 +72,43 @@ proc toNNode*[N](field: CxxField, conf: CodegenConf): ObjectField[N] =
       conf.getImport(), newNLit[N, string](field.cxxName.cxxStr()))
 
 
-proc toNNode*[N](header: CxxHeader): N =
+proc toNNode*[N](header: CxxBind, conf: CodegenConf): seq[N] =
   case header.kind:
-    of chkGlobal: newNLit[N, string](header.global)
-    of chkAbsolute: newNLit[N, string](header.file.string)
-    of chkPNode: newNLit[N, string](header.other)
+    of cbkGlobal:
+      result.add newIdentColonExpr(
+        "header", newNLit[N, string](header.global))
+
+    of cbkAbsolute:
+      result.add newIdentColonExpr(
+        "header", newNLit[N, string](header.file.string))
+
+    of cbkPNode:
+      result.add newIdentColonExpr(
+        "header", newNLit[N, string](header.other))
+
+    of cbkNone:
+      discard
+
+    of cbkDynamicPatt:
+      result.add newIdentColonExpr(
+        "dynlib", newNLit[N, string](header.dynPattern))
+
+    of cbkDynamicExpr:
+      result.add newIdentColonExpr(
+        "dynlib", newNLit[N, string](header.dynExpr))
+
+  if header.icpp.len > 0:
+    let str =
+      if conf.isIcpp:
+        $header.icpp
+
+      else:
+        assertKind(header.icpp[0], { ipkTextPart })
+        $header.icpp[0]
+
+    result.add newIdentColonExpr[N](
+      conf.getImport(),
+      newPLit[N, string](str))
 
 proc toNNode*[N](def: CxxAlias, conf: CodegenConf): AliasDecl[N] =
   newAliasDecl(toNNode[N](def.decl, conf), toNNode[N](def.baseType, conf))
@@ -95,10 +127,8 @@ proc toNNode*[N](
     result.addPragma("exportc", newNLit[N, string](def.cxxName.cxxStr()))
 
   else:
-    if def.header.isSome():
-      result.addPragma("header", toNNode[N](def.header.get()))
-
-    result.addPragma(conf.getImport(), newNLit[N, string](def.getIcppStr(ctkPtr)))
+    result.addPragma toNNode[N](def.getCbindAs(ctkIdent), conf)
+    # result.addPragma(conf.getImport(), newNLit[N, string](def.getIcppStr(ctkPtr)))
 
   if def.isConstructor and onConstructor == ctkIdent:
     result.addPragma("constructor")
@@ -121,7 +151,9 @@ proc toNNode*[N](obj: CxxObject, conf: CodegenConf): seq[NimDecl[N]] =
   res.addPragma("bycopy")
   # res.addPragma("inheritable")
   # res.addPragma("byref")
-  res.addPragma("header", toNNode[N](obj.header.get()))
+
+  res.addPragma toNNode[N](obj.cbind, conf)
+  # res.addPragma("header", toNNode[N](obj.header.get()))
   res.addPragma(conf.getImport(), newNLit[N, string](obj.getIcppStr()))
 
   for field in obj.mfields:
@@ -207,10 +239,10 @@ proc toNNode*[N](file: CxxFile, conf: CodegenConf): N =
     result.add toNNode[N](decl)
 
 proc toString*(file: CxxFile, conf: CodegenConf): string =
-  `$`(hc_codegen.toNNode[PNode](file, conf))
+  `$`(toNNode[PNode](file, conf))
 
 proc toString*(entries: seq[CxxEntry], conf: CodegenConf): string =
-  `$`(hc_codegen.toNNode[PNode](entries, conf))
+  `$`(toNNode[PNode](entries, conf))
 
 import std/[strutils, strformat]
 

@@ -68,14 +68,20 @@ func ctype*(icpp: var IcppPattern, typeName: string) =
 func ctype*(icpp: var IcppPattern, namespace: seq[string], typeName: string) =
   icpp.add icpp(joinName(namespace, typeName))
 
+func `[]`*(icpp: IcppPattern, idx: int): IcppPart = icpp.parts[idx]
+
+func `$`*(part: IcppPart): string =
+  case part.kind:
+    of ipkTextPart: result.add part.text
+    of ipkNextDotArg: result.add "#."
+    of ipkNextArg: result.add "#"
+    of ipkArgSplice: result.add "@"
+    else: raise newImplementKindError(part)
+
+
 func `$`*(icpp: IcppPattern): string =
   for part in icpp.parts:
-    case part.kind:
-      of ipkTextPart: result.add part.text
-      of ipkNextDotArg: result.add "#."
-      of ipkNextArg: result.add "#"
-      of ipkArgSplice: result.add "@"
-      else: raise newImplementKindError(part)
+    result.add $part
 
 proc parsePatternCall*(pat: string): IcppPattern =
   var i = 0
