@@ -1,8 +1,8 @@
 #include "boost_wave.hpp"
 
 EntryHandling found_warning_directive_impl(
-    const CWaveContextImpl* ctx,
-    const CWaveTokenList*   message,
+    const WaveContextImplHandle* ctx,
+    const WaveTokenListHandle*   message,
     void*                   env) {
     std::cout << "Found warning directive with message [["
               << util::impl::as_string(toCxx(message)->d) << "]]\n";
@@ -12,18 +12,18 @@ EntryHandling found_warning_directive_impl(
 
 int main() {
     const char*   text    = "test()\n";
-    CWaveContext* context = wave_newWaveContext(text, "file");
+    WaveContextHandle* context = wave_newWaveContext(text, "file");
 
     //    wave_setFoundWarningDirective(context,
     //    &found_warning_directive_impl, NULL);
 
 
-    CWaveIterator* begin = wave_beginIterator(context);
-    CWaveIterator* end   = wave_endIterator(context);
+    WaveIteratorHandle* begin = wave_beginIterator(context);
+    WaveIteratorHandle* end   = wave_endIterator(context);
 
     while (!wave_contextHasError(context)
            && wave_neqIterator(begin, end)) {
-        CWaveToken* tok = wave_iterGetTok(begin);
+        WaveTokenHandle* tok = wave_iterGetTok(begin);
         std::cout << "token " << wave_tokGetValue(tok) << "\n";
         wave_advanceIterator(begin);
         wave_deleteTok(tok);

@@ -323,59 +323,66 @@ TYPE enum EntryHandling {
 
 #define DECL_STRUCT(name) TYPE struct name TYPE_NAME(name);
 
-DECL_STRUCT(CWaveProcessingHooks);
-DECL_STRUCT(CWaveContext);
-DECL_STRUCT(CWaveIterator);
-DECL_STRUCT(CWaveToken);
-DECL_STRUCT(CWaveIterator);
-DECL_STRUCT(CWaveToken);
-DECL_STRUCT(CWaveContextImpl);
-DECL_STRUCT(CWaveTokenList);
+DECL_STRUCT(WaveProcessingHooksHandle);
+DECL_STRUCT(WaveContextHandle);
+DECL_STRUCT(WaveIteratorHandle);
+DECL_STRUCT(WaveTokenHandle);
+DECL_STRUCT(WaveContextImplHandle);
+DECL_STRUCT(WaveTokenListHandle);
+DECL_STRUCT(WaveTokenVectorHandle);
+DECL_STRUCT(WaveTokenListHandle);
 
-BOOST_WAVE_EXPORT CWaveProcessingHooks* wave_newProcessingHooks();
-BOOST_WAVE_EXPORT void                  wave_destroyProcessingHooks(
-                     CWaveProcessingHooks* hooks);
+TYPE struct WavePosition {
+} TYPE_NAME(WavePosition);
 
 
-BOOST_WAVE_EXPORT CWaveContext* wave_newWaveContext(
+BOOST_WAVE_EXPORT void wave_deleteWaveTokenVector(
+    WaveTokenVectorHandle vec);
+
+BOOST_WAVE_EXPORT WaveProcessingHooksHandle* wave_newProcessingHooks();
+BOOST_WAVE_EXPORT void                       wave_destroyProcessingHooks(
+                          WaveProcessingHooksHandle* hooks);
+
+
+BOOST_WAVE_EXPORT WaveContextHandle* wave_newWaveContext(
     const char* instring,
     const char* filename);
 
-BOOST_WAVE_EXPORT void wave_processAll(CWaveContext* context);
+BOOST_WAVE_EXPORT void wave_processAll(WaveContextHandle* context);
 
 typedef EntryHandling (*CFoundWarningDirectiveCbType)(
-    const CWaveContextImpl* ctx,
-    const CWaveTokenList*   message,
-    void*                   env);
+    const WaveContextImplHandle* ctx,
+    const WaveTokenListHandle*   message,
+    void*                        env);
 
 BOOST_WAVE_EXPORT void wave_setFoundWarningDirective(
-    CWaveContext*                context,
+    WaveContextHandle*           context,
     CFoundWarningDirectiveCbType impl,
     void*                        env);
 
 typedef EntryHandling (*CFoundUnknownDirectiveCbType)(
-    CWaveContextImpl* ctx,
-    CWaveTokenList*   line,
-    CWaveTokenList*   pending,
-    void*             env);
+    WaveContextImplHandle* ctx,
+    WaveTokenListHandle*   line,
+    WaveTokenListHandle*   pending,
+    void*                  env);
 
 
 BOOST_WAVE_EXPORT void wave_setFoundUnknownDirective(
-    CWaveContext*                context,
+    WaveContextHandle*           context,
     CFoundUnknownDirectiveCbType impl);
 
 typedef EntryHandling (*CFoundDirectiveCbType)(
-    CWaveContextImpl* ctx,
-    CWaveToken*       tok,
-    void*             env);
+    WaveContextImplHandle* ctx,
+    WaveTokenHandle*       tok,
+    void*                  env);
 
 
 BOOST_WAVE_EXPORT void wave_setFoundDirective(
-    CWaveContext*         context,
+    WaveContextHandle*    context,
     CFoundDirectiveCbType impl);
 
 
-BOOST_WAVE_EXPORT void wave_destroyContext(CWaveContext* context);
+BOOST_WAVE_EXPORT void wave_destroyContext(WaveContextHandle* context);
 
 TYPE struct WaveDiagnostics {
     int               line;
@@ -389,29 +396,45 @@ TYPE struct WaveDiagnostics {
 
 
 BOOST_WAVE_EXPORT void wave_contextSetData(
-    CWaveContext* context,
-    void*         data);
-BOOST_WAVE_EXPORT void* wave_contextGetData(CWaveContext* context);
-BOOST_WAVE_EXPORT bool  wave_contextHasError(CWaveContext* context);
-BOOST_WAVE_EXPORT bool  wave_contextHasWarnings(CWaveContext* context);
-BOOST_WAVE_EXPORT void  wave_deleteDiagnostics(WaveDiagnostics* diag);
+    WaveContextHandle* context,
+    void*              data);
+BOOST_WAVE_EXPORT void* wave_contextGetData(WaveContextHandle* context);
+BOOST_WAVE_EXPORT bool  wave_contextHasError(WaveContextHandle* context);
+BOOST_WAVE_EXPORT bool wave_contextHasWarnings(WaveContextHandle* context);
+BOOST_WAVE_EXPORT void wave_deleteDiagnostics(WaveDiagnostics* diag);
 BOOST_WAVE_EXPORT WaveDiagnostics
-    wave_contextPopWarning(CWaveContext* context);
+                       wave_contextPopWarning(WaveContextHandle* context);
+BOOST_WAVE_EXPORT void wave_addMacroDefinition(
+    WaveContextHandle* context,
+    const char*        macrostring,
+    bool               is_predefined);
+BOOST_WAVE_EXPORT bool wave_isDefinedMacro(
+    WaveContextHandle* context,
+    const char*        name);
+BOOST_WAVE_EXPORT bool wave_getMacroDefinition(
+    WaveContextHandle*      context,
+    const char*             name,
+    bool*                   is_function_style,
+    bool*                   is_predefined,
+    WavePosition*           pos,
+    WaveTokenVectorHandle** parameters,
+    WaveTokenVectorHandle** definition);
 
+BOOST_WAVE_EXPORT WaveIteratorHandle* wave_beginIterator(
+    WaveContextHandle* context);
+BOOST_WAVE_EXPORT WaveIteratorHandle* wave_endIterator(
+    WaveContextHandle* context);
+BOOST_WAVE_EXPORT void wave_advanceIterator(WaveIteratorHandle* iter);
+BOOST_WAVE_EXPORT bool wave_neqIterator(
+    WaveIteratorHandle* iter1,
+    WaveIteratorHandle* iter2);
 
-BOOST_WAVE_EXPORT CWaveIterator* wave_beginIterator(CWaveContext* context);
-BOOST_WAVE_EXPORT CWaveIterator* wave_endIterator(CWaveContext* context);
-BOOST_WAVE_EXPORT void           wave_advanceIterator(CWaveIterator* iter);
-BOOST_WAVE_EXPORT bool           wave_neqIterator(
-              CWaveIterator* iter1,
-              CWaveIterator* iter2);
+BOOST_WAVE_EXPORT WaveTokenHandle* wave_iterGetTok(
+    WaveIteratorHandle* iter);
+BOOST_WAVE_EXPORT void wave_deleteTok(WaveTokenHandle* tok);
 
-BOOST_WAVE_EXPORT CWaveToken* wave_iterGetTok(CWaveIterator* iter);
-BOOST_WAVE_EXPORT void        wave_deleteTok(CWaveToken* tok);
-
-BOOST_WAVE_EXPORT CWaveTokId  wave_tokGetId(CWaveToken* tok);
-BOOST_WAVE_EXPORT const char* wave_tokGetValue(CWaveToken* tok);
-
+BOOST_WAVE_EXPORT CWaveTokId  wave_tokGetId(WaveTokenHandle* tok);
+BOOST_WAVE_EXPORT const char* wave_tokGetValue(WaveTokenHandle* tok);
 
 #ifdef __cplusplus
 }
