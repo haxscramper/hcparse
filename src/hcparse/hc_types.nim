@@ -1920,17 +1920,3 @@ proc getFlags*(config: ParseConf, file: AbsFile): seq[string] =
   result.add config.includepaths.toIncludes()
   result.add config.globalFlags
   result.add config.fileFlags.getOrDefault(file)
-
-
-proc getExpanded*(file: AbsFile, parseConf: ParseConf): string =
-  ## Return expanded content of the @arg{file} using @sh{clang}. Uses
-  ## include paths and other flags from @arg{parseConf}. Expanded form does
-  ## not contain `#line` directives, but preserves comments.
-  let flags = getFlags(parseConf, file)
-  var cmd = shellCmd(clang, -C, -E, -P)
-  for flag in flags:
-    cmd.raw flag
-
-  cmd.arg file
-
-  result = evalShellStdout(cmd)

@@ -364,7 +364,7 @@ proc toCxx*(node: CppNode): seq[CxxEntry] =
               # FIXME handle multiple trailing typedefs
               var struct = toCxxObject(baseBody)
               if struct.cxxName().isEmpty():
-                # Handle `typedef struct {} struct_name;` 
+                # Handle `typedef struct {} struct_name;`
                 struct.name = newType.name
                 result.add struct
 
@@ -408,6 +408,12 @@ proc toCxx*(node: CppNode): seq[CxxEntry] =
           raise newImplementKindError(node[1], node.treeRepr())
 
     of cppTypeIdentifier:
+      discard
+
+    of cppExpressionStatement:
+      # NOTE first encountered for incorrect code that had `;;` generated.
+      # Maybe there is some expression statements that are allowed on
+      # toplevel though, so this need to be REVIEW-ed
       discard
 
     else:

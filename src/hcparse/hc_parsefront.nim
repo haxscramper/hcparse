@@ -16,7 +16,7 @@ import
   hnimast
 
 import
-  hmisc/other/oswrap,
+  hmisc/other/[oswrap, hshell],
   hmisc/types/colorstring,
   hmisc/algo/[hstring_algo, namegen]
 
@@ -160,10 +160,9 @@ proc convertViaTs*(text: string): PNode =
   return parseCppString(addr text).conv(text, cache)
 
 proc wrapViaTs*(
-    str: string, isCpp: bool, 
+    str: string, isCpp: bool,
     header: CxxHeader,
     nameFix: NameFixImpl = nil
-
   ): seq[CxxEntry] =
   var str = str
   let node = parseCppString(addr str)
@@ -175,8 +174,8 @@ proc wrapViaTs*(
     fixIdentsRec(item, cache, if isCpp: "cxx" else: "c", nameFix)
 
 proc wrapViaTs*(
-    file: AbsFile, 
-    isCpp: bool, 
+    file: AbsFile,
+    isCpp: bool,
     libRoot: AbsDir,
     nameFix: NameFixImpl = nil
   ): CxxFile =
@@ -191,6 +190,19 @@ proc wrapViaClang*(conf: WrapConf, file: AbsFile): CxxFile =
   let parsed = parseFile(file, conf, cache)
   conf.unit = parsed.unit
   toCxxFile(parsed, conf, cache)
+
+proc expandViaCc*(file: AbsFile, parseConf: ParseConf): string =
+  ## Return expanded content of the @arg{file} using @sh{clang}. Uses
+  ## include paths and other flags from @arg{parseConf}. Expanded form does
+  ## not contain `#line` directives, but preserves comments.
+  let flags = getFlags(parseConf, file)
+  var cmd = shellCmd(clang, -C, -E, -P)
+  for flag in flags:
+    cmd.raw flag
+
+  cmd.arg file
+
+  result = evalShellStdout(cmd)
 
 proc registerTypes*(files: var seq[CxxFile]) =
   var store = CxxTypeStore()

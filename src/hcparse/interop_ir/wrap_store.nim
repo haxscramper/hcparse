@@ -40,6 +40,7 @@ type
     ## `includepath` when wrappers are compiled
     chkAbsolute ## Absolute path to the base header file
     chkPNode ## Unconstrained PNode - can be anything
+    chkDynamic
 
   CxxLibImport* = object
     library*: string
@@ -55,6 +56,9 @@ type
 
       of chkPNode:
         other*: string
+
+      of chkDynamic:
+        discard
 
   CxxBase* = object of RootObj
     iinfo*: LineInfo
@@ -874,7 +878,7 @@ func setTypeStoreRec*(
 
 
 proc fixIdentsRec*(
-    entry: var CxxEntry, cache: var StringNameCache, 
+    entry: var CxxEntry, cache: var StringNameCache,
     prefix: string,
     fixWith: NameFixImpl = nil
   ) =

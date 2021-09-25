@@ -820,6 +820,14 @@ void wave_addMacroDefinition(
         macrostring, is_predefined);
 }
 
+bool wave_removeMacroDefinition(
+    WaveContextHandle* context,
+    const char*        macrostring,
+    bool               is_predefined) {
+    return toCxx(context)->context->remove_macro_definition(
+        macrostring, is_predefined);
+}
+
 bool wave_isDefinedMacro(WaveContextHandle* context, const char* name) {
     return toCxx(context)->context->is_defined_macro(name);
 }

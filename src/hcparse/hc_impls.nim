@@ -468,3 +468,9 @@ proc dotDepImports*(
 
   dot.rankdir = grdLeftRight
   dot.toPng(outFile)
+
+import hmisc/algo/hstring_algo
+
+proc dropPrefix*(prefix: string): NameFixImpl =
+  return proc(name: string, isType: bool): string =
+    name.snakeToCamelCase().dropPrefix(prefix)

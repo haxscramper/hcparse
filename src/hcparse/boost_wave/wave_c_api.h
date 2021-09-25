@@ -408,6 +408,10 @@ BOOST_WAVE_EXPORT void wave_addMacroDefinition(
     WaveContextHandle* context,
     const char*        macrostring,
     bool               is_predefined);
+BOOST_WAVE_EXPORT bool wave_removeMacroDefinition(
+    WaveContextHandle* context,
+    const char*        macrostring,
+    bool               is_predefined);
 BOOST_WAVE_EXPORT bool wave_isDefinedMacro(
     WaveContextHandle* context,
     const char*        name);

@@ -2,7 +2,7 @@ import
   ./interop_ir/wrap_store,
   hnimast/hast_common,
   hnimast,
-  hnimast/proc_decl
+  hnimast/[proc_decl, nim_decl]
 
 import
   hmisc/core/all,
@@ -98,7 +98,7 @@ proc toNNode*[N](
     if def.header.isSome():
       result.addPragma("header", toNNode[N](def.header.get()))
 
-    result.addPragma("importcpp", newNLit[N, string](def.getIcppStr(ctkPtr)))
+    result.addPragma(conf.getImport(), newNLit[N, string](def.getIcppStr(ctkPtr)))
 
   if def.isConstructor and onConstructor == ctkIdent:
     result.addPragma("constructor")
@@ -115,7 +115,7 @@ proc toNNode*[N](
   for arg in def.arguments:
     result.addArgument toNNode[N](arg, conf)
 
-proc toNNode*[N](obj: CxxObject, conf: CodegenConf): seq[NimDecl[N]] = 
+proc toNNode*[N](obj: CxxObject, conf: CodegenConf): seq[NimDecl[N]] =
   var res = newObjectDecl[N](obj.nimName)
   res.docComment = obj.docComment.get("")
   res.addPragma("bycopy")
@@ -205,3 +205,23 @@ proc toNNode*[N](file: CxxFile, conf: CodegenConf): N =
 
   for decl in toNNode[N](file.entries, conf):
     result.add toNNode[N](decl)
+
+proc toString*(file: CxxFile, conf: CodegenConf): string =
+  `$`(hc_codegen.toNNode[PNode](file, conf))
+
+proc toString*(entries: seq[CxxEntry], conf: CodegenConf): string =
+  `$`(hc_codegen.toNNode[PNode](entries, conf))
+
+import std/[strutils, strformat]
+
+proc toNumerated*(str: string, numRange: Slice[int]): string =
+  var num = 1
+  var first = true
+  for line in splitLines(str):
+    if num in numRange:
+      if not first:
+        result.add "\n"
+
+      result.add &"{num:<4}| {line}"
+      first = false
+    inc num
