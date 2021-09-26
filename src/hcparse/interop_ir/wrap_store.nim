@@ -564,6 +564,7 @@ func nimName*(arg: CxxArg): string = arg.name.nim
 func nimName*(arg: CxxEnumValue): string = arg.name.nim
 func nimName*(t: CxxTypeUse): string = t.cxxType.name.nim
 func nimName*(obj: CxxObject): string = obj.decl.name.nim
+func nimName*(obj: CxxForward): string = obj.decl.name.nim
 func nimName*(obj: CxxEnum): string = obj.decl.name.nim
 func nimName*(field: CxxField): string = field.name.nim
 func nimName*(t: CxxTypeDecl): string = t.name.nim
@@ -577,6 +578,16 @@ func cxxName*(obj: CxxEnum): CxxName = obj.decl.name.cxx
 func cxxName*(alias: CxxAlias): CxxName = alias.decl.name.cxx
 func cxxName*(name: string): CxxName = CxxName(scopes: @[name])
 func cxxName*(scopes: seq[string]): CxxName = CxxName(scopes: scopes)
+
+func name*(e: CxxEntry): CxxNamePair =
+  case e.kind:
+    of cekEnum: result = e.cxxEnum.decl.name
+    of cekForward: result = e.cxxForward.decl.name
+    of cekObject: result = e.cxxObject.decl.name
+    of cekProc: result = e.cxxProc.head.name
+    of cekAlias: result = e.cxxAlias.decl.name
+    else:
+      raise newImplementKindError(e)
 
 func cxxPair*(nim: string, cxx: CxxName): CxxNamePair =
   CxxNamePair(nim: nim, cxx: cxx)
@@ -863,12 +874,13 @@ func setCxxBind*(target: var CxxBind, source: CxxBind) =
 
 proc setHeaderRec*(entry: var CxxEntry, conf: CxxFixConf) =
   case entry.kind:
-    of cekPass, cekForward, cekImport, cekEmpty, cekComment:
+    of cekPass, cekImport, cekEmpty, cekComment:
       discard
 
     of cekTypeGroup, cekMacroGroup, cekMacro:
       raise newImplementKindError(entry)
 
+    of cekForward: entry.cxxForward.cbind.setCxxBind(conf.getBind(entry))
     of cekEnum: entry.cxxEnum.cbind.setCxxBind(conf.getBind(entry))
     of cekProc: entry.cxxProc.cbind.setCxxBind(conf.getBind(entry))
     of cekAlias: entry.cxxAlias.cbind.setCxxBind(conf.getBind(entry))
@@ -986,6 +998,7 @@ proc fixIdentsRec*(
         context[cancFirstArgName] = some decl.arguments[0].nimType.cxxType.name
 
     aux(decl.head.name)
+    aux(decl.returnType, cache)
 
     context[cancFirstArgName].clear()
     context[cancFirstArgType].clear()

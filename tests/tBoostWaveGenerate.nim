@@ -3,14 +3,12 @@ import
   hcparse/[hc_parsefront, hc_codegen, hc_impls],
   hcparse/interop_ir/wrap_store,
   hmisc/algo/[namegen, hstring_algo],
-  hmisc/other/oswrap,
+  hmisc/other/[oswrap, hshell],
   hmisc/core/all
 
 import std/options
 
 let dir = AbsDir(relToSource"../src/hcparse/boost_wave")
-
-let code = expandViaCc(dir /. "wave_c_api.h", baseCParseConf)
 
 var fixConf = baseFixConf
 fixConf.libName = "wave"
@@ -43,4 +41,14 @@ fixConf.getBind =
       cxxHeader("wave_c_api.h")
 
 
-writeFile(dir /. "boost_wave_wrap.nim", code.wrapViaTs(fixConf).toString(cCodegenConf))
+let res = dir /. "boost_wave_wrap.nim"
+
+writeFile(
+  res,
+  expandViaCc(dir /. "wave_c_api.h", baseCParseConf).
+    # printNumerated(330 .. 340).
+    wrapViaTs(fixConf).
+    toString(cCodegenConf))
+
+
+execShell shellCmd(nim, c, $res)

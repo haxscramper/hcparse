@@ -89,12 +89,10 @@ proc getTypeGraph(wrapped: var seq[CxxFile]): TypeGraph =
                   )
 
         of cekForward:
-          discard
+          raise newImplementError()
 
         else:
           discard
-
-
 
     file.entries.add extraEntries
 

@@ -379,7 +379,7 @@ proc toCxx*(node: CppNode): seq[CxxEntry] =
               if alias.baseType of ctkIdent and
                 alias.decl.cxxName() == alias.baseType.cxxName():
                 # `typedef struct T T;`
-                discard
+                result.add cxxForward(alias.decl.name)
 
               else:
                 result.add alias
@@ -413,9 +413,16 @@ proc toCxx*(node: CppNode): seq[CxxEntry] =
                 baseBody, $node & " " & node.treeRepr())
 
           of cppFunctionDeclarator:
+            let body = node["declarator"]
+            var args: seq[CxxArg]
+            for arg in body["parameters"]:
+              args.add cxxArg(
+                arg["declarator"].getName().cxxPair(),
+                toCxxType(arg["type"]))
+
             result.add cxxAlias(
-              toCxxType(node["type"]).toDecl(),
-              cxxTypeUse(node["declarator"].getName(), @[]))
+              body["declarator"].getName().cxxPair().cxxTypeDecl(),
+              cxxTypeUse(args, toCxxType(node["type"])))
 
           else:
             raise newImplementKindError(node, node.treeRepr())

@@ -36,19 +36,29 @@ func toNNode*[N](lib: CxxLibImport, asImport: bool): N =
   else:
     result = newNTree[N](nnkExportStmt, newNIdent[N](lib.getFilename()))
 
+
+proc toNNode*[N](arg: CxxArg, conf: CodegenConf): NIdentDefs[N]
+
 proc toNNode*[N](t: CxxTypeUse, conf: CodegenConf): NType[N] =
   case t.kind:
     of ctkIdent:
       result = newNNType[N](t.nimName, @[])
 
     of ctkPtr:
-      if t.wrapped of ctkIdent and
-         t.wrapped.nimName == "char":
-
-        result = newNNType[N]("cstring", @[])
+      if t.wrapped of ctkIdent:
+        case t.wrapped.nimName:
+          of "char": result = newNNType[N]("cstring", @[])
+          of "void": result = newNNType[N]("pointer", @[])
+          else: result = newNType[N]("ptr", @[toNNode[N](t.wrapped, conf)])
 
       else:
         result = newNType[N]("ptr", @[toNNode[N](t.wrapped, conf)])
+
+    of ctkProc:
+      result = newProcNType[N](
+        t.arguments.mapIt(toNNode[N](it, conf)),
+        toNNode[N](t.returnType, conf),
+        newNPragma[N](newNIdent[N]("cdecl")))
 
     else:
       raise newImplementKindError(t)
@@ -173,6 +183,11 @@ proc toNNode*[N](obj: CxxObject, conf: CodegenConf): seq[NimDecl[N]] =
   for n in obj.nested:
     result.add toNNode[N](n, conf)
 
+proc toNNode*[N](obj: CxxForward, conf: CodegenConf): ObjectDecl[N] =
+  result = newObjectDecl[N](obj.nimName)
+  result.addPragma("bycopy")
+  result.addPragma toNNode[N](obj.cbind, conf)
+
 proc toNNode*[N](field: CxxEnumValue, conf: CodegenConf): EnumField[N] =
   makeEnumField(field.nimName, some newNLit[N, BiggestInt](field.value))
 
@@ -203,12 +218,13 @@ proc toNNode*[N](entry: CxxEntry, conf: CodegenConf): seq[NimDecl[N]] =
         entry.cxxProc, conf, ctkPtr).toNimDecl()
 
     of cekForward:
-      raise newUnexpectedKindError(
-        entry,
-        "forward declaration must be converted to pass/import",
-        "or promoted into full type declartions ",
-        "by forward declaration patch stage. This code should",
-        "not be reached. declaration is ", $entry)
+      result.add toNNode[N](entry.cxxForward, conf)
+      # raise newUnexpectedKindError(
+      #   entry,
+      #   "forward declaration must be converted to pass/import",
+      #   "or promoted into full type declartions ",
+      #   "by forward declaration patch stage. This code should",
+      #   "not be reached. declaration is ", $entry)
 
     of cekEmpty:
       discard
@@ -222,13 +238,18 @@ proc toNNode*[N](entry: CxxEntry, conf: CodegenConf): seq[NimDecl[N]] =
 proc toNNode*[N](entries: seq[CxxEntry], conf: CodegenConf): seq[NimDecl[N]] =
   var types: seq[NimTypeDecl[N]]
   var other: seq[NimDecl[N]]
+  var visited: HashSet[CxxNamePair]
   for item in entries:
-    for conv in toNNode[N](item, conf):
-      if conv of {nekObjectDecl, nekAliasDecl, nekEnumDecl}:
-        types.add toNimTypeDecl(conv)
+    if item.name notin visited:
+      if item of cekForward:
+        visited.incl item.name
 
-      else:
-        other.add conv
+      for conv in toNNode[N](item, conf):
+        if conv of {nekObjectDecl, nekAliasDecl, nekEnumDecl}:
+            types.add toNimTypeDecl(conv)
+
+        else:
+          other.add conv
 
   result.add toNimDecl(types)
   result.add other
@@ -266,14 +287,12 @@ proc toString*(entries: seq[CxxEntry], conf: CodegenConf): string =
 
 import std/[strutils, strformat]
 
-proc toNumerated*(str: string, numRange: Slice[int]): string =
+proc printNumerated*(str: string, numRange: Slice[int]): string =
   var num = 1
-  var first = true
   for line in splitLines(str):
     if num in numRange:
-      if not first:
-        result.add "\n"
+      echo &"{num:<4}| {line}"
 
-      result.add &"{num:<4}| {line}"
-      first = false
     inc num
+
+  return str

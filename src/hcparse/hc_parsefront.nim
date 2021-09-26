@@ -18,7 +18,8 @@ import
 import
   hmisc/other/[oswrap, hshell],
   hmisc/types/colorstring,
-  hmisc/algo/[hstring_algo, namegen]
+  hmisc/algo/[hstring_algo, namegen],
+  hmisc/core/all
 
 proc parseTranslationUnit*(
     trIndex: CXIndex,
