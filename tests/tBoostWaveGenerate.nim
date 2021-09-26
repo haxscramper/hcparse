@@ -34,7 +34,13 @@ fixConf.fixNameImpl = proc(
 
   cache.newRename(name.nim, result)
 
-fixConf.getBind = proc(): CxxBind = cxxDynlib("libbost_wave.so")
+fixConf.getBind =
+  proc(e: CxxEntry): CxxBind =
+    if e of cekProc:
+      cxxDynlib("libbost_wave.so")
+
+    else:
+      cxxHeader("wave_c_api.h")
 
 
 writeFile(dir /. "boost_wave_wrap.nim", code.wrapViaTs(fixConf).toString(cCodegenConf))

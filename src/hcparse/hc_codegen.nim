@@ -42,7 +42,13 @@ proc toNNode*[N](t: CxxTypeUse, conf: CodegenConf): NType[N] =
       result = newNNType[N](t.nimName, @[])
 
     of ctkPtr:
-      result = newNType[N]("ptr", @[toNNode[N](t.wrapped, conf)])
+      if t.wrapped of ctkIdent and
+         t.wrapped.nimName == "char":
+
+        result = newNNType[N]("cstring", @[])
+
+      else:
+        result = newNType[N]("ptr", @[toNNode[N](t.wrapped, conf)])
 
     else:
       raise newImplementKindError(t)
@@ -167,8 +173,22 @@ proc toNNode*[N](obj: CxxObject, conf: CodegenConf): seq[NimDecl[N]] =
   for n in obj.nested:
     result.add toNNode[N](n, conf)
 
+proc toNNode*[N](field: CxxEnumValue, conf: CodegenConf): EnumField[N] =
+  makeEnumField(field.nimName, some newNLit[N, BiggestInt](field.value))
+
 proc toNNode*[N](en: CxxEnum, conf: CodegenConf): EnumDecl[N] =
   result = newEnumDecl[N](en.nimName)
+
+  var fieldList: seq[EnumField[N]]
+  var values = en.values
+  # TODO sort deduplicate
+
+  var visited: HashSet[BiggestInt]
+  for value in values:
+    if value.value notin visited:
+      visited.incl value.value
+      result.add toNNode[N](value, conf)
+
 
 proc toNNode*[N](entry: CxxEntry, conf: CodegenConf): seq[NimDecl[N]] =
   case entry.kind:

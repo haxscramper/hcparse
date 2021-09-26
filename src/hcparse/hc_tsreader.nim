@@ -2,7 +2,7 @@ import
   htsparse/cpp/cpp
 
 import
-  std/[json, strutils, parseutils]
+  std/[json, strutils, parseutils, tables]
 
 import
   ./hc_types,
@@ -107,6 +107,21 @@ proc toCxxMacro*(node: CppNode): CxxMacro =
   # TODO convert body
 
 
+type
+  CxxEvalCtx = object
+    table: Table[string, BiggestInt]
+
+proc evalEnumValue(node: CppNode, ctx: CxxEvalCtx): BiggestInt =
+  case node.kind:
+    of cppNumberLiteral:
+      discard parseBiggestInt(node.strVal(), result)
+
+    of cppIdentifier:
+      result = ctx.table[node.strVal()]
+
+    else:
+      raise newImplementKindError(node, node.treeRepr())
+
 proc toCxxEnum*(node: CppNode): CxxEnum =
   var name: CxxNamePair
 
@@ -115,13 +130,22 @@ proc toCxxEnum*(node: CppNode): CxxEnum =
 
   result = cxxEnum(name)
 
+  var env: CxxEvalCtx
+  var value: BiggestInt = 0
   for en in node["body"]:
     case en.kind:
       of cppEnumerator:
+        if "value" in en:
+          value = evalEnumValue(en["value"], env)
+
+        let name = en["name"].strVal()
+        env.table[name] = value
         result.values.add CxxEnumValue(
-          name: cxxPair(en["name"].strVal()),
-          value: 0 # TODO convert from `en["value"]`
-        )
+          name: cxxPair(name),
+          value: value)
+
+        inc value
+
 
       of cppComment:
         result.values[^1].comment.add en.strVal()

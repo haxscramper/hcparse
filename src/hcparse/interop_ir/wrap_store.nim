@@ -137,6 +137,8 @@ type
     ctfDefaultedParam
     ctfIsPodType
 
+    ctfPtrToArray
+
   CxxTypeUse* = ref object
     ## Instantiated type
     flags*: set[CxxTypeFlag]
@@ -226,7 +228,12 @@ type
       of cekCall:
         ident*: CxxNamePair
 
+  CxxArgFlag = enum
+    cafOutParam
+    cafInParam
+
   CxxArg* = object of CxxBase
+    flags*: set[CxxArgFlag]
     name*: CxxNamePair
     nimType*: CxxTypeUse
     default*: Option[CxxExpr]
@@ -363,7 +370,7 @@ type
       conf: CxxFixConf
     ): string
 
-    getBind*: proc(): CxxBind
+    getBind*: proc(e: CxxEntry): CxxBind
     libName*: string
     isIcpp*: bool
 
@@ -554,6 +561,7 @@ func `name`*(use: CxxTypeUse): CxxNamePair =
 
 func nimName*(pr: CxxProc): string = pr.head.name.nim
 func nimName*(arg: CxxArg): string = arg.name.nim
+func nimName*(arg: CxxEnumValue): string = arg.name.nim
 func nimName*(t: CxxTypeUse): string = t.cxxType.name.nim
 func nimName*(obj: CxxObject): string = obj.decl.name.nim
 func nimName*(obj: CxxEnum): string = obj.decl.name.nim
@@ -788,6 +796,13 @@ func initIcpp*(
     pr: var CxxProc, onConstructor: CxxTypeKind = ctkIdent) =
   pr.cbind.icpp = getIcpp(pr, onConstructor)
 
+func box*(en: CxxEnum): CxxEntry = CxxEntry(kind: cekEnum, cxxEnum: en)
+func box*(en: CxxForward): CxxEntry =
+  CxxEntry(kind: cekForward, cxxForward: en)
+func box*(ob: CxxObject): CxxEntry = CxxEntry(kind: cekObject, cxxObject: ob)
+func box*(en: CxxProc): CxxEntry = CxxEntry(kind: cekProc, cxxProc: en)
+func box*(en: CxxAlias): CxxEntry = CxxEntry(kind: cekAlias, cxxAlias: en)
+func box*(en: CxxMacro): CxxEntry = CxxEntry(kind: cekMacro, cxxMacro: en)
 
 func cxxTypeUse*(
     arguments: seq[CxxArg], returnType: CxxTypeUse): CxxTypeUse =
@@ -854,13 +869,13 @@ proc setHeaderRec*(entry: var CxxEntry, conf: CxxFixConf) =
     of cekTypeGroup, cekMacroGroup, cekMacro:
       raise newImplementKindError(entry)
 
-    of cekEnum: entry.cxxEnum.cbind.setCxxBind(conf.getBind())
-    of cekProc: entry.cxxProc.cbind.setCxxBind(conf.getBind())
-    of cekAlias: entry.cxxAlias.cbind.setCxxBind(conf.getBind())
+    of cekEnum: entry.cxxEnum.cbind.setCxxBind(conf.getBind(entry))
+    of cekProc: entry.cxxProc.cbind.setCxxBind(conf.getBind(entry))
+    of cekAlias: entry.cxxAlias.cbind.setCxxBind(conf.getBind(entry))
     of cekObject:
-      entry.cxxObject.cbind.setCxxBind(conf.getBind())
+      entry.cxxObject.cbind.setCxxBind(conf.getBind(entry))
       for meth in mitems(entry.cxxObject.methods):
-        meth.cbind.setCxxBind(conf.getBind())
+        meth.cbind.setCxxBind(conf.getBind(box(meth)))
 
       for nest in mitems(entry.cxxObject.nested):
         setHeaderRec(nest, conf)
@@ -1034,14 +1049,6 @@ func getTypeDecl*(entry: CxxEntry): CxxTypeDecl =
 func toRealDecl*(entry: CxxEntry): CxxEntry =
   assertKind(entry, cekForward)
   raise newImplementError()
-
-func box*(en: CxxEnum): CxxEntry = CxxEntry(kind: cekEnum, cxxEnum: en)
-func box*(en: CxxForward): CxxEntry =
-  CxxEntry(kind: cekForward, cxxForward: en)
-func box*(ob: CxxObject): CxxEntry = CxxEntry(kind: cekObject, cxxObject: ob)
-func box*(en: CxxProc): CxxEntry = CxxEntry(kind: cekProc, cxxProc: en)
-func box*(en: CxxAlias): CxxEntry = CxxEntry(kind: cekAlias, cxxAlias: en)
-func box*(en: CxxMacro): CxxEntry = CxxEntry(kind: cekMacro, cxxMacro: en)
 
 func add*(
     s: var seq[CxxEntry],
