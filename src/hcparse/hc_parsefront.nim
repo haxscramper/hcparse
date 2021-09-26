@@ -160,9 +160,8 @@ proc convertViaTs*(text: string): PNode =
   return parseCppString(addr text).conv(text, cache)
 
 proc wrapViaTs*(
-    str: string, isCpp: bool,
-    header: CxxBind,
-    nameFix: NameFixImpl = nil
+    str: string,
+    conf: CxxFixConf
   ): seq[CxxEntry] =
   var str = str
   let node = parseCppString(addr str)
@@ -170,20 +169,18 @@ proc wrapViaTs*(
 
   var cache: StringNameCache
   for item in mitems(result):
-    setHeaderRec(item, header)
-    fixIdentsRec(item, cache, if isCpp: "cxx" else: "c", nameFix)
+    setHeaderRec(item, conf)
+    fixIdentsRec(item, cache, conf)
 
 proc wrapViaTs*(
     file: AbsFile,
-    isCpp: bool,
     libRoot: AbsDir,
-    nameFix: NameFixImpl = nil
+    conf: CxxFixConf
   ): CxxFile =
 
   let relative = file.string.dropPrefix(libRoot.string)
-  wrapViaTs(file.readFile(), isCpp, cxxHeader(file), nameFix).cxxFile(
-    cxxLibImport(libRoot.name(), relative.split("/")),
-  )
+  wrapViaTs(file.readFile(), conf).cxxFile(
+    cxxLibImport(libRoot.name(), relative.split("/")))
 
 proc wrapViaClang*(conf: WrapConf, file: AbsFile): CxxFile =
   var cache: WrapCache
@@ -195,6 +192,7 @@ proc expandViaCc*(file: AbsFile, parseConf: ParseConf): string =
   ## Return expanded content of the @arg{file} using @sh{clang}. Uses
   ## include paths and other flags from @arg{parseConf}. Expanded form does
   ## not contain `#line` directives, but preserves comments.
+  assertExists(file)
   let flags = getFlags(parseConf, file)
   var cmd = shellCmd(clang, -C, -E, -P)
   for flag in flags:

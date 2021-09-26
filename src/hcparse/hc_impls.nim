@@ -451,6 +451,8 @@ let baseCWrapConf* = baseCPPWrapConf.withDeepIt do:
   it.isImportcpp = false
   it.wrapName = "base-c-wrap-conf"
 
+let baseFixConf* = CxxFixConf()
+
 import
   hmisc/types/hgraph,
   hmisc/hasts/graphviz_ast
@@ -468,9 +470,3 @@ proc dotDepImports*(
 
   dot.rankdir = grdLeftRight
   dot.toPng(outFile)
-
-import hmisc/algo/hstring_algo
-
-proc dropPrefix*(prefix: string): NameFixImpl =
-  return proc(name: string, isType: bool): string =
-    name.snakeToCamelCase().dropPrefix(prefix)

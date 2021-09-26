@@ -83,7 +83,15 @@ type
   CxxName* = object
     scopes*: seq[string]
 
+  CxxNameContext* = enum
+    cncType
+    cncArg
+    cncVar
+    cncProc
+    cncMethod
+
   CxxNamePair* = object
+    context*: CxxNameContext
     nim*: string
     cxx*: CxxName
 
@@ -339,6 +347,33 @@ type
     isGenerated*: bool
     savePath*: CxxLibImport
 
+  CxxAdjacentNameContext* = enum
+    cancFirstArgType
+    cancFirstArgName
+    cancParentEnumName
+    cancParentObjectName
+    cancLibName
+
+  CxxNameFixContext* = array[CxxAdjacentNameContext, Option[CxxNamePair]]
+  CxxFixConf* = object
+    fixNameImpl*: proc(
+      name: CxxNamePair,
+      cache: var StringNameCache,
+      context: CxxNameFixContext,
+      conf: CxxFixConf
+    ): string
+
+    getBind*: proc(): CxxBind
+    libName*: string
+    isIcpp*: bool
+
+proc fixName*(
+    conf: CxxFixConf,
+    name: CxxNamePair,
+    cache: var StringNameCache,
+    context: CxxNameFixContext
+  ): string =
+  conf.fixNameImpl(name, cache, context, conf)
 
 func `$`*(cxx: CxxLibImport): string =
   cxx.library & "@" & cxx.importPath.join("/")
@@ -391,7 +426,7 @@ func `$`*(ct: CxxTypeUse): string =
 
       of ctkIdent:
         result &= $ct.cxxType
-        if ct.genParams.len > 0:
+        if ?ct.genParams:
           result &= "["
           result &= ct.genParams.mapIt($it).join(", ")
           result &= "]"
@@ -416,7 +451,7 @@ func `$`*(decl: CxxTypeDecl): string =
 
 
   result.add $decl.name
-  if decl.genParams.len > 0:
+  if ?decl.genParams:
     result.add "["
     for idx, (name, default) in decl.genParams:
       if idx > 0:
@@ -574,7 +609,8 @@ func cxxHeader*(file: AbsFile): CxxBind =
   CxxBind(kind: cbkAbsolute, file: file)
 
 func cxxArg*(name: CxxNamePair, argType: CxxTypeUse): CxxArg =
-  CxxArg(nimType: argType, name: name, haxdocIdent: newJNull())
+  result = CxxArg(nimType: argType, name: name, haxdocIdent: newJNull())
+  result.name.context = cncArg
 
 func wrapArray*(size, element: CxxTypeUse): CxxTypeUse =
   if size.kind == ctkStaticParam:
@@ -597,11 +633,13 @@ func wrap*(wrapped: CxxTypeUse, kind: CxxTypeKind): CxxTypeUse =
 
 func cxxTypeRef*(
     name: CxxNamePair, store: CxxTypeStore = nil): CxxTypeRef =
-  CxxTypeRef(isParam: false, name: name, typeStore: store)
+  result = CxxTypeRef(isParam: false, name: name, typeStore: store)
+  result.name.context = cncType
 
 func cxxTypeDecl*(
     head: CxxNamePair, genParams: CxxGenParams = @[]): CxxTypeDecl =
-  CxxTypeDecl(name: head, genParams: genParams)
+  result = CxxTypeDecl(name: head, genParams: genParams)
+  result.name.context = cncType
 
 func cxxTypeUse*(
     head: CxxNamePair,
@@ -609,6 +647,8 @@ func cxxTypeUse*(
     store: CxxTypeStore = nil
   ): CxxTypeUse =
 
+  var head = head
+  head.context = cncType
   CxxTypeUse(
     kind: ctkIdent, cxxType: cxxTypeRef(head, store), genParams: @genParams)
 
@@ -665,7 +705,7 @@ func getFilename*(limport: CxxLibImport): string =
     result = result[0 ..< idx]
 
 func getFile*(lib: CxxLibImport): RelFile =
-  assert lib.importPath.len > 0
+  assertHasIdx(lib.importPath, 0)
   result = RelFile(lib.importPath.join("/"))
 
 func getFile*(file: CxxFile): RelFile = file.savePath.getFile()
@@ -725,7 +765,7 @@ func `icpp=`*(pr: var CxxProc, icpp: IcppPattern) = pr.cbind.icpp = icpp
 
 func getIcpp*(
     pr: CxxProc, onConstructor: CxxTypeKind = ctkIdent): IcppPattern =
-  assert pr.cbind.icpp.len > 0
+  assertHasIdx(pr.cbind.icpp, 0)
   return pr.cbind.icpp
 
 
@@ -806,7 +846,7 @@ func setCxxBind*(target: var CxxBind, source: CxxBind) =
   target.icpp = icpp
 
 
-func setHeaderRec*(entry: var CxxEntry, header: CxxBind) =
+proc setHeaderRec*(entry: var CxxEntry, conf: CxxFixConf) =
   case entry.kind:
     of cekPass, cekForward, cekImport, cekEmpty, cekComment:
       discard
@@ -814,16 +854,16 @@ func setHeaderRec*(entry: var CxxEntry, header: CxxBind) =
     of cekTypeGroup, cekMacroGroup, cekMacro:
       raise newImplementKindError(entry)
 
-    of cekEnum: entry.cxxEnum.cbind.setCxxBind(header)
-    of cekProc: entry.cxxProc.cbind.setCxxBind(header)
-    of cekAlias: entry.cxxAlias.cbind.setCxxBind(header)
+    of cekEnum: entry.cxxEnum.cbind.setCxxBind(conf.getBind())
+    of cekProc: entry.cxxProc.cbind.setCxxBind(conf.getBind())
+    of cekAlias: entry.cxxAlias.cbind.setCxxBind(conf.getBind())
     of cekObject:
-      entry.cxxObject.cbind.setCxxBind(header)
+      entry.cxxObject.cbind.setCxxBind(conf.getBind())
       for meth in mitems(entry.cxxObject.methods):
-        meth.cbind.setCxxBind(header)
+        meth.cbind.setCxxBind(conf.getBind())
 
       for nest in mitems(entry.cxxObject.nested):
-        setHeaderRec(nest, header)
+        setHeaderRec(nest, conf)
 
 func getCbindAs*(pr: CxxProc, onConstructor: CxxTypeKind): CxxBind =
   result = pr.cbind
@@ -840,21 +880,6 @@ func getCbindAs*(pr: CxxProc, onConstructor: CxxTypeKind): CxxBind =
 
       else:
         result.icpp.standaloneProc(pr.getIcppName())
-
-
-  # case entry.kind:
-  #   of cekProc:
-  #     aux(entry.cxxProc)
-
-  #   of cekObject:
-  #     for meth in mitems(entry.cxxObject.methods):
-  #       aux(meth)
-
-  #     for nest in mitems(entry.cxxObject.nested):
-  #       fixIcpp(nest)
-
-  #   else:
-  #     discard
 
 func setTypeStoreRec*(
     entry: var CxxEntry, store: var CxxTypeStore, lib: CxxLibImport) =
@@ -911,56 +936,65 @@ func setTypeStoreRec*(
 
 
 proc fixIdentsRec*(
-    entry: var CxxEntry, cache: var StringNameCache,
-    prefix: string,
-    fixWith: NameFixImpl = nil
+    entry: var CxxEntry,
+    cache: var StringNameCache,
+    conf: CxxFixConf
   ) =
 
-  let identFixConf = NameFixConf(
-    fixWith: fixWith,
-    prefix: prefix,
-    toCamel: true,
-    strat: nfsNumerateNew
-  )
-
-  let typeFixConf = identFixConf.withIt do:
-    it.isType = true
-
+  var context: CxxNameFixContext
+  context[cancLibName] = some cxxPair(conf.libName, cxxName(conf.libName))
   template aux(name: var CxxNamePair): untyped =
-    name.nim = cache.fixName(name.nim, identFixConf)
-
-  template auxType(name: var CxxNamePair): untyped =
-    name.nim = cache.fixName(name.nim, typeFixConf)
+    name.nim = conf.fixName(name, cache, context)
 
   proc aux(decl: var CxxTypeDecl, cache: var StringNameCache) =
-    auxType(decl.name)
+    aux(decl.name)
 
   proc aux(use: var CxxTypeUse, cache: var StringNameCache) =
     var cache {.byaddr1.} = cache
-
     eachIdent(use) do (use: var CxxTypeUse):
-      auxType(use.cxxType.name)
+      aux(use.cxxType.name)
 
   proc aux(decl: var CxxProc, cache: var StringNameCache) =
-    if decl.isMethod(): aux(decl.methodOf.get(), cache)
-    if decl.isConstructor(): aux(decl.constructorOf.get(), cache)
+    if decl.isMethod():
+      aux(decl.methodOf.get(), cache)
 
-    aux(decl.head.name)
+    if decl.isConstructor():
+      aux(decl.constructorOf.get(), cache)
+
     for arg in mitems(decl.arguments):
       aux(arg.name)
       aux(arg.nimType, cache)
 
-  proc aux(entry: var CxxEntry, cache: var StringNameCache) =
+    if ?decl.arguments:
+      context[cancFirstArgName] = some decl.arguments[0].name
+      if decl.arguments[0].nimType.kind == ctkIdent:
+        context[cancFirstArgName] = some decl.arguments[0].nimType.cxxType.name
+
+    aux(decl.head.name)
+
+    context[cancFirstArgName].clear()
+    context[cancFirstArgType].clear()
+
+  proc aux(
+      entry: var CxxEntry,
+      cache: var StringNameCache
+    ) =
+
     case entry.kind:
       of cekEnum:
-        auxType(entry.cxxEnum.decl.name)
-        for value in mitems(entry.cxxEnum.values): aux(value.name)
+        aux(entry.cxxEnum.decl.name)
+        context[cancParentEnumName] = some entry.cxxEnum.decl.name
+        for value in mitems(entry.cxxEnum.values):
+          aux(value.name)
+
+        context[cancParentEnumName].clear()
 
       of cekForward:
-        auxType(entry.cxxForward.decl.name)
+        aux(entry.cxxForward.decl.name)
 
       of cekObject:
-        auxType(entry.cxxObject.decl.name)
+        aux(entry.cxxObject.decl.name)
+        context[cancParentObjectName] = some entry.cxxObject.decl.name
         for field in mitems(entry.cxxObject.mfields):
           aux(field.name)
           aux(field.nimType, cache)
@@ -970,6 +1004,8 @@ proc fixIdentsRec*(
 
         for nestd in mitems(entry.cxxObject.nested):
           aux(nestd, cache)
+
+        context[cancParentObjectName].clear()
 
       of cekProc:
         aux(entry.cxxProc, cache)
