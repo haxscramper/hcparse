@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(NIM REQUIRED)
 find_package(Boost COMPONENTS system filesystem thread wave REQUIRED)
 
-add_library(boost_wave SHARED
+add_library(boost_cwave SHARED
   boost_wave_global.hpp
   boost_wave.cpp
   boost_wave.hpp
@@ -25,7 +25,7 @@ add_executable(boost_wave_test
   scratch.cpp
 )
 
-target_link_libraries(boost_wave
+target_link_libraries(boost_cwave
   ${Boost_FILESYSTEM_LIBRARY}
   ${Boost_SYSTEM_LIBRARY}
   ${Boost_WAVE_LIBRARY}
@@ -41,26 +41,26 @@ target_link_libraries(boost_wave_test
 
 file(GLOB NIM_IN_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.nim")
 
-add_custom_target(
-    boost_wave_nim ALL
-    COMMAND
-        nim c
-            --nimcache:"${CMAKE_BINARY_DIR}/nim_source_dir"
-            --out:"${CMAKE_CURRENT_SOURCE_DIR}/boost_wave_nim"
-            "boost_wave_test.nim"
+#add_custom_target(
+#    boost_wave_nim ALL
+#    COMMAND
+#        nim c
+#            --nimcache:"${CMAKE_BINARY_DIR}/nim_source_dir"
+#            --out:"${CMAKE_CURRENT_SOURCE_DIR}/boost_wave_nim"
+#            "boost_wave_test.nim"
 
-    SOURCES ${NIM_IN_SOURCES}
-    COMMENT "Build nim test file"
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-)
+#    SOURCES ${NIM_IN_SOURCES}
+#    COMMENT "Build nim test file"
+#    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+#)
 
 
 
-target_compile_definitions(boost_wave PRIVATE BOOST_WAVE_LIBRARY)
+target_compile_definitions(boost_cwave PRIVATE BOOST_WAVE_LIBRARY)
 
-set_target_properties(boost_wave
+set_target_properties(boost_cwave
     PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
-add_dependencies(boost_wave_nim boost_wave)
+#add_dependencies(boost_wave_nim boost_cwave)

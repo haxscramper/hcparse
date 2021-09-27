@@ -1,7 +1,7 @@
 import ./boost_wave
 import hmisc/core/all
 
-echo waveDl
+echo cwaveDl
 
 proc main() =
   var ctx = newWaveContext(allocCStringArray(["#warning \"123\"\n"])[0], "<Unknown>".cstring)
@@ -10,7 +10,10 @@ proc main() =
       ctx: ptr WaveContextImplHandle,
       message: ptr WaveTokenListHandle
     ): EntryHandling =
-      echo "Found warning directive"
+      echo "Found warning directive with ",
+        tokenListLen(message), " elements, value = ",
+        tokenListToStr(message)
+
       return EntryHandlingSkip
   )
 

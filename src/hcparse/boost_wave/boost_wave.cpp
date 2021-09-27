@@ -781,9 +781,9 @@ void wave_processAll(WaveContextHandle* context) {
 }
 
 void wave_setFoundWarningDirective(
-    WaveContextHandle*           context,
+    WaveContextHandle*            context,
     FoundWarningDirectiveImplType impl,
-    void*                        env) {
+    void*                         env) {
     toCxx(context)->context->get_hooks().found_warning_directive_impl.impl = (EntryHandling(*)(
         const WaveContextImplHandle*, const WaveTokenListHandle*, void*))(
         impl);
@@ -855,4 +855,20 @@ bool wave_getMacroDefinition(
     *definition = (WaveTokenListHandle*)outDefinition;
 
     return res;
+}
+
+int wave_tokenVectorLen(WaveTokenVectorHandle* vec) {
+    return toCxx(vec)->size();
+}
+
+void wave_deleteWaveTokenVector(WaveTokenVectorHandle* vec) {
+    delete toCxx(vec);
+}
+
+int wave_tokenListLen(WaveTokenListHandle* list) {
+    return toCxx(list)->size();
+}
+
+const char* wave_tokenListToStr(WaveTokenListHandle* list) {
+    return util::impl::as_string(*toCxx(list)).c_str();
 }

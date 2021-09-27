@@ -32,7 +32,7 @@ fixConf.fixNameImpl = proc(
 
   cache.newRename(name.nim, result)
 
-let dynProcs = cxxDynlibVar("waveDl")
+let dynProcs = cxxDynlibVar("cwaveDl")
 
 fixConf.getBind =
   proc(e: CxxEntry): CxxBind =
@@ -48,7 +48,7 @@ let res = dir /. "boost_wave_wrap.nim"
 var codegen = cCodegenConf
 
 codegen.declBinds = some (dynProcs, @{
-  "linux": cxxDynlib("libboost_wave.so")
+  "linux": cxxDynlib("libboost_cwave.so")
 })
 
 writeFile(

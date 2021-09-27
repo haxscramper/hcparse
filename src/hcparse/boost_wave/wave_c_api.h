@@ -336,8 +336,13 @@ TYPE struct WavePosition {
 } TYPE_NAME(WavePosition);
 
 
+BOOST_WAVE_EXPORT int  wave_tokenVectorLen(WaveTokenVectorHandle* vec);
 BOOST_WAVE_EXPORT void wave_deleteWaveTokenVector(
-    WaveTokenVectorHandle vec);
+    WaveTokenVectorHandle* vec);
+
+BOOST_WAVE_EXPORT int         wave_tokenListLen(WaveTokenListHandle* list);
+BOOST_WAVE_EXPORT const char* wave_tokenListToStr(
+    WaveTokenListHandle* list);
 
 BOOST_WAVE_EXPORT WaveProcessingHooksHandle* wave_newProcessingHooks();
 BOOST_WAVE_EXPORT void                       wave_destroyProcessingHooks(

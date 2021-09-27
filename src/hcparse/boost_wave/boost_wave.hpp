@@ -386,10 +386,6 @@ struct CxxWaveToken {
     WaveToken d;
 };
 
-struct CxxWaveTokenList {
-    WaveTokenList d;
-};
-
 struct CxxWaveIterator {
     WaveIterator d;
 };
@@ -399,12 +395,16 @@ inline WaveContext* toCxx(WaveContextHandle* context) {
     return (WaveContext*)(context);
 }
 
-inline CxxWaveTokenList* toCxx(WaveTokenListHandle* context) {
-    return (CxxWaveTokenList*)(context);
+inline WaveTokenList* toCxx(WaveTokenListHandle* context) {
+    return (WaveTokenList*)(context);
 }
 
-inline const CxxWaveTokenList* toCxx(const WaveTokenListHandle* context) {
-    return (CxxWaveTokenList*)(context);
+inline const WaveTokenList* toCxx(const WaveTokenListHandle* context) {
+    return (WaveTokenList*)(context);
+}
+
+inline const WaveTokenVector* toCxx(const WaveTokenVectorHandle* context) {
+    return (WaveTokenVector*)(context);
 }
 
 inline CxxWaveIterator* toCxx(WaveIteratorHandle* context) {
@@ -436,10 +436,10 @@ bool WaveHooksImpl::expanding_function_like_macro(
             bool,
             WaveContextImpl const*,
             WaveToken const*,
-            std::vector<WaveToken> const*,
-            WaveTokenList const*,
-            WaveToken const*,
-            std::vector<WaveTokenList> const*,
+            const WaveTokenVectorHandle*,
+            const WaveTokenList*,
+            const WaveToken*,
+            WaveTokenVectorHandle const*,
             void*,
             void*>
             real_impl;
@@ -449,14 +449,14 @@ bool WaveHooksImpl::expanding_function_like_macro(
         real_impl.env = expanding_function_like_macro_impl.env;
 
         return real_impl(
-            &ctx,             // ctx,
-            &macrodef,        // macrodef,
-            &formal_args,     // formal_args,
-            &definition,      // definition,
-            &macrocall,       // macrocall,
-            &arguments,       // arguments,
-            (void*)&seqstart, // seqstart,
-            (void*)&seqstart  // seqend
+            &ctx,                                       // ctx,
+            &macrodef,                                  // macrodef,
+            (const WaveTokenVectorHandle*)&formal_args, // formal_args,
+            &definition,                                // definition,
+            &macrocall,                                 // macrocall,
+            (const WaveTokenVectorHandle*)&arguments,   // arguments,
+            (void*)&seqstart,                           // seqstart,
+            (void*)&seqstart                            // seqend
         );
     } else {
         return default_preprocessing_hooks::expanding_function_like_macro(

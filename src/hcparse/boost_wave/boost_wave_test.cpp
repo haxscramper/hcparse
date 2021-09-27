@@ -3,15 +3,15 @@
 EntryHandling found_warning_directive_impl(
     const WaveContextImplHandle* ctx,
     const WaveTokenListHandle*   message,
-    void*                   env) {
+    void*                        env) {
     std::cout << "Found warning directive with message [["
-              << util::impl::as_string(toCxx(message)->d) << "]]\n";
+              << util::impl::as_string(*toCxx(message)) << "]]\n";
     return EntryHandlingSkip;
 }
 
 
 int main() {
-    const char*   text    = "test()\n";
+    const char*        text    = "test()\n";
     WaveContextHandle* context = wave_newWaveContext(text, "file");
 
     //    wave_setFoundWarningDirective(context,

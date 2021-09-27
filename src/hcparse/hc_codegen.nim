@@ -275,8 +275,7 @@ proc genDynDecl*[N](conf: CodegenConf): N =
         nnkConstSection,
         name     = pathname,
         ctype    = newEmptyNNode[N](),
-        expr     = newNLit[N, string](""), # newNIdent[N](expr & "_path"),
-        exported = true,
+        expr     = newNLit[N, string](""),
         pragmas  = @[newNident[N]("strdefine")])
 
     check.addBranch(
