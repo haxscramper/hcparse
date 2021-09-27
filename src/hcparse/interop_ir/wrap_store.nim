@@ -43,6 +43,7 @@ type
     cbkPNode ## Unconstrained PNode - can be anything
     cbkDynamicPatt
     cbkDynamicExpr
+    cbkDynamicCall
 
   CxxLibImport* = object
     library*: string
@@ -66,7 +67,7 @@ type
       of cbkDynamicPatt:
         dynPattern*: string
 
-      of cbkDynamicExpr:
+      of cbkDynamicExpr, cbkDynamicCall:
         dynExpr*: string
 
   CxxBase* = object of RootObj
@@ -387,7 +388,7 @@ func `$`*(cxx: CxxLibImport): string =
 
 func cxxStr*(name: CxxName): string = name.scopes.join("::")
 func `$`*(name: CxxName): string = name.cxxStr()
-func `$`*(name: CxxNamePair): string = $name.nim & "/" & $name.cxx
+func `$`*(name: CxxNamePair): string = $name.context & "." & $name.nim & "/" & $name.cxx
 func `$`*(expr: CxxExpr): string = raise newImplementError()
 
 func `$`*(tref: CxxTypeRef): string =
@@ -621,6 +622,12 @@ func getIcppName*(pr: CxxProc, asMethod: bool = false): string =
 func cxxDynlib*(dyn: string): CxxBind =
   CxxBind(dynPattern: dyn, kind: cbkDynamicPatt)
 
+func cxxDynlibVar*(name: string): CxxBind =
+  CxxBind(dynExpr: name, kind: cbkDynamicExpr)
+
+func cxxDynlibCall*(name: string): CxxBind =
+  CxxBind(dynExpr: name, kind: cbkDynamicCall)
+
 func cxxHeader*(global: string): CxxBind =
   CxxBind(global: global, kind: cbkGlobal)
 
@@ -843,6 +850,14 @@ func cxxAlias*(decl: CxxTypeDecl, baseType: CxxTypeUse): CxxAlias =
 
 func cxxEmpty*(): CxxEntry = CxxEntry(kind: cekEmpty)
 
+func cxxContext*(name: sink CxxNamePair, ctx: CxxNameContext): CxxNamePair =
+  result = name
+  name.context = ctx
+
+func cxxContext*(name: sink CxxTypeDecl, ctx: CxxNameContext): CxxTypeDecl =
+  result = name
+  result.name.context = ctx
+
 func cxxProc*(
     name: CxxNamePair,
     arguments: seq[CxxArg] = @[],
@@ -851,7 +866,7 @@ func cxxProc*(
   ): CxxProc =
 
   CxxProc(
-    head: cxxTypeDecl(name, genParams),
+    head: cxxTypeDecl(name, genParams).cxxContext(cncProc),
     haxdocIdent: newJNull(),
     returnType: returnType,
     arguments: arguments

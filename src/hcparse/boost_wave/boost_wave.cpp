@@ -446,7 +446,7 @@ bool WaveHooksImpl::found_warning_directive(
 }
 
 
-CWaveTokId wave_tokGetId(WaveTokenHandle* tok) {
+WaveTokId wave_tokGetId(WaveTokenHandle* tok) {
     switch (toCxx(tok)->d.operator boost::wave::token_id()) {
         case T_UNKNOWN: return tokId_UNKNOWN;
         case T_FIRST_TOKEN: return tokId_FIRST_TOKEN;
@@ -782,7 +782,7 @@ void wave_processAll(WaveContextHandle* context) {
 
 void wave_setFoundWarningDirective(
     WaveContextHandle*           context,
-    CFoundWarningDirectiveCbType impl,
+    FoundWarningDirectiveImplType impl,
     void*                        env) {
     toCxx(context)->context->get_hooks().found_warning_directive_impl.impl = (EntryHandling(*)(
         const WaveContextImplHandle*, const WaveTokenListHandle*, void*))(

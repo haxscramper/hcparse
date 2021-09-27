@@ -16,7 +16,7 @@ extern "C" {
 
 #endif
 
-TYPE enum CWaveTokId {
+TYPE enum WaveTokId {
     tokId_UNKNOWN,
     tokId_FIRST_TOKEN,
     tokId_AND,
@@ -252,7 +252,7 @@ TYPE enum CWaveTokId {
     tokId_PARAMETERBASE,
     tokId_EXTPARAMETERBASE,
     tokId_OPTPARAMETERBASE,
-} TYPE_NAME(CWaveTokId);
+} TYPE_NAME(WaveTokId);
 
 TYPE enum WaveErrorCode {
     wekNoError = 0,
@@ -350,17 +350,17 @@ BOOST_WAVE_EXPORT WaveContextHandle* wave_newWaveContext(
 
 BOOST_WAVE_EXPORT void wave_processAll(WaveContextHandle* context);
 
-typedef EntryHandling (*CFoundWarningDirectiveCbType)(
+typedef EntryHandling (*FoundWarningDirectiveImplType)(
     const WaveContextImplHandle* ctx,
     const WaveTokenListHandle*   message,
     void*                        env);
 
 BOOST_WAVE_EXPORT void wave_setFoundWarningDirective(
-    WaveContextHandle*           context,
-    CFoundWarningDirectiveCbType impl,
-    void*                        env);
+    WaveContextHandle*            context,
+    FoundWarningDirectiveImplType impl,
+    void*                         env);
 
-typedef EntryHandling (*CFoundUnknownDirectiveCbType)(
+typedef EntryHandling (*FoundUnknownDirectiveImplType)(
     WaveContextImplHandle* ctx,
     WaveTokenListHandle*   line,
     WaveTokenListHandle*   pending,
@@ -368,18 +368,18 @@ typedef EntryHandling (*CFoundUnknownDirectiveCbType)(
 
 
 BOOST_WAVE_EXPORT void wave_setFoundUnknownDirective(
-    WaveContextHandle*           context,
-    CFoundUnknownDirectiveCbType impl);
+    WaveContextHandle*            context,
+    FoundUnknownDirectiveImplType impl);
 
-typedef EntryHandling (*CFoundDirectiveCbType)(
+typedef EntryHandling (*FoundDirectiveImplType)(
     WaveContextImplHandle* ctx,
     WaveTokenHandle*       tok,
     void*                  env);
 
 
 BOOST_WAVE_EXPORT void wave_setFoundDirective(
-    WaveContextHandle*    context,
-    CFoundDirectiveCbType impl);
+    WaveContextHandle*     context,
+    FoundDirectiveImplType impl);
 
 
 BOOST_WAVE_EXPORT void wave_destroyContext(WaveContextHandle* context);
@@ -437,7 +437,7 @@ BOOST_WAVE_EXPORT WaveTokenHandle* wave_iterGetTok(
     WaveIteratorHandle* iter);
 BOOST_WAVE_EXPORT void wave_deleteTok(WaveTokenHandle* tok);
 
-BOOST_WAVE_EXPORT CWaveTokId  wave_tokGetId(WaveTokenHandle* tok);
+BOOST_WAVE_EXPORT WaveTokId   wave_tokGetId(WaveTokenHandle* tok);
 BOOST_WAVE_EXPORT const char* wave_tokGetValue(WaveTokenHandle* tok);
 
 #ifdef __cplusplus

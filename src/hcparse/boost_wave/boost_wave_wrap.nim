@@ -1,5 +1,14 @@
+
+when defined(waveDlPathOverride):
+  const
+    waveDlPathOverride* {.strdefine.} = ""
+  const
+    waveDl* = waveDlPathOverride
+elif defined(linux):
+  const
+    waveDl* = "libboost_wave.so"
 type
-  CWaveTokId* = enum
+  WaveTokId* = enum
     tokId_UNKNOWN = 0, tokId_FIRST_TOKEN = 1, tokId_AND = 2, tokId_AND_ALT = 3,
     tokId_ANDAND = 4, tokId_ANDAND_ALT = 5, tokId_ASSIGN = 6,
     tokId_ANDASSIGN = 7, tokId_ANDASSIGN_ALT = 8, tokId_OR = 9,
@@ -79,7 +88,7 @@ type
     tokId_UNKNOWN_UNIVERSALCHAR = 225, tokId_NONREPLACABLE_IDENTIFIER = 226,
     tokId_PLACEHOLDER = 227, tokId_PLACEMARKER = 228, tokId_PARAMETERBASE = 229,
     tokId_EXTPARAMETERBASE = 230, tokId_OPTPARAMETERBASE = 231
-  ErrorCode* = enum
+  WaveErrorCode* = enum
     wekNoError = 0, wekUnexpectedError = 1, wekMacroRedefinition = 2,
     wekMacroInsertionError = 3, wekBadIncludeFile = 4,
     wekBadIncludeStatement = 5, wekIllFormedDirective = 6,
@@ -102,128 +111,102 @@ type
     wekUnbalancedIfEndif = 40, wekCharacterLiteralOutOfRange = 41,
     wekCouldNotOpenOutputFile = 42, wekIncompatibleConfig = 43,
     wekIllFormedPragmaMessage = 44, wekPragmaMessageDirective = 45
-  SeverityLevel* = enum
+  WaveSeverityLevel* = enum
     wslRemark = 0, wslWarning = 1, wslError = 2, wslFatal = 3,
     wslCommandlineError = 4
   EntryHandling* = enum
     EntryHandlingSkip = 0, EntryHandlingProcess = 1, EntryHandlingRaise = 2
-  ProcessingHooksHandle* {.bycopy, header: "wave_c_api.h".} = object
+  WaveProcessingHooksHandle* {.bycopy, header: "wave_c_api.h".} = object
   
-  ContextHandle* {.bycopy, header: "wave_c_api.h".} = object
+  WaveContextHandle* {.bycopy, header: "wave_c_api.h".} = object
   
-  IteratorHandle* {.bycopy, header: "wave_c_api.h".} = object
+  WaveIteratorHandle* {.bycopy, header: "wave_c_api.h".} = object
   
-  TokenHandle* {.bycopy, header: "wave_c_api.h".} = object
+  WaveTokenHandle* {.bycopy, header: "wave_c_api.h".} = object
   
-  ContextImplHandle* {.bycopy, header: "wave_c_api.h".} = object
+  WaveContextImplHandle* {.bycopy, header: "wave_c_api.h".} = object
   
-  TokenListHandle* {.bycopy, header: "wave_c_api.h".} = object
+  WaveTokenListHandle* {.bycopy, header: "wave_c_api.h".} = object
   
-  TokenVectorHandle* {.bycopy, header: "wave_c_api.h".} = object
+  WaveTokenVectorHandle* {.bycopy, header: "wave_c_api.h".} = object
   
-  Position* {.bycopy, header: "wave_c_api.h", importc: "WavePosition".} = object
+  WavePosition* {.bycopy, header: "wave_c_api.h", importc: "WavePosition".} = object
   
-  CFoundWarningDirectiveCbType* = distinct proc (ctx: ContextImplHandle;
-      message: TokenListHandle; env: void): EntryHandling {.cdecl.}
-  CFoundUnknownDirectiveCbType* = distinct proc (ctx: ContextImplHandle;
-      line: TokenListHandle; pending: TokenListHandle; env: void): EntryHandling {.
+  FoundWarningDirectiveImplType* = distinct proc (ctx: WaveContextImplHandle;
+      message: WaveTokenListHandle; env: void): EntryHandling {.cdecl.}
+  FoundUnknownDirectiveImplType* = distinct proc (ctx: WaveContextImplHandle;
+      line: WaveTokenListHandle; pending: WaveTokenListHandle; env: void): EntryHandling {.
       cdecl.}
-  CFoundDirectiveCbType* = distinct proc (ctx: ContextImplHandle;
-      tok: TokenHandle; env: void): EntryHandling {.cdecl.}
-  Diagnostics* {.bycopy, header: "wave_c_api.h", importc: "WaveDiagnostics".} = object
+  FoundDirectiveImplType* = distinct proc (ctx: WaveContextImplHandle;
+      tok: WaveTokenHandle; env: void): EntryHandling {.cdecl.}
+  WaveDiagnostics* {.bycopy, header: "wave_c_api.h", importc: "WaveDiagnostics".} = object
     line*: cint
     column*: cint
-    code*: ErrorCode
-    level*: SeverityLevel
+    code*: WaveErrorCode
+    level*: WaveSeverityLevel
     filename*: cstring
     errorText*: cstring
 
-
-proc deleteWaveTokenVector*(vec: TokenVectorHandle): void {.
-    dynlib: "libbost_wave.so", importc: "wave_deleteWaveTokenVector".}
-
-proc newProcessingHooks*(): ptr ProcessingHooksHandle {.
-    dynlib: "libbost_wave.so", importc: "wave_newProcessingHooks".}
-
-proc destroyProcessingHooks*(hooks: ptr ProcessingHooksHandle): void {.
-    dynlib: "libbost_wave.so", importc: "wave_destroyProcessingHooks".}
-
-proc newWaveContext*(instring: cstring; filename: cstring): ptr ContextHandle {.
-    dynlib: "libbost_wave.so", importc: "wave_newWaveContext".}
-
-proc processAll*(context: ptr ContextHandle): void {.dynlib: "libbost_wave.so",
+proc deleteWaveTokenVector*(vec: WaveTokenVectorHandle): void {.dynlib: waveDl,
+    importc: "wave_deleteWaveTokenVector".}
+proc newProcessingHooks*(): ptr WaveProcessingHooksHandle {.dynlib: waveDl,
+    importc: "wave_newProcessingHooks".}
+proc destroyProcessingHooks*(hooks: ptr WaveProcessingHooksHandle): void {.
+    dynlib: waveDl, importc: "wave_destroyProcessingHooks".}
+proc newWaveContext*(instring: cstring; filename: cstring): ptr WaveContextHandle {.
+    dynlib: waveDl, importc: "wave_newWaveContext".}
+proc processAll*(context: ptr WaveContextHandle): void {.dynlib: waveDl,
     importc: "wave_processAll".}
-
-proc setFoundWarningDirective*(context: ptr ContextHandle;
-                               impl: CFoundWarningDirectiveCbType; env: pointer): void {.
-    dynlib: "libbost_wave.so", importc: "wave_setFoundWarningDirective".}
-
-proc setFoundUnknownDirective*(context: ptr ContextHandle;
-                               impl: CFoundUnknownDirectiveCbType): void {.
-    dynlib: "libbost_wave.so", importc: "wave_setFoundUnknownDirective".}
-
-proc setFoundDirective*(context: ptr ContextHandle; impl: CFoundDirectiveCbType): void {.
-    dynlib: "libbost_wave.so", importc: "wave_setFoundDirective".}
-
-proc destroyContext*(context: ptr ContextHandle): void {.
-    dynlib: "libbost_wave.so", importc: "wave_destroyContext".}
-
-proc contextSetData*(context: ptr ContextHandle; data: pointer): void {.
-    dynlib: "libbost_wave.so", importc: "wave_contextSetData".}
-
-proc contextGetData*(context: ptr ContextHandle): pointer {.
-    dynlib: "libbost_wave.so", importc: "wave_contextGetData".}
-
-proc contextHasError*(context: ptr ContextHandle): bool {.
-    dynlib: "libbost_wave.so", importc: "wave_contextHasError".}
-
-proc contextHasWarnings*(context: ptr ContextHandle): bool {.
-    dynlib: "libbost_wave.so", importc: "wave_contextHasWarnings".}
-
-proc deleteDiagnostics*(diag: ptr Diagnostics): void {.
-    dynlib: "libbost_wave.so", importc: "wave_deleteDiagnostics".}
-
-proc contextPopWarning*(context: ptr ContextHandle): Diagnostics {.
-    dynlib: "libbost_wave.so", importc: "wave_contextPopWarning".}
-
-proc addMacroDefinition*(context: ptr ContextHandle; macrostring: cstring;
-                         is_predefined: bool): void {.dynlib: "libbost_wave.so",
+proc setFoundWarningDirective*(context: ptr WaveContextHandle;
+                               impl: FoundWarningDirectiveImplType; env: pointer): void {.
+    dynlib: waveDl, importc: "wave_setFoundWarningDirective".}
+proc setFoundUnknownDirective*(context: ptr WaveContextHandle;
+                               impl: FoundUnknownDirectiveImplType): void {.
+    dynlib: waveDl, importc: "wave_setFoundUnknownDirective".}
+proc setFoundDirective*(context: ptr WaveContextHandle;
+                        impl: FoundDirectiveImplType): void {.dynlib: waveDl,
+    importc: "wave_setFoundDirective".}
+proc destroyContext*(context: ptr WaveContextHandle): void {.dynlib: waveDl,
+    importc: "wave_destroyContext".}
+proc contextSetData*(context: ptr WaveContextHandle; data: pointer): void {.
+    dynlib: waveDl, importc: "wave_contextSetData".}
+proc contextGetData*(context: ptr WaveContextHandle): pointer {.dynlib: waveDl,
+    importc: "wave_contextGetData".}
+proc contextHasError*(context: ptr WaveContextHandle): bool {.dynlib: waveDl,
+    importc: "wave_contextHasError".}
+proc contextHasWarnings*(context: ptr WaveContextHandle): bool {.dynlib: waveDl,
+    importc: "wave_contextHasWarnings".}
+proc deleteDiagnostics*(diag: ptr WaveDiagnostics): void {.dynlib: waveDl,
+    importc: "wave_deleteDiagnostics".}
+proc contextPopWarning*(context: ptr WaveContextHandle): WaveDiagnostics {.
+    dynlib: waveDl, importc: "wave_contextPopWarning".}
+proc addMacroDefinition*(context: ptr WaveContextHandle; macrostring: cstring;
+                         is_predefined: bool): void {.dynlib: waveDl,
     importc: "wave_addMacroDefinition".}
-
-proc removeMacroDefinition*(context: ptr ContextHandle; macrostring: cstring;
-                            is_predefined: bool): bool {.
-    dynlib: "libbost_wave.so", importc: "wave_removeMacroDefinition".}
-
-proc isDefinedMacro*(context: ptr ContextHandle; name: cstring): bool {.
-    dynlib: "libbost_wave.so", importc: "wave_isDefinedMacro".}
-
-proc getMacroDefinition*(context: ptr ContextHandle; name: cstring;
+proc removeMacroDefinition*(context: ptr WaveContextHandle;
+                            macrostring: cstring; is_predefined: bool): bool {.
+    dynlib: waveDl, importc: "wave_removeMacroDefinition".}
+proc isDefinedMacro*(context: ptr WaveContextHandle; name: cstring): bool {.
+    dynlib: waveDl, importc: "wave_isDefinedMacro".}
+proc getMacroDefinition*(context: ptr WaveContextHandle; name: cstring;
                          is_function_style: ptr bool; is_predefined: ptr bool;
-                         pos: ptr Position;
-                         parameters: ptr ptr TokenVectorHandle;
-                         definition: ptr ptr TokenVectorHandle): bool {.
-    dynlib: "libbost_wave.so", importc: "wave_getMacroDefinition".}
-
-proc beginIterator*(context: ptr ContextHandle): ptr IteratorHandle {.
-    dynlib: "libbost_wave.so", importc: "wave_beginIterator".}
-
-proc endIterator*(context: ptr ContextHandle): ptr IteratorHandle {.
-    dynlib: "libbost_wave.so", importc: "wave_endIterator".}
-
-proc advanceIterator*(iter: ptr IteratorHandle): void {.
-    dynlib: "libbost_wave.so", importc: "wave_advanceIterator".}
-
-proc neqIterator*(iter1: ptr IteratorHandle; iter2: ptr IteratorHandle): bool {.
-    dynlib: "libbost_wave.so", importc: "wave_neqIterator".}
-
-proc iterGetTok*(iter: ptr IteratorHandle): ptr TokenHandle {.
-    dynlib: "libbost_wave.so", importc: "wave_iterGetTok".}
-
-proc deleteTok*(tok: ptr TokenHandle): void {.dynlib: "libbost_wave.so",
+                         pos: ptr WavePosition;
+                         parameters: ptr ptr WaveTokenVectorHandle;
+                         definition: ptr ptr WaveTokenVectorHandle): bool {.
+    dynlib: waveDl, importc: "wave_getMacroDefinition".}
+proc beginIterator*(context: ptr WaveContextHandle): ptr WaveIteratorHandle {.
+    dynlib: waveDl, importc: "wave_beginIterator".}
+proc endIterator*(context: ptr WaveContextHandle): ptr WaveIteratorHandle {.
+    dynlib: waveDl, importc: "wave_endIterator".}
+proc advanceIterator*(iter: ptr WaveIteratorHandle): void {.dynlib: waveDl,
+    importc: "wave_advanceIterator".}
+proc neqIterator*(iter1: ptr WaveIteratorHandle; iter2: ptr WaveIteratorHandle): bool {.
+    dynlib: waveDl, importc: "wave_neqIterator".}
+proc iterGetTok*(iter: ptr WaveIteratorHandle): ptr WaveTokenHandle {.
+    dynlib: waveDl, importc: "wave_iterGetTok".}
+proc deleteTok*(tok: ptr WaveTokenHandle): void {.dynlib: waveDl,
     importc: "wave_deleteTok".}
-
-proc tokGetId*(tok: ptr TokenHandle): CWaveTokId {.dynlib: "libbost_wave.so",
+proc tokGetId*(tok: ptr WaveTokenHandle): WaveTokId {.dynlib: waveDl,
     importc: "wave_tokGetId".}
-
-proc tokGetValue*(tok: ptr TokenHandle): cstring {.dynlib: "libbost_wave.so",
+proc tokGetValue*(tok: ptr WaveTokenHandle): cstring {.dynlib: waveDl,
     importc: "wave_tokGetValue".}

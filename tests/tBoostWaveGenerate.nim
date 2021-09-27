@@ -24,7 +24,7 @@ fixConf.fixNameImpl = proc(
   if cache.knownRename(name.nim):
     return cache.getRename(name.nim)
 
-  if ?context[cancLibName]:
+  if ?context[cancLibName] and name.context == cncProc:
     result = name.nim.dropNormPrefix(context[cancLibName].get().nim)
 
   else:
@@ -32,10 +32,12 @@ fixConf.fixNameImpl = proc(
 
   cache.newRename(name.nim, result)
 
+let dynProcs = cxxDynlibVar("waveDl")
+
 fixConf.getBind =
   proc(e: CxxEntry): CxxBind =
     if e of cekProc:
-      cxxDynlib("libbost_wave.so")
+      dynProcs
 
     else:
       cxxHeader("wave_c_api.h")
@@ -43,12 +45,18 @@ fixConf.getBind =
 
 let res = dir /. "boost_wave_wrap.nim"
 
+var codegen = cCodegenConf
+
+codegen.declBinds = some (dynProcs, @{
+  "linux": cxxDynlib("libboost_wave.so")
+})
+
 writeFile(
   res,
   expandViaCc(dir /. "wave_c_api.h", baseCParseConf).
     # printNumerated(330 .. 340).
     wrapViaTs(fixConf).
-    toString(cCodegenConf))
+    toString(codegen))
 
 
-execShell shellCmd(nim, c, $res)
+execShell shellCmd(nim, r, $(dir /. "boost_wave_test.nim"))

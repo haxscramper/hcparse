@@ -13,6 +13,10 @@ import
 type
   CodegenConf* = object
     isIcpp*: bool
+    declBinds*: Option[tuple[
+      decl: CxxBind,
+      perOs: seq[(string, CxxBind)]
+    ]]
 
 const
   cxxCodegenConf* = CodegenConf(
@@ -111,7 +115,11 @@ proc toNNode*[N](header: CxxBind, conf: CodegenConf): seq[N] =
 
     of cbkDynamicExpr:
       result.add newIdentColonExpr(
-        "dynlib", newNLit[N, string](header.dynExpr))
+        "dynlib", newNIdent[N](header.dynExpr))
+
+    of cbkDynamicCall:
+      result.add newIdentColonExpr(
+        "dynlib", newXCall(newNIdent[N](header.dynExpr)))
 
   if header.icpp.len > 0:
     let str =
@@ -254,8 +262,44 @@ proc toNNode*[N](entries: seq[CxxEntry], conf: CodegenConf): seq[NimDecl[N]] =
   result.add toNimDecl(types)
   result.add other
 
+proc genDynDecl*[N](conf: CodegenConf): N =
+  result = newNtree[N](nnkStmtList)
+  if conf.declBinds.isSome():
+    let (varDecl, perOs) = conf.declBinds.get()
+    let expr = vardecl.dynExpr
+    var check = newNTree[N](nnkWhenStmt)
+
+
+    let pathname = expr & "PathOverride"
+    let sect = newSection(
+        nnkConstSection,
+        name     = pathname,
+        ctype    = newEmptyNNode[N](),
+        expr     = newNLit[N, string](""), # newNIdent[N](expr & "_path"),
+        exported = true,
+        pragmas  = @[newNident[N]("strdefine")])
+
+    check.addBranch(
+      newXCall("defined", newNIdent[N](pathname)),
+      newNTree[N](
+        nnkStmtList,
+        sect,
+        newConst(expr, newNIdent[N](pathname), true)))
+
+    for (os, decl) in perOs:
+      check.addBranch(
+        newXCall("defined", newNIdent[N](os)),
+        newConst(expr, newNLit[N, string](decl.dynPattern), true))
+
+    result.add check
+
+    echo check.treeRepr()
+
+
+
 proc toNNode*[N](file: CxxFile, conf: CodegenConf): N =
   result = newNTree[N](nnkStmtList)
+
   for dep in items(file.imports):
     if dep.getLibrary() == file.getLibrary():
       let (pDep, pFile) = (dep.getFile(), file.getFile())
@@ -276,6 +320,7 @@ proc toNNode*[N](file: CxxFile, conf: CodegenConf): N =
   for exp in items(file.exports):
     result.add toNNode[N](exp, false)
 
+  result.add genDynDecl[N](conf)
   for decl in toNNode[N](file.entries, conf):
     result.add toNNode[N](decl)
 
@@ -283,7 +328,10 @@ proc toString*(file: CxxFile, conf: CodegenConf): string =
   `$`(toNNode[PNode](file, conf))
 
 proc toString*(entries: seq[CxxEntry], conf: CodegenConf): string =
-  `$`(toNNode[PNode](entries, conf))
+  var gen = newPStmtList()
+  gen.add genDyndecl[PNode](conf)
+  gen.add toNNode[PNode](entries, conf).toNNode()
+  `$`(gen)
 
 import std/[strutils, strformat]
 
