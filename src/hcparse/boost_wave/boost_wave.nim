@@ -51,6 +51,157 @@ proc setFoundWarningDirective*(
   let impl = rawProc(impl)
   ctx.setFoundWarningDirective(cast[FoundWarningDirectiveImplType](impl), env)
 
+
+proc setEvaluatedConditionalExpression*(
+    ctx: ptr WaveContextHandle,
+    impl: proc (
+      ctx: ptr WaveContextImplHandle;
+      directive: ptr WaveTokenHandle;
+      expression: ptr WaveTokenListHandle;
+      expressionValue: bool): bool
+  ) =
+
+  ##[
+
+The callback is called, whenever the preprocessor has encountered a `#if`,
+`#elif`, `#ifdef` or `#ifndef` directive. This hook gets passed the
+non-expanded conditional expression (as it was given in the analysed source
+file) and the result of the evaluation of this expression in the current
+preprocessing context.
+
+- The ctx parameter provides a reference to the context_type used during
+  instantiation of the preprocessing iterators by the user. Note, this
+  parameter was added for the Boost V1.35.0 release.
+- The token parameter holds a reference to the evaluated directive token.
+- The parameter expression holds the non-expanded token sequence comprising the
+  evaluated expression.
+- The parameter expression_value contains the result of the evaluation of the
+  expression in the current preprocessing context.
+- The return value defines, whether the given expression has to be evaluated
+  again, allowing to decide which of the conditional branches should be
+  expanded. You need to return 'true' from this hook function to force the
+  expression to be re-evaluated. Note, this was changed from a 'void' for the
+  Boost V1.35.0 release.
+
+  ]##
+
+  let env = rawEnv(impl)
+  let impl = rawProc(impl)
+  echo "setting conditional expression evaluation ", cast[int](env)
+  ctx.setEvaluatedConditionalExpression(
+    cast[EvaluatedConditionalExpressionImplType](impl),
+    env)
+
+proc setExpandingFunctionLikeMacro*(
+    ctx: ptr WaveContextHandle,
+    impl: proc (
+      ctx: ptr WaveContextImplHandle;
+      macrodef: ptr WaveTokenHandle;
+      formal_args: ptr WaveTokenVectorHandle;
+      definition: ptr WaveTokenListHandle;
+      macrocall: ptr WaveTokenHandle;
+      arguments: ptr WaveTokenVectorHandle;
+      seqstart: pointer;
+      seqend: pointer): bool
+   ) =
+
+  ##[
+
+The function expanding_function_like_macro is called, whenever a
+function-like macro is to be expanded, i.e. before the actual expansion
+starts.
+
+- The ctx parameter provides a reference to the context_type used during
+  instantiation of the preprocessing iterators by the user. Note, this
+  parameter was added for the Boost V1.35.0 release.
+
+- The macroname parameter marks the position where the macro to expand is
+  defined. It contains the token which identifies the macro name used inside
+  the corresponding macro definition.
+
+- The formal_args parameter holds the formal arguments used during the
+  definition of the macro.
+
+- The definition parameter holds the macro definition for the macro to trace.
+  This is a standard STL container which holds the token sequence identified
+  during the macro definition as the macro replacement list.
+
+- The macrocall parameter marks the position where this macro is invoked. It
+  contains the token, which identifies the macro call inside the preprocessed
+  input stream.
+
+- The arguments parameter holds the macro arguments used during the
+  invocation of the macro. This is a vector of standard STL containers which
+  contain the token sequences identified at the position of the macro call as
+  the arguments to be used during the macro expansion.
+
+- The parameters seqstart and seqend point into the input token stream
+  allowing to access the whole token sequence comprising the macro invocation
+  (starting with the opening parenthesis and ending after the closing one).
+
+- If the return value is true, the macro is not expanded, i.e. the overall
+  macro invocation sequence, including the parameters are copied to the
+  output without further processing . If the return value is false, the macro
+  is expanded as expected.
+
+]##
+
+  let env = rawEnv(impl)
+  let impl = rawProc(impl)
+  ctx.setExpandingFunctionLikeMacro(cast[ExpandingFunctionLikeMacroImplType](impl), env)
+
+proc setFoundIncludeDirective*(
+    ctx: ptr WaveContextHandle,
+    impl: proc(
+      context: ptr WaveContextImplHandle;
+      impl: cstring;
+      include_next: bool): EntryHandling
+  ) =
+
+  ##[
+
+The function found_include_directive is called whenever whenever a
+`#include` directive was located..
+
+The ctx parameter provides a reference to the context_type used during
+instantiation of the preprocessing iterators by the user. Note, this
+parameter was added for the Boost V1.35.0 release.
+
+The parameter filename contains the (expanded) file name found after the
+`#include` directive. This has the format `<file>`, `"file"` or `file`. The
+formats `<file>` or `"file"` are used for #include directives found in the
+preprocessed token stream, the format `file` is used for files specified
+through the `--force_include` command line argument.
+
+TODO document how specify `--force_include` arguments
+
+The parameter include_next is set to true if the found directive was a
+`#include_next` directive and the `BOOST_WAVE_SUPPORT_INCLUDE_NEXT`
+preprocessing constant was defined to something `!= 0`.
+
+If the return value is 'skip', the include directive is not executed, i.e.
+the file to include is not loaded nor processed. The overall directive is
+replaced by a single newline character. If the return value is 'process',
+the directive is executed in a normal manner.
+
+  ]##
+
+  ctx.setFoundIncludeDirective(
+    cast[FoundIncludeDirectiveImplType](rawProc(impl)),
+    rawEnv(impl))
+
+
+proc setSkippedToken*(
+    ctx: ptr WaveContextHandle,
+    impl: proc (
+      context: ptr WaveContextImplHandle;
+      token: ptr WaveTokenHandle): void
+  ) =
+
+  ctx.setSkippedToken(
+    cast[SkippedTokenImplType](rawProc(impl)),
+    rawEnv(impl))
+
 proc first*(ctx: ptr WaveContextHandle): ptr WaveIteratorHandle = ctx.beginIterator()
 proc last*(ctx: ptr WaveContextHandle): ptr WaveIteratorHandle = ctx.endIterator()
 proc getTok*(iter: ptr WaveIteratorHandle): ptr WaveTokenHandle = iter.iterGetTok()
@@ -60,6 +211,14 @@ proc `==`*(iter1, iter2: ptr WaveIteratorHandle): bool {.error.}
 proc getValue*(tok: ptr WaveTokenHandle): cstring = tok.tokGetValue()
 proc kind*(tok: ptr WaveTokenHandle): WaveTokId = tok.tokGetId()
 
+proc `$`*(t: ptr WaveTokenHandle): string =
+  if not isNil(t):
+    let val = t.getValue()
+    if not isNil(val):
+      return $val
+
+proc `$`*(l: ptr WaveTokenListHandle): string = $tokenListToStr(l)
+proc len*(l: ptr WaveTokenListHandle): int = tokenListLen(l)
 
 
 

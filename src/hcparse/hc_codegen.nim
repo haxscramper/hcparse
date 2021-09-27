@@ -135,7 +135,11 @@ proc toNNode*[N](header: CxxBind, conf: CodegenConf): seq[N] =
       newPLit[N, string](str))
 
 proc toNNode*[N](def: CxxAlias, conf: CodegenConf): AliasDecl[N] =
-  newAliasDecl(toNNode[N](def.decl, conf), toNNode[N](def.baseType, conf))
+  newAliasDecl(
+    toNNode[N](def.decl, conf),
+    toNNode[N](def.baseType, conf),
+    isDistinct = false
+  )
 
 proc toNNode*[N](
     def: CxxProc,
@@ -292,7 +296,6 @@ proc genDynDecl*[N](conf: CodegenConf): N =
 
     result.add check
 
-    echo check.treeRepr()
 
 
 

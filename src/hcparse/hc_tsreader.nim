@@ -413,15 +413,26 @@ proc toCxx*(node: CppNode): seq[CxxEntry] =
                 baseBody, $node & " " & node.treeRepr())
 
           of cppFunctionDeclarator:
-            let body = node["declarator"]
+            let d = "declarator"
+            let body = node[d]
             var args: seq[CxxArg]
             for arg in body["parameters"]:
-              args.add cxxArg(
-                arg["declarator"].getName().cxxPair(),
-                toCxxType(arg["type"]))
+              let name =
+                if d in arg and (arg[d].kind != cppAbstractPointerDeclarator):
+                  arg[d].getName()
+
+                else:
+                  ""
+
+
+              var t = toCxxType(arg["type"])
+              if d in arg:
+                pointerWraps(arg[d], t)
+
+              args.add cxxArg(cxxPair(name), t)
 
             result.add cxxAlias(
-              body["declarator"].getName().cxxPair().cxxTypeDecl(),
+              body[d].getName().cxxPair().cxxTypeDecl(),
               cxxTypeUse(args, toCxxType(node["type"])))
 
           else:

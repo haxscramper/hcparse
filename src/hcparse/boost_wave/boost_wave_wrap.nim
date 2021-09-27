@@ -132,13 +132,27 @@ type
   
   WavePosition* {.bycopy, header: "wave_c_api.h", importc: "WavePosition".} = object
   
-  FoundWarningDirectiveImplType* = distinct proc (ctx: WaveContextImplHandle;
-      message: WaveTokenListHandle; env: void): EntryHandling {.cdecl.}
-  FoundUnknownDirectiveImplType* = distinct proc (ctx: WaveContextImplHandle;
-      line: WaveTokenListHandle; pending: WaveTokenListHandle; env: void): EntryHandling {.
+  FoundWarningDirectiveImplType* = proc (ctx: ptr WaveContextImplHandle;
+      message: ptr WaveTokenListHandle; env: pointer): EntryHandling {.cdecl.}
+  EvaluatedConditionalExpressionImplType* = proc (
+      ctx: ptr WaveContextImplHandle; directive: ptr WaveTokenHandle;
+      expression: ptr WaveTokenListHandle; expression_value: bool): bool {.cdecl.}
+  FoundUnknownDirectiveImplType* = proc (ctx: ptr WaveContextImplHandle;
+      line: ptr WaveTokenListHandle; pending: ptr WaveTokenListHandle;
+      env: pointer): EntryHandling {.cdecl.}
+  ExpandingFunctionLikeMacroImplType* = proc (ctx: ptr WaveContextImplHandle;
+      macrodef: ptr WaveTokenHandle; formal_args: ptr WaveTokenVectorHandle;
+      definition: ptr WaveTokenListHandle; macrocall: ptr WaveTokenHandle;
+      arguments: ptr WaveTokenVectorHandle; seqstart: pointer; seqend: pointer): bool {.
       cdecl.}
-  FoundDirectiveImplType* = distinct proc (ctx: WaveContextImplHandle;
-      tok: WaveTokenHandle; env: void): EntryHandling {.cdecl.}
+  FoundDirectiveImplType* = proc (ctx: ptr WaveContextImplHandle;
+                                  tok: ptr WaveTokenHandle; env: pointer): EntryHandling {.
+      cdecl.}
+  FoundIncludeDirectiveImplType* = proc (context: ptr WaveContextImplHandle;
+      impl: cstring; include_next: bool; env: pointer): EntryHandling {.cdecl.}
+  SkippedTokenImplType* = proc (context: ptr WaveContextImplHandle;
+                                token: ptr WaveTokenHandle; env: pointer): void {.
+      cdecl.}
   WaveDiagnostics* {.bycopy, header: "wave_c_api.h", importc: "WaveDiagnostics".} = object
     line*: cint
     column*: cint
@@ -166,12 +180,26 @@ proc processAll*(context: ptr WaveContextHandle): void {.dynlib: cwaveDl,
 proc setFoundWarningDirective*(context: ptr WaveContextHandle;
                                impl: FoundWarningDirectiveImplType; env: pointer): void {.
     dynlib: cwaveDl, importc: "wave_setFoundWarningDirective".}
-proc setFoundUnknownDirective*(context: ptr WaveContextHandle;
-                               impl: FoundUnknownDirectiveImplType): void {.
-    dynlib: cwaveDl, importc: "wave_setFoundUnknownDirective".}
-proc setFoundDirective*(context: ptr WaveContextHandle;
-                        impl: FoundDirectiveImplType): void {.dynlib: cwaveDl,
-    importc: "wave_setFoundDirective".}
+proc setEvaluatedConditionalExpression*(context: ptr WaveContextHandle; impl: EvaluatedConditionalExpressionImplType;
+                                        env: pointer): void {.dynlib: cwaveDl,
+    importc: "wave_setEvaluatedConditionalExpression".}
+proc setFoundUnknownDirectiveImplType*(context: ptr WaveContextHandle;
+                                       impl: FoundUnknownDirectiveImplType;
+                                       env: pointer): void {.dynlib: cwaveDl,
+    importc: "wave_setFoundUnknownDirectiveImplType".}
+proc setExpandingFunctionLikeMacro*(context: ptr WaveContextHandle;
+                                    impl: ExpandingFunctionLikeMacroImplType;
+                                    env: pointer): void {.dynlib: cwaveDl,
+    importc: "wave_setExpandingFunctionLikeMacro".}
+proc setFoundDirective*(ctx: ptr WaveContextHandle;
+                        filename: FoundDirectiveImplType; include_next: pointer): void {.
+    dynlib: cwaveDl, importc: "wave_setFoundDirective".}
+proc setFoundIncludeDirective*(context: ptr WaveContextHandle;
+                               impl: FoundIncludeDirectiveImplType; env: pointer): void {.
+    dynlib: cwaveDl, importc: "wave_setFoundIncludeDirective".}
+proc setSkippedToken*(context: ptr WaveContextHandle;
+                      impl: SkippedTokenImplType; env: pointer): void {.
+    dynlib: cwaveDl, importc: "wave_setSkippedToken".}
 proc destroyContext*(context: ptr WaveContextHandle): void {.dynlib: cwaveDl,
     importc: "wave_destroyContext".}
 proc contextSetData*(context: ptr WaveContextHandle; data: pointer): void {.

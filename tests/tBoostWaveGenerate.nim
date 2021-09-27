@@ -1,6 +1,7 @@
 import
   compiler/[ast, renderer],
   hcparse/[hc_parsefront, hc_codegen, hc_impls],
+  hmisc/other/hpprint,
   hcparse/interop_ir/wrap_store,
   hmisc/algo/[namegen, hstring_algo],
   hmisc/other/[oswrap, hshell],
@@ -51,12 +52,11 @@ codegen.declBinds = some (dynProcs, @{
   "linux": cxxDynlib("libboost_cwave.so")
 })
 
-writeFile(
-  res,
-  expandViaCc(dir /. "wave_c_api.h", baseCParseConf).
+let ir = expandViaCc(dir /. "wave_c_api.h", baseCParseConf).
     # printNumerated(330 .. 340).
-    wrapViaTs(fixConf).
-    toString(codegen))
+    wrapViaTs(fixConf)
+
+writeFile(res, ir.toString(codegen))
 
 
 execShell shellCmd(nim, r, $(dir /. "boost_wave_test.nim"))

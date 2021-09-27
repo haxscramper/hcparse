@@ -560,24 +560,26 @@ func `name`*(use: CxxTypeUse): CxxNamePair =
   result = use.cxxType.name
 
 
-func nimName*(pr: CxxProc): string = pr.head.name.nim
-func nimName*(arg: CxxArg): string = arg.name.nim
+func nimName*(pr: CxxProc): string       = pr.head.name.nim
+func nimName*(arg: CxxArg): string       = arg.name.nim
 func nimName*(arg: CxxEnumValue): string = arg.name.nim
-func nimName*(t: CxxTypeUse): string = t.cxxType.name.nim
-func nimName*(obj: CxxObject): string = obj.decl.name.nim
-func nimName*(obj: CxxForward): string = obj.decl.name.nim
-func nimName*(obj: CxxEnum): string = obj.decl.name.nim
-func nimName*(field: CxxField): string = field.name.nim
-func nimName*(t: CxxTypeDecl): string = t.name.nim
+func nimName*(t: CxxTypeUse): string     = t.cxxType.name.nim
+func nimName*(obj: CxxObject): string    = obj.decl.name.nim
+func nimName*(obj: CxxForward): string   = obj.decl.name.nim
+func nimName*(obj: CxxEnum): string      = obj.decl.name.nim
+func nimName*(field: CxxField): string   = field.name.nim
+func nimName*(t: CxxTypeDecl): string    = t.name.nim
 
-func cxxName*(field: CxxField): CxxName = field.name.cxx
-func cxxName*(t: CxxTypeUse): CxxName = t.cxxType.name.cxx
-func cxxName*(t: CxxTypeDecl): CxxName = t.name.cxx
-func cxxName*(pr: CxxProc): CxxName = pr.head.name.cxx
-func cxxName*(obj: CxxObject): CxxName = obj.decl.name.cxx
-func cxxName*(obj: CxxEnum): CxxName = obj.decl.name.cxx
-func cxxName*(alias: CxxAlias): CxxName = alias.decl.name.cxx
-func cxxName*(name: string): CxxName = CxxName(scopes: @[name])
+
+func cxxName*(arg: CxxArg): CxxName         = arg.name.cxx
+func cxxName*(field: CxxField): CxxName     = field.name.cxx
+func cxxName*(t: CxxTypeUse): CxxName       = t.cxxType.name.cxx
+func cxxName*(t: CxxTypeDecl): CxxName      = t.name.cxx
+func cxxName*(pr: CxxProc): CxxName         = pr.head.name.cxx
+func cxxName*(obj: CxxObject): CxxName      = obj.decl.name.cxx
+func cxxName*(obj: CxxEnum): CxxName        = obj.decl.name.cxx
+func cxxName*(alias: CxxAlias): CxxName     = alias.decl.name.cxx
+func cxxName*(name: string): CxxName        = CxxName(scopes: @[name])
 func cxxName*(scopes: seq[string]): CxxName = CxxName(scopes: scopes)
 
 func name*(e: CxxEntry): CxxNamePair =
@@ -996,6 +998,28 @@ proc fixIdentsRec*(
     eachIdent(use) do (use: var CxxTypeUse):
       aux(use.cxxType.name)
 
+    proc auxArg(use: var CxxTypeUse, cache: var StringNameCache) =
+      case use.kind:
+        of ctkWrapKinds: auxArg(use.wrapped, cache)
+        of ctkStaticParam: discard
+        of ctkArrayKinds: auxArg(use.arrayElement, cache)
+        of ctkIdent:
+          for param in mitems(use.genParams):
+            auxArg(param, cache)
+
+        of ctkProc:
+          for idx, arg in mpairs(use.arguments):
+            if isEmpty(arg.cxxName()):
+              arg.name = cxxPair("arg" & $idx)
+
+
+            aux(arg.name)
+            auxArg(arg.nimType, cache)
+
+          auxArg(use.returnType, cache)
+
+    auxArg(use, cache)
+
   proc aux(decl: var CxxProc, cache: var StringNameCache) =
     if decl.isMethod():
       aux(decl.methodOf.get(), cache)
@@ -1003,7 +1027,10 @@ proc fixIdentsRec*(
     if decl.isConstructor():
       aux(decl.constructorOf.get(), cache)
 
-    for arg in mitems(decl.arguments):
+    for idx, arg in mpairs(decl.arguments):
+      if isEmpty(arg.cxxName()):
+        arg.name = cxxPair("arg" & $idx)
+
       aux(arg.name)
       aux(arg.nimType, cache)
 

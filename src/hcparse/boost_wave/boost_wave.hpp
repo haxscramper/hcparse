@@ -149,7 +149,7 @@ struct WaveHooksImpl
         bool                   expression_value);
 
 
-    method_impl<void, const WaveContextImplHandle*, const WaveToken*>
+    method_impl<void, const WaveContextImplHandle*, const WaveTokenHandle*>
          skipped_token_impl;
     void skipped_token(WaveContextImpl const& ctx, WaveToken const& token);
 
@@ -382,10 +382,6 @@ struct WaveContext {
 // DECL_STRUCT(CWaveToken);
 // DECL_STRUCT(CWaveContextImpl);
 
-struct CxxWaveToken {
-    WaveToken d;
-};
-
 struct CxxWaveIterator {
     WaveIterator d;
 };
@@ -415,8 +411,8 @@ inline const CxxWaveIterator* toCxx(const WaveIteratorHandle* context) {
     return (CxxWaveIterator*)(context);
 }
 
-inline CxxWaveToken* toCxx(const WaveTokenHandle* tok) {
-    return (CxxWaveToken*)(tok);
+inline WaveToken* toCxx(const WaveTokenHandle* tok) {
+    return (WaveToken*)(tok);
 }
 
 template <typename Iterator>

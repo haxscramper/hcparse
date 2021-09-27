@@ -132,7 +132,14 @@ void WaveHooksImpl::skipped_token(
     WaveContextImpl const& ctx,
     WaveToken const&       token) {
     if (skipped_token_impl.isActive()) {
-        skipped_token_impl((const WaveContextImplHandle*)&ctx, &token);
+        //        std::cout << ">> Executing skipped token callback. "
+        //                  << "C value of the skipped token is ";
+        //        std::cout << std::flush;
+        //        std::cout << token.get_value() << "\n";
+        skipped_token_impl(
+            (const WaveContextImplHandle*)&ctx,
+            (const WaveTokenHandle*)&token);
+        //        std::cout << ">> User callback finished\n";
     } else {
         default_preprocessing_hooks::skipped_token(ctx, token);
     }
@@ -447,7 +454,7 @@ bool WaveHooksImpl::found_warning_directive(
 
 
 WaveTokId wave_tokGetId(WaveTokenHandle* tok) {
-    switch (toCxx(tok)->d.operator boost::wave::token_id()) {
+    switch (toCxx(tok)->operator boost::wave::token_id()) {
         case T_UNKNOWN: return tokId_UNKNOWN;
         case T_FIRST_TOKEN: return tokId_FIRST_TOKEN;
         case T_AND: return tokId_AND;
@@ -688,15 +695,15 @@ WaveTokId wave_tokGetId(WaveTokenHandle* tok) {
 }
 
 const char* wave_tokGetValue(WaveTokenHandle* tok) {
-    return toCxx(tok)->d.get_value().c_str();
+    return toCxx(tok)->get_value().c_str();
 }
 
 
 WaveTokenHandle* wave_iterGetTok(WaveIteratorHandle* iter) {
-    return (WaveTokenHandle*)(new CxxWaveToken{*(toCxx(iter)->d)});
+    return (WaveTokenHandle*)&(*(toCxx(iter)->d));
 }
 
-void wave_deleteTok(WaveTokenHandle* tok) { delete (CxxWaveToken*)(tok); }
+void wave_deleteTok(WaveTokenHandle* tok) { delete (WaveToken*)(tok); }
 
 bool wave_neqIterator(
     WaveIteratorHandle* iter1,
@@ -790,6 +797,55 @@ void wave_setFoundWarningDirective(
     toCxx(context)->context->get_hooks().found_warning_directive_impl.env = env;
 }
 
+void wave_setFoundIncludeDirective(
+    WaveContextHandle*            context,
+    FoundIncludeDirectiveImplType impl,
+    void*                         env) {
+    toCxx(context)->context->get_hooks().found_include_directive_impl.impl = (EntryHandling(*)(
+        const WaveContextImplHandle*, const char*, bool, void*))(impl);
+    toCxx(context)->context->get_hooks().found_include_directive_impl.env = env;
+}
+
+
+void wave_setEvaluatedConditionalExpression(
+    WaveContextHandle*                     context,
+    EvaluatedConditionalExpressionImplType impl,
+    void*                                  env) {
+    toCxx(context)
+        ->context->get_hooks()
+        .evaluated_conditional_expression_impl.impl
+        = (bool (*)(
+            const WaveContextImplHandle*,
+            const WaveTokenHandle*,
+            const WaveTokenListHandle*,
+            bool,
+            void*))(impl);
+    toCxx(context)
+        ->context->get_hooks()
+        .evaluated_conditional_expression_impl.env
+        = env;
+}
+
+
+void wave_setSkippedToken(
+    WaveContextHandle*   context,
+    SkippedTokenImplType impl,
+    void*                env) {
+    toCxx(context)->context->get_hooks().skipped_token_impl.impl = (void (*)(
+        const WaveContextImplHandle*, const WaveTokenHandle*, void*))(
+        impl);
+    toCxx(context)->context->get_hooks().skipped_token_impl.env = env;
+}
+
+
+void wave_setExpandingFunctionLikeMacro(
+    WaveContextHandle*                 context,
+    ExpandingFunctionLikeMacroImplType impl,
+    void*                              env) {
+    toCxx(context)->context->get_hooks().expanding_function_like_macro_impl.impl = (bool (*)(
+        void*, void*))(impl);
+    toCxx(context)->context->get_hooks().expanding_function_like_macro_impl.env = env;
+}
 
 // void wave_setFoundUnknonwDirective(
 //    CWaveContext*                context,
