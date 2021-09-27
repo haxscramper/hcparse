@@ -130,6 +130,8 @@ type
   
   WaveTokenVectorHandle* {.bycopy, header: "wave_c_api.h".} = object
   
+  WaveTokenListIteratorHandle* {.bycopy, header: "wave_c_api.h".} = object
+  
   WavePosition* {.bycopy, header: "wave_c_api.h", importc: "WavePosition".} = object
   
   FoundWarningDirectiveImplType* = proc (ctx: ptr WaveContextImplHandle;
@@ -153,6 +155,23 @@ type
   SkippedTokenImplType* = proc (context: ptr WaveContextImplHandle;
                                 token: ptr WaveTokenHandle; env: pointer): void {.
       cdecl.}
+  EmitLineDirectiveImplType* = proc (ctx: ptr WaveContextImplHandle;
+                                     pending: ptr WaveTokenListHandle;
+                                     act_token: ptr WaveTokenHandle;
+                                     env: pointer): EntryHandling {.cdecl.}
+  FoundLineDirectiveImplType* = proc (ctx: ptr WaveContextImplHandle;
+                                      arguments: ptr WaveTokenListHandle;
+                                      line: cuint; filename: cstring;
+                                      env: pointer): EntryHandling {.cdecl.}
+  FoundErrorDirectiveImplType* = proc (ctx: ptr WaveContextImplHandle;
+                                       message: ptr WaveTokenListHandle;
+                                       env: pointer): EntryHandling {.cdecl.}
+  DefinedMacroImplType* = proc (ctx: ptr WaveContextImplHandle;
+                                name: ptr WaveTokenHandle;
+                                is_functionlike: bool;
+                                parameters: ptr WaveTokenVectorHandle;
+                                definition: ptr WaveTokenListHandle;
+                                is_predefined: bool; env: pointer): void {.cdecl.}
   WaveDiagnostics* {.bycopy, header: "wave_c_api.h", importc: "WaveDiagnostics".} = object
     line*: cint
     column*: cint
@@ -163,12 +182,25 @@ type
 
 proc tokenVectorLen*(vec: ptr WaveTokenVectorHandle): cint {.dynlib: cwaveDl,
     importc: "wave_tokenVectorLen".}
+proc tokenVectorGetAt*(vec: ptr WaveTokenVectorHandle; idx: cint): ptr WaveTokenHandle {.
+    dynlib: cwaveDl, importc: "wave_tokenVectorGetAt".}
 proc deleteWaveTokenVector*(vec: ptr WaveTokenVectorHandle): void {.
     dynlib: cwaveDl, importc: "wave_deleteWaveTokenVector".}
 proc tokenListLen*(list: ptr WaveTokenListHandle): cint {.dynlib: cwaveDl,
     importc: "wave_tokenListLen".}
 proc tokenListToStr*(list: ptr WaveTokenListHandle): cstring {.dynlib: cwaveDl,
     importc: "wave_tokenListToStr".}
+proc tokenListBeginIterator*(l: ptr WaveTokenListHandle): ptr WaveTokenListIteratorHandle {.
+    dynlib: cwaveDl, importc: "wave_tokenListBeginIterator".}
+proc tokenListEndIterator*(l: ptr WaveTokenListHandle): ptr WaveTokenListIteratorHandle {.
+    dynlib: cwaveDl, importc: "wave_tokenListEndIterator".}
+proc neqListIterator*(i1: ptr WaveTokenListIteratorHandle;
+                      i2: ptr WaveTokenListIteratorHandle): bool {.
+    dynlib: cwaveDl, importc: "wave_neqListIterator".}
+proc listIterDeref*(i: ptr WaveTokenListIteratorHandle): ptr WaveTokenHandle {.
+    dynlib: cwaveDl, importc: "wave_listIterDeref".}
+proc listIterAdvance*(i: ptr WaveTokenListIteratorHandle): void {.
+    dynlib: cwaveDl, importc: "wave_listIterAdvance".}
 proc newProcessingHooks*(): ptr WaveProcessingHooksHandle {.dynlib: cwaveDl,
     importc: "wave_newProcessingHooks".}
 proc destroyProcessingHooks*(hooks: ptr WaveProcessingHooksHandle): void {.
@@ -200,6 +232,18 @@ proc setFoundIncludeDirective*(context: ptr WaveContextHandle;
 proc setSkippedToken*(context: ptr WaveContextHandle;
                       impl: SkippedTokenImplType; env: pointer): void {.
     dynlib: cwaveDl, importc: "wave_setSkippedToken".}
+proc setEmitLineDirective*(context: ptr WaveContextHandle;
+                           impl: EmitLineDirectiveImplType; env: pointer): void {.
+    dynlib: cwaveDl, importc: "wave_setEmitLineDirective".}
+proc setFoundLineDirective*(context: ptr WaveContextHandle;
+                            impl: FoundLineDirectiveImplType; env: pointer): void {.
+    dynlib: cwaveDl, importc: "wave_setFoundLineDirective".}
+proc setFoundErrorDirective*(context: ptr WaveContextHandle;
+                             impl: FoundErrorDirectiveImplType; env: pointer): void {.
+    dynlib: cwaveDl, importc: "wave_setFoundErrorDirective".}
+proc setDefinedMacro*(context: ptr WaveContextHandle;
+                      impl: DefinedMacroImplType; env: pointer): void {.
+    dynlib: cwaveDl, importc: "wave_setDefinedMacro".}
 proc destroyContext*(context: ptr WaveContextHandle): void {.dynlib: cwaveDl,
     importc: "wave_destroyContext".}
 proc contextSetData*(context: ptr WaveContextHandle; data: pointer): void {.

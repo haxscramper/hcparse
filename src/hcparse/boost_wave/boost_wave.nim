@@ -189,6 +189,47 @@ the directive is executed in a normal manner.
     cast[FoundIncludeDirectiveImplType](rawProc(impl)),
     rawEnv(impl))
 
+proc setDefinedMacro*(
+    ctx: ptr WaveContextHandle,
+    impl: proc (
+      ctx: ptr WaveContextImplHandle;
+      name: ptr WaveTokenHandle;
+      is_functionlike: bool;
+      parameters: ptr WaveTokenVectorHandle;
+      definition: ptr WaveTokenListHandle;
+      is_predefined: bool): void
+  ) =
+
+  ##[
+
+The function defined_macro is called whenever a macro was defined
+successfully.
+
+The ctx parameter provides a reference to the context_type used during
+instantiation of the preprocessing iterators by the user. Note, this
+parameter was added for the Boost V1.35.0 release.
+
+- The parameter name is a reference to the token holding the macro name.
+
+- The parameter is_functionlike is set to true whenever the newly defined
+  macro is defined as a function like macro.
+
+- The parameter parameters holds the parameter tokens for the macro
+  definition. If the macro has no parameters or if it is a object like
+  macro, then this container is empty.
+
+- The parameter definition contains the token sequence given as the
+  replacement sequence (definition part) of the newly defined macro.
+
+- The parameter is_predefined is set to true for all macros predefined
+  during the initialisation pahase of the library.
+
+  ]##
+
+  ctx.setDefinedMacro(
+    cast[DefinedMacroImplType](rawProc(impl)),
+    rawEnv(impl))
+
 
 proc setSkippedToken*(
     ctx: ptr WaveContextHandle,
@@ -219,6 +260,27 @@ proc `$`*(t: ptr WaveTokenHandle): string =
 proc `$`*(l: ptr WaveTokenListHandle): string = $tokenListToStr(l)
 proc len*(l: ptr WaveTokenListHandle): int = tokenListLen(l)
 
+proc len*(l: ptr WaveTokenVectorHandle): int = tokenVectorLen(l)
+proc `[]`*(l: ptr WaveTokenVectorHandle, idx: int): ptr WaveTokenHandle =
+  tokenVectorGetAt(l, cint(idx))
+
+iterator items*(l: ptr WaveTokenVectorHandle): ptr WaveTokenHandle =
+  for i in 0 ..< len(l):
+    yield l[i]
+
+proc first*(l: ptr WaveTokenListHandle): ptr WaveTokenListIteratorHandle = tokenListBeginIterator(l)
+proc last*(l: ptr WaveTokenListHandle): ptr WaveTokenListIteratorHandle = tokenListEndIterator(l)
+proc `!=`*(iter1, iter2: ptr WaveTokenListIteratorHandle): bool = neqListIterator(iter1, iter2)
+proc `==`*(iter1, iter2: ptr WaveTokenListIteratorHandle): bool {.error.}
+proc deref*(i: ptr WaveTokenListIteratorHandle): ptr WaveTokenHandle = listIterDeref(i)
+proc advance*(i: ptr WaveTokenListIteratorHandle) = listIterAdvance(i)
+
+iterator items*(l: ptr WaveTokenListHandle): ptr WaveTokenHandle =
+  var iter1 = first(l)
+  var iter2 = last(l)
+  while iter1 != iter2:
+    yield deref(iter1)
+    advance(iter1)
 
 
 # proc addMacroDefinition*(

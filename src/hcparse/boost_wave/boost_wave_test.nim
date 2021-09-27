@@ -9,6 +9,7 @@ echo cwaveDl
 proc main() =
   var ctx = newWaveContext(allocCStringArray([
     lit3"""
+      #define concat(a, b) a ## b
       #warning "123"
       #if 1
       call1();
@@ -62,6 +63,24 @@ proc main() =
       else:
         echo wrap($token, CharBrace.doubleSquare)
 
+  )
+
+  ctx.setDefinedMacro(
+    proc (
+      ctx: ptr WaveContextImplHandle;
+      name: ptr WaveTokenHandle;
+      is_functionlike: bool;
+      parameters: ptr WaveTokenVectorHandle;
+      definition: ptr WaveTokenListHandle;
+      is_predefined: bool): void =
+
+      echo toGreen("#define" |<< 16), name
+      for item in items(parameters):
+        echo " " |<< 16, hshow(item.kind) |<< 16, wrap($item, CharBrace.doubleAngle)
+
+      echo toGreen("as")
+      for item in items(definition):
+        echo " " |<< 16, hshow(item.kind) |<< 16, wrap($item, CharBrace.doubleAngle)
   )
 
   var first: ptr WaveIteratorHandle = ctx.first()

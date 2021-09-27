@@ -291,18 +291,22 @@ struct WaveHooksImpl
         WaveTokenList const&   values,
         WaveToken const&       pragma_token);
 
-    //    template <
-    //        typename ContextT,
-    //        typename TokenT,
-    //        typename ParametersT,
-    //        typename DefinitionT>
-    //    void defined_macro(
-    //        ContextT const&    ctx,
-    //        TokenT const&      name,
-    //        bool               is_functionlike,
-    //        ParametersT const& parameters,
-    //        DefinitionT const& definition,
-    //        bool               is_predefined);
+    method_impl<
+        void,
+        const WaveContextImplHandle*,
+        const WaveTokenHandle*,
+        bool,
+        const WaveTokenVectorHandle*,
+        const WaveTokenListHandle*,
+        bool>
+         defined_macro_impl;
+    void defined_macro(
+        WaveContextImpl const& ctx,
+        WaveToken const&       name,
+        bool                   is_functionlike,
+        WaveTokenVector const& parameters,
+        WaveTokenList const&   definition,
+        bool                   is_predefined);
 
 
     method_impl<void, const WaveContextImplHandle*, const WaveTokenHandle*>
@@ -403,6 +407,11 @@ inline const WaveTokenVector* toCxx(const WaveTokenVectorHandle* context) {
     return (WaveTokenVector*)(context);
 }
 
+
+inline WaveTokenVector* toCxx(WaveTokenVectorHandle* context) {
+    return (WaveTokenVector*)(context);
+}
+
 inline CxxWaveIterator* toCxx(WaveIteratorHandle* context) {
     return (CxxWaveIterator*)(context);
 }
@@ -413,6 +422,11 @@ inline const CxxWaveIterator* toCxx(const WaveIteratorHandle* context) {
 
 inline WaveToken* toCxx(const WaveTokenHandle* tok) {
     return (WaveToken*)(tok);
+}
+
+inline WaveTokenList::iterator* toCxx(
+    const WaveTokenListIteratorHandle* tok) {
+    return (WaveTokenList::iterator*)(tok);
 }
 
 template <typename Iterator>

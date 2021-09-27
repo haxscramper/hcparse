@@ -331,18 +331,34 @@ DECL_STRUCT(WaveContextImplHandle);
 DECL_STRUCT(WaveTokenListHandle);
 DECL_STRUCT(WaveTokenVectorHandle);
 DECL_STRUCT(WaveTokenListHandle);
+DECL_STRUCT(WaveTokenListIteratorHandle);
 
 TYPE struct WavePosition {
 } TYPE_NAME(WavePosition);
 
 
-BOOST_WAVE_EXPORT int  wave_tokenVectorLen(WaveTokenVectorHandle* vec);
+BOOST_WAVE_EXPORT int wave_tokenVectorLen(WaveTokenVectorHandle* vec);
+BOOST_WAVE_EXPORT WaveTokenHandle* wave_tokenVectorGetAt(
+    WaveTokenVectorHandle* vec,
+    int                    idx);
 BOOST_WAVE_EXPORT void wave_deleteWaveTokenVector(
     WaveTokenVectorHandle* vec);
 
 BOOST_WAVE_EXPORT int         wave_tokenListLen(WaveTokenListHandle* list);
 BOOST_WAVE_EXPORT const char* wave_tokenListToStr(
     WaveTokenListHandle* list);
+
+BOOST_WAVE_EXPORT WaveTokenListIteratorHandle* wave_tokenListBeginIterator(
+    WaveTokenListHandle* l);
+BOOST_WAVE_EXPORT WaveTokenListIteratorHandle* wave_tokenListEndIterator(
+    WaveTokenListHandle* l);
+BOOST_WAVE_EXPORT bool wave_neqListIterator(
+    WaveTokenListIteratorHandle* i1,
+    WaveTokenListIteratorHandle* i2);
+BOOST_WAVE_EXPORT WaveTokenHandle* wave_listIterDeref(
+    WaveTokenListIteratorHandle* i);
+BOOST_WAVE_EXPORT void wave_listIterAdvance(
+    WaveTokenListIteratorHandle* i);
 
 BOOST_WAVE_EXPORT WaveProcessingHooksHandle* wave_newProcessingHooks();
 BOOST_WAVE_EXPORT void                       wave_destroyProcessingHooks(
@@ -444,6 +460,65 @@ typedef void (*SkippedTokenImplType)(
 BOOST_WAVE_EXPORT void wave_setSkippedToken(
     WaveContextHandle*   context,
     SkippedTokenImplType impl,
+    void*                env);
+
+// Emit line directive
+
+typedef EntryHandling (*EmitLineDirectiveImplType)(
+    const WaveContextImplHandle* ctx,
+    WaveTokenListHandle*         pending,
+    const WaveTokenHandle*       act_token,
+    void*                        env);
+
+
+BOOST_WAVE_EXPORT void wave_setEmitLineDirective(
+    WaveContextHandle*        context,
+    EmitLineDirectiveImplType impl,
+    void*                     env);
+
+// Found line directive
+
+typedef EntryHandling (*FoundLineDirectiveImplType)(
+    const WaveContextImplHandle* ctx,
+    const WaveTokenListHandle*   arguments,
+    unsigned int                 line,
+    const char*                  filename,
+    void*                        env);
+
+
+BOOST_WAVE_EXPORT void wave_setFoundLineDirective(
+    WaveContextHandle*         context,
+    FoundLineDirectiveImplType impl,
+    void*                      env);
+
+// Found error directive
+
+typedef EntryHandling (*FoundErrorDirectiveImplType)(
+    const WaveContextImplHandle* ctx,
+    const WaveTokenListHandle*   message,
+    void*                        env);
+
+
+BOOST_WAVE_EXPORT void wave_setFoundErrorDirective(
+    WaveContextHandle*          context,
+    FoundErrorDirectiveImplType impl,
+    void*                       env);
+
+// Defined macro
+
+typedef void (*DefinedMacroImplType)(
+    const WaveContextImplHandle* ctx,
+    const WaveTokenHandle*       name,
+    bool                         is_functionlike,
+    const WaveTokenVectorHandle* parameters,
+    const WaveTokenListHandle*   definition,
+    bool                         is_predefined,
+    void*                        env);
+
+
+BOOST_WAVE_EXPORT void wave_setDefinedMacro(
+    WaveContextHandle*   context,
+    DefinedMacroImplType impl,
     void*                env);
 
 BOOST_WAVE_EXPORT void wave_destroyContext(WaveContextHandle* context);

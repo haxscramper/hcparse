@@ -348,6 +348,34 @@ bool WaveHooksImpl::interpret_pragma(
     }
 }
 
+void WaveHooksImpl::defined_macro(
+    const WaveContextImpl& ctx,
+    const WaveToken&       name,
+    bool                   is_functionlike,
+    const WaveTokenVector& parameters,
+    const WaveTokenList&   definition,
+    bool                   is_predefined) {
+    if (defined_macro_impl.isActive()) {
+        defined_macro_impl(
+            (const WaveContextImplHandle*)&ctx,
+            (const WaveTokenHandle*)&name,
+            is_functionlike,
+            (const WaveTokenVectorHandle*)&parameters,
+            (const WaveTokenListHandle*)&definition,
+            is_predefined);
+
+    } else {
+        default_preprocessing_hooks::defined_macro(
+            ctx,
+            name,
+            is_functionlike,
+            parameters,
+            definition,
+            is_predefined);
+    }
+}
+
+
 void WaveHooksImpl::undefined_macro(
     const WaveContextImpl& ctx,
     const WaveToken&       name) {
@@ -842,6 +870,56 @@ void wave_setExpandingFunctionLikeMacro(
     toCxx(context)->context->get_hooks().expanding_function_like_macro_impl.env = env;
 }
 
+void wave_setEmitLineDirective(
+    WaveContextHandle*        context,
+    EmitLineDirectiveImplType impl,
+    void*                     env) {
+    toCxx(context)->context->get_hooks().emit_line_directive_impl.impl = (EntryHandling(*)(
+        const WaveContextImplHandle*,
+        WaveTokenListHandle*,
+        const WaveTokenHandle*,
+        void*))(impl);
+    toCxx(context)->context->get_hooks().emit_line_directive_impl.env = env;
+}
+
+void wave_setFoundLineDirective(
+    WaveContextHandle*         context,
+    FoundLineDirectiveImplType impl,
+    void*                      env) {
+    toCxx(context)->context->get_hooks().found_line_directive_impl.impl = (EntryHandling(*)(
+        const WaveContextImplHandle*,
+        const WaveTokenListHandle*,
+        unsigned int,
+        const char*,
+        void*))(impl);
+    toCxx(context)->context->get_hooks().found_line_directive_impl.env = env;
+}
+
+void wave_setFoundErrorDirective(
+    WaveContextHandle*         context,
+    FoundLineDirectiveImplType impl,
+    void*                      env) {
+    toCxx(context)->context->get_hooks().found_error_directive_impl.impl = (EntryHandling(*)(
+        const WaveContextImplHandle*, const WaveTokenListHandle*, void*))(
+        impl);
+    toCxx(context)->context->get_hooks().found_error_directive_impl.env = env;
+}
+
+void wave_setDefinedMacro(
+    WaveContextHandle*   context,
+    DefinedMacroImplType impl,
+    void*                env) {
+    toCxx(context)->context->get_hooks().defined_macro_impl.impl = (void (*)(
+        const WaveContextImplHandle*,
+        const WaveTokenHandle*,
+        bool,
+        const WaveTokenVectorHandle*,
+        const WaveTokenListHandle*,
+        bool,
+        void*))(impl);
+    toCxx(context)->context->get_hooks().defined_macro_impl.env = env;
+}
+
 // void wave_setFoundUnknonwDirective(
 //    CWaveContext*                context,
 //    CFoundUnknownDirectiveCbType impl) {
@@ -912,6 +990,13 @@ int wave_tokenVectorLen(WaveTokenVectorHandle* vec) {
     return toCxx(vec)->size();
 }
 
+WaveTokenHandle* wave_tokenVectorGetAt(
+    WaveTokenVectorHandle* vec,
+    int                    idx) {
+    WaveToken* tmp = &(toCxx(vec)->operator[](idx));
+    return (WaveTokenHandle*)tmp;
+}
+
 void wave_deleteWaveTokenVector(WaveTokenVectorHandle* vec) {
     delete toCxx(vec);
 }
@@ -922,4 +1007,32 @@ int wave_tokenListLen(WaveTokenListHandle* list) {
 
 const char* wave_tokenListToStr(WaveTokenListHandle* list) {
     return util::impl::as_string(*toCxx(list)).c_str();
+}
+
+
+WaveTokenListIteratorHandle* wave_tokenListBeginIterator(
+    WaveTokenListHandle* l) {
+    return (WaveTokenListIteratorHandle*)new WaveTokenList::iterator(
+        toCxx(l)->begin());
+}
+
+WaveTokenListIteratorHandle* wave_tokenListEndIterator(
+    WaveTokenListHandle* l) {
+    return (WaveTokenListIteratorHandle*)new WaveTokenList::iterator(
+        toCxx(l)->end());
+}
+
+bool wave_neqListIterator(
+    WaveTokenListIteratorHandle* i1,
+    WaveTokenListIteratorHandle* i2) {
+    return (*toCxx(i1)) != (*toCxx(i2));
+}
+
+WaveTokenHandle* wave_listIterDeref(WaveTokenListIteratorHandle* i) {
+    WaveToken* tmp = &(**toCxx(i));
+    return (WaveTokenHandle*)tmp;
+}
+
+void wave_listIterAdvance(WaveTokenListIteratorHandle* i) {
+    ++(*toCxx(i));
 }
