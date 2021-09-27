@@ -132,14 +132,9 @@ void WaveHooksImpl::skipped_token(
     WaveContextImpl const& ctx,
     WaveToken const&       token) {
     if (skipped_token_impl.isActive()) {
-        //        std::cout << ">> Executing skipped token callback. "
-        //                  << "C value of the skipped token is ";
-        //        std::cout << std::flush;
-        //        std::cout << token.get_value() << "\n";
         skipped_token_impl(
             (const WaveContextImplHandle*)&ctx,
             (const WaveTokenHandle*)&token);
-        //        std::cout << ">> User callback finished\n";
     } else {
         default_preprocessing_hooks::skipped_token(ctx, token);
     }

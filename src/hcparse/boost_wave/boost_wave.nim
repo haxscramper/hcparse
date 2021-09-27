@@ -87,7 +87,6 @@ preprocessing context.
 
   let env = rawEnv(impl)
   let impl = rawProc(impl)
-  echo "setting conditional expression evaluation ", cast[int](env)
   ctx.setEvaluatedConditionalExpression(
     cast[EvaluatedConditionalExpressionImplType](impl),
     env)

@@ -24,14 +24,11 @@ proc main() =
       ctx: ptr WaveContextImplHandle,
       message: ptr WaveTokenListHandle
     ): EntryHandling =
-      echo "Found warning directive with ",
-        len(message), " elements, value = ",
-        $message
+      echo toYellow("warning" |<< 16), wrap($message, CharBrace.doubleCurly)
 
       return EntryHandlingSkip
   )
 
-  var needComment = false
   ctx.setEvaluatedConditionalExpression(
     proc (
       ctx: ptr WaveContextImplHandle;
@@ -39,10 +36,8 @@ proc main() =
       expression: ptr WaveTokenListHandle;
       expression_value: bool): bool =
 
-      echo "evaluated conditional expression ", $directive,
-        $expression, " to ", expressionValue
-
-      needComment = true
+      echo hshow(directive.kind) |<< 16, toCyan($directive & " " & $expression),
+        " = ", expressionValue
   )
 
   ctx.setFoundIncludeDirective(
@@ -51,7 +46,7 @@ proc main() =
       impl: cstring;
       include_next: bool): EntryHandling =
 
-      echo "found include directive for ", $impl
+      echo toBlue("#include" |<< 16), $impl
       return EntryHandlingSkip
   )
 
@@ -60,24 +55,19 @@ proc main() =
       context: ptr WaveContextImplHandle;
       token: ptr WaveTokenHandle) =
 
-      if needComment and token.kind != tokId_SPACE:
-        stdout.write "// "
-        needComment = false
-
+      stdout.write hshow(token.kind) |<< 16, " skip "
       if token.kind in {tokIdNewline}:
-        stdout.write wrap("\\n", CharBrace.doubleSquare), "\n"
+        echo wrap("\\n", CharBrace.doubleSquare)
 
       else:
-        stdout.write wrap($token, CharBrace.doubleSquare)
+        echo wrap($token, CharBrace.doubleSquare)
 
-      if token.kind in {tokIdNewline, tokIdCppComment}:
-        needComment = true
   )
 
   var first: ptr WaveIteratorHandle = ctx.first()
   while first != ctx.last():
     let tok = first.getTok()
-    echo hshow(tok.kind()) |<< 16, hshow(tok.getValue())
+    echo hshow(tok.kind()) |<< 16, " real ", hshow(tok.getValue())
     first.advance()
 
 when isMainModule:
