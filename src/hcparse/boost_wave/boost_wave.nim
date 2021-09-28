@@ -51,6 +51,15 @@ proc setFoundWarningDirective*(
   let impl = rawProc(impl)
   ctx.setFoundWarningDirective(cast[FoundWarningDirectiveImplType](impl), env)
 
+template onFoundWarningDirective*(inCtx: ptr WaveContextHandle, body: untyped): untyped =
+  inCtx.setFoundWarningDirective(
+    proc(
+      ctx {.inject.}: ptr WaveContextImplHandle,
+      message {.inject.}: ptr WaveTokenListHandle
+    ): EntryHandling =
+
+      body
+  )
 
 proc setEvaluatedConditionalExpression*(
     ctx: ptr WaveContextHandle,
@@ -90,6 +99,17 @@ preprocessing context.
   ctx.setEvaluatedConditionalExpression(
     cast[EvaluatedConditionalExpressionImplType](impl),
     env)
+
+template onEvaluatedConditionalExpression*(inCtx: ptr WaveContextHandle, body: untyped): untyped =
+  inCtx.setEvaluatedConditionalExpression(
+    proc (
+      ctx {.inject.}: ptr WaveContextImplHandle;
+      directive {.inject.}: ptr WaveTokenHandle;
+      expression {.inject.}: ptr WaveTokenListHandle;
+      expressionValue {.inject.}: bool): bool =
+
+      body
+  )
 
 proc setExpandingFunctionLikeMacro*(
     ctx: ptr WaveContextHandle,
@@ -189,6 +209,17 @@ the directive is executed in a normal manner.
     cast[FoundIncludeDirectiveImplType](rawProc(impl)),
     rawEnv(impl))
 
+
+template onFoundIncludeDirective*(ctx: ptr WaveContextHandle, body: untyped): untyped =
+  ctx.setFoundIncludeDirective(
+    proc(
+      context {.inject.}: ptr WaveContextImplHandle;
+      impl {.inject.}: cstring;
+      includeNext {.inject.}: bool): EntryHandling =
+
+      body
+  )
+
 proc setDefinedMacro*(
     ctx: ptr WaveContextHandle,
     impl: proc (
@@ -229,6 +260,20 @@ parameter was added for the Boost V1.35.0 release.
   ctx.setDefinedMacro(
     cast[DefinedMacroImplType](rawProc(impl)),
     rawEnv(impl))
+
+template onDefinedMacro*(inCtx: ptr WaveContextHandle, body: untyped): untyped =
+  inCtx.setDefinedMacro(
+    proc (
+      ctx {.inject.}: ptr WaveContextImplHandle;
+      name {.inject.}: ptr WaveTokenHandle;
+      isFunctionlike {.inject.}: bool;
+      parameters {.inject.}: ptr WaveTokenVectorHandle;
+      definition {.inject.}: ptr WaveTokenListHandle;
+      isPredefined {.inject.}: bool): void =
+
+      body
+
+    )
 
 
 proc setExpandingObjectLikeMacro*(
@@ -271,6 +316,33 @@ macro is to be expanded, i.e. before the actual expansion starts.
     cast[ExpandingObjectLikeMacroImplType](rawProc(impl)),
     rawEnv(impl))
 
+template onExpandingObjectLikeMacro*(inCtx: ptr WaveContextHandle, body: untyped): untyped =
+  inCtx.setExpandingObjectLikeMacro(
+    proc(
+      ctx {.inject.}: ptr WaveContextImplHandle;
+      argmacro {.inject.}: ptr WaveTokenHandle;
+      definition {.inject.}: ptr WaveTokenListHandle;
+      macrocall {.inject.}: ptr WaveTokenHandle): EntryHandling =
+
+      body
+
+  )
+
+template onExpandingFunctionLikeMacro*(inCtx: ptr WaveContextHandle, body: untyped): untyped =
+  inCtx.setExpandingFunctionLikeMacro(
+    proc(
+      ctx {.inject.}: ptr WaveContextImplHandle;
+      macrodef {.inject.}: ptr WaveTokenHandle;
+      formalArgs {.inject.}: ptr WaveTokenVectorHandle;
+      definition {.inject.}: ptr WaveTokenListHandle;
+      macrocall {.inject.}: ptr WaveTokenHandle;
+      arguments {.inject.}: ptr WaveTokenVectorHandle;
+      seqstart {.inject.}: pointer;
+      seqend {.inject.}: pointer): bool =
+
+      body
+  )
+
 proc setExpandedMacro*(
     ctx: ptr WaveContextHandle,
     impl: proc (
@@ -299,6 +371,15 @@ before the rescanning process starts.
     cast[ExpandedMacroImplType](rawProc(impl)),
     rawEnv(impl))
 
+template onExpandedMacro*(inCtx: ptr WaveContextHandle, body: untyped): untyped =
+  inCtx.setExpandedMacro(
+    proc(
+      ctx {.inject.}: ptr WaveContextImplHandle;
+      result {.inject.}: ptr WaveTokenListHandle): void =
+
+      body
+  )
+
 proc setRescannedMacro*(
     ctx: ptr WaveContextHandle,
     impl: proc (
@@ -325,6 +406,15 @@ is finished, i.e. the macro expansion is complete.
     cast[RescannedMacroImplType](rawProc(impl)),
     rawEnv(impl))
 
+
+template onRescannedMacro*(inCtx: ptr WaveContextHandle, body: untyped): untyped =
+  inCtx.setRescannedMacro(
+    proc(
+      ctx {.inject.}: ptr WaveContextImplHandle;
+      result {.inject.}: ptr WaveTokenListHandle): void =
+
+      body
+  )
 
 proc setEmitLineDirective*(
     ctx: ptr WaveContextHandle,
@@ -359,6 +449,16 @@ to be emitted into the generated output.
     cast[EmitLineDirectiveImplType](rawProc(impl)),
     rawEnv(impl))
 
+template onEmitLineDirective*(inCtx: ptr WaveContextHandle, body: untyped): untyped =
+  inCtx.setEmitLineDirective(
+    proc (
+      ctx {.inject.}: ptr WaveContextImplHandle;
+      pending {.inject.}: ptr WaveTokenListHandle;
+      actToken {.inject.}: ptr WaveTokenHandle): bool =
+
+      body
+  )
+
 proc setSkippedToken*(
     ctx: ptr WaveContextHandle,
     impl: proc (
@@ -366,9 +466,33 @@ proc setSkippedToken*(
       token: ptr WaveTokenHandle): void
   ) =
 
+  ##[
+
+The function skipped_token is called, whenever a token is about to be
+skipped due to a false preprocessor condition (code fragments to be skipped
+inside the not evaluated conditional #if/#else/#endif branches).
+
+- The ctx parameter provides a reference to the context_type used during
+  instantiation of the preprocessing iterators by the user. Note, this
+  parameter was added for the Boost V1.35.0 release.
+
+- The parameter token refers to the token to be skipped.
+
+  ]##
+
   ctx.setSkippedToken(
     cast[SkippedTokenImplType](rawProc(impl)),
     rawEnv(impl))
+
+template onSkippedToken*(ctx: ptr WaveContextHandle, body: untyped): untyped =
+  ctx.setSkippedToken(
+    proc(
+      context {.inject.}: ptr WaveContextImplHandle;
+      token {.inject.}: ptr WaveTokenHandle) =
+
+      body
+
+  )
 
 proc first*(ctx: ptr WaveContextHandle): ptr WaveIteratorHandle = ctx.beginIterator()
 proc last*(ctx: ptr WaveContextHandle): ptr WaveIteratorHandle = ctx.endIterator()

@@ -28,128 +28,59 @@ proc main() =
     """])[0], "<Unknown>".cstring)
 
   var indent = 16
-  ctx.setFoundWarningDirective(
-    proc(
-      ctx: ptr WaveContextImplHandle,
-      message: ptr WaveTokenListHandle
-    ): EntryHandling =
-      echo toYellow("warning" |<< indent), wrap($message, CharBrace.doubleCurly)
+  ctx.onFoundWarningDirective():
+    echo toYellow("warning" |<< indent), wrap($message, CharBrace.doubleCurly)
+    return EntryHandlingSkip
 
-      return EntryHandlingSkip
-  )
+  ctx.onEvaluatedConditionalExpression():
+    echo hshow(directive.kind) |<< indent, toCyan($directive & " " & $expression),
+      " = ", expressionValue
 
-  ctx.setEvaluatedConditionalExpression(
-    proc (
-      ctx: ptr WaveContextImplHandle;
-      directive: ptr WaveTokenHandle;
-      expression: ptr WaveTokenListHandle;
-      expression_value: bool): bool =
+  ctx.onFoundIncludeDirective():
+    echo toBlue("#include" |<< indent), $impl
+    return EntryHandlingSkip
 
-      echo hshow(directive.kind) |<< indent, toCyan($directive & " " & $expression),
-        " = ", expressionValue
-  )
+  ctx.onSkippedToken():
+    stdout.write hshow(token.kind) |<< indent, " skip "
+    if token.kind in {tokIdNewline}:
+      echo wrap("\\n", CharBrace.doubleSquare)
 
-  ctx.setFoundIncludeDirective(
-    proc(
-      context: ptr WaveContextImplHandle;
-      impl: cstring;
-      include_next: bool): EntryHandling =
+    else:
+      echo wrap($token, CharBrace.doubleSquare)
 
-      echo toBlue("#include" |<< indent), $impl
-      return EntryHandlingSkip
-  )
+  ctx.onDefinedMacro():
+    echo toGreen("#define" |<< indent), name
+    for item in items(parameters):
+      echo " " |<< indent, hshow(item.kind) |<< 16, wrap($item, CharBrace.doubleAngle)
 
-  ctx.setSkippedToken(
-    proc(
-      context: ptr WaveContextImplHandle;
-      token: ptr WaveTokenHandle) =
+    echo toGreen("as") |>> indent
+    for item in items(definition):
+      echo " " |<< indent, hshow(item.kind) |<< 16, wrap($item, CharBrace.doubleAngle)
 
-      stdout.write hshow(token.kind) |<< indent, " skip "
-      if token.kind in {tokIdNewline}:
-        echo wrap("\\n", CharBrace.doubleSquare)
+  ctx.onExpandingFunctionLikeMacro():
+    echo " " |<< indent, "expanding function-like macro", $macrodef
+    inc indent, 2
 
-      else:
-        echo wrap($token, CharBrace.doubleSquare)
+  ctx.onExpandingObjectLikeMacro():
+    echo " " |<< indent, "expanding object-like macro ", $argmacro
+    inc indent, 2
 
-  )
+  ctx.onExpandedMacro():
+    echo " " |<< indent,
+      "expanded macro to",
+      clformat.joinc(mapIt(result, $it), " ")
 
-  ctx.setDefinedMacro(
-    proc (
-      ctx: ptr WaveContextImplHandle;
-      name: ptr WaveTokenHandle;
-      is_functionlike: bool;
-      parameters: ptr WaveTokenVectorHandle;
-      definition: ptr WaveTokenListHandle;
-      is_predefined: bool): void =
+    dec indent, 2
 
-      echo toGreen("#define" |<< indent), name
-      for item in items(parameters):
-        echo " " |<< indent, hshow(item.kind) |<< 16, wrap($item, CharBrace.doubleAngle)
+  ctx.onRescannedMacro():
+    echo " " |<< indent,
+      "rescanned macro to",
+      clformat.joinc(mapIt(result, $it), " ")
 
-      echo toGreen("as") |>> indent
-      for item in items(definition):
-        echo " " |<< indent, hshow(item.kind) |<< 16, wrap($item, CharBrace.doubleAngle)
-  )
+    dec indent, 2
 
-  ctx.setExpandingFunctionLikeMacro(
-    proc(
-      ctx: ptr WaveContextImplHandle;
-      macrodef: ptr WaveTokenHandle;
-      formal_args: ptr WaveTokenVectorHandle;
-      definition: ptr WaveTokenListHandle;
-      macrocall: ptr WaveTokenHandle;
-      arguments: ptr WaveTokenVectorHandle;
-      seqstart: pointer;
-      seqend: pointer): bool =
-
-      echo " " |<< indent, "expanding function-like macro", $macrodef
-      inc indent, 2
-  )
-
-  ctx.setExpandingObjectLikeMacro(
-    proc(
-      ctx: ptr WaveContextImplHandle;
-      argmacro: ptr WaveTokenHandle;
-      definition: ptr WaveTokenListHandle;
-      macrocall: ptr WaveTokenHandle): EntryHandling =
-
-      echo " " |<< indent, "expanding object-like macro ", $argmacro
-      inc indent, 2
-
-  )
-
-  ctx.setExpandedMacro(
-    proc(
-      ctx: ptr WaveContextImplHandle;
-      result: ptr WaveTokenListHandle): void =
-
-      echo " " |<< indent,
-        "expanded macro to",
-        clformat.joinc(mapIt(result, $it), " ")
-
-      dec indent, 2
-  )
-
-  ctx.setRescannedMacro(
-    proc(
-      ctx: ptr WaveContextImplHandle;
-      result: ptr WaveTokenListHandle): void =
-
-      echo " " |<< indent,
-        "rescanned macro to",
-        clformat.joinc(mapIt(result, $it), " ")
-
-      dec indent, 2
-  )
-
-  ctx.setEmitLineDirective(
-    proc (
-      ctx: ptr WaveContextImplHandle;
-      pending: ptr WaveTokenListHandle;
-      act_token: ptr WaveTokenHandle): bool =
-
-      return true
-  )
+  ctx.onEmitLineDirective():
+    return true
 
   var first: ptr WaveIteratorHandle = ctx.first()
   while first != ctx.last():
