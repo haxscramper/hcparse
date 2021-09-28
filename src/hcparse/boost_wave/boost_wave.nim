@@ -24,6 +24,77 @@ proc newWaveContext*(str: string, file: string = "<unknown>"): WaveContext =
   result.str = allocCStringArray([str])
   result.handle = newWaveContext(result.str[0], file)
 
+
+proc first*(ctx: WaveContext): ptr WaveIteratorHandle = ctx.handle.beginIterator()
+proc last*(ctx: WaveContext): ptr WaveIteratorHandle = ctx.handle.endIterator()
+proc getTok*(iter: ptr WaveIteratorHandle): ptr WaveTokenHandle = iter.iterGetTok()
+proc advance*(iter: ptr WaveIteratorHandle) = iter.advanceIterator()
+proc `!=`*(iter1, iter2: ptr WaveIteratorHandle): bool = neqIterator(iter1, iter2)
+proc `==`*(iter1, iter2: ptr WaveIteratorHandle): bool {.error.}
+proc getValue*(tok: ptr WaveTokenHandle): cstring = tok.tokGetValue()
+proc kind*(tok: ptr WaveTokenHandle): WaveTokId = tok.tokGetId()
+
+proc `$`*(t: ptr WaveTokenHandle): string =
+  if not isNil(t):
+    let val = t.getValue()
+    if not isNil(val):
+      return $val
+
+iterator items*(
+    ctx: var WaveContext,
+    ignoreHashLine: bool = true
+  ): ptr WaveTokenHandle =
+  ## - @arg{ignoreHashLine} :: Explicitly omit `#line` directives if they are
+  ##   emitted by the preprocessing context. This is useful when plain source 
+  ##   code is needed, witout correct line position information.
+  var inHashLine = false
+  var first: ptr WaveIteratorHandle = ctx.first()
+  while first != ctx.last():
+    let tok = first.getTok()
+    if tok.kind == tokIdPpLine and ignoreHashLine:
+      inHashLine = true
+
+    if inHashLine:
+      if tok.kind == tokIdNewline:
+        inHashLine = false
+
+    else:
+      yield tok
+
+    first.advance()
+
+
+
+proc getExpanded*(ctx: var WaveContext, ignoreHashLine: bool = true): string =
+  for tok in items(ctx, ignoreHashLine):
+    result.add $tok
+
+proc `$`*(l: ptr WaveTokenListHandle): string = $tokenListToStr(l)
+proc len*(l: ptr WaveTokenListHandle): int = tokenListLen(l)
+
+proc len*(l: ptr WaveTokenVectorHandle): int = tokenVectorLen(l)
+proc `[]`*(l: ptr WaveTokenVectorHandle, idx: int): ptr WaveTokenHandle =
+  tokenVectorGetAt(l, cint(idx))
+
+iterator items*(l: ptr WaveTokenVectorHandle): ptr WaveTokenHandle =
+  for i in 0 ..< len(l):
+    yield l[i]
+
+proc first*(l: ptr WaveTokenListHandle): ptr WaveTokenListIteratorHandle = tokenListBeginIterator(l)
+proc last*(l: ptr WaveTokenListHandle): ptr WaveTokenListIteratorHandle = tokenListEndIterator(l)
+proc `!=`*(iter1, iter2: ptr WaveTokenListIteratorHandle): bool = neqListIterator(iter1, iter2)
+proc `==`*(iter1, iter2: ptr WaveTokenListIteratorHandle): bool {.error.}
+proc deref*(i: ptr WaveTokenListIteratorHandle): ptr WaveTokenHandle = listIterDeref(i)
+proc advance*(i: ptr WaveTokenListIteratorHandle) = listIterAdvance(i)
+
+iterator items*(l: ptr WaveTokenListHandle): ptr WaveTokenHandle =
+  var iter1 = first(l)
+  var iter2 = last(l)
+  while iter1 != iter2:
+    yield deref(iter1)
+    advance(iter1)
+
+
 proc setFoundWarningDirective*(
     ctx: var WaveContext,
     impl: proc(
@@ -478,45 +549,43 @@ template onSkippedToken*(ctx: var WaveContext, body: untyped): untyped =
 
   )
 
-proc first*(ctx: WaveContext): ptr WaveIteratorHandle = ctx.handle.beginIterator()
-proc last*(ctx: WaveContext): ptr WaveIteratorHandle = ctx.handle.endIterator()
-proc getTok*(iter: ptr WaveIteratorHandle): ptr WaveTokenHandle = iter.iterGetTok()
-proc advance*(iter: ptr WaveIteratorHandle) = iter.advanceIterator()
-proc `!=`*(iter1, iter2: ptr WaveIteratorHandle): bool = neqIterator(iter1, iter2)
-proc `==`*(iter1, iter2: ptr WaveIteratorHandle): bool {.error.}
-proc getValue*(tok: ptr WaveTokenHandle): cstring = tok.tokGetValue()
-proc kind*(tok: ptr WaveTokenHandle): WaveTokId = tok.tokGetId()
+iterator allItems*(
+    ctx: var WaveContext,
+    ignoreHashLine: bool = true
+  ): tuple[skipped: bool, token: ptr WaveTokenHandle] =
+  ## Iterate over all tokens, including skipped ones.
+  ## - NOTE :: this override wave context 'on skipped token' hook
+  ## - TODO :: add 'before' hook invocation instead that would be
+  ##   removed after 'all items execution is finished'. 
 
-proc `$`*(t: ptr WaveTokenHandle): string =
-  if not isNil(t):
-    let val = t.getValue()
-    if not isNil(val):
-      return $val
+  var skipped: seq[ptr WaveTokenHandle]
+  ctx.onSkippedToken():
+    skipped.add token
 
-proc `$`*(l: ptr WaveTokenListHandle): string = $tokenListToStr(l)
-proc len*(l: ptr WaveTokenListHandle): int = tokenListLen(l)
+  var first: ptr WaveIteratorHandle = ctx.first()
+  var inHashLine = false
+  while first != ctx.last():
+    if 0 < skipped.len:
+      for item in skipped:
+        yield (true, item)
 
-proc len*(l: ptr WaveTokenVectorHandle): int = tokenVectorLen(l)
-proc `[]`*(l: ptr WaveTokenVectorHandle, idx: int): ptr WaveTokenHandle =
-  tokenVectorGetAt(l, cint(idx))
+      skipped.setLen(0)
 
-iterator items*(l: ptr WaveTokenVectorHandle): ptr WaveTokenHandle =
-  for i in 0 ..< len(l):
-    yield l[i]
+    let tok = first.getTok()
+    if tok.kind == tokIdPpLine and ignoreHashLine:
+      inHashLine = true
 
-proc first*(l: ptr WaveTokenListHandle): ptr WaveTokenListIteratorHandle = tokenListBeginIterator(l)
-proc last*(l: ptr WaveTokenListHandle): ptr WaveTokenListIteratorHandle = tokenListEndIterator(l)
-proc `!=`*(iter1, iter2: ptr WaveTokenListIteratorHandle): bool = neqListIterator(iter1, iter2)
-proc `==`*(iter1, iter2: ptr WaveTokenListIteratorHandle): bool {.error.}
-proc deref*(i: ptr WaveTokenListIteratorHandle): ptr WaveTokenHandle = listIterDeref(i)
-proc advance*(i: ptr WaveTokenListIteratorHandle) = listIterAdvance(i)
+    if inHashLine:
+      if tok.kind == tokIdNewline:
+        inHashLine = false
 
-iterator items*(l: ptr WaveTokenListHandle): ptr WaveTokenHandle =
-  var iter1 = first(l)
-  var iter2 = last(l)
-  while iter1 != iter2:
-    yield deref(iter1)
-    advance(iter1)
+    else:
+      yield (false, tok)
+
+    first.advance()
+
+
+
 
 
 # proc addMacroDefinition*(
