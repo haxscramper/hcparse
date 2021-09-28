@@ -85,6 +85,21 @@ suite "Test expansion hooks":
     for tok in items(ctx, false):
       echo hshow(tok.kind()) |<< indent, " real ", hshow(tok.getValue())
 
+suite "Iterate over tokens":
+  var ctx = newWaveContext("""
+#if 1
+test1
+#else
+test2
+#endif
+""")
+
+  var toks: seq[(WaveTokId, string)]
+  ctx.allTokens() do (skipped: bool, tok: ptr WaveTokenHandle):
+    toks.add((tok.kind, $tok))
+
+  pprint toks
+
 suite "Get expanded text":
   test "Simple token":
     var ctx = newWaveContext("test()")

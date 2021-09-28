@@ -2,6 +2,7 @@ import hmisc/wrappers/wraphelp
 
 import ./boost_wave_wrap
 export boost_wave_wrap
+import hmisc/core/gold
 
 import std/os
 
@@ -549,27 +550,39 @@ template onSkippedToken*(ctx: var WaveContext, body: untyped): untyped =
 
   )
 
-iterator allItems*(
+proc allTokens*(
     ctx: var WaveContext,
+    onToken: proc(skipped: bool, tok: ptr WaveTokenHandle),
     ignoreHashLine: bool = true
-  ): tuple[skipped: bool, token: ptr WaveTokenHandle] =
+  ) =
   ## Iterate over all tokens, including skipped ones.
-  ## - NOTE :: this override wave context 'on skipped token' hook
+  ## - WARNING :: Due to handing of the 'on skip' tokens, it is *highly
+  ##   recommended* to perform all the analysis directly inside of callback -
+  ##   when it's execution is finished passed `tok` pointer is not guaranteed
+  ##   to exists anymore, especially if it was `skipped`.
+  ## - NOTE :: this override wave context 'on skipped token' and
+  ##   'evaluated conditional expression' hooks.
   ## - TODO :: add 'before' hook invocation instead that would be
-  ##   removed after 'all items execution is finished'. 
+  ##   removed after 'all items execution is finished'.
 
-  var skipped: seq[ptr WaveTokenHandle]
+  // "Begin all items implementation body"
+
+  ctx.onEvaluatedConditionalExpression():
+    onToken(true, directive)
+    for tok in expression:
+      onToken(true, tok)
+
   ctx.onSkippedToken():
-    skipped.add token
+    onToken(true, token)
 
   var first: ptr WaveIteratorHandle = ctx.first()
   var inHashLine = false
   while first != ctx.last():
-    if 0 < skipped.len:
-      for item in skipped:
-        yield (true, item)
+    # if 0 < skipped.len:
+    #   for item in skipped:
+    #     yield (true, item)
 
-      skipped.setLen(0)
+    #   skipped.setLen(0)
 
     let tok = first.getTok()
     if tok.kind == tokIdPpLine and ignoreHashLine:
@@ -580,9 +593,12 @@ iterator allItems*(
         inHashLine = false
 
     else:
-      yield (false, tok)
+      onToken(false, tok)
+      # yield (false, tok)
 
     first.advance()
+
+  // "End all items implementation body"
 
 
 

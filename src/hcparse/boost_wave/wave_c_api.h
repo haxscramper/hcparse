@@ -333,6 +333,11 @@ DECL_STRUCT(WaveTokenVectorHandle);
 DECL_STRUCT(WaveTokenListHandle);
 DECL_STRUCT(WaveTokenListIteratorHandle);
 
+
+// TYPE struct WaveTokenHandle {
+//    char fake
+//} TYPE_NAME(WaveTokenHandle);
+
 TYPE struct WavePosition {
 } TYPE_NAME(WavePosition);
 
