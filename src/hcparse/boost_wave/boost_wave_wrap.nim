@@ -3,7 +3,6 @@ const boostWaveLibDir = currentSourcePath().splitFile().dir / "../../../lib"
 const cwaveDl* = boostWaveLibDir / "libboost_cwave.so"
 
 
-
 type
   WaveTokId* = enum
     tokId_UNKNOWN = 0, tokId_FIRST_TOKEN = 1, tokId_AND = 2, tokId_AND_ALT = 3,

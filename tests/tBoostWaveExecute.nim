@@ -5,7 +5,7 @@ import hmisc/types/colorstring
 import hmisc/algo/[clformat, hstring_algo]
 
 proc main() =
-  var ctx = newWaveContext(allocCStringArray([
+  var ctx = newWaveContext(
     lit3"""
       #define concat(a, b) a ## b
       #warning "123"
@@ -23,7 +23,7 @@ proc main() =
       ABC
       MUL(MUL(1,2),3)
 
-    """])[0], "<Unknown>".cstring)
+    """)
 
   var indent = 16
   ctx.onFoundWarningDirective():

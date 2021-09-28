@@ -86,4 +86,4 @@ const cwaveDl* = boostWaveLibDir / "libboost_cwave.so"
 """ & ir.toString(codegen))
 
 
-execShell shellCmd(nim, r, "tBoostWaveExecute.nim")
+execShell shellCmd(nim, r, $relToSource("tBoostWaveExecute.nim"))

@@ -776,6 +776,10 @@ WaveContextHandle* wave_newWaveContext(
     return (WaveContextHandle*)(res);
 }
 
+void wave_destroyContext(WaveContextHandle* context) {
+    delete toCxx(context);
+}
+
 
 bool wave_contextHasError(WaveContextHandle* context) {
     return toCxx(context)->hasError;
