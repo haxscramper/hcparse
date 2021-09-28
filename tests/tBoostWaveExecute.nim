@@ -101,3 +101,13 @@ void GIT_CALLBACK(free)(git_writestream *stream);
 """)
 
     check ctx.getExpanded().strip() == "void (*free)(git_writestream *stream);"
+
+  test "Get expanded with explicitly defined macros":
+    var ctx = newWaveContext("GIT_CALLBACK(free)(git_writestream *stream);")
+    ctx.addMacroDefinition("GIT_CALLBACK(name)=(*name)")
+    check ctx.getExpanded() == "(*free)(git_writestream *stream);"
+
+  test "Get expanded with explicitly defined macros via overload":
+    var ctx = newWaveContext("GIT_CALLBACK(free)(git_writestream *stream);")
+    ctx.addMacroDefinition("GIT_CALLBACK", @["name"], some "(*name)")
+    check ctx.getExpanded() == "(*free)(git_writestream *stream);"

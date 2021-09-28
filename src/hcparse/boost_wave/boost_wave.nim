@@ -588,48 +588,87 @@ iterator allItems*(
 
 
 
-# proc addMacroDefinition*(
-#     ctx: var WaveContext,
-#     str: cstring,
-#     isPredefined: bool
-#   ) {.apiProc, importc: "wave_addMacroDefinition".}
+proc addMacroDefinition*(
+    ctx: var WaveContext,
+    str: string,
+    isPredefined: bool = false
+  ) =
 
-#   ##[
+  ##[
 
-# Adds a new macro definition to the macro symbol table. The parameter
-# macrostring should contain the macro to define in the command line format,
-# i.e. something like `MACRO(x)=definition`. The following table describes
-# this format in more detail. The parameter is_predefined should be true
-# while defining predefined macros, i.e. macros, which are not undefinable
-# with an #undef directive from inside the preprocessed input stream. If this
-# parameter is not given, it defaults to false.
+Adds a new macro definition to the macro symbol table. The parameter
+macrostring should contain the macro to define in the command line format,
+i.e. something like `MACRO(x)=definition`. The following table describes
+this format in more detail. The parameter is_predefined should be true
+while defining predefined macros, i.e. macros, which are not undefinable
+with an #undef directive from inside the preprocessed input stream. If this
+parameter is not given, it defaults to false.
 
-# **Summary of possible formats for defining macros**
+**Summary of possible formats for defining macros**
 
-# ====================== ==================================
-# macro definition       description
-# ====================== ==================================
-# `MACRO`                 define `MACRO` as `1`
-# `MACRO=`                define `MACRO` as nothing (empty)
-# `MACRO=definition`      define `MACRO` as definition
-# `MACRO(x)`              define `MACRO(x)` as `1`
-# `MACRO(x)=`             define `MACRO(x)` as nothing (empty)
-# `MACRO(x)=definition`   define `MACRO(x)` as `definition`
-# ====================== ===================================
+====================== ==================================
+macro definition       description
+====================== ==================================
+`MACRO`                 define `MACRO` as `1`
+`MACRO=`                define `MACRO` as nothing (empty)
+`MACRO=definition`      define `MACRO` as definition
+`MACRO(x)`              define `MACRO(x)` as `1`
+`MACRO(x)=`             define `MACRO(x)` as nothing (empty)
+`MACRO(x)=definition`   define `MACRO(x)` as `definition`
+====================== ===================================
 
-# The function returns false, if the macro to define already was defined and
-# the new definition is equivalent to the existing one, it returns true, if
-# the new macro was successfully added to the macro symbol table.
+The function returns false, if the macro to define already was defined and
+the new definition is equivalent to the existing one, it returns true, if
+the new macro was successfully added to the macro symbol table.
 
-# If the given macro definition resembles a redefinition and the new macro is
-# not identical to the already defined macro (in the sense defined by the C++
-# Standard), the function throws a corresponding `preprocess_exception` using
-# `throw_exception` override for the active context.
+If the given macro definition resembles a redefinition and the new macro is
+not identical to the already defined macro (in the sense defined by the C++
+Standard), the function throws a corresponding `preprocess_exception` using
+`throw_exception` override for the active context.
 
-# For C wrappers exception is stored in the context and can be checked for
-# using `hasErrors`, and accessed using `popDiagnostics`
+For C wrappers exception is stored in the context and can be checked for
+using `hasErrors`, and accessed using `popDiagnostics`
 
-#   ]##
+  ]##
+
+  ctx.handle.addMacroDefinition(str.cstring, isPredefined)
+
+import std/options
+export options
+
+proc addMacroDefinition*(
+    ctx: var WaveContext,
+    name: string,
+    args: seq[string],
+    definition: Option[string] = none(string),
+    isPredefined: bool = false
+  ) =
+
+  ## Convenience overload for adding macro definitions. By default (when
+  ## empty argument list is supplied) behavior is identical to definig
+  ## `MACRO` as `1`.
+  ##
+  ## - @arg{definition} :: Optional definition of the macro. Macro definition
+  ##   has three modes - simply `#define macro` (no arguments) implicitly
+  ##   defines it as `1`. That's what `none(string)` does. Other alternatives
+  ##   pass definition using `=<definition>`. If you want to define macro as
+  ##   nothing (explicitly empty string), use `some("")`
+
+  var def = name
+  if 0 < args.len:
+    def.add "("
+    for idx, arg in args:
+      if 0 < idx:
+        def.add ","
+      def.add arg
+    def.add ")"
+
+
+  if definition.isSome():
+    def.add "="
+    def.add definition.get()
+
+  ctx.addMacroDefinition(def, isPredefined)
 
 # proc addMacroDefinition*(
 #     ctx: var WaveContext,
