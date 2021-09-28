@@ -1,4 +1,4 @@
-import ./boost_wave
+import hcparse/boost_wave/boost_wave
 import hmisc/core/all
 import std/[strformat, sequtils, strutils]
 import hmisc/types/colorstring

@@ -5,44 +5,7 @@ export boost_wave_wrap
 
 import std/os
 
-# const boostWaveLibDir = currentSourcePath().splitFile().dir / "../../../lib"
-# echo boostWaveLibDir
-
-# {.pragma: apiPtr, header: hdr, requiresinit, bycopy.}
-# {.pragma: apiProc, dynlib: so, cdecl.}
-
-# type
-#   EntryHandling* = enum
-#     ehSkip
-#     ehProcess
-#     ehRaise
-
-# type WaveTokenHandle* {.apiPtr.} = object
-
-# type WaveIteratorHandle* {.apiPtr.} = object
-
-
-# type
-#   WaveContextHandle* {.apiPtr.} = object
-#   WaveContextImplHandle* {.apiPtr.} = object
-#   WaveTokenListHandle* {.apiPtr.} = object
-
-#   FoundWarningDirectiveCb = proc(
-#     ctx: ptr WaveContextImplHandle,
-#     message: ptr WaveTokenListHandle): EntryHandling
-
-#   FoundWarningDirectiveImpl = proc(
-#     ctx: ptr WaveContextImplHandle,
-#     message: ptr WaveTokenListHandle,
-#     env: pointer
-#   ): EntryHandling {.cdecl.}
-
-# proc setFoundWarningDirective*(
-#     ctx: ptr WaveContextHandle,
-#     impl: FoundWarningDirectiveImpl,
-#     env: pointer
-#   ) {.apiProc, importc: "wave_setFoundWarningDirective".}
-
+{.passc:"-I" & currentSourcePath().splitFile().dir .}
 
 
 proc setFoundWarningDirective*(

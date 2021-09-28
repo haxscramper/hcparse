@@ -83,8 +83,7 @@ import std/os
 const boostWaveLibDir = currentSourcePath().splitFile().dir / "../../../lib"
 const cwaveDl* = boostWaveLibDir / "libboost_cwave.so"
 
-
 """ & ir.toString(codegen))
 
 
-execShell shellCmd(nim, r, $(dir /. "boost_wave_test.nim"))
+execShell shellCmd(nim, r, "tBoostWaveExecute.nim")
