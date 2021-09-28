@@ -60,7 +60,7 @@ target_compile_definitions(boost_cwave PRIVATE BOOST_WAVE_LIBRARY)
 
 set_target_properties(boost_cwave
     PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../../lib"
 )
 
 #add_dependencies(boost_wave_nim boost_cwave)

@@ -68,15 +68,23 @@ let res = dir /. "boost_wave_wrap.nim"
 
 var codegen = cCodegenConf
 
-codegen.declBinds = some (dynProcs, @{
-  "linux": cxxDynlib("libboost_cwave.so")
-})
+# codegen.declBinds = some (dynProcs, @{
+#   "linux": cxxDynlib("libboost_cwave.so")
+# })
 
 let ir = expandViaCc(dir /. "wave_c_api.h", baseCParseConf).
     # printNumerated(330 .. 340).
     wrapViaTs(fixConf)
 
-writeFile(res, ir.toString(codegen))
+writeFile(
+  res,
+  """
+import std/os
+const boostWaveLibDir = currentSourcePath().splitFile().dir / "../../../lib"
+const cwaveDl* = boostWaveLibDir / "libboost_cwave.so"
+
+
+""" & ir.toString(codegen))
 
 
 execShell shellCmd(nim, r, $(dir /. "boost_wave_test.nim"))

@@ -4,8 +4,6 @@ import std/[strformat, sequtils, strutils]
 import hmisc/types/colorstring
 import hmisc/algo/[clformat, hstring_algo]
 
-echo cwaveDl
-
 proc main() =
   var ctx = newWaveContext(allocCStringArray([
     lit3"""

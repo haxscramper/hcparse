@@ -3,6 +3,11 @@ import hmisc/wrappers/wraphelp
 import ./boost_wave_wrap
 export boost_wave_wrap
 
+import std/os
+
+# const boostWaveLibDir = currentSourcePath().splitFile().dir / "../../../lib"
+# echo boostWaveLibDir
+
 # {.pragma: apiPtr, header: hdr, requiresinit, bycopy.}
 # {.pragma: apiProc, dynlib: so, cdecl.}
 
