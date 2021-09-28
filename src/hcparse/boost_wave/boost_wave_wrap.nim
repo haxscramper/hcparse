@@ -145,7 +145,16 @@ type
   ExpandingFunctionLikeMacroImplType* = proc (ctx: ptr WaveContextImplHandle;
       macrodef: ptr WaveTokenHandle; formal_args: ptr WaveTokenVectorHandle;
       definition: ptr WaveTokenListHandle; macrocall: ptr WaveTokenHandle;
-      arguments: ptr WaveTokenVectorHandle; seqstart: pointer; seqend: pointer): bool {.
+      arguments: ptr WaveTokenVectorHandle; seqstart: pointer; seqend: pointer;
+      env: pointer): bool {.cdecl.}
+  ExpandingObjectLikeMacroImplType* = proc (ctx: ptr WaveContextImplHandle;
+      argmacro: ptr WaveTokenHandle; definition: ptr WaveTokenListHandle;
+      macrocall: ptr WaveTokenHandle; env: pointer): EntryHandling {.cdecl.}
+  ExpandedMacroImplType* = proc (ctx: ptr WaveContextImplHandle;
+                                 result: ptr WaveTokenListHandle; env: pointer): void {.
+      cdecl.}
+  RescannedMacroImplType* = proc (ctx: ptr WaveContextImplHandle;
+                                  result: ptr WaveTokenListHandle; env: pointer): void {.
       cdecl.}
   FoundDirectiveImplType* = proc (ctx: ptr WaveContextImplHandle;
                                   tok: ptr WaveTokenHandle; env: pointer): EntryHandling {.
@@ -158,7 +167,7 @@ type
   EmitLineDirectiveImplType* = proc (ctx: ptr WaveContextImplHandle;
                                      pending: ptr WaveTokenListHandle;
                                      act_token: ptr WaveTokenHandle;
-                                     env: pointer): EntryHandling {.cdecl.}
+                                     env: pointer): bool {.cdecl.}
   FoundLineDirectiveImplType* = proc (ctx: ptr WaveContextImplHandle;
                                       arguments: ptr WaveTokenListHandle;
                                       line: cuint; filename: cstring;
@@ -223,6 +232,16 @@ proc setExpandingFunctionLikeMacro*(context: ptr WaveContextHandle;
                                     impl: ExpandingFunctionLikeMacroImplType;
                                     env: pointer): void {.dynlib: cwaveDl,
     importc: "wave_setExpandingFunctionLikeMacro".}
+proc setExpandingObjectLikeMacro*(context: ptr WaveContextHandle;
+                                  impl: ExpandingObjectLikeMacroImplType;
+                                  env: pointer): void {.dynlib: cwaveDl,
+    importc: "wave_setExpandingObjectLikeMacro".}
+proc setExpandedMacro*(context: ptr WaveContextHandle;
+                       impl: ExpandedMacroImplType; env: pointer): void {.
+    dynlib: cwaveDl, importc: "wave_setExpandedMacro".}
+proc setRescannedMacro*(context: ptr WaveContextHandle;
+                        impl: RescannedMacroImplType; env: pointer): void {.
+    dynlib: cwaveDl, importc: "wave_setRescannedMacro".}
 proc setFoundDirective*(ctx: ptr WaveContextHandle;
                         filename: FoundDirectiveImplType; include_next: pointer): void {.
     dynlib: cwaveDl, importc: "wave_setFoundDirective".}

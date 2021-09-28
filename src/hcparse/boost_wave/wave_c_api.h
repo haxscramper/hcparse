@@ -406,6 +406,7 @@ BOOST_WAVE_EXPORT void wave_setFoundUnknownDirectiveImplType(
     FoundUnknownDirectiveImplType impl,
     void*                         env);
 
+// Expanding function like macro
 
 typedef bool (*ExpandingFunctionLikeMacroImplType)(
     const WaveContextImplHandle* ctx,
@@ -415,13 +416,59 @@ typedef bool (*ExpandingFunctionLikeMacroImplType)(
     const WaveTokenHandle*       macrocall,
     WaveTokenVectorHandle*       arguments,
     void*                        seqstart,
-    void*                        seqend);
+    void*                        seqend,
+    void*                        env);
 
 
 BOOST_WAVE_EXPORT void wave_setExpandingFunctionLikeMacro(
     WaveContextHandle*                 context,
     ExpandingFunctionLikeMacroImplType impl,
     void*                              env);
+
+// Expanding object like macro
+
+typedef EntryHandling (*ExpandingObjectLikeMacroImplType)(
+    const WaveContextImplHandle* ctx,
+    const WaveTokenHandle*       macro,
+    const WaveTokenListHandle*   definition,
+    const WaveTokenHandle*       macrocall,
+    void*                        env);
+
+
+BOOST_WAVE_EXPORT void wave_setExpandingObjectLikeMacro(
+    WaveContextHandle*               context,
+    ExpandingObjectLikeMacroImplType impl,
+    void*                            env);
+
+// Expanded macro
+
+typedef void (*ExpandedMacroImplType)(
+    const WaveContextImplHandle* ctx,
+    const WaveTokenListHandle*   result,
+    void*                        env);
+
+
+BOOST_WAVE_EXPORT void wave_setExpandedMacro(
+    WaveContextHandle*    context,
+    ExpandedMacroImplType impl,
+    void*                 env);
+
+
+// Rescanned macro
+
+typedef void (*RescannedMacroImplType)(
+    const WaveContextImplHandle* ctx,
+    const WaveTokenListHandle*   result,
+    void*                        env);
+
+
+BOOST_WAVE_EXPORT void wave_setRescannedMacro(
+    WaveContextHandle*     context,
+    RescannedMacroImplType impl,
+    void*                  env);
+
+
+// Found directive
 
 typedef EntryHandling (*FoundDirectiveImplType)(
     WaveContextImplHandle* ctx,
@@ -464,7 +511,7 @@ BOOST_WAVE_EXPORT void wave_setSkippedToken(
 
 // Emit line directive
 
-typedef EntryHandling (*EmitLineDirectiveImplType)(
+typedef bool (*EmitLineDirectiveImplType)(
     const WaveContextImplHandle* ctx,
     WaveTokenListHandle*         pending,
     const WaveTokenHandle*       act_token,

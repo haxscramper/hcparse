@@ -7,7 +7,7 @@ import
   hmisc/other/[oswrap, hshell],
   hmisc/core/all
 
-import std/options
+import std/[options, sets]
 
 let dir = AbsDir(relToSource"../src/hcparse/boost_wave")
 
@@ -15,6 +15,13 @@ var fixConf = baseFixConf
 fixConf.libName = "wave"
 
 starthax()
+
+func isSharedTypeName*(name: string): bool =
+  const sharedNames = toHashSet [
+    "void", "int", "float", "bool", "char", # ...
+  ]
+
+  return name in sharedNames
 
 fixConf.fixNameImpl = proc(
     name: CxxNamePair,
@@ -30,6 +37,19 @@ fixConf.fixNameImpl = proc(
 
   else:
     result = name.nim
+
+  let (prefix, suffix) =
+    case name.context:
+      of cncType: ("", "T")
+      of cncArg: ("arg", "")
+      of cncProc: ("c", "")
+      else: raise newImplementKindError(name.context)
+
+  if name.context != cncType and isReservedNimType(result):
+    result = prefix & result & suffix
+
+  if isReservedNimIdent(result):
+    result = prefix & result & suffix
 
   cache.newRename(name.nim, result)
 

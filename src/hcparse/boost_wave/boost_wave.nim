@@ -145,9 +145,9 @@ starts.
 
 ]##
 
-  let env = rawEnv(impl)
-  let impl = rawProc(impl)
-  ctx.setExpandingFunctionLikeMacro(cast[ExpandingFunctionLikeMacroImplType](impl), env)
+  ctx.setExpandingFunctionLikeMacro(
+    cast[ExpandingFunctionLikeMacroImplType](rawProc(impl)),
+    rawEnv(impl))
 
 proc setFoundIncludeDirective*(
     ctx: ptr WaveContextHandle,
@@ -230,6 +230,134 @@ parameter was added for the Boost V1.35.0 release.
     cast[DefinedMacroImplType](rawProc(impl)),
     rawEnv(impl))
 
+
+proc setExpandingObjectLikeMacro*(
+    ctx: ptr WaveContextHandle,
+    impl: proc (
+      ctx: ptr WaveContextImplHandle;
+      argmacro: ptr WaveTokenHandle;
+      definition: ptr WaveTokenListHandle;
+      macrocall: ptr WaveTokenHandle): EntryHandling
+  ) =
+
+  ##[
+
+The function expanding_object_like_macro is called, whenever a object-like
+macro is to be expanded, i.e. before the actual expansion starts.
+
+- The ctx parameter provides a reference to the context_type used during
+  instantiation of the preprocessing iterators by the user. Note, this
+  parameter was added for the Boost V1.35.0 release.
+
+- The argmacro parameter marks the position where the macro to expand is
+  defined. It contains the token which identifies the macro name used
+  inside the corresponding macro definition.
+
+- The definition parameter holds the macro definition for the macro to
+  trace. This is a standard STL container which holds the token sequence
+  identified during the macro definition as the macro replacement list.
+
+- The macrocall parameter marks the position where this macro is invoked.
+  It contains the token which identifies the macro call inside the
+  preprocessed input stream.
+
+- If the return value is true, the macro is not expanded, i.e. the macro
+  symbol is copied to the output without further processing. If the return
+  value is false, the macro is expanded as expected.
+
+  ]##
+
+  ctx.setExpandingObjectLikeMacro(
+    cast[ExpandingObjectLikeMacroImplType](rawProc(impl)),
+    rawEnv(impl))
+
+proc setExpandedMacro*(
+    ctx: ptr WaveContextHandle,
+    impl: proc (
+      ctx: ptr WaveContextImplHandle;
+      result: ptr WaveTokenListHandle): void
+  ) =
+
+  ##[
+
+The function expanded_macro is called whenever the expansion of a macro is
+finished, the replacement list is completely scanned and the identified
+macros herein are replaced by its corresponding expansion results, but
+before the rescanning process starts.
+
+- The ctx parameter provides a reference to the context_type used during
+  instantiation of the preprocessing iterators by the user. Note, this
+  parameter was added for the Boost V1.35.0 release.
+
+- The parameter result contains the the result of the macro expansion so
+  far. This is a standard STL container containing the generated token
+  sequence.
+
+  ]##
+
+  ctx.setExpandedMacro(
+    cast[ExpandedMacroImplType](rawProc(impl)),
+    rawEnv(impl))
+
+proc setRescannedMacro*(
+    ctx: ptr WaveContextHandle,
+    impl: proc (
+      ctx: ptr WaveContextImplHandle;
+      result: ptr WaveTokenListHandle): void
+  ) =
+
+  ##[
+
+The function rescanned_macro is called whenever the rescanning of a macro
+is finished, i.e. the macro expansion is complete.
+
+- The ctx parameter provides a reference to the context_type used during
+  instantiation of the preprocessing iterators by the user. Note, this
+  parameter was added for the Boost V1.35.0 release.
+
+- The parameter result contains the the result of the whole macro
+  expansion. This is a standard STL container containing the generated
+  token sequence.
+
+  ]##
+
+  ctx.setRescannedMacro(
+    cast[RescannedMacroImplType](rawProc(impl)),
+    rawEnv(impl))
+
+
+proc setEmitLineDirective*(
+    ctx: ptr WaveContextHandle,
+    impl: proc (
+      ctx: ptr WaveContextImplHandle;
+      pending: ptr WaveTokenListHandle;
+      act_token: ptr WaveTokenHandle): bool
+) =
+  ##[
+
+The function emit_line_directive is called whenever a #line directive has
+to be emitted into the generated output.
+
+- The parameter ctx is a reference to the context object used for
+  instantiating the preprocessing iterators by the user.
+
+- The parameter pending may be used to push tokens back into the input
+  stream, which are to be used instead of the default output generated for
+  the #line directive.
+
+- The parameter act_token contains the actual #pragma token, which may be
+  used for error output. The line number stored in this token can be used
+  as the line number emitted as part of the #line directive.
+
+- If the return value is false, a default #line directive is emitted by the
+  library. A return value of true will inhibit any further actions, the
+  tokens contained in pending will be copied verbatim to the output.
+
+  ]##
+
+  ctx.setEmitLineDirective(
+    cast[EmitLineDirectiveImplType](rawProc(impl)),
+    rawEnv(impl))
 
 proc setSkippedToken*(
     ctx: ptr WaveContextHandle,

@@ -870,11 +870,46 @@ void wave_setExpandingFunctionLikeMacro(
     toCxx(context)->context->get_hooks().expanding_function_like_macro_impl.env = env;
 }
 
+
+void wave_setExpandingObjectLikeMacro(
+    WaveContextHandle*               context,
+    ExpandingObjectLikeMacroImplType impl,
+    void*                            env) {
+    toCxx(context)->context->get_hooks().expanding_object_like_macro_impl.impl = (EntryHandling(*)(
+        const WaveContextImplHandle*,
+        const WaveTokenHandle*,
+        const WaveTokenListHandle*,
+        const WaveTokenHandle*,
+        void*))(impl);
+    toCxx(context)->context->get_hooks().expanding_object_like_macro_impl.env = env;
+}
+
+void wave_setExpandedMacro(
+    WaveContextHandle*    context,
+    ExpandedMacroImplType impl,
+    void*                 env) {
+    toCxx(context)->context->get_hooks().expanded_macro_impl.impl = (void (*)(
+        const WaveContextImplHandle*, const WaveTokenListHandle*, void*))(
+        impl);
+    toCxx(context)->context->get_hooks().expanded_macro_impl.env = env;
+}
+
+void wave_setRescannedMacro(
+    WaveContextHandle*     context,
+    RescannedMacroImplType impl,
+    void*                  env) {
+    toCxx(context)->context->get_hooks().rescanned_macro_impl.impl = (void (*)(
+        const WaveContextImplHandle*, const WaveTokenListHandle*, void*))(
+        impl);
+    toCxx(context)->context->get_hooks().rescanned_macro_impl.env = env;
+}
+
+
 void wave_setEmitLineDirective(
     WaveContextHandle*        context,
     EmitLineDirectiveImplType impl,
     void*                     env) {
-    toCxx(context)->context->get_hooks().emit_line_directive_impl.impl = (EntryHandling(*)(
+    toCxx(context)->context->get_hooks().emit_line_directive_impl.impl = (bool (*)(
         const WaveContextImplHandle*,
         WaveTokenListHandle*,
         const WaveTokenHandle*,

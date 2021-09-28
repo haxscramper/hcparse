@@ -341,7 +341,7 @@ struct WaveHooksImpl
         std::string const&     filename);
 
     method_impl<
-        EntryHandling,
+        bool,
         const WaveContextImplHandle*,
         WaveTokenListHandle*,
         const WaveTokenHandle*>
