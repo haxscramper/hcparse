@@ -95,9 +95,16 @@ test2
 """)
 
   var toks: seq[(WaveTokId, string)]
+
+  var hookOverrideTriggered = false
+
+  ctx.onEvaluatedConditionalExpression():
+    hookOverrideTriggered = true
+
   ctx.allTokens() do (skipped: bool, tok: ptr WaveTokenHandle):
     toks.add((tok.kind, $tok))
 
+  assert hookOverrideTriggered
   pprint toks
 
 suite "Get expanded text":

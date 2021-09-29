@@ -392,7 +392,8 @@ typedef bool (*EvaluatedConditionalExpressionImplType)(
     const WaveContextImplHandle* ctx,
     const WaveTokenHandle*       directive,
     const WaveTokenListHandle*   expression,
-    bool                         expression_value);
+    bool                         expression_value,
+    void*                        env);
 
 BOOST_WAVE_EXPORT void wave_setEvaluatedConditionalExpression(
     WaveContextHandle*                     context,

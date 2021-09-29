@@ -10,9 +10,12 @@ import std/os
 
 
 type
-  WaveContext = object
-    handle: ptr WaveContextHandle
-    str: cstringArray
+  WaveContext* = object
+    handle*: ptr WaveContextHandle
+    str*: cstringArray
+
+    evaluatedConditional*: EvaluatedConditionalExpressionImplTypeNim
+    skippedToken*: SkippedTokenImplTypeNim
 
 proc newWaveContext*(str: string, file: string = "<unknown>"): WaveContext =
   # new(
@@ -46,7 +49,7 @@ iterator items*(
     ignoreHashLine: bool = true
   ): ptr WaveTokenHandle =
   ## - @arg{ignoreHashLine} :: Explicitly omit `#line` directives if they are
-  ##   emitted by the preprocessing context. This is useful when plain source 
+  ##   emitted by the preprocessing context. This is useful when plain source
   ##   code is needed, witout correct line position information.
   var inHashLine = false
   var first: ptr WaveIteratorHandle = ctx.first()
@@ -98,9 +101,7 @@ iterator items*(l: ptr WaveTokenListHandle): ptr WaveTokenHandle =
 
 proc setFoundWarningDirective*(
     ctx: var WaveContext,
-    impl: proc(
-      ctx: ptr WaveContextImplHandle,
-      message: ptr WaveTokenListHandle): EntryHandling
+    impl: FoundWarningDirectiveImplTypeNim
   ) =
 
   let env = rawEnv(impl)
@@ -119,11 +120,7 @@ template onFoundWarningDirective*(inCtx: var WaveContext, body: untyped): untype
 
 proc setEvaluatedConditionalExpression*(
     ctx: var WaveContext,
-    impl: proc (
-      ctx: ptr WaveContextImplHandle;
-      directive: ptr WaveTokenHandle;
-      expression: ptr WaveTokenListHandle;
-      expressionValue: bool): bool
+    impl: EvaluatedConditionalExpressionImplTypeNim
   ) =
 
   ##[
@@ -150,13 +147,17 @@ preprocessing context.
 
   ]##
 
+  ctx.evaluatedConditional = impl
+
   let env = rawEnv(impl)
   let impl = rawProc(impl)
   ctx.handle.setEvaluatedConditionalExpression(
     cast[EvaluatedConditionalExpressionImplType](impl),
     env)
 
-template onEvaluatedConditionalExpression*(inCtx: var WaveContext, body: untyped): untyped =
+template onEvaluatedConditionalExpression*(
+    inCtx: var WaveContext, body: untyped): untyped =
+
   inCtx.setEvaluatedConditionalExpression(
     proc (
       ctx {.inject.}: ptr WaveContextImplHandle;
@@ -169,15 +170,7 @@ template onEvaluatedConditionalExpression*(inCtx: var WaveContext, body: untyped
 
 proc setExpandingFunctionLikeMacro*(
     ctx: var WaveContext,
-    impl: proc (
-      ctx: ptr WaveContextImplHandle;
-      macrodef: ptr WaveTokenHandle;
-      formal_args: ptr WaveTokenVectorHandle;
-      definition: ptr WaveTokenListHandle;
-      macrocall: ptr WaveTokenHandle;
-      arguments: ptr WaveTokenVectorHandle;
-      seqstart: pointer;
-      seqend: pointer): bool
+    impl: ExpandingFunctionLikeMacroImplTypeNim
    ) =
 
   ##[
@@ -227,10 +220,7 @@ starts.
 
 proc setFoundIncludeDirective*(
     ctx: var WaveContext,
-    impl: proc(
-      context: ptr WaveContextImplHandle;
-      impl: cstring;
-      include_next: bool): EntryHandling
+    impl: FoundIncludeDirectiveImplTypeNim
   ) =
 
   ##[
@@ -278,13 +268,7 @@ template onFoundIncludeDirective*(ctx: var WaveContext, body: untyped): untyped 
 
 proc setDefinedMacro*(
     ctx: var WaveContext,
-    impl: proc (
-      ctx: ptr WaveContextImplHandle;
-      name: ptr WaveTokenHandle;
-      is_functionlike: bool;
-      parameters: ptr WaveTokenVectorHandle;
-      definition: ptr WaveTokenListHandle;
-      is_predefined: bool): void
+    impl: DefinedMacroImplTypeNim
   ) =
 
   ##[
@@ -334,11 +318,7 @@ template onDefinedMacro*(inCtx: var WaveContext, body: untyped): untyped =
 
 proc setExpandingObjectLikeMacro*(
     ctx: var WaveContext,
-    impl: proc (
-      ctx: ptr WaveContextImplHandle;
-      argmacro: ptr WaveTokenHandle;
-      definition: ptr WaveTokenListHandle;
-      macrocall: ptr WaveTokenHandle): EntryHandling
+    impl: ExpandingObjectLikeMacroImplTypeNim
   ) =
 
   ##[
@@ -536,6 +516,7 @@ inside the not evaluated conditional #if/#else/#endif branches).
 
   ]##
 
+  ctx.skippedToken = impl
   ctx.handle.setSkippedToken(
     cast[SkippedTokenImplType](rawProc(impl)),
     rawEnv(impl))
@@ -560,37 +541,48 @@ proc allTokens*(
   ##   recommended* to perform all the analysis directly inside of callback -
   ##   when it's execution is finished passed `tok` pointer is not guaranteed
   ##   to exists anymore, especially if it was `skipped`.
-  ## - NOTE :: this override wave context 'on skipped token' and
-  ##   'evaluated conditional expression' hooks.
-  ## - TODO :: add 'before' hook invocation instead that would be
-  ##   removed after 'all items execution is finished'.
 
   // "Begin all items implementation body"
+
+  let oldConditional = ctx.evaluatedConditional
 
   ctx.onEvaluatedConditionalExpression():
     onToken(true, directive)
     for tok in expression:
       onToken(true, tok)
 
+    if not isNil(oldConditional):
+      return oldConditional(ctx, directive, expression, expressionValue)
+
+  let oldToken = ctx.skippedToken
   ctx.onSkippedToken():
     onToken(true, token)
 
+    if not isNil(oldToken):
+      oldToken(context, token)
+
   var first: ptr WaveIteratorHandle = ctx.first()
   var inHashLine = false
-  while first != ctx.last():
-    let tok = first.getTok()
-    if tok.kind == tokIdPpLine and ignoreHashLine:
-      inHashLine = true
 
-    if inHashLine:
-      if tok.kind == tokIdNewline:
-        inHashLine = false
+  try:
+    while first != ctx.last():
+      let tok = first.getTok()
+      if tok.kind == tokIdPpLine and ignoreHashLine:
+        inHashLine = true
 
-    else:
-      onToken(false, tok)
-      # yield (false, tok)
+      if inHashLine:
+        if tok.kind == tokIdNewline:
+          inHashLine = false
 
-    first.advance()
+      else:
+        onToken(false, tok)
+        # yield (false, tok)
+
+      first.advance()
+
+  finally:
+    ctx.setEvaluatedConditionalExpression(oldConditional)
+    ctx.setSkippedToken(oldToken)
 
   // "End all items implementation body"
 

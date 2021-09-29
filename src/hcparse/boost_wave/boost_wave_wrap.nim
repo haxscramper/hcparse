@@ -137,7 +137,11 @@ type
       message: ptr WaveTokenListHandle): EntryHandling
   EvaluatedConditionalExpressionImplType* = proc (
       ctx: ptr WaveContextImplHandle; directive: ptr WaveTokenHandle;
-      expression: ptr WaveTokenListHandle; expression_value: bool): bool {.cdecl.}
+      expression: ptr WaveTokenListHandle; expression_value: bool; env: pointer): bool {.
+      cdecl.}
+  EvaluatedConditionalExpressionImplTypeNim* = proc (
+      ctx: ptr WaveContextImplHandle; directive: ptr WaveTokenHandle;
+      expression: ptr WaveTokenListHandle; expression_value: bool): bool
   FoundUnknownDirectiveImplType* = proc (ctx: ptr WaveContextImplHandle;
       line: ptr WaveTokenListHandle; pending: ptr WaveTokenListHandle;
       env: pointer): EntryHandling {.cdecl.}
