@@ -77,10 +77,16 @@ proc mapTypeName*(node: CppNode): string =
 
 proc toCxxType*(node: CppNode): CxxTypeUse =
   case node.kind:
-    of cppTypeIdentifier, cppSizedTypeSpecifier, cppPrimitiveType:
+    of cppTypeIdentifier,
+       cppSizedTypeSpecifier,
+       cppPrimitiveType:
       result = cxxTypeUse(cxxPair(
         mapTypeName(node),
         cxxName(@[node.strVal()])))
+
+      if node of {cppSizedTypeSpecifier, cppPrimitiveType}:
+        result.podKind = node.primitiveName().mapPrimitivePod()
+        result.flags.incl ctfIsPodType
 
     of cppStructSpecifier, cppEnumSpecifier, cppUnionSpecifier:
       result = toCxxType(node[0])

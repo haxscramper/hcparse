@@ -578,12 +578,6 @@ proc allTokens*(
   var first: ptr WaveIteratorHandle = ctx.first()
   var inHashLine = false
   while first != ctx.last():
-    # if 0 < skipped.len:
-    #   for item in skipped:
-    #     yield (true, item)
-
-    #   skipped.setLen(0)
-
     let tok = first.getTok()
     if tok.kind == tokIdPpLine and ignoreHashLine:
       inHashLine = true

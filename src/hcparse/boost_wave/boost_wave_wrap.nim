@@ -112,71 +112,106 @@ type
     wslCommandlineError = 4
   EntryHandling* = enum
     EntryHandlingSkip = 0, EntryHandlingProcess = 1, EntryHandlingRaise = 2
-  WaveProcessingHooksHandle* {.bycopy, header: "wave_c_api.h".} = object
+  WaveProcessingHooksHandle* {.bycopy, incompleteStruct, header: "wave_c_api.h".} = object
   
-  WaveContextHandle* {.bycopy, header: "wave_c_api.h".} = object
+  WaveContextHandle* {.bycopy, incompleteStruct, header: "wave_c_api.h".} = object
   
-  WaveIteratorHandle* {.bycopy, header: "wave_c_api.h".} = object
+  WaveIteratorHandle* {.bycopy, incompleteStruct, header: "wave_c_api.h".} = object
   
-  WaveTokenHandle* {.bycopy, header: "wave_c_api.h".} = object
+  WaveTokenHandle* {.bycopy, incompleteStruct, header: "wave_c_api.h".} = object
   
-  WaveContextImplHandle* {.bycopy, header: "wave_c_api.h".} = object
+  WaveContextImplHandle* {.bycopy, incompleteStruct, header: "wave_c_api.h".} = object
   
-  WaveTokenListHandle* {.bycopy, header: "wave_c_api.h".} = object
+  WaveTokenListHandle* {.bycopy, incompleteStruct, header: "wave_c_api.h".} = object
   
-  WaveTokenVectorHandle* {.bycopy, header: "wave_c_api.h".} = object
+  WaveTokenVectorHandle* {.bycopy, incompleteStruct, header: "wave_c_api.h".} = object
   
-  WaveTokenListIteratorHandle* {.bycopy, header: "wave_c_api.h".} = object
+  WaveTokenListIteratorHandle* {.bycopy, incompleteStruct,
+                                 header: "wave_c_api.h".} = object
   
   WavePosition* {.bycopy, header: "wave_c_api.h", importc: "WavePosition".} = object
   
   FoundWarningDirectiveImplType* = proc (ctx: ptr WaveContextImplHandle;
       message: ptr WaveTokenListHandle; env: pointer): EntryHandling {.cdecl.}
+  FoundWarningDirectiveImplTypeNim* = proc (ctx: ptr WaveContextImplHandle;
+      message: ptr WaveTokenListHandle): EntryHandling
   EvaluatedConditionalExpressionImplType* = proc (
       ctx: ptr WaveContextImplHandle; directive: ptr WaveTokenHandle;
       expression: ptr WaveTokenListHandle; expression_value: bool): bool {.cdecl.}
   FoundUnknownDirectiveImplType* = proc (ctx: ptr WaveContextImplHandle;
       line: ptr WaveTokenListHandle; pending: ptr WaveTokenListHandle;
       env: pointer): EntryHandling {.cdecl.}
+  FoundUnknownDirectiveImplTypeNim* = proc (ctx: ptr WaveContextImplHandle;
+      line: ptr WaveTokenListHandle; pending: ptr WaveTokenListHandle): EntryHandling
   ExpandingFunctionLikeMacroImplType* = proc (ctx: ptr WaveContextImplHandle;
       macrodef: ptr WaveTokenHandle; formal_args: ptr WaveTokenVectorHandle;
       definition: ptr WaveTokenListHandle; macrocall: ptr WaveTokenHandle;
       arguments: ptr WaveTokenVectorHandle; seqstart: pointer; seqend: pointer;
       env: pointer): bool {.cdecl.}
+  ExpandingFunctionLikeMacroImplTypeNim* = proc (ctx: ptr WaveContextImplHandle;
+      macrodef: ptr WaveTokenHandle; formal_args: ptr WaveTokenVectorHandle;
+      definition: ptr WaveTokenListHandle; macrocall: ptr WaveTokenHandle;
+      arguments: ptr WaveTokenVectorHandle; seqstart: pointer; seqend: pointer): bool
   ExpandingObjectLikeMacroImplType* = proc (ctx: ptr WaveContextImplHandle;
       argmacro: ptr WaveTokenHandle; definition: ptr WaveTokenListHandle;
       macrocall: ptr WaveTokenHandle; env: pointer): EntryHandling {.cdecl.}
+  ExpandingObjectLikeMacroImplTypeNim* = proc (ctx: ptr WaveContextImplHandle;
+      argmacro: ptr WaveTokenHandle; definition: ptr WaveTokenListHandle;
+      macrocall: ptr WaveTokenHandle): EntryHandling
   ExpandedMacroImplType* = proc (ctx: ptr WaveContextImplHandle;
                                  result: ptr WaveTokenListHandle; env: pointer): void {.
       cdecl.}
+  ExpandedMacroImplTypeNim* = proc (ctx: ptr WaveContextImplHandle;
+                                    result: ptr WaveTokenListHandle): void
   RescannedMacroImplType* = proc (ctx: ptr WaveContextImplHandle;
                                   result: ptr WaveTokenListHandle; env: pointer): void {.
       cdecl.}
+  RescannedMacroImplTypeNim* = proc (ctx: ptr WaveContextImplHandle;
+                                     result: ptr WaveTokenListHandle): void
   FoundDirectiveImplType* = proc (ctx: ptr WaveContextImplHandle;
                                   tok: ptr WaveTokenHandle; env: pointer): EntryHandling {.
       cdecl.}
+  FoundDirectiveImplTypeNim* = proc (ctx: ptr WaveContextImplHandle;
+                                     tok: ptr WaveTokenHandle): EntryHandling
   FoundIncludeDirectiveImplType* = proc (context: ptr WaveContextImplHandle;
       impl: cstring; include_next: bool; env: pointer): EntryHandling {.cdecl.}
+  FoundIncludeDirectiveImplTypeNim* = proc (context: ptr WaveContextImplHandle;
+      impl: cstring; include_next: bool): EntryHandling
   SkippedTokenImplType* = proc (context: ptr WaveContextImplHandle;
                                 token: ptr WaveTokenHandle; env: pointer): void {.
       cdecl.}
+  SkippedTokenImplTypeNim* = proc (context: ptr WaveContextImplHandle;
+                                   token: ptr WaveTokenHandle): void
   EmitLineDirectiveImplType* = proc (ctx: ptr WaveContextImplHandle;
                                      pending: ptr WaveTokenListHandle;
                                      act_token: ptr WaveTokenHandle;
                                      env: pointer): bool {.cdecl.}
+  EmitLineDirectiveImplTypeNim* = proc (ctx: ptr WaveContextImplHandle;
+                                        pending: ptr WaveTokenListHandle;
+                                        act_token: ptr WaveTokenHandle): bool
   FoundLineDirectiveImplType* = proc (ctx: ptr WaveContextImplHandle;
                                       arguments: ptr WaveTokenListHandle;
                                       line: cuint; filename: cstring;
                                       env: pointer): EntryHandling {.cdecl.}
+  FoundLineDirectiveImplTypeNim* = proc (ctx: ptr WaveContextImplHandle;
+      arguments: ptr WaveTokenListHandle; line: cuint; filename: cstring): EntryHandling
   FoundErrorDirectiveImplType* = proc (ctx: ptr WaveContextImplHandle;
                                        message: ptr WaveTokenListHandle;
                                        env: pointer): EntryHandling {.cdecl.}
+  FoundErrorDirectiveImplTypeNim* = proc (ctx: ptr WaveContextImplHandle;
+      message: ptr WaveTokenListHandle): EntryHandling
   DefinedMacroImplType* = proc (ctx: ptr WaveContextImplHandle;
                                 name: ptr WaveTokenHandle;
                                 is_functionlike: bool;
                                 parameters: ptr WaveTokenVectorHandle;
                                 definition: ptr WaveTokenListHandle;
                                 is_predefined: bool; env: pointer): void {.cdecl.}
+  DefinedMacroImplTypeNim* = proc (ctx: ptr WaveContextImplHandle;
+                                   name: ptr WaveTokenHandle;
+                                   is_functionlike: bool;
+                                   parameters: ptr WaveTokenVectorHandle;
+                                   definition: ptr WaveTokenListHandle;
+                                   is_predefined: bool): void
   WaveDiagnostics* {.bycopy, header: "wave_c_api.h", importc: "WaveDiagnostics".} = object
     line*: cint
     column*: cint

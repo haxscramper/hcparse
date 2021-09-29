@@ -139,6 +139,31 @@ type
     ctfIsPodType
 
     ctfPtrToArray
+    ctfNoCdeclProc
+
+  CxxPodTypeKind* = enum
+    cptNone
+
+    cptU8
+    cptU16
+    cptU32
+    cptU64
+
+    cptI8
+    cptI16
+    cptI32
+    cptI64
+
+    cptVoid
+    cptChar
+    cptUChar
+
+    cptInt
+    cptUInt
+    cptBool
+    cptFloat
+    cptDouble
+    cptSizeT
 
   CxxTypeUse* = ref object
     ## Instantiated type
@@ -155,6 +180,7 @@ type
         arrayElement*: CxxTypeUse
 
       of ctkIdent:
+        podKind*: CxxPodTypeKind
         cxxType*: CxxTypeRef
         genParams*: seq[CxxTypeUse]
 
@@ -383,6 +409,7 @@ proc fixName*(
   ): string =
   conf.fixNameImpl(name, cache, context, conf)
 
+
 func `$`*(cxx: CxxLibImport): string =
   cxx.library & "@" & cxx.importPath.join("/")
 
@@ -501,6 +528,62 @@ func `$`*(e: CxxEntry): string =
     else:
       raise newImplementKindError(e)
 
+func `[]`*(t: CxxTypeUse, idx: int): CxxTypeUse =
+  ## Return idx'th generic parameter of a type. Regular generic parameter
+  ## return their parameters, arrays return `[0 => arraySize, 1 =>
+  ## arrayElement]`, wrapped kinds (pointer, ref etc.) return wrapped type
+  ## on 0'th parameter, procedural type yield return type on 0'th argument,
+  ## and types of arguments on others.
+  ##
+  ## - `array[Enum, int]` :: `0 -> Enum`, `1 -> int`
+  ## - `proc(a: int): float` :: `0 -> float`, `1 -> int`
+  ## - `ptr X` :: `0 -> X`
+  case t.kind:
+    of ctkWrapKinds:
+      if idx != 0: raise newArgumentError(
+        "Wrap kinds only support indexing into 0'th parameter, but ",
+        idx, " was used")
+
+      result = t.wrapped
+
+    of ctkArrayKinds:
+      case idx:
+        of 0: result = t.arraySize
+        of 1: result = t.arrayElement
+        else: raise newArgumentError(
+          "Array kinds only supports indexing into 0'th of 1st parameters, ",
+          "but ", idx, " was used")
+
+    of ctkIdent:
+      result = t.genParams[idx]
+
+    of ctkProc:
+      if idx == 0:
+        result = t.returnType
+
+      else:
+        result = t.arguments[idx - 1].nimType
+
+    of ctkStaticParam:
+      raise newUnexpectedKindError(
+        t, "Static param does not support generic parameter indexing")
+
+func len*(t: CxxTypeUse): int =
+  case t.kind:
+    of ctkWrapKinds: 1
+    of ctkArrayKinds: 2
+    of ctkIdent: t.genParams.len
+    of ctkProc: 1 + t.arguments.len
+    of ctkStaticParam: 0
+
+func `[]`*(back: CxxTypeUse, idx: BackwardsIndex): CxxTypeUse =
+  back[back.len - idx.int]
+
+iterator items*(use: CxxTypeUse): CxxTypeUse =
+  for i in 0 ..< len(use):
+    yield use[i]
+
+
 func `==`*(n1, n2: CxxName): bool = n1.scopes == n2.scopes
 func `==`*(l1, l2: CxxLibImport): bool =
   l1.library == l2.library and l1.importPath == l2.importPath
@@ -559,6 +642,7 @@ func `name`*(use: CxxTypeUse): CxxNamePair =
   assertKind(use, {ctkIdent})
   result = use.cxxType.name
 
+func `nimName=`*(obj: var CxxAlias, name: string) = obj.decl.name.nim = name
 
 func nimName*(pr: CxxProc): string       = pr.head.name.nim
 func nimName*(arg: CxxArg): string       = arg.name.nim
@@ -567,6 +651,7 @@ func nimName*(t: CxxTypeUse): string     = t.cxxType.name.nim
 func nimName*(obj: CxxObject): string    = obj.decl.name.nim
 func nimName*(obj: CxxForward): string   = obj.decl.name.nim
 func nimName*(obj: CxxEnum): string      = obj.decl.name.nim
+func nimName*(obj: CxxAlias): string     = obj.decl.name.nim
 func nimName*(field: CxxField): string   = field.name.nim
 func nimName*(t: CxxTypeDecl): string    = t.name.nim
 

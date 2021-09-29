@@ -78,6 +78,7 @@ proc toCxxUse*(conf: WrapConf, cxtype: CxType, cache: var WrapCache): CxxTypeUse
     mutable: bool = false
     special: CTypeSpecialKind = ctskNone
     pair: CxxNamePair
+    podKind: CxxPodTypeKind
 
   case cxtype.cxKind():
     of tkBool, tkint, tkvoid, tkuint, tklonglong, tkulonglong,
@@ -86,6 +87,12 @@ proc toCxxUse*(conf: WrapConf, cxtype: CxType, cache: var WrapCache): CxxTypeUse
        tkshort, tkschar:
       let name = $cxtype
       pair = cxxPair(name, mapPrimitiveName(name).cxxName())
+
+      podKind =
+        case cxType.cxKind():
+          of tkBool: cptBool
+          of tkVoid: cptVoid
+          else: raise newImplementKindError(cxType.cxKind())
 
     of tkTypedef:
       mutable = cxType.isMutableRef()

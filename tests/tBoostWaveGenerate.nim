@@ -1,3 +1,5 @@
+import hmisc/preludes/unittest
+
 import
   compiler/[ast, renderer],
   hcparse/[hc_parsefront, hc_codegen, hc_impls],
@@ -23,67 +25,70 @@ func isSharedTypeName*(name: string): bool =
 
   return name in sharedNames
 
-fixConf.fixNameImpl = proc(
-    name: CxxNamePair,
-    cache: var StringNameCache,
-    context: CxxNameFixContext,
-    conf: CxxFixConf
-  ): string =
-  if cache.knownRename(name.nim):
-    return cache.getRename(name.nim)
+suite "Generate":
+  test "Boost wave C API":
+    fixConf.fixNameImpl = proc(
+        name: CxxNamePair,
+        cache: var StringNameCache,
+        context: CxxNameFixContext,
+        conf: CxxFixConf
+      ): string =
+      if cache.knownRename(name.nim):
+        return cache.getRename(name.nim)
 
-  if ?context[cancLibName] and name.context == cncProc:
-    result = name.nim.dropNormPrefix(context[cancLibName].get().nim)
+      if ?context[cancLibName] and name.context == cncProc:
+        result = name.nim.dropNormPrefix(context[cancLibName].get().nim)
 
-  else:
-    result = name.nim
+      else:
+        result = name.nim
 
-  let (prefix, suffix) =
-    case name.context:
-      of cncType: ("", "T")
-      of cncArg: ("arg", "")
-      of cncProc: ("c", "")
-      else: raise newImplementKindError(name.context)
+      let (prefix, suffix) =
+        case name.context:
+          of cncType: ("", "T")
+          of cncArg: ("arg", "")
+          of cncProc: ("c", "")
+          else: raise newImplementKindError(name.context)
 
-  if name.context != cncType and isReservedNimType(result):
-    result = prefix & result & suffix
+      if name.context != cncType and isReservedNimType(result):
+        result = prefix & result & suffix
 
-  if isReservedNimIdent(result):
-    result = prefix & result & suffix
+      if isReservedNimIdent(result):
+        result = prefix & result & suffix
 
-  cache.newRename(name.nim, result)
+      cache.newRename(name.nim, result)
 
-let dynProcs = cxxDynlibVar("cwaveDl")
+    let dynProcs = cxxDynlibVar("cwaveDl")
 
-fixConf.getBind =
-  proc(e: CxxEntry): CxxBind =
-    if e of cekProc:
-      dynProcs
+    fixConf.getBind =
+      proc(e: CxxEntry): CxxBind =
+        if e of cekProc:
+          dynProcs
 
-    else:
-      cxxHeader("wave_c_api.h")
-
-
-let res = dir /. "boost_wave_wrap.nim"
-
-var codegen = cCodegenConf
-
-# codegen.declBinds = some (dynProcs, @{
-#   "linux": cxxDynlib("libboost_cwave.so")
-# })
-
-let ir = expandViaCc(dir /. "wave_c_api.h", baseCParseConf).
-    # printNumerated(330 .. 340).
-    wrapViaTs(fixConf)
-
-writeFile(
-  res,
-  """
-import std/os
-const boostWaveLibDir = currentSourcePath().splitFile().dir / "../../../lib"
-const cwaveDl* = boostWaveLibDir / "libboost_cwave.so"
-
-""" & ir.toString(codegen))
+        else:
+          cxxHeader("wave_c_api.h")
 
 
-execShell shellCmd(nim, r, $relToSource("tBoostWaveExecute.nim"))
+    let res = dir /. "boost_wave_wrap.nim"
+
+    var codegen = cCodegenConf
+
+    # codegen.declBinds = some (dynProcs, @{
+    #   "linux": cxxDynlib("libboost_cwave.so")
+    # })
+
+    let ir = expandViaCc(dir /. "wave_c_api.h", baseCParseConf).
+        # printNumerated(330 .. 340).
+        wrapViaTs(fixConf)
+
+    writeFile(
+      res,
+      lit3"""
+        import std/os
+        const boostWaveLibDir = currentSourcePath().splitFile().dir / "../../../lib"
+        const cwaveDl* = boostWaveLibDir / "libboost_cwave.so"
+
+        """ & ir.toString(codegen))
+
+suite "Run":
+  test "Compile and execute":
+    execShell shellCmd(nim, r, $relToSource("tBoostWaveExecute.nim"))

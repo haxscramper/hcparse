@@ -559,24 +559,26 @@ proc fromCxxTypeName*(name: string): string =
     of "unsigned long": "culong"
     else: ""
 
-func mapPrimitiveName*(name: string): string =
+func mapPrimitiveNameImpl*(name: string):
+    tuple[nim: string, pod: CxxPodTypeKind] =
+
   case name:
-    of "unsigned long": "ulong"
-    of "long long": "clonglong"
-    of "long": "clong"
-    of "void": "void"
-    of "int": "cint"
-    of "char": "char"
-    of "unsigned", "unsigned int": "cuint"
-    of "float": "cfloat"
-    of "bool": "bool"
-    of "size_t": "size_t"
+    of "unsigned long": ("ulong", cptU32)
+    of "long long": ("clonglong", cptI64)
+    of "long": ("clong", cptI32)
+    of "void": ("void", cptVoid)
+    of "int": ("cint", cptInt)
+    of "char": ("char", cptChar)
+    of "unsigned", "unsigned int": ("cuint", cptUInt)
+    of "float": ("cfloat", cptFloat)
+    of "bool": ("bool", cptBool)
+    of "size_t": ("size_t", cptSizeT)
 
-    of "int16_t": "int16"
+    of "int16_t": ("int16", cptI16)
 
-    of "uint8_t": "uint8"
-    of "uint16_t": "uint16"
-    of "uint64_t": "uint64"
+    of "uint8_t": ("uint8", cptU8)
+    of "uint16_t": ("uint16", cptU16)
+    of "uint64_t": ("uint64", cptU64)
     # of tkBool:       ("bool")
     # of tkint:        ("cint")
     # of tkvoid:       ("void")
@@ -601,6 +603,12 @@ func mapPrimitiveName*(name: string): string =
     else:
       raise newImplementKindError(name)
 
+
+func mapPrimitiveName*(name: string): string =
+  mapPrimitiveNameImpl(name).nim
+
+func mapPrimitivePod*(name: string): CxxPodTypeKind =
+  mapPrimitiveNameImpl(name).pod
 
 proc toNimType*(
     cxtype: CXType, conf: WrapConf, cache: var WrapCache): NimType =

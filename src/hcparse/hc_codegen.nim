@@ -59,10 +59,13 @@ proc toNNode*[N](t: CxxTypeUse, conf: CodegenConf): NType[N] =
         result = newNType[N]("ptr", @[toNNode[N](t.wrapped, conf)])
 
     of ctkProc:
+      var pragma: Pragma[N]
+      if ctfNoCdeclProc notin t.flags:
+        pragma = newNPragma[N](newNIdent[N]("cdecl"))
+
       result = newProcNType[N](
         t.arguments.mapIt(toNNode[N](it, conf)),
-        toNNode[N](t.returnType, conf),
-        newNPragma[N](newNIdent[N]("cdecl")))
+        toNNode[N](t.returnType, conf), pragma)
 
     else:
       raise newImplementKindError(t)
@@ -134,12 +137,28 @@ proc toNNode*[N](header: CxxBind, conf: CodegenConf): seq[N] =
       conf.getImport(),
       newPLit[N, string](str))
 
-proc toNNode*[N](def: CxxAlias, conf: CodegenConf): AliasDecl[N] =
-  newAliasDecl(
+proc toNNode*[N](def: CxxAlias, conf: CodegenConf):
+  tuple[alias: AliasDecl[N], extra: seq[NimDecl[N]]] =
+
+  result.alias = newAliasDecl(
     toNNode[N](def.decl, conf),
     toNNode[N](def.baseType, conf),
     isDistinct = false
   )
+
+  if def.baseType of ctkProc:
+    let base = def.baseType
+    if base[^1] of ctkPtr and base[^1][0].podKind == cptVoid:
+      var newDef = def
+      newDef.nimName = newDef.nimName & "Nim"
+      discard newDef.baseType.arguments.pop()
+      newDef.baseType.flags.incl ctfNoCdeclProc
+
+      result.extra.add toNimDecl[N](newAliasDecl(
+        toNNode[N](newDef.decl, conf),
+        toNNode[N](newDef.baseType, conf),
+        isDistinct = false
+      ))
 
 proc toNNode*[N](
     def: CxxProc,
@@ -198,6 +217,7 @@ proc toNNode*[N](obj: CxxObject, conf: CodegenConf): seq[NimDecl[N]] =
 proc toNNode*[N](obj: CxxForward, conf: CodegenConf): ObjectDecl[N] =
   result = newObjectDecl[N](obj.nimName)
   result.addPragma("bycopy")
+  result.addPragma("incompleteStruct")
   result.addPragma toNNode[N](obj.cbind, conf)
 
 proc toNNode*[N](field: CxxEnumValue, conf: CodegenConf): EnumField[N] =
@@ -242,7 +262,9 @@ proc toNNode*[N](entry: CxxEntry, conf: CodegenConf): seq[NimDecl[N]] =
       discard
 
     of cekAlias:
-      result.add toNNode[N](entry.cxxAlias, conf).toNimDecl()
+      let (alias, extra) = toNNode[N](entry.cxxAlias, conf)
+      result.add alias.toNimDecl()
+      result.add extra
 
     else:
       raise newImplementKindError(entry)
