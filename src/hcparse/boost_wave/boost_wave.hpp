@@ -371,7 +371,7 @@ struct WaveContext {
     std::string                      text;
     util::file_position_type         current_position;
     void*                            contextData = nullptr;
-    bool                             hasError    = false;
+    int                              errorCount  = 0;
     std::queue<WaveDiagnostics>      diagnostics;
 
     WaveContext(std::string _text, const char* filename);

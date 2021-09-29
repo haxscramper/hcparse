@@ -4,26 +4,29 @@ import ./boost_wave_wrap
 export boost_wave_wrap
 import hmisc/core/gold
 
-import std/os
+import std/[os, strformat]
 
 {.passc:"-I" & currentSourcePath().splitFile().dir .}
 
 
 type
-  WaveContext* = object
+  WaveContext* = ref object
     handle*: ptr WaveContextHandle
     str*: cstringArray
 
     evaluatedConditional*: EvaluatedConditionalExpressionImplTypeNim
     skippedToken*: SkippedTokenImplTypeNim
 
+  WaveException* = object of CatchableError
+    diag*: WaveDiagnostics
+
 proc newWaveContext*(str: string, file: string = "<unknown>"): WaveContext =
-  # new(
-  #   result,
-  #   proc(ctx: WaveContext) =
-  #     destroyContext(ctx.handle)
-  #     deallocCStringArray(ctx.str)
-  # )
+  new(
+    result,
+    proc(ctx: WaveContext) =
+      destroyContext(ctx.handle)
+      deallocCStringArray(ctx.str)
+  )
 
   result.str = allocCStringArray([str])
   result.handle = newWaveContext(result.str[0], file)
@@ -37,12 +40,26 @@ proc `!=`*(iter1, iter2: ptr WaveIteratorHandle): bool = neqIterator(iter1, iter
 proc `==`*(iter1, iter2: ptr WaveIteratorHandle): bool {.error.}
 proc getValue*(tok: ptr WaveTokenHandle): cstring = tok.tokGetValue()
 proc kind*(tok: ptr WaveTokenHandle): WaveTokId = tok.tokGetId()
+proc hasErrors*(c: var WaveContext): bool = contextHasErrors(c.handle)
+proc hasWarnings*(c: var WaveContext): bool = contextHasWarnings(c.handle)
+proc popDiag*(c: var WaveContext): WaveDiagnostics = contextPopDiagnostics(c.handle)
 
 proc `$`*(t: ptr WaveTokenHandle): string =
   if not isNil(t):
     let val = t.getValue()
     if not isNil(val):
       return $val
+
+proc raiseErrors*(ctx: var WaveContext) =
+  while ctx.hasErrors():
+    echo "has errors"
+    var diag = ctx.popDiag()
+    if diag.level in {wslError, wslFatal}:
+      raise (ref WaveException)(
+        diag: diag,
+        msg: &"Input processing failed with {diag.code}." &
+          &" Error was - '{diag.errorText}'"
+      )
 
 iterator items*(
     ctx: var WaveContext,
@@ -54,6 +71,7 @@ iterator items*(
   var inHashLine = false
   var first: ptr WaveIteratorHandle = ctx.first()
   while first != ctx.last():
+    raiseErrors(ctx)
     let tok = first.getTok()
     if tok.kind == tokIdPpLine and ignoreHashLine:
       inHashLine = true
@@ -107,6 +125,87 @@ proc setFoundWarningDirective*(
   let env = rawEnv(impl)
   let impl = rawProc(impl)
   ctx.handle.setFoundWarningDirective(cast[FoundWarningDirectiveImplType](impl), env)
+
+# REVIEW
+## #+begin_group
+
+##[
+
+The Wave library maintains two separate search paths for include files. A
+search path for user include files and a search path for system include
+files. Any directories specified with the add_include_path() function
+before the function set_sysinclude_delimiter() is called are searched only
+for the case of #include "..." directives, they are not searched for
+#include <file> directives. I.e. these directories are added to the user
+include search path.
+
+If additional directories are specified with the add_include_path()
+function after a call to the function set_sysinclude_delimiter(), these
+directories are searched for all #include directives. I.e. these
+directories are added to the system include search path.
+
+In addition, a call to the function set_sysinclude_delimiter() inhibits the
+use of the current reference directory as the first search directory for
+#include "..." directives. Therefore, the current reference directory is
+searched only, if it is requested explicitly with a call to the function
+add_include_path(".").
+
+Callig both functions, the set_sysinclude_delimiter() and
+add_include_path(".") allows you to control precisely, which directories
+are searched before the current one and which are searched after.
+
+These functions are modelled after the command line behaviour implemented
+by the popular gcc compiler.
+
+]##
+
+proc addIncludePath*(ctx: var WaveContext, path: string): bool =
+  ##[
+
+Adds the given file system path to the user include search paths. After a
+call to the set_sysinclude_delimiter() this function adds the given file
+system path to the system include search paths. Note though, that the given
+path is validated against the file system.
+
+If the given path string does not form a name of a valid file system
+directory item, the function returns false. If the given path was
+successfully added to the include search paths in question, the function
+returns true.
+
+  ]##
+  return ctx.handle.addIncludePath(path.cstring)
+
+proc addSysincludePath*(ctx: var WaveContext, path: string): bool =
+  ##[
+
+Adds the given file system path to the system include search paths. This
+function operates on the system include search path regardless of the mode
+of operation of the `add_include_path()`. Note though, that the given path
+is validated against the file system.
+
+If the given path string does not form a name of a valid file system
+directory item, the function returns false. If the given path was
+successfully added to the system include search paths, the function returns
+true.
+
+  ]##
+  return ctx.handle.addIncludePath(path.cstring)
+
+proc setSysincludeDelimiter*(ctx: var WaveContext) =
+  ## Switches the mode, how the `add_include_path()` function operates. By
+  ## default the given file system path is added to the user include search
+  ## paths. After calling this function a subsequent call to the
+  ## `add_include_path()` adds the given file system path to the system
+  ## include search paths. Additionally it inhibits the the use of the
+  ## current reference directory as the first search directory for
+  ## `#include "..."` directives.
+
+  ctx.handle.setSysincludeDelimiter()
+
+proc setCurrentFilename*(ctx: var WaveContext, name: string) =
+  ctx.handle.setCurrentFilename(name.cstring)
+
+## #+end_group
 
 template onFoundWarningDirective*(inCtx: var WaveContext, body: untyped): untyped =
   inCtx.setFoundWarningDirective(
@@ -228,26 +327,26 @@ proc setFoundIncludeDirective*(
 The function found_include_directive is called whenever whenever a
 `#include` directive was located..
 
-The ctx parameter provides a reference to the context_type used during
-instantiation of the preprocessing iterators by the user. Note, this
-parameter was added for the Boost V1.35.0 release.
+- The ctx parameter provides a reference to the context_type used during
+  instantiation of the preprocessing iterators by the user. Note, this
+  parameter was added for the Boost V1.35.0 release.
 
-The parameter filename contains the (expanded) file name found after the
-`#include` directive. This has the format `<file>`, `"file"` or `file`. The
-formats `<file>` or `"file"` are used for #include directives found in the
-preprocessed token stream, the format `file` is used for files specified
-through the `--force_include` command line argument.
+- The parameter filename contains the (expanded) file name found after the
+  `#include` directive. This has the format `<file>`, `"file"` or `file`.
+  The formats `<file>` or `"file"` are used for #include directives found
+  in the preprocessed token stream, the format `file` is used for files
+  specified through the `--force_include` command line argument.
 
-TODO document how specify `--force_include` arguments
+- TODO document how specify `--force_include` arguments
 
-The parameter include_next is set to true if the found directive was a
-`#include_next` directive and the `BOOST_WAVE_SUPPORT_INCLUDE_NEXT`
-preprocessing constant was defined to something `!= 0`.
+- The parameter include_next is set to true if the found directive was a
+  `#include_next` directive and the `BOOST_WAVE_SUPPORT_INCLUDE_NEXT`
+  preprocessing constant was defined to something `!= 0`.
 
-If the return value is 'skip', the include directive is not executed, i.e.
-the file to include is not loaded nor processed. The overall directive is
-replaced by a single newline character. If the return value is 'process',
-the directive is executed in a normal manner.
+- If the return value is 'skip', the include directive is not executed,
+  i.e. the file to include is not loaded nor processed. The overall
+  directive is replaced by a single newline character. If the return value
+  is 'process', the directive is executed in a normal manner.
 
   ]##
 
@@ -521,11 +620,71 @@ inside the not evaluated conditional #if/#else/#endif branches).
     cast[SkippedTokenImplType](rawProc(impl)),
     rawEnv(impl))
 
-template onSkippedToken*(ctx: var WaveContext, body: untyped): untyped =
-  ctx.setSkippedToken(
+template onSkippedToken*(inCtx: var WaveContext, body: untyped): untyped =
+  inCtx.setSkippedToken(
     proc(
       context {.inject.}: ptr WaveContextImplHandle;
       token {.inject.}: ptr WaveTokenHandle) =
+
+      body
+  )
+
+
+
+proc setLocateIncludeFIle*(
+    ctx: var WaveContext,
+    impl: LocateIncludeFileImplTypeNim
+  ) =
+
+  ##[
+
+
+
+The function locate_include_file is called, whenever a `#include` directive
+was encountered. It is supposed to locate the given file and should return
+the full file name of the located file. This file name is expected to
+uniquely identify the referenced file.
+
+- The parameter ctx is a reference to the context object used for
+  instantiating the preprocessing iterators by the user.
+
+- The parameter file_path contains the (expanded) file name found after the
+  `#include` directive. This parameter holds the string as it is specified
+  in the #include directive, i.e. `<file>` or `"file"` will result in a
+  parameter value 'file'.
+
+- The parameter is_system is set to true if this call happens as a result
+  of a `#include <file>` directive, it is false otherwise, i.e. for
+  `#include "file"` directives.
+
+- The parameter current_name is only used if a #include_next directive was
+  encountered (and `BOOST_WAVE_SUPPORT_INCLUDE_NEXT` was defined to be
+  non-zero). In this case it points to unique full name of the current
+  include file (if any). Otherwise this parameter is set to NULL.
+
+- The parameter dir_path on return is expected to hold the directory part
+  of the located file.
+
+- The parameter native_name on return is expected to hold the unique full
+  file name of the located file.
+
+- The return value defines whether the file was located successfully.
+
+  ]##
+
+  ctx.handle.setLocateIncludeFile(
+    cast[LocateIncludeFileImplType](rawProc(impl)),
+    rawEnv(impl))
+
+template onLocateIncludeFile*(inCtx: var WaveContext, body: untyped): untyped =
+  inCtx.setLocateIncludeFile(
+    proc (
+      ctx {.inject.}: ptr WaveContextImplHandle;
+      filePath {.inject}: cstring;
+      isSystem {.inject.}: bool;
+      currentName {.inject.}: cstring;
+      dirPath {.inject.}: cstring;
+      nativename {.inject.}: cstring): EntryHandling =
 
       body
 

@@ -574,6 +574,51 @@ BOOST_WAVE_EXPORT void wave_setDefinedMacro(
     DefinedMacroImplType impl,
     void*                env);
 
+// Locate include file
+
+typedef EntryHandling (*LocateIncludeFileImplType)(
+    WaveContextImplHandle* ctx,
+    char*                  file_path,
+    bool                   is_system,
+    char const*            current_name,
+    char*                  dir_path,
+    char*                  native_name,
+    void*                  env);
+
+
+BOOST_WAVE_EXPORT void wave_setLocateIncludeFile(
+    WaveContextHandle*        context,
+    LocateIncludeFileImplType impl,
+    void*                     env);
+
+// Opened include file
+
+typedef void (*OpenedIncludeFileImplType)(
+    const WaveContextImplHandle* ctx,
+    const char*                  rel_filename,
+    const char*                  abs_filename,
+    bool                         is_system_include,
+    void*                        env);
+
+
+BOOST_WAVE_EXPORT void wave_setOpenedIncludeFile(
+    WaveContextHandle*        context,
+    OpenedIncludeFileImplType impl,
+    void*                     env);
+
+// Returning from include file
+
+typedef void (*ReturningFromIncludeFileImplType)(
+    const WaveContextImplHandle*,
+    void* env);
+
+
+BOOST_WAVE_EXPORT void wave_setReturningFromIncludeFile(
+    WaveContextHandle*               context,
+    ReturningFromIncludeFileImplType impl,
+    void*                            env);
+
+
 BOOST_WAVE_EXPORT void wave_destroyContext(WaveContextHandle* context);
 
 TYPE struct WaveDiagnostics {
@@ -591,11 +636,11 @@ BOOST_WAVE_EXPORT void wave_contextSetData(
     WaveContextHandle* context,
     void*              data);
 BOOST_WAVE_EXPORT void* wave_contextGetData(WaveContextHandle* context);
-BOOST_WAVE_EXPORT bool  wave_contextHasError(WaveContextHandle* context);
+BOOST_WAVE_EXPORT bool  wave_contextHasErrors(WaveContextHandle* context);
 BOOST_WAVE_EXPORT bool wave_contextHasWarnings(WaveContextHandle* context);
 BOOST_WAVE_EXPORT void wave_deleteDiagnostics(WaveDiagnostics* diag);
 BOOST_WAVE_EXPORT WaveDiagnostics
-                       wave_contextPopWarning(WaveContextHandle* context);
+    wave_contextPopDiagnostics(WaveContextHandle* context);
 BOOST_WAVE_EXPORT void wave_addMacroDefinition(
     WaveContextHandle* context,
     const char*        macrostring,
@@ -615,6 +660,28 @@ BOOST_WAVE_EXPORT bool wave_getMacroDefinition(
     WavePosition*           pos,
     WaveTokenVectorHandle** parameters,
     WaveTokenVectorHandle** definition);
+
+BOOST_WAVE_EXPORT bool wave_addSysincludePath(
+    WaveContextHandle* context,
+    char const*        path);
+
+BOOST_WAVE_EXPORT bool wave_addIncludePath(
+    WaveContextHandle* context,
+    char const*        path);
+
+BOOST_WAVE_EXPORT void wave_setSysincludeDelimiter(
+    WaveContextHandle* context);
+
+BOOST_WAVE_EXPORT void wave_setCurrentFilename(
+    WaveContextHandle* context,
+    const char*        name);
+
+BOOST_WAVE_EXPORT const char* wave_getCurrentFilename(
+    WaveContextHandle* context);
+BOOST_WAVE_EXPORT const char* wave_getCurrentDirectory(
+    WaveContextHandle* context);
+
+BOOST_WAVE_EXPORT int getIterationDepth(WaveContextHandle* context);
 
 BOOST_WAVE_EXPORT WaveIteratorHandle* wave_beginIterator(
     WaveContextHandle* context);

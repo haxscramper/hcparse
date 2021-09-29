@@ -133,3 +133,27 @@ void GIT_CALLBACK(free)(git_writestream *stream);
     var ctx = newWaveContext("GIT_CALLBACK(free)(git_writestream *stream);")
     ctx.addMacroDefinition("GIT_CALLBACK", @["name"], some "(*name)")
     check ctx.getExpanded() == "(*free)(git_writestream *stream);"
+
+suite "Include directive handling":
+  test "Raised exception for invalid include":
+
+    expect WaveException as ewave:
+      var ctx = newWaveContext("#include \"asdf.h\"")
+      for tok in items(ctx):
+        discard tok
+
+    check ewave.diag.code == wekBadIncludeStatement
+
+  test "Ignore include":
+    var ctx = newWaveContext("""#include "asdf.h"""")
+
+    ctx.onLocateIncludeFile():
+      echo "Locate include file"
+      return EntryHandlingSkip
+
+    ctx.onFoundIncludeDirective():
+      echo "found include directive for ", impl
+      return EntryHandlingSkip
+
+    for tok in ctx:
+      echo "> ", tok

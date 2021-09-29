@@ -216,6 +216,27 @@ type
                                    parameters: ptr WaveTokenVectorHandle;
                                    definition: ptr WaveTokenListHandle;
                                    is_predefined: bool): void
+  LocateIncludeFileImplType* = proc (ctx: ptr WaveContextImplHandle;
+                                     file_path: cstring; is_system: bool;
+                                     current_name: cstring; dir_path: cstring;
+                                     native_name: cstring; env: pointer): EntryHandling {.
+      cdecl.}
+  LocateIncludeFileImplTypeNim* = proc (ctx: ptr WaveContextImplHandle;
+                                        file_path: cstring; is_system: bool;
+                                        current_name: cstring;
+                                        dir_path: cstring; native_name: cstring): EntryHandling
+  OpenedIncludeFileImplType* = proc (ctx: ptr WaveContextImplHandle;
+                                     rel_filename: cstring;
+                                     abs_filename: cstring;
+                                     is_system_include: bool; env: pointer): void {.
+      cdecl.}
+  OpenedIncludeFileImplTypeNim* = proc (ctx: ptr WaveContextImplHandle;
+                                        rel_filename: cstring;
+                                        abs_filename: cstring;
+                                        is_system_include: bool): void
+  ReturningFromIncludeFileImplType* = proc (arg0: ptr WaveContextImplHandle;
+      env: pointer): void {.cdecl.}
+  ReturningFromIncludeFileImplTypeNim* = proc (arg0: ptr WaveContextImplHandle): void
   WaveDiagnostics* {.bycopy, header: "wave_c_api.h", importc: "WaveDiagnostics".} = object
     line*: cint
     column*: cint
@@ -298,20 +319,30 @@ proc setFoundErrorDirective*(context: ptr WaveContextHandle;
 proc setDefinedMacro*(context: ptr WaveContextHandle;
                       impl: DefinedMacroImplType; env: pointer): void {.
     dynlib: cwaveDl, importc: "wave_setDefinedMacro".}
+proc setLocateIncludeFile*(context: ptr WaveContextHandle;
+                           impl: LocateIncludeFileImplType; env: pointer): void {.
+    dynlib: cwaveDl, importc: "wave_setLocateIncludeFile".}
+proc setOpenedIncludeFile*(context: ptr WaveContextHandle;
+                           impl: OpenedIncludeFileImplType; env: pointer): void {.
+    dynlib: cwaveDl, importc: "wave_setOpenedIncludeFile".}
+proc setReturningFromIncludeFile*(context: ptr WaveContextHandle;
+                                  impl: ReturningFromIncludeFileImplType;
+                                  env: pointer): void {.dynlib: cwaveDl,
+    importc: "wave_setReturningFromIncludeFile".}
 proc destroyContext*(context: ptr WaveContextHandle): void {.dynlib: cwaveDl,
     importc: "wave_destroyContext".}
 proc contextSetData*(context: ptr WaveContextHandle; data: pointer): void {.
     dynlib: cwaveDl, importc: "wave_contextSetData".}
 proc contextGetData*(context: ptr WaveContextHandle): pointer {.dynlib: cwaveDl,
     importc: "wave_contextGetData".}
-proc contextHasError*(context: ptr WaveContextHandle): bool {.dynlib: cwaveDl,
-    importc: "wave_contextHasError".}
+proc contextHasErrors*(context: ptr WaveContextHandle): bool {.dynlib: cwaveDl,
+    importc: "wave_contextHasErrors".}
 proc contextHasWarnings*(context: ptr WaveContextHandle): bool {.
     dynlib: cwaveDl, importc: "wave_contextHasWarnings".}
 proc deleteDiagnostics*(diag: ptr WaveDiagnostics): void {.dynlib: cwaveDl,
     importc: "wave_deleteDiagnostics".}
-proc contextPopWarning*(context: ptr WaveContextHandle): WaveDiagnostics {.
-    dynlib: cwaveDl, importc: "wave_contextPopWarning".}
+proc contextPopDiagnostics*(context: ptr WaveContextHandle): WaveDiagnostics {.
+    dynlib: cwaveDl, importc: "wave_contextPopDiagnostics".}
 proc addMacroDefinition*(context: ptr WaveContextHandle; macrostring: cstring;
                          is_predefined: bool): void {.dynlib: cwaveDl,
     importc: "wave_addMacroDefinition".}
@@ -326,6 +357,20 @@ proc getMacroDefinition*(context: ptr WaveContextHandle; name: cstring;
                          parameters: ptr ptr WaveTokenVectorHandle;
                          definition: ptr ptr WaveTokenVectorHandle): bool {.
     dynlib: cwaveDl, importc: "wave_getMacroDefinition".}
+proc addSysincludePath*(context: ptr WaveContextHandle; path: cstring): bool {.
+    dynlib: cwaveDl, importc: "wave_addSysincludePath".}
+proc addIncludePath*(context: ptr WaveContextHandle; path: cstring): bool {.
+    dynlib: cwaveDl, importc: "wave_addIncludePath".}
+proc setSysincludeDelimiter*(context: ptr WaveContextHandle): void {.
+    dynlib: cwaveDl, importc: "wave_setSysincludeDelimiter".}
+proc setCurrentFilename*(context: ptr WaveContextHandle; name: cstring): void {.
+    dynlib: cwaveDl, importc: "wave_setCurrentFilename".}
+proc getCurrentFilename*(context: ptr WaveContextHandle): cstring {.
+    dynlib: cwaveDl, importc: "wave_getCurrentFilename".}
+proc getCurrentDirectory*(context: ptr WaveContextHandle): cstring {.
+    dynlib: cwaveDl, importc: "wave_getCurrentDirectory".}
+proc getIterationDepth*(context: ptr WaveContextHandle): cint {.dynlib: cwaveDl,
+    importc: "getIterationDepth".}
 proc beginIterator*(context: ptr WaveContextHandle): ptr WaveIteratorHandle {.
     dynlib: cwaveDl, importc: "wave_beginIterator".}
 proc endIterator*(context: ptr WaveContextHandle): ptr WaveIteratorHandle {.

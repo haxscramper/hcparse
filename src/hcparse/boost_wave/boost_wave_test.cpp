@@ -21,7 +21,7 @@ int main() {
     WaveIteratorHandle* begin = wave_beginIterator(context);
     WaveIteratorHandle* end   = wave_endIterator(context);
 
-    while (!wave_contextHasError(context)
+    while (!wave_contextHasErrors(context)
            && wave_neqIterator(begin, end)) {
         WaveTokenHandle* tok = wave_iterGetTok(begin);
         std::cout << "token " << wave_tokGetValue(tok) << "\n";
@@ -29,13 +29,13 @@ int main() {
         wave_deleteTok(tok);
     }
 
-    if (wave_contextHasError(context)) {
+    if (wave_contextHasErrors(context)) {
         std::cout << "Error encountered during parsing\n";
     }
 
     if (wave_contextHasWarnings(context)) {
         std::cout << "Warning encountered during parsing\n";
-        auto warn = wave_contextPopWarning(context);
+        auto warn = wave_contextPopDiagnostics(context);
         std::cout << "> " << warn.errorText << " in " << warn.filename
                   << "\n";
     }
