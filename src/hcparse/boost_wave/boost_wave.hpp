@@ -92,6 +92,7 @@ using WaveContextImpl = context<
     iteration_context_policies::load_file_to_string,
     WaveHooksImpl>;
 
+
 struct WaveContext;
 
 struct WaveHooksImpl
@@ -364,7 +365,9 @@ struct WaveHooksImpl
 };
 
 
-using WaveIterator = WaveContextImpl::iterator_type;
+using WaveIterator          = WaveContextImpl::iterator_type;
+using WaveMacroMap          = boost::wave::util::macromap<WaveContextImpl>;
+using WaveMacroNameIterator = WaveMacroMap::name_iterator;
 
 struct WaveContext {
     std::unique_ptr<WaveContextImpl> context;
@@ -390,6 +393,10 @@ struct CxxWaveIterator {
     WaveIterator d;
 };
 
+
+inline WaveMacroNameIterator* toCxx(WaveMacroIteratorHandle* i) {
+    return (WaveMacroNameIterator*)(i);
+}
 
 inline WaveContext* toCxx(WaveContextHandle* context) {
     return (WaveContext*)(context);
@@ -480,5 +487,6 @@ bool WaveHooksImpl::expanding_function_like_macro(
             seqend);
     }
 }
+
 
 #endif // BOOST_WAVE_HPP

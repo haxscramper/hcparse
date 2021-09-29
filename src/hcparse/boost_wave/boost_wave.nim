@@ -2,9 +2,9 @@ import hmisc/wrappers/wraphelp
 
 import ./boost_wave_wrap
 export boost_wave_wrap
-import hmisc/core/gold
+import hmisc/core/all
 
-import std/[os, strformat]
+import std/[os, strformat, options]
 
 {.passc:"-I" & currentSourcePath().splitFile().dir .}
 
@@ -39,6 +39,7 @@ proc advance*(iter: ptr WaveIteratorHandle) = iter.advanceIterator()
 proc `!=`*(iter1, iter2: ptr WaveIteratorHandle): bool = neqIterator(iter1, iter2)
 proc `==`*(iter1, iter2: ptr WaveIteratorHandle): bool {.error.}
 proc getValue*(tok: ptr WaveTokenHandle): cstring = tok.tokGetValue()
+proc strVal*(tok: ptr WaveTokenHandle): string = $tok.tokGetValue()
 proc kind*(tok: ptr WaveTokenHandle): WaveTokId = tok.tokGetId()
 proc hasErrors*(c: var WaveContext): bool = contextHasErrors(c.handle)
 proc hasWarnings*(c: var WaveContext): bool = contextHasWarnings(c.handle)
@@ -52,7 +53,6 @@ proc `$`*(t: ptr WaveTokenHandle): string =
 
 proc raiseErrors*(ctx: var WaveContext) =
   while ctx.hasErrors():
-    echo "has errors"
     var diag = ctx.popDiag()
     if diag.level in {wslError, wslFatal}:
       raise (ref WaveException)(
@@ -112,6 +112,21 @@ proc advance*(i: ptr WaveTokenListIteratorHandle) = listIterAdvance(i)
 iterator items*(l: ptr WaveTokenListHandle): ptr WaveTokenHandle =
   var iter1 = first(l)
   var iter2 = last(l)
+  while iter1 != iter2:
+    yield deref(iter1)
+    advance(iter1)
+
+
+proc firstMacro*(l: var WaveContext): ptr WaveMacroIteratorHandle = macroBeginIterator(l.handle)
+proc lastMacro*(l: var WaveContext): ptr WaveMacroIteratorHandle = macroEndIterator(l.handle)
+proc `!=`*(iter1, iter2: ptr WaveMacroIteratorHandle): bool = neqMacroIterator(iter1, iter2)
+proc `==`*(iter1, iter2: ptr WaveMacroIteratorHandle): bool {.error.}
+proc deref*(i: ptr WaveMacroIteratorHandle): cstring = macroIteratorAdvance(i)
+proc advance*(i: ptr WaveMacroIteratorHandle) = macroIteratorAdvance(i)
+
+iterator macroNames*(l: var WaveContext): cstring =
+  var iter1 = firstMacro(l)
+  var iter2 = lastMacro(l)
   while iter1 != iter2:
     yield deref(iter1)
     advance(iter1)
@@ -204,6 +219,26 @@ proc setSysincludeDelimiter*(ctx: var WaveContext) =
 
 proc setCurrentFilename*(ctx: var WaveContext, name: string) =
   ctx.handle.setCurrentFilename(name.cstring)
+
+proc findIncludeFile*(
+    ctx: var WaveContext,
+    file: string,
+    isSystem: bool = false
+  ): Option[string] =
+  var sRes: cstring
+  var dirRes: cstring
+  assertRef(ctx)
+  assertRef(ctx.handle)
+  echov ctx.handle.getCurrentFilename()
+  let res = ctx.handle.findIncludeFile(
+    addr sRes,
+    addr dirRes,
+    isSystem,
+    ctx.handle.getCurrentFilename()
+  )
+
+  echov sRes
+  echov dirRes
 
 ## #+end_group
 

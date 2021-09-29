@@ -142,18 +142,18 @@ suite "Include directive handling":
       for tok in items(ctx):
         discard tok
 
-    check ewave.diag.code == wekBadIncludeStatement
+    check ewave.diag.code == wekIllFormedDirective
 
   test "Ignore include":
-    var ctx = newWaveContext("""#include "asdf.h"""")
+    var ctx = newWaveContext("#include \"asdf.h\"\n")
 
-    ctx.onLocateIncludeFile():
-      echo "Locate include file"
-      return EntryHandlingSkip
+    var trigger = ""
 
     ctx.onFoundIncludeDirective():
-      echo "found include directive for ", impl
+      trigger = $impl
       return EntryHandlingSkip
 
     for tok in ctx:
-      echo "> ", tok
+      discard
+
+    check trigger == "\"asdf.h\""

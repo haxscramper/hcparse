@@ -1,6 +1,11 @@
 #include "boost_wave.hpp"
 #include <memory>
 
+static_assert(
+    (int)wekLastErrorNumber
+        == (int)preprocess_exception::error_code::last_error_number,
+    "Mismatched C API enum size");
+
 
 const char* to_string(EntryHandling handling) {
     switch (handling) {
@@ -1146,6 +1151,48 @@ const char* wave_getCurrentFilename(WaveContextHandle* context) {
 
 const char* wave_getCurrentDirectory(WaveContextHandle* context) {
     return toCxx(context)->context->get_current_directory().c_str();
+}
+
+bool wave_findIncludeFile(
+    WaveContextHandle* ctx,
+    char**             str,
+    char**             dir,
+    bool               is_system,
+    char const*        current_file) {
+    std::string s;
+    std::string d;
+    bool        res = toCxx(ctx)->context->find_include_file(
+        s, d, is_system, current_file);
+    std::cout << "s: " << s << std::endl;
+    std::cout << "d: " << d << std::endl;
+    *str = copyalloc(s.c_str());
+    *dir = copyalloc(d.c_str());
+
+    return res;
+}
+
+WaveMacroIteratorHandle* wave_macroBeginIterator(
+    WaveContextHandle* context) {
+    return (WaveMacroIteratorHandle*)new WaveMacroNameIterator(
+        toCxx(context)->context->macro_names_begin());
+}
+
+WaveMacroIteratorHandle* wave_macroEndIterator(
+    WaveContextHandle* context) {
+    return (WaveMacroIteratorHandle*)new WaveMacroNameIterator(
+        toCxx(context)->context->macro_names_end());
+}
+
+bool wave_neqMacroIterator(
+    WaveMacroIteratorHandle* i1,
+    WaveMacroIteratorHandle* i2) {
+    return *toCxx(i1) != *toCxx(i2);
+}
+void wave_macroIteratorAdvance(WaveMacroIteratorHandle* i) {
+    ++(*toCxx(i));
+}
+const char* wave_macroIteratorDeref(WaveMacroIteratorHandle* i) {
+    return (*(*toCxx(i))).c_str();
 }
 
 

@@ -261,6 +261,7 @@ TYPE enum WaveErrorCode {
     wekMacroInsertionError,
     wekBadIncludeFile,
     wekBadIncludeStatement,
+    wekBadHasIncludeExpression,
     wekIllFormedDirective,
     wekErrorDirective,
     wekWarningDirective,
@@ -270,6 +271,9 @@ TYPE enum WaveErrorCode {
     wekIllFormedOperator,
     wekBadDefineStatement,
     wekBadDefineStatementVaArgs,
+    wekBadDefineStatementVaOpt,
+    wekBadDefineStatementVaOptParens,
+    wekBadDefineStatementVaOptRecurse,
     wekTooFewMacroarguments,
     wekTooManyMacroarguments,
     wekEmptyMacroarguments,
@@ -304,6 +308,7 @@ TYPE enum WaveErrorCode {
     wekLastErrorNumber = wekPragmaMessageDirective
 } TYPE_NAME(WaveErrorCode);
 
+
 TYPE enum WaveSeverityLevel {
     wslRemark,
     wslWarning,
@@ -331,6 +336,7 @@ DECL_STRUCT(WaveContextImplHandle);
 DECL_STRUCT(WaveTokenListHandle);
 DECL_STRUCT(WaveTokenVectorHandle);
 DECL_STRUCT(WaveTokenListHandle);
+DECL_STRUCT(WaveMacroIteratorHandle);
 DECL_STRUCT(WaveTokenListIteratorHandle);
 
 
@@ -661,6 +667,18 @@ BOOST_WAVE_EXPORT bool wave_getMacroDefinition(
     WaveTokenVectorHandle** parameters,
     WaveTokenVectorHandle** definition);
 
+BOOST_WAVE_EXPORT WaveMacroIteratorHandle* wave_macroBeginIterator(
+    WaveContextHandle* context);
+BOOST_WAVE_EXPORT WaveMacroIteratorHandle* wave_macroEndIterator(
+    WaveContextHandle* context);
+BOOST_WAVE_EXPORT bool wave_neqMacroIterator(
+    WaveMacroIteratorHandle* i1,
+    WaveMacroIteratorHandle* i2);
+BOOST_WAVE_EXPORT void wave_macroIteratorAdvance(
+    WaveMacroIteratorHandle* i);
+BOOST_WAVE_EXPORT const char* wave_macroIteratorDeref(
+    WaveMacroIteratorHandle* i);
+
 BOOST_WAVE_EXPORT bool wave_addSysincludePath(
     WaveContextHandle* context,
     char const*        path);
@@ -675,6 +693,14 @@ BOOST_WAVE_EXPORT void wave_setSysincludeDelimiter(
 BOOST_WAVE_EXPORT void wave_setCurrentFilename(
     WaveContextHandle* context,
     const char*        name);
+
+BOOST_WAVE_EXPORT bool wave_findIncludeFile(
+    WaveContextHandle* ctx,
+    char**             str,
+    char**             dir,
+    bool               is_system,
+    char const*        current_file);
+
 
 BOOST_WAVE_EXPORT const char* wave_getCurrentFilename(
     WaveContextHandle* context);

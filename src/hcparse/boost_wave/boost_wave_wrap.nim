@@ -87,26 +87,28 @@ type
   WaveErrorCode* = enum
     wekNoError = 0, wekUnexpectedError = 1, wekMacroRedefinition = 2,
     wekMacroInsertionError = 3, wekBadIncludeFile = 4,
-    wekBadIncludeStatement = 5, wekIllFormedDirective = 6,
-    wekErrorDirective = 7, wekWarningDirective = 8, wekIllFormedExpression = 9,
-    wekMissingMatchingIf = 10, wekMissingMatchingEndif = 11,
-    wekIllFormedOperator = 12, wekBadDefineStatement = 13,
-    wekBadDefineStatementVaArgs = 14, wekTooFewMacroarguments = 15,
-    wekTooManyMacroarguments = 16, wekEmptyMacroarguments = 17,
-    wekImproperlyTerminatedMacro = 18, wekBadLineStatement = 19,
-    wekBadLineNumber = 20, wekBadLineFilename = 21,
-    wekBadUndefineStatement = 22, wekBadMacroDefinition = 23,
-    wekIllegalRedefinition = 24, wekDuplicateParameterName = 25,
-    wekInvalidConcat = 26, wekLastLineNotTerminated = 27,
-    wekIllFormedPragmaOption = 28, wekIncludeNestingTooDeep = 29,
-    wekMisplacedOperator = 30, wekAlreadydefinedName = 31,
-    wekUndefinedMacroname = 32, wekInvalidMacroname = 33,
-    wekUnexpectedQualifiedName = 34, wekDivisionByZero = 35,
-    wekIntegerOverflow = 36, wekIllegalOperatorRedefinition = 37,
-    wekIllFormedIntegerLiteral = 38, wekIllFormedCharacterLiteral = 39,
-    wekUnbalancedIfEndif = 40, wekCharacterLiteralOutOfRange = 41,
-    wekCouldNotOpenOutputFile = 42, wekIncompatibleConfig = 43,
-    wekIllFormedPragmaMessage = 44, wekPragmaMessageDirective = 45
+    wekBadIncludeStatement = 5, wekBadHasIncludeExpression = 6,
+    wekIllFormedDirective = 7, wekErrorDirective = 8, wekWarningDirective = 9,
+    wekIllFormedExpression = 10, wekMissingMatchingIf = 11,
+    wekMissingMatchingEndif = 12, wekIllFormedOperator = 13,
+    wekBadDefineStatement = 14, wekBadDefineStatementVaArgs = 15,
+    wekBadDefineStatementVaOpt = 16, wekBadDefineStatementVaOptParens = 17,
+    wekBadDefineStatementVaOptRecurse = 18, wekTooFewMacroarguments = 19,
+    wekTooManyMacroarguments = 20, wekEmptyMacroarguments = 21,
+    wekImproperlyTerminatedMacro = 22, wekBadLineStatement = 23,
+    wekBadLineNumber = 24, wekBadLineFilename = 25,
+    wekBadUndefineStatement = 26, wekBadMacroDefinition = 27,
+    wekIllegalRedefinition = 28, wekDuplicateParameterName = 29,
+    wekInvalidConcat = 30, wekLastLineNotTerminated = 31,
+    wekIllFormedPragmaOption = 32, wekIncludeNestingTooDeep = 33,
+    wekMisplacedOperator = 34, wekAlreadydefinedName = 35,
+    wekUndefinedMacroname = 36, wekInvalidMacroname = 37,
+    wekUnexpectedQualifiedName = 38, wekDivisionByZero = 39,
+    wekIntegerOverflow = 40, wekIllegalOperatorRedefinition = 41,
+    wekIllFormedIntegerLiteral = 42, wekIllFormedCharacterLiteral = 43,
+    wekUnbalancedIfEndif = 44, wekCharacterLiteralOutOfRange = 45,
+    wekCouldNotOpenOutputFile = 46, wekIncompatibleConfig = 47,
+    wekIllFormedPragmaMessage = 48, wekPragmaMessageDirective = 49
   WaveSeverityLevel* = enum
     wslRemark = 0, wslWarning = 1, wslError = 2, wslFatal = 3,
     wslCommandlineError = 4
@@ -125,6 +127,8 @@ type
   WaveTokenListHandle* {.bycopy, incompleteStruct, header: "wave_c_api.h".} = object
   
   WaveTokenVectorHandle* {.bycopy, incompleteStruct, header: "wave_c_api.h".} = object
+  
+  WaveMacroIteratorHandle* {.bycopy, incompleteStruct, header: "wave_c_api.h".} = object
   
   WaveTokenListIteratorHandle* {.bycopy, incompleteStruct,
                                  header: "wave_c_api.h".} = object
@@ -357,6 +361,17 @@ proc getMacroDefinition*(context: ptr WaveContextHandle; name: cstring;
                          parameters: ptr ptr WaveTokenVectorHandle;
                          definition: ptr ptr WaveTokenVectorHandle): bool {.
     dynlib: cwaveDl, importc: "wave_getMacroDefinition".}
+proc macroBeginIterator*(context: ptr WaveContextHandle): ptr WaveMacroIteratorHandle {.
+    dynlib: cwaveDl, importc: "wave_macroBeginIterator".}
+proc macroEndIterator*(context: ptr WaveContextHandle): ptr WaveMacroIteratorHandle {.
+    dynlib: cwaveDl, importc: "wave_macroEndIterator".}
+proc neqMacroIterator*(i1: ptr WaveMacroIteratorHandle;
+                       i2: ptr WaveMacroIteratorHandle): bool {.dynlib: cwaveDl,
+    importc: "wave_neqMacroIterator".}
+proc macroIteratorAdvance*(i: ptr WaveMacroIteratorHandle): void {.
+    dynlib: cwaveDl, importc: "wave_macroIteratorAdvance".}
+proc macroIteratorDeref*(i: ptr WaveMacroIteratorHandle): cstring {.
+    dynlib: cwaveDl, importc: "wave_macroIteratorDeref".}
 proc addSysincludePath*(context: ptr WaveContextHandle; path: cstring): bool {.
     dynlib: cwaveDl, importc: "wave_addSysincludePath".}
 proc addIncludePath*(context: ptr WaveContextHandle; path: cstring): bool {.
@@ -365,6 +380,9 @@ proc setSysincludeDelimiter*(context: ptr WaveContextHandle): void {.
     dynlib: cwaveDl, importc: "wave_setSysincludeDelimiter".}
 proc setCurrentFilename*(context: ptr WaveContextHandle; name: cstring): void {.
     dynlib: cwaveDl, importc: "wave_setCurrentFilename".}
+proc findIncludeFile*(ctx: ptr WaveContextHandle; str: ptr cstring;
+                      dir: ptr cstring; is_system: bool; current_file: cstring): bool {.
+    dynlib: cwaveDl, importc: "wave_findIncludeFile".}
 proc getCurrentFilename*(context: ptr WaveContextHandle): cstring {.
     dynlib: cwaveDl, importc: "wave_getCurrentFilename".}
 proc getCurrentDirectory*(context: ptr WaveContextHandle): cstring {.
