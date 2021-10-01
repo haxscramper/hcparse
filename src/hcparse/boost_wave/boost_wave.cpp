@@ -1206,6 +1206,5 @@ int getIterationDepth(WaveContextHandle* context) {
 
 const char* wave_unescapeIncludeToken(const char* s) {
     auto tmp = boost::wave::util::impl::unescape_lit(std::string(s));
-    std::cout << " unescaped include " << tmp << "\n";
     return copyalloc(tmp.c_str());
 }

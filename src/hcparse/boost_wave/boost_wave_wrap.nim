@@ -359,7 +359,7 @@ proc getMacroDefinition*(context: ptr WaveContextHandle; name: cstring;
                          is_function_style: ptr bool; is_predefined: ptr bool;
                          pos: ptr WavePosition;
                          parameters: ptr ptr WaveTokenVectorHandle;
-                         definition: ptr ptr WaveTokenVectorHandle): bool {.
+                         definition: ptr ptr WaveTokenListHandle): bool {.
     dynlib: cwaveDl, importc: "wave_getMacroDefinition".}
 proc macroBeginIterator*(context: ptr WaveContextHandle): ptr WaveMacroIteratorHandle {.
     dynlib: cwaveDl, importc: "wave_macroBeginIterator".}

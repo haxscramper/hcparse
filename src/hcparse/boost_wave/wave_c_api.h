@@ -665,7 +665,7 @@ BOOST_WAVE_EXPORT bool wave_getMacroDefinition(
     bool*                   is_predefined,
     WavePosition*           pos,
     WaveTokenVectorHandle** parameters,
-    WaveTokenVectorHandle** definition);
+    WaveTokenListHandle**   definition);
 
 BOOST_WAVE_EXPORT WaveMacroIteratorHandle* wave_macroBeginIterator(
     WaveContextHandle* context);

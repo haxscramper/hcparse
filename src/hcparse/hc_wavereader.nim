@@ -16,7 +16,9 @@ proc newWaveReader*(file: AbsFile, withHook: bool = false): WaveReader =
     subcontext.skipAll()
 
     for def in macroNames(subcontext):
-      echo "def> [", def, "]"
+      let mdef = subcontext.getMacroDefinition($def)
+      if not mdef.isPredefined:
+        echo "def> [", def, "] = <", mdef.definition, ">"
 
     return EntryHandlingSkip
 

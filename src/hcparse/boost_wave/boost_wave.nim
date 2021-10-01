@@ -920,27 +920,28 @@ proc addMacroDefinition*(
 
 #   ]##
 
-# type
-#   WaveMacroDefinition* = object
-#     isFunctionStyle: bool
-#     isPredefined: bool
-#     pos: WavePosition
-#     parameters: ptr WaveTokenVectorHandle
-#     definition: ptr WaveTokenListHandle
+type
+  WaveMacroDefinition* = object
+    isFunctionStyle: bool
+    isPredefined: bool
+    pos: WavePosition
+    parameters: ptr WaveTokenVectorHandle
+    definition: ptr WaveTokenListHandle
 
 # proc `=destroy`(def: var WaveMacroDefinition) =
 
 
-# proc getMacroDefinition*(
-#     ctx: var WaveContext, name: string): WaveMacroDefinition =
-#   getMacroDefinition(
-#     ctx,
-#     name.cstring,
-#     addr result.isFunctionStyle,
-#     addr result.isPredefined,
-#     addr result.parameters,
-#     addr result.definition
-#   )
+proc getMacroDefinition*(
+    ctx: var WaveContext, name: string): WaveMacroDefinition =
+  let ok = getMacroDefinition(
+    ctx.handle,
+    name.cstring,
+    addr result.isFunctionStyle,
+    addr result.isPredefined,
+    addr result.pos,
+    addr result.parameters,
+    addr result.definition
+  )
 
 
 # type WaveProcessingHooksHandle {.apiPtr.} = object
