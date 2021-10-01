@@ -366,8 +366,7 @@ struct WaveHooksImpl
 
 
 using WaveIterator          = WaveContextImpl::iterator_type;
-using WaveMacroMap          = boost::wave::util::macromap<WaveContextImpl>;
-using WaveMacroNameIterator = WaveMacroMap::name_iterator;
+using WaveMacroNameIterator = WaveContextImpl::name_iterator;
 
 struct WaveContext {
     std::unique_ptr<WaveContextImpl> context;

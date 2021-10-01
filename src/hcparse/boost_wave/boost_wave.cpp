@@ -1159,12 +1159,12 @@ bool wave_findIncludeFile(
     char**             dir,
     bool               is_system,
     char const*        current_file) {
-    std::string s;
+    std::string s{*str};
     std::string d;
     bool        res = toCxx(ctx)->context->find_include_file(
         s, d, is_system, current_file);
-    std::cout << "s: " << s << std::endl;
-    std::cout << "d: " << d << std::endl;
+    //    std::cout << "s: " << s << std::endl;
+    //    std::cout << "d: " << d << std::endl;
     *str = copyalloc(s.c_str());
     *dir = copyalloc(d.c_str());
 
@@ -1188,8 +1188,11 @@ bool wave_neqMacroIterator(
     WaveMacroIteratorHandle* i2) {
     return *toCxx(i1) != *toCxx(i2);
 }
+
 void wave_macroIteratorAdvance(WaveMacroIteratorHandle* i) {
-    ++(*toCxx(i));
+    WaveMacroNameIterator* iter = toCxx(i);
+    **iter;
+    iter->operator++();
 }
 const char* wave_macroIteratorDeref(WaveMacroIteratorHandle* i) {
     return (*(*toCxx(i))).c_str();

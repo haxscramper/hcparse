@@ -121,7 +121,7 @@ proc firstMacro*(l: var WaveContext): ptr WaveMacroIteratorHandle = macroBeginIt
 proc lastMacro*(l: var WaveContext): ptr WaveMacroIteratorHandle = macroEndIterator(l.handle)
 proc `!=`*(iter1, iter2: ptr WaveMacroIteratorHandle): bool = neqMacroIterator(iter1, iter2)
 proc `==`*(iter1, iter2: ptr WaveMacroIteratorHandle): bool {.error.}
-proc deref*(i: ptr WaveMacroIteratorHandle): cstring = macroIteratorAdvance(i)
+proc deref*(i: ptr WaveMacroIteratorHandle): cstring = macroIteratorDeref(i)
 proc advance*(i: ptr WaveMacroIteratorHandle) = macroIteratorAdvance(i)
 
 iterator macroNames*(l: var WaveContext): cstring =
@@ -130,6 +130,7 @@ iterator macroNames*(l: var WaveContext): cstring =
   while iter1 != iter2:
     yield deref(iter1)
     advance(iter1)
+    # macroIteratorAdvance(iter1)
 
 
 proc setFoundWarningDirective*(
@@ -223,22 +224,27 @@ proc setCurrentFilename*(ctx: var WaveContext, name: string) =
 proc findIncludeFile*(
     ctx: var WaveContext,
     file: string,
-    isSystem: bool = false
+    isSystem: bool,
+    currentName: cstring
   ): Option[string] =
-  var sRes: cstring
+  var sRes: cstringArray = allocCStringArray([ file ])
   var dirRes: cstring
   assertRef(ctx)
   assertRef(ctx.handle)
-  echov ctx.handle.getCurrentFilename()
+  # echov ctx.handle.getCurrentFilename()
   let res = ctx.handle.findIncludeFile(
-    addr sRes,
+    addr sRes[0],
     addr dirRes,
     isSystem,
-    ctx.handle.getCurrentFilename()
+    currentName
   )
 
-  echov sRes
-  echov dirRes
+  if res:
+    result = some $sRes[0]
+
+  # echov sRes[0]
+  # echov dirRes
+
 
 ## #+end_group
 

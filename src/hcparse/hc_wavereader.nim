@@ -6,24 +6,26 @@ type
   WaveReader* = object
     ctx*: WaveContext
 
-proc newWaveReader*(file: AbsFile): WaveReader =
+proc newWaveReader*(file: AbsFile, withHook: bool = false): WaveReader =
   var resCtx: WaveContext = newWaveContext(readFile(file), file.string)
 
-  resCtx.onLocateIncludeFile():
-    echov "Dropping to subcontext"
-    let file = resCtx.findIncludeFIle($filePath)
+  if withHook:
+    resCtx.onLocateIncludeFile():
+      let file = resCtx.findIncludeFile(
+        $filePath,
+        isSystem = isSystem,
+        currentName = currentName
+      ).get()
 
-    var subcontext = newWaveContext(readFile($filePath), $filePath)
+      var subcontext = newWaveContext(readFile($file), $file)
 
+      for tok in items(subcontext):
+        discard
 
-    for tok in items(subcontext):
-      discard
+      for def in macroNames(subcontext):
+        echo "def> [", def, "]"
 
-    echo "asdf"
-    for def in macroNames(subcontext):
-      echo def
-
-    return EntryHandlingSkip
+      return EntryHandlingSkip
 
   result.ctx = resCtx
 
