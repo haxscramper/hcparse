@@ -724,6 +724,7 @@ BOOST_WAVE_EXPORT void wave_deleteTok(WaveTokenHandle* tok);
 
 BOOST_WAVE_EXPORT WaveTokId   wave_tokGetId(WaveTokenHandle* tok);
 BOOST_WAVE_EXPORT const char* wave_tokGetValue(WaveTokenHandle* tok);
+BOOST_WAVE_EXPORT const char* wave_unescapeIncludeToken(const char* s);
 
 #ifdef __cplusplus
 }

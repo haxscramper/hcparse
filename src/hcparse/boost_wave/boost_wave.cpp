@@ -1202,3 +1202,10 @@ const char* wave_macroIteratorDeref(WaveMacroIteratorHandle* i) {
 int getIterationDepth(WaveContextHandle* context) {
     return toCxx(context)->context->get_iteration_depth();
 }
+
+
+const char* wave_unescapeIncludeToken(const char* s) {
+    auto tmp = boost::wave::util::impl::unescape_lit(std::string(s));
+    std::cout << " unescaped include " << tmp << "\n";
+    return copyalloc(tmp.c_str());
+}

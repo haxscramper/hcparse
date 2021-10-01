@@ -44,7 +44,7 @@ Out nuclear_cast(In in) {
 
 inline char* copyalloc(const char* in) {
     int   len = strlen(in);
-    char* res = (char*)std::malloc(sizeof(char) * (len + 1));
+    char* res = (char*)std::malloc(sizeof(char) * (len));
     std::memcpy(res, in, len);
     return res;
 }

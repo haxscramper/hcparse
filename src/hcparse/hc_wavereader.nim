@@ -9,23 +9,16 @@ type
 proc newWaveReader*(file: AbsFile, withHook: bool = false): WaveReader =
   var resCtx: WaveContext = newWaveContext(readFile(file), file.string)
 
-  if withHook:
-    resCtx.onLocateIncludeFile():
-      let file = resCtx.findIncludeFile(
-        $filePath,
-        isSystem = isSystem,
-        currentName = currentName
-      ).get()
+  resCtx.onFoundIncludeDirective():
+    let file = resCtx.findIncludeFile(unescapeInclude(impl)).get()
 
-      var subcontext = newWaveContext(readFile($file), $file)
+    var subcontext = newWaveContext(readFile($file), $file)
+    subcontext.skipAll()
 
-      for tok in items(subcontext):
-        discard
+    for def in macroNames(subcontext):
+      echo "def> [", def, "]"
 
-      for def in macroNames(subcontext):
-        echo "def> [", def, "]"
-
-      return EntryHandlingSkip
+    return EntryHandlingSkip
 
   result.ctx = resCtx
 

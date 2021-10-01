@@ -39,6 +39,14 @@ proc advance*(iter: ptr WaveIteratorHandle) = iter.advanceIterator()
 proc `!=`*(iter1, iter2: ptr WaveIteratorHandle): bool = neqIterator(iter1, iter2)
 proc `==`*(iter1, iter2: ptr WaveIteratorHandle): bool {.error.}
 proc getValue*(tok: ptr WaveTokenHandle): cstring = tok.tokGetValue()
+proc unescapeInclude*(tok: cstring): string =
+  let res = $unescapeIncludeToken(tok)
+  var slice = 0 .. res.high
+  if res[0] in {'<', '"'}: inc slice.a
+  if res[^1] in {'>', '"'}: dec slice.b
+  result = res[slice]
+
+
 proc strVal*(tok: ptr WaveTokenHandle): string = $tok.tokGetValue()
 proc kind*(tok: ptr WaveTokenHandle): WaveTokId = tok.tokGetId()
 proc hasErrors*(c: var WaveContext): bool = contextHasErrors(c.handle)
@@ -85,6 +93,9 @@ iterator items*(
 
     first.advance()
 
+proc skipAll*(ctx: var WaveContext) =
+  for item in items(ctx):
+    discard
 
 
 proc getExpanded*(ctx: var WaveContext, ignoreHashLine: bool = true): string =
@@ -224,8 +235,8 @@ proc setCurrentFilename*(ctx: var WaveContext, name: string) =
 proc findIncludeFile*(
     ctx: var WaveContext,
     file: string,
-    isSystem: bool,
-    currentName: cstring
+    isSystem: bool = false,
+    currentName: cstring = nil
   ): Option[string] =
   var sRes: cstringArray = allocCStringArray([ file ])
   var dirRes: cstring

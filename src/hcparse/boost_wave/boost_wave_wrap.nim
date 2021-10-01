@@ -405,3 +405,5 @@ proc tokGetId*(tok: ptr WaveTokenHandle): WaveTokId {.dynlib: cwaveDl,
     importc: "wave_tokGetId".}
 proc tokGetValue*(tok: ptr WaveTokenHandle): cstring {.dynlib: cwaveDl,
     importc: "wave_tokGetValue".}
+proc unescapeIncludeToken*(s: cstring): cstring {.dynlib: cwaveDl,
+    importc: "wave_unescapeIncludeToken".}
