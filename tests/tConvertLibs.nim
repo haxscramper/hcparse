@@ -33,7 +33,9 @@ suite "libgit":
   fixConf.libName = "git"
 
   fixConf.onGetBind():
-    cxxHeader("zzz")
+    case entry.kind:
+      of cekProc: result = cxxDynlibVar("libgitDl")
+      else: result = cxxNoBind()
 
   fixConf.onFixName():
     if cache.knownRename(name.nim):
@@ -60,6 +62,7 @@ suite "libgit":
     let lib = AbsDir"/usr/include/git2"
     let file = lib /. "types.h"
     let res = getTestTempFile("nim")
+    var cache = newWaveCache()
 
     echov res
     res.writeFile(

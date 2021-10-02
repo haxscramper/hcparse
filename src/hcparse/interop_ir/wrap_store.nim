@@ -70,12 +70,15 @@ type
       of cbkDynamicExpr, cbkDynamicCall:
         dynExpr*: string
 
+  CxxComment* = object
+    text*: string
+
   CxxBase* = object of RootObj
     iinfo*: LineInfo
     spellingLocation*: Option[CxxSpellingLocation]
     cbind*: CxxBind
     private*: bool
-    docComment*: Option[string]
+    docComment*: seq[CxxComment]
     haxdocIdent* #[ {.requiresinit.} ]#: JsonNode
 
     isAnonymous*: bool
@@ -289,7 +292,7 @@ type
     name*: CxxNamePair
     value*: BiggestInt
     valueTokens*: seq[string]
-    comment*: string
+    docComment*: seq[CxxComment]
 
   CxxEnum* = object of CxxBase
     isClassEnum*: bool
@@ -302,6 +305,7 @@ type
     cokUnion
     cokStruct
     cokClass
+
 
   CxxObject* = ref object of CxxBase
     decl*: CxxTypeDecl
@@ -705,6 +709,7 @@ func cxxName*(t: CxxTypeUse): CxxName       = t.cxxType.name.cxx
 func cxxName*(t: CxxTypeDecl): CxxName      = t.name.cxx
 func cxxName*(pr: CxxProc): CxxName         = pr.head.name.cxx
 func cxxName*(obj: CxxObject): CxxName      = obj.decl.name.cxx
+func cxxName*(obj: CxxForward): CxxName     = obj.decl.name.cxx
 func cxxName*(obj: CxxEnum): CxxName        = obj.decl.name.cxx
 func cxxName*(alias: CxxAlias): CxxName     = alias.decl.name.cxx
 func cxxName*(name: string): CxxName        = CxxName(scopes: @[name])
@@ -763,6 +768,8 @@ func cxxHeader*(global: string): CxxBind =
 
 func cxxHeader*(file: AbsFile): CxxBind =
   CxxBind(kind: cbkAbsolute, file: file)
+
+func cxxNoBind*(): CxxBind = CxxBind(kind: cbkNone)
 
 func cxxArg*(name: CxxNamePair, argType: CxxTypeUse): CxxArg =
   result = CxxArg(nimType: argType, name: name, haxdocIdent: newJNull())
@@ -930,15 +937,14 @@ func getIcppStr*(
   $getIcpp(pr, onConstructor)
 
 
-func getIcpp*(pr: CxxObject): IcppPattern =
+func getIcpp*(pr: CxxObject | CxxForward): IcppPattern =
   if pr.cbind.icpp.len > 0:
     return pr.cbind.icpp
 
   else:
     result.ctype(pr.cxxName.scopes.join("::"))
 
-
-func getIcppStr*(pr: CxxObject): string = $getIcpp(pr)
+func getIcppStr*(pr: CxxObject | CxxForward): string = $getIcpp(pr)
 
 func initIcpp*(
     pr: var CxxProc, onConstructor: CxxTypeKind = ctkIdent) =
@@ -995,6 +1001,9 @@ func cxxEmpty*(): CxxEntry = CxxEntry(kind: cekEmpty)
 func cxxEnumValue*(name: CxxNamePair, value: BiggestInt): CxxEnumValue =
   result = CxxEnumValue(name: name, value: value)
   result.name.context = cncEnumField
+
+func cxxComment*(com: string): CxxComment =
+  CxxComment(text: com)
 
 
 func cxxProc*(
@@ -1241,6 +1250,13 @@ func getTypeDecl*(entry: CxxEntry): CxxTypeDecl =
 func toRealDecl*(entry: CxxEntry): CxxEntry =
   assertKind(entry, cekForward)
   raise newImplementError()
+
+func add*[
+  E: CxxMacro | CxxAlias | CxxObject | CxxForward | 
+     CxxProc | CxxEnum | CxxEnumValue
+  ](
+    s: var E, comment: CxxComment | seq[CxxComment]) =
+  s.docComment.add comment
 
 func add*(
     s: var seq[CxxEntry],

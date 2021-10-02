@@ -3,6 +3,7 @@ import hmisc/wrappers/wraphelp
 import ./boost_wave_wrap
 export boost_wave_wrap
 import hmisc/core/all
+import hmisc/other/oswrap
 
 import std/[os, strformat, options]
 
@@ -237,12 +238,11 @@ proc findIncludeFile*(
     file: string,
     isSystem: bool = false,
     currentName: cstring = nil
-  ): Option[string] =
+  ): Option[AbsFile] =
   var sRes: cstringArray = allocCStringArray([ file ])
   var dirRes: cstring
   assertRef(ctx)
   assertRef(ctx.handle)
-  # echov ctx.handle.getCurrentFilename()
   let res = ctx.handle.findIncludeFile(
     addr sRes[0],
     addr dirRes,
@@ -251,11 +251,7 @@ proc findIncludeFile*(
   )
 
   if res:
-    result = some $sRes[0]
-
-  # echov sRes[0]
-  # echov dirRes
-
+    result = some AbsFile($sRes[0])
 
 ## #+end_group
 

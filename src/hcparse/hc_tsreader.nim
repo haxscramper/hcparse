@@ -7,6 +7,7 @@ import
 import
   ./hc_types,
   ./hc_typeconv,
+  ./cxcommon,
   ./interop_ir/wrap_store
 
 import
@@ -16,26 +17,7 @@ import
 
 export parseCppString, treeRepr
 
-func stripComment*(text: string): string =
-  const starts = ["/*!", "/**<", "/**", "/*", "*", "//<", "///", "//"]
-  const ends  = ["*/"]
-  var idx = 0
-  for line in text.splitLines():
-    var pos = line.skipWhile({' '})
-    var final = line.high
-    for start in starts:
-      if line[pos .. pos + start.high] == start:
-        pos = pos + start.len
-        break
-
-    for endc in ends:
-      if line[final - endc.high .. final] == endc:
-        final = final - endc.len
-        break
-
-    if idx != 0: result.add "\n"
-    inc idx
-    result.add line[pos .. final]
+using coms: var seq[CxxComment]
 
 proc primitiveName*(node: CppNode): string =
   proc aux(ts: TsCppNode): string =
@@ -96,15 +78,10 @@ proc toCxxType*(node: CppNode): CxxTypeUse =
 
 
 
-proc toCxxMacro*(node: CppNode): CxxMacro =
+proc toCxxMacro*(node: CppNode, coms): CxxMacro =
   assertKind(node, {cppPreprocFunctionDef, cppPreprocDef})
 
   result = cxxMacro(cxxPair(node["name"].strVal()))
-
-  # result = CxxMacro(
-  #   haxdocIdent: conf.getHaxdoc(@[]),
-  #   name: (node["name"].strVal)
-  # )
 
   if "parameters" in node:
     for arg in node["parameters"]:
@@ -142,13 +119,15 @@ proc evalEnumValue(node: CppNode, ctx: CxxEvalCtx): BiggestInt =
     else:
       raise newImplementKindError(node, node.treeRepr())
 
-proc toCxxEnum*(node: CppNode): CxxEnum =
+proc toCxxEnum*(node: CppNode, coms): CxxEnum =
   var name: CxxNamePair
 
   if "name" in node:
     name = cxxPair(node["name"].strVal())
 
   result = cxxEnum(name)
+  result.add coms
+  coms.clear()
 
   var env: CxxEvalCtx
   var value: BiggestInt = 0
@@ -165,7 +144,7 @@ proc toCxxEnum*(node: CppNode): CxxEnum =
 
 
       of cppComment:
-        result.values[^1].comment.add en.strVal()
+        result.values[^1].add cxxComment(en.strVal().stripComment())
 
       else:
         raise newImplementKindError(en)
@@ -253,7 +232,8 @@ proc toCxxArg*(node: CppNode, idx: int): CxxArg =
 
 proc toCxxProc*(
     node: CppNode,
-    parent: Option[CxxObject] = none(CxxObject)
+    coms;
+    parent: Option[CxxObject] = none(CxxObject),
   ): CxxProc =
 
   result = cxxProc(cxxPair(node["declarator"].getName()))
@@ -278,7 +258,7 @@ proc toCxxProc*(
     result.arguments.add toCxxArg(arg, idx)
 
 
-proc toCxxField*(node: CppNode): CxxField =
+proc toCxxField*(node: CppNode, coms): CxxField =
   assertKind(node, {cppFieldDeclaration})
   result = cxxField(
     cxxPair(getName(node["declarator"])),
@@ -286,15 +266,19 @@ proc toCxxField*(node: CppNode): CxxField =
 
   pointerWraps(node["declarator"], result.nimType)
 
-proc toCxxForwardType*(node: CppNode): CxxForward =
-  cxxForward(cxxPair(node["name"].strVal()))
+proc toCxxForwardType*(node: CppNode, coms): CxxForward =
+  result = cxxForward(cxxPair(node["name"].strVal()))
+  result.add coms
+  coms.clear()
 
-proc toCxxObject*(node: CppNode): CxxObject =
+proc toCxxObject*(node: CppNode, coms): CxxObject =
   var decl: CxxNamePair
   if "name" in node:
     decl = cxxPair(node["name"].strVal())
 
   result = cxxObject(decl)
+  result.add coms
+  coms.clear()
 
   case node.kind:
     of cppStructSpecifier: result.kind = cokStruct
@@ -306,20 +290,20 @@ proc toCxxObject*(node: CppNode): CxxObject =
     case field.kind:
       of cppFieldDeclaration:
         if field["declarator"] of cppFunctionDeclarator:
-          result.methods.add toCxxProc(field, some result)
+          result.methods.add toCxxProc(field, coms, some result)
 
         else:
-          result.mfields.add toCxxField(field)
+          result.mfields.add toCxxField(field, coms)
 
       of cppComment:
-        result.mfields[^1].docComment.mget().add field.strVal().stripComment()
+        result.mfields[^1].docComment.add cxxComment(field.strVal().stripComment())
 
       else:
         raise newImplementKindError(field, field.treeRepr())
 
 
 
-proc toCxx*(node: CppNode): seq[CxxEntry] =
+proc toCxx*(node: CppNode, coms): seq[CxxEntry] =
   case node.kind:
     of cppTranslationUnit,
        cppPreprocIfdef,
@@ -329,7 +313,7 @@ proc toCxx*(node: CppNode): seq[CxxEntry] =
        cppPreprocElse
          :
       for sub in node:
-        result.add toCxx(sub)
+        result.add toCxx(sub, coms)
 
     of cppIdentifier,
        cppStringLiteral,
@@ -342,36 +326,42 @@ proc toCxx*(node: CppNode): seq[CxxEntry] =
 
     of cppClassSpecifier, cppStructSpecifier, cppUnionSpecifier:
       if "body" notin node:
-        result.add toCxxForwardType(node)
+        result.add toCxxForwardType(node, coms)
 
       else:
-        result.add toCxxObject(node)
+        result.add toCxxObject(node, coms)
 
     of cppPreprocDef:
       if node.len < 2:
         discard
 
       else:
-        result.add toCxxMacro(node).box()
+        result.add toCxxMacro(node, coms).box()
 
     of cppPreprocFunctionDef:
-      result.add toCxxMacro(node).box()
+      result.add toCxxMacro(node, coms).box()
 
     of cppPreprocDefined, cppPreprocElif:
       discard
 
     of cppComment:
-      discard
-      # result.add toCxxComment(node.strVal)
+      let text = node.strVal.stripComment()
+      if "Copyright (C)" in text:
+        discard
+
+      else:
+        coms.add cxxComment(text)
 
     of cppEnumSpecifier:
-      result.add toCxxEnum(node).box()
+      result.add toCxxEnum(node, coms).box()
 
     of cppTypeDefinition:
       if node.len == 1:
         case node[0].kind:
           of cppEnumSpecifier:
-            result.add toCxxEnum(node[0]).box()
+            result.add toCxxEnum(node[0], coms).withIt do:
+              it.add coms
+              coms.clear()
 
           else:
             raise newImplementKindError(node[0])
@@ -390,20 +380,24 @@ proc toCxx*(node: CppNode): seq[CxxEntry] =
                 cppStructSpecifier, cppUnionSpecifier, cppEnumSpecifier} and
               "body" notin baseBody
             ):
-              var alias = cxxAlias(newType, toCxxType(node["type"]))
+              var alias = cxxAlias(newType, toCxxType(node["type"])).withIt do:
+                    it.add coms
+                    coms.clear()
               pointerWraps(node["declarator"], alias.baseType)
 
               if alias.baseType of ctkIdent and
                 alias.decl.cxxName() == alias.baseType.cxxName():
                 # `typedef struct T T;`
-                result.add cxxForward(alias.decl.name)
+                result.add cxxForward(alias.decl.name).withIt do:
+                  it.add coms
+                  coms.clear()
 
               else:
                 result.add alias
 
             elif baseBody of {cppStructSpecifier, cppUnionSpecifier}:
               # FIXME handle multiple trailing typedefs
-              var struct = toCxxObject(baseBody)
+              var struct = toCxxObject(baseBody, coms)
               if struct.cxxName().isEmpty():
                 # Handle `typedef struct {} struct_name;`
                 struct.name = newType.name
@@ -412,10 +406,12 @@ proc toCxx*(node: CppNode): seq[CxxEntry] =
               else:
                 result.add struct
                 if struct.cxxName() != newType.cxxName():
-                  result.add cxxAlias(newType, struct.decl.cxxTypeUse())
+                  result.add cxxAlias(newType, struct.decl.cxxTypeUse()).withIt do:
+                    it.add coms
+                    coms.clear()
 
             elif baseBody of {cppEnumSpecifier}:
-              var enumd = toCxxEnum(node[0])
+              var enumd = toCxxEnum(node[0], coms)
               if enumd.cxxName().isEmpty():
                 enumd.name = newType.name
                 result.add enumd
@@ -423,7 +419,9 @@ proc toCxx*(node: CppNode): seq[CxxEntry] =
               else:
                 result.add enumd
                 if enumd.cxxName() != newType.cxxName():
-                  result.add cxxAlias(newType, enumd.decl.cxxTypeUse())
+                  result.add cxxAlias(newType, enumd.decl.cxxTypeUse()).withIt do:
+                    it.add coms
+                    coms.clear()
 
             else:
               raise newImplementKindError(
@@ -461,7 +459,7 @@ proc toCxx*(node: CppNode): seq[CxxEntry] =
     of cppDeclaration:
       case node["declarator"].skipPointer().kind:
         of cppFunctionDeclarator:
-          result.add toCxxProc(node)
+          result.add toCxxProc(node, coms)
 
         else:
           raise newImplementKindError(node[1], node.treeRepr())

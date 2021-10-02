@@ -10,6 +10,7 @@ import
   ./hc_tsconvert,
   ./hc_codegen,
   ./hc_irgen,
+  ./hc_wavereader,
   ./interop_ir/wrap_store
 
 import
@@ -20,6 +21,9 @@ import
   hmisc/types/colorstring,
   hmisc/algo/[hstring_algo, namegen],
   hmisc/core/all
+
+export
+  hc_wavereader
 
 proc parseTranslationUnit*(
     trIndex: CXIndex,
@@ -166,7 +170,8 @@ proc wrapViaTs*(
   ): seq[CxxEntry] =
   var str = str
   let node = parseCppString(addr str)
-  result = toCxx(node)
+  var coms: seq[CxxComment]
+  result = toCxx(node, coms)
 
   var cache: StringNameCache
   for item in mitems(result):
@@ -181,6 +186,18 @@ proc wrapViaTs*(
 
   let relative = file.string.dropPrefix(libRoot.string)
   wrapViaTs(file.readFile(), conf).cxxFile(
+    cxxLibImport(libRoot.name(), relative.split("/")))
+
+proc wrapViaTsWave*(
+    file: AbsFile,
+    libRoot: AbsDir,
+    conf: CxxFixConf,
+    waveCache: var WaveCache
+  ): CxxFile =
+
+  let relative = file.string.dropPrefix(libRoot.string)
+  var reader = newWaveReader(file, waveCache)
+  wrapViaTs(reader.getExpanded(), conf).cxxFile(
     cxxLibImport(libRoot.name(), relative.split("/")))
 
 proc wrapViaClang*(conf: WrapConf, file: AbsFile): CxxFile =

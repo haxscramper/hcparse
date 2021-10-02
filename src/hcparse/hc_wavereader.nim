@@ -1,28 +1,45 @@
 import ./boost_wave/boost_wave
 import hmisc/other/oswrap
 import hmisc/core/all
+import std/[strutils, options, tables]
 
 type
   WaveReader* = object
     ctx*: WaveContext
 
-proc newWaveReader*(file: AbsFile, withHook: bool = false): WaveReader =
+  WaveCache* = ref object
+    defines*: Table[AbsFile, seq[
+      tuple[name: string, args, body: seq[string]]]]
+
+proc newWaveReader*(file: AbsFile, cache: var WaveCache): WaveReader =
   var resCtx: WaveContext = newWaveContext(readFile(file), file.string)
   resCtx.onFoundIncludeDirective():
     let file = resCtx.findIncludeFile(unescapeInclude(impl)).get()
 
-    var subcontext = newWaveContext(readFile($file), $file)
-    subcontext.skipAll()
+    if file notin cache.defines:
+      var subcontext = newWaveContext(readFile($file), $file)
+      subcontext.skipAll()
 
-    for def in macroNames(subcontext):
-      let mdef = subcontext.getMacroDefinition($def)
-      if not mdef.isPredefined:
-        echo "def> [", def, "] = <", mdef.definition, ">"
+      for def in macroNames(subcontext):
+        let mdef = subcontext.getMacroDefinition($def)
+        if not mdef.isPredefined:
+          echo "def> [", def, "] = <", mdef.definition, ">"
+
+          var args, body: seq[string]
+
+          for arg in mdef.parameters: args.add $arg
+          for arg in mdef.definition: body.add $arg
+
+          cache.defines.mgetOrPut(file, @[]).add(($def, args, body))
+
+    for (name, args, body) in cache.defines[file]:
+      resCtx.addMacroDefinition(name, args, some body.join(""))
 
     return EntryHandlingSkip
 
   result.ctx = resCtx
 
+proc newWaveCache*(): WaveCache = new(result)
 
 proc getExpanded*(reader: var WaveReader): string =
   for tok in items(reader.ctx):

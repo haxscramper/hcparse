@@ -73,3 +73,38 @@ proc toNimFile*(file: RelFile): RelFile =
     buf.add fixFileName(pathPart)
 
   result = RelFile(buf.join("/")).withExt("nim")
+
+
+func stripComment*(text: string): string =
+  const starts = ["/*!", "/**<", "/**", "/*", "//<", "///", "//", "*"]
+  const ends  = ["*/", "*"]
+  var idx = 0
+  for line in text.splitLines():
+    var pos = line.skipWhile({' '})
+    var final = line.high
+    for start in starts:
+      if pos + start.len < line.len and
+         line[pos .. pos + start.high] == start:
+        pos = clamp(pos + start.len, 0, high(line))
+        break
+
+    for endc in ends:
+      if line[final - endc.high .. final] == endc:
+        final = clamp(final - endc.len, pos, high(line))
+        break
+
+    if idx != 0:
+      result.add "\n"
+
+    else:
+      while line[pos] in {' '}:
+        inc pos
+
+    inc idx
+    if line.len > 0:
+      if line[pos .. final] in ["*", "/"]:
+        result.add ""
+
+      else:
+        result.add line[pos .. final]
+

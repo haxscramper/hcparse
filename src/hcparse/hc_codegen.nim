@@ -81,12 +81,17 @@ proc toNNode*[N](arg: CxxArg, conf: CodegenConf): NIdentDefs[N] =
     toNNode[N](arg.nimType, conf),
     value = some newEmptyNNode[N]())
 
+proc toNimComment*(com: seq[CxxComment]): string =
+  for idx, c in com:
+    if idx > 0: result.add "\n"
+    result.add c.text
+
 proc toNNode*[N](field: CxxField, conf: CodegenConf): ObjectField[N] =
   result = ObjectField[N](
     isTuple: false,
     name: field.nimName(),
     isExported: true,
-    docComment: field.docComment.get(""),
+    docComment: field.docComment.toNimComment(),
     fldType: toNNode[N](field.getType(), conf))
 
   let cxx = field.cxxName.cxxStr()
@@ -168,7 +173,7 @@ proc toNNode*[N](
 
   result = newProcDecl[N](def.nimName)
   result.exported = true
-  result.docComment = def.docComment.get("")
+  result.docComment = def.docComment.toNimComment()
 
   if cpfExportc in def.flags:
     result.addPragma("exportc", newNLit[N, string](def.cxxName.cxxStr()))
@@ -194,7 +199,7 @@ proc toNNode*[N](
 
 proc toNNode*[N](obj: CxxObject, conf: CodegenConf): seq[NimDecl[N]] =
   var res = newObjectDecl[N](obj.nimName)
-  res.docComment = obj.docComment.get("")
+  res.docComment = obj.docComment.toNimComment()
   res.addPragma("bycopy")
   # res.addPragma("inheritable")
   # res.addPragma("byref")
@@ -219,9 +224,13 @@ proc toNNode*[N](obj: CxxForward, conf: CodegenConf): ObjectDecl[N] =
   result.addPragma("bycopy")
   result.addPragma("incompleteStruct")
   result.addPragma toNNode[N](obj.cbind, conf)
+  result.docComment.add toNimComment(obj.docComment)
 
 proc toNNode*[N](field: CxxEnumValue, conf: CodegenConf): EnumField[N] =
-  makeEnumField(field.nimName, some newNLit[N, BiggestInt](field.value))
+  result = makeEnumField(
+    field.nimName, some newNLit[N, BiggestInt](field.value))
+
+  result.docComment = toNimComment(field.docComment)
 
 proc toNNode*[N](en: CxxEnum, conf: CodegenConf): EnumDecl[N] =
   result = newEnumDecl[N](en.nimName)
@@ -235,6 +244,8 @@ proc toNNode*[N](en: CxxEnum, conf: CodegenConf): EnumDecl[N] =
     if value.value notin visited:
       visited.incl value.value
       result.add toNNode[N](value, conf)
+
+  result.docComment.add toNimComment(en.docComment)
 
 
 proc toNNode*[N](entry: CxxEntry, conf: CodegenConf): seq[NimDecl[N]] =
