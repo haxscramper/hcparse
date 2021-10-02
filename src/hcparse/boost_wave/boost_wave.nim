@@ -18,20 +18,14 @@ type
     evaluatedConditional*: EvaluatedConditionalExpressionImplTypeNim
     skippedToken*: SkippedTokenImplTypeNim
 
+    wasSysInclude*: bool
+    sysIncludes*, userIncludes*: seq[string] ## Boost wave does not support
+    ## 'get_system_includes', so in order to be able to produce adequate
+    ## error messages we maintain copy of the include paths for the
+    ## context.
+
   WaveException* = object of CatchableError
     diag*: WaveDiagnostics
-
-proc newWaveContext*(str: string, file: string = "<unknown>"): WaveContext =
-  new(
-    result,
-    proc(ctx: WaveContext) =
-      destroyContext(ctx.handle)
-      deallocCStringArray(ctx.str)
-  )
-
-  result.str = allocCStringArray([str])
-  result.handle = newWaveContext(result.str[0], file)
-
 
 proc first*(ctx: WaveContext): ptr WaveIteratorHandle = ctx.handle.beginIterator()
 proc last*(ctx: WaveContext): ptr WaveIteratorHandle = ctx.handle.endIterator()
@@ -60,14 +54,40 @@ proc `$`*(t: ptr WaveTokenHandle): string =
     if not isNil(val):
       return $val
 
+proc formatIncludes(ctx: WaveContext): string =
+  result.add "user:"
+  if ?ctx.userIncludes:
+    for path in ctx.userIncludes:
+      result.add "\n  - " & path
+
+  else:
+    result.add "\n  - no user include directories"
+
+  result.add "\nsystem:"
+  if ?ctx.sysIncludes:
+    for path in ctx.sysIncludes:
+      result.add "\n  - " & path
+
+  else:
+    result.add "\n  - no system include directories"
+
 proc raiseErrors*(ctx: var WaveContext) =
   while ctx.hasErrors():
     var diag = ctx.popDiag()
     if diag.level in {wslError, wslFatal}:
+      var extra: string
+
+      case diag.code:
+        of wekBadIncludeFile:
+          extra.add ". Include file configuration was\n" & formatIncludes(ctx)
+
+        else:
+          discard
+
       raise (ref WaveException)(
         diag: diag,
         msg: &"Input processing failed with {diag.code}." &
-          &" Error was - '{diag.errorText}'"
+          &" Error was - '{diag.errorText}' at {diag.filename}:{diag.line}:{diag.column}{extra}"
       )
 
 iterator items*(
@@ -145,15 +165,6 @@ iterator macroNames*(l: var WaveContext): cstring =
     # macroIteratorAdvance(iter1)
 
 
-proc setFoundWarningDirective*(
-    ctx: var WaveContext,
-    impl: FoundWarningDirectiveImplTypeNim
-  ) =
-
-  let env = rawEnv(impl)
-  let impl = rawProc(impl)
-  ctx.handle.setFoundWarningDirective(cast[FoundWarningDirectiveImplType](impl), env)
-
 # REVIEW
 ## #+begin_group
 
@@ -188,36 +199,30 @@ by the popular gcc compiler.
 ]##
 
 proc addIncludePath*(ctx: var WaveContext, path: string): bool =
-  ##[
-
-Adds the given file system path to the user include search paths. After a
-call to the set_sysinclude_delimiter() this function adds the given file
-system path to the system include search paths. Note though, that the given
-path is validated against the file system.
-
-If the given path string does not form a name of a valid file system
-directory item, the function returns false. If the given path was
-successfully added to the include search paths in question, the function
-returns true.
-
-  ]##
+  ## Adds the given file system path to the user include search paths.
+  ## After a call to the set_sysinclude_delimiter() this function adds the
+  ## given file system path to the system include search paths. Note
+  ## though, that the given path is validated against the file system.
+  ## 
+  ## If the given path string does not form a name of a valid file system
+  ## directory item, the function returns false. If the given path was
+  ## successfully added to the include search paths in question, the
+  ## function returns true.
+  ctx.userIncludes.add path
   return ctx.handle.addIncludePath(path.cstring)
 
 proc addSysincludePath*(ctx: var WaveContext, path: string): bool =
-  ##[
-
-Adds the given file system path to the system include search paths. This
-function operates on the system include search path regardless of the mode
-of operation of the `add_include_path()`. Note though, that the given path
-is validated against the file system.
-
-If the given path string does not form a name of a valid file system
-directory item, the function returns false. If the given path was
-successfully added to the system include search paths, the function returns
-true.
-
-  ]##
-  return ctx.handle.addIncludePath(path.cstring)
+  ## Adds the given file system path to the system include search paths. This
+  ## function operates on the system include search path regardless of the mode
+  ## of operation of the `add_include_path()`. Note though, that the given path
+  ## is validated against the file system.
+  ## 
+  ## If the given path string does not form a name of a valid file system
+  ## directory item, the function returns false. If the given path was
+  ## successfully added to the system include search paths, the function returns
+  ## true.
+  ctx.sysIncludes.add path
+  return ctx.handle.addSysIncludePath(path.cstring)
 
 proc setSysincludeDelimiter*(ctx: var WaveContext) =
   ## Switches the mode, how the `add_include_path()` function operates. By
@@ -236,24 +241,83 @@ proc setCurrentFilename*(ctx: var WaveContext, name: string) =
 proc findIncludeFile*(
     ctx: var WaveContext,
     file: string,
-    isSystem: bool = false,
-    currentName: cstring = nil
-  ): Option[AbsFile] =
+    isSystem: bool = false
+  ): AbsFile =
   var sRes: cstringArray = allocCStringArray([ file ])
   var dirRes: cstring
   assertRef(ctx)
   assertRef(ctx.handle)
+  let curr = ctx.handle.getCurrentFilename()
   let res = ctx.handle.findIncludeFile(
     addr sRes[0],
     addr dirRes,
     isSystem,
-    currentName
+    nil
   )
 
   if res:
-    result = some AbsFile($sRes[0])
+    result = AbsFile($sRes[0])
+
+  else:
+    raise newEnvironmentAssertionError(
+      "Could not find include file '" & file &
+        "'. Current file is '" & $curr & "'" &
+        tern(isSystem, " (is system file)", "") & ". " &
+        "Include file configuration was\n" & formatIncludes(ctx))
+
+proc setIncludePaths*(ctx: var WaveContext, user, sys: seq[string]) =
+  ## Add system and include paths for wave context.
+  # - NOTE :: It adds *both* system and include paths, and toggles system
+  #   include state. Use this function only for one-time configuration that
+  #   will not be altered, otherwise use [[code:addIncludePath]],
+  #   [[code:addSysIncludePath]] with [[code:setSysIncludeDelimiter]] called
+  #   where appropriate.
+  for path in user:
+    assert ctx.addIncludePath(path)
+
+  # assert not ctx.wasSysInclude
+  # ctx.setSysIncludeDelimiter()
+
+  for path in sys:
+    assert ctx.addSysIncludePath(path)
 
 ## #+end_group
+
+proc newWaveContext*(
+    str: string, 
+    file: string = "<unknown>",
+    userIncludes: seq[string] = @[],
+    sysIncludes: seq[string] = @[]
+  ): WaveContext =
+  ## Construct new wave context object.
+  ## - NOTE if @arg{userIncludes} *or* @arg{sysIncludes} is a non-empty
+  ##   sequence then [[code:setIncludePath]] is called for one-time configuration,
+  ##   meaning subsequent configurations are not supported.
+  new(
+    result,
+    proc(ctx: WaveContext) =
+      destroyContext(ctx.handle)
+      deallocCStringArray(ctx.str)
+  )
+
+  result.str = allocCStringArray([str])
+  result.handle = newWaveContext(result.str[0], file)
+
+  discard result.addIncludePath(".")
+  if ?userIncludes or ?sysIncludes:
+    result.setIncludePaths(userIncludes, sysIncludes)
+
+proc setFoundWarningDirective*(
+    ctx: var WaveContext,
+    impl: FoundWarningDirectiveImplTypeNim
+  ) =
+
+  let env = rawEnv(impl)
+  let impl = rawProc(impl)
+  ctx.handle.setFoundWarningDirective(cast[FoundWarningDirectiveImplType](impl), env)
+
+
+
 
 template onFoundWarningDirective*(inCtx: var WaveContext, body: untyped): untyped =
   inCtx.setFoundWarningDirective(

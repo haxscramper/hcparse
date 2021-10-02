@@ -192,11 +192,13 @@ proc wrapViaTsWave*(
     file: AbsFile,
     libRoot: AbsDir,
     conf: CxxFixConf,
-    waveCache: var WaveCache
+    waveCache: var WaveCache,
+    userIncludes: seq[string] = @[],
+    sysIncludes: seq[string] = @[]
   ): CxxFile =
 
   let relative = file.string.dropPrefix(libRoot.string)
-  var reader = newWaveReader(file, waveCache)
+  var reader = newWaveReader(file, waveCache, userIncludes, sysIncludes)
   wrapViaTs(reader.getExpanded(), conf).cxxFile(
     cxxLibImport(libRoot.name(), relative.split("/")))
 

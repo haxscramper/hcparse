@@ -11,13 +11,21 @@ type
     defines*: Table[AbsFile, seq[
       tuple[name: string, args, body: seq[string]]]]
 
-proc newWaveReader*(file: AbsFile, cache: var WaveCache): WaveReader =
-  var resCtx: WaveContext = newWaveContext(readFile(file), file.string)
+proc newWaveReader*(
+    file: AbsFile, 
+    cache: WaveCache,
+    userIncludes: seq[string] = @[],
+    sysIncludes: seq[string] = @[]
+  ): WaveReader =
+  var resCtx: WaveContext = newWaveContext(
+    readFile(file), file.string, userIncludes, sysIncludes)
+
   resCtx.onFoundIncludeDirective():
-    let file = resCtx.findIncludeFile(unescapeInclude(impl)).get()
+    let file = resCtx.findIncludeFile(unescapeInclude(impl))
 
     if file notin cache.defines:
-      var subcontext = newWaveContext(readFile($file), $file)
+      var subcontext = newWaveContext(
+        readFile($file), $file, userIncludes, sysIncludes)
       subcontext.skipAll()
 
       for def in macroNames(subcontext):

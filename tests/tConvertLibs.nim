@@ -64,6 +64,9 @@ suite "libgit":
     let res = getTestTempFile("nim")
     var cache = newWaveCache()
 
-    echov res
     res.writeFile(
-      $toNNode[PNode](wrapViaTs(file, lib, fixConf), cCodegenConf))
+      $toNNode[PNode](wrapViaTsWave(
+        file, lib, fixConf, cache,
+        @[],
+        @["/usr/include/sys"]
+        ), cCodegenConf))
