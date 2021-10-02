@@ -8,7 +8,6 @@ type
 
 proc newWaveReader*(file: AbsFile, withHook: bool = false): WaveReader =
   var resCtx: WaveContext = newWaveContext(readFile(file), file.string)
-
   resCtx.onFoundIncludeDirective():
     let file = resCtx.findIncludeFile(unescapeInclude(impl)).get()
 

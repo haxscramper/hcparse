@@ -125,6 +125,20 @@ proc evalEnumValue(node: CppNode, ctx: CxxEvalCtx): BiggestInt =
     of cppIdentifier:
       result = ctx.table[node.strVal()]
 
+    of cppBinaryExpression:
+      let lhs = evalEnumValue(node[0], ctx)
+      let rhs = evalEnumValue(node[1], ctx)
+
+      case node{1}.strVal():
+        of "|": result = lhs or rhs
+        of "&": result = rhs and lhs
+        of "+": result = lhs + rhs
+        of "-": result = lhs - rhs
+        of "<<": result = lhs shl rhs
+        of ">>": result = lhs shr rhs
+        else: raise newImplementKindError(node{1}.strVal()) 
+
+
     else:
       raise newImplementKindError(node, node.treeRepr())
 
@@ -146,10 +160,7 @@ proc toCxxEnum*(node: CppNode): CxxEnum =
 
         let name = en["name"].strVal()
         env.table[name] = value
-        result.values.add CxxEnumValue(
-          name: cxxPair(name),
-          value: value)
-
+        result.values.add cxxEnumValue(cxxPair(name), value)
         inc value
 
 

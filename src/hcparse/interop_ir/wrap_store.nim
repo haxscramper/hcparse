@@ -90,6 +90,8 @@ type
     cncVar
     cncProc
     cncMethod
+    cncField
+    cncEnumField
 
   CxxNamePair* = object
     context*: CxxNameContext
@@ -397,17 +399,42 @@ type
       conf: CxxFixConf
     ): string
 
-    getBind*: proc(e: CxxEntry): CxxBind
+    getBindImpl*: proc(entry: CxxEntry, conf: CxxFixConf): CxxBind
     libName*: string
     isIcpp*: bool
 
-proc fixName*(
-    conf: CxxFixConf,
-    name: CxxNamePair,
-    cache: var StringNameCache,
-    context: CxxNameFixContext
-  ): string =
-  conf.fixNameImpl(name, cache, context, conf)
+proc getBind*(conf: CxxFixConf, entry: CxxEntry): CxxBind =
+  assertRef conf.getBindImpl
+  return conf.getBindImpl(entry, conf)
+
+template onGetBind*(fixConf: var CxxFixConf, body: untyped): untyped =
+  ## Add 'get bind' callback to fix context configuration.
+  ## - @inject{entry: CxxEntry} :: Entry to get bind for
+  ## - @inject{conf: CxxFixConf} :: Current fix context configuration
+  ## - @ret{CxBind}
+  fixConf.getBindImpl = proc(
+    entry {.inject.}: CxxEntry,
+    conf {.inject.}: CxxFixConf
+  ): CxxBind =
+    body
+
+template onFixName*(fixConf: var CxxFixConf, body: untyped): untyped =
+  ## Add 'fix name' callback to fix context.
+  ## - @inject{name} :: Input name to fix
+  ## - @inject{cache} :: Global string name cache
+  ## - @inject{context} :: Current fix context
+  ## - @inject{conf} :: Current fix configuration
+  ## - @ret{string} :: Fixed name string. Body is wrapped in the callback
+  ##   procedure, `return`/`result=` can be used
+
+  fixConf.fixNameImpl = proc(
+      name {.inject.}: CxxNamePair,
+      cache {.inject.}: var StringNameCache,
+      context {.inject.}: CxxNameFixContext,
+      conf {.inject.}: CxxFixConf
+    ): string =
+
+    body
 
 
 func `$`*(cxx: CxxLibImport): string =
@@ -527,6 +554,22 @@ func `$`*(e: CxxEntry): string =
 
     else:
       raise newImplementKindError(e)
+
+proc fixName*(
+    conf: CxxFixConf,
+    name: CxxNamePair,
+    cache: var StringNameCache,
+    context: CxxNameFixContext
+  ): string =
+  result = conf.fixNameImpl(name, cache, context, conf)
+
+  if not cache.knownRename(name.nim):
+    raise newLogicError(
+      "'fix name' callback implementation did not register new rename: '",
+      name, "' is not in list of known renames. In order to register new ",
+      "rename call '<cache>.newRename(<name.nim>, <result>)' at the end of callback")
+
+
 
 func `[]`*(t: CxxTypeUse, idx: int): CxxTypeUse =
   ## Return idx'th generic parameter of a type. Regular generic parameter
@@ -929,21 +972,30 @@ func cxxForward*(name: CxxNamePair): CxxForward =
 func cxxEnum*(name: CxxNamePair): CxxEnum =
   CxxEnum(decl: cxxTypeDecl(name), haxdocIdent: newJNull())
 
+
+func cxxContext*(name: sink CxxNamePair, ctx: CxxNameContext): CxxNamePair =
+  result = name
+  result.context = ctx
+
+func cxxContext*(name: sink CxxTypeDecl, ctx: CxxNameContext): CxxTypeDecl =
+  result = name
+  result.name.context = ctx
+
+
 func cxxField*(name: CxxNamePair, nimType: CxxTypeUse): CxxField =
-  CxxField(name: name, nimType: nimType, haxdocIdent: newJNull())
+  CxxField(
+    name: name.cxxContext(cncField),
+    nimType: nimType, haxdocIdent: newJNull())
 
 func cxxAlias*(decl: CxxTypeDecl, baseType: CxxTypeUse): CxxAlias =
   CxxAlias(decl: decl, baseType: baseType, haxdocIdent: newJNull())
 
 func cxxEmpty*(): CxxEntry = CxxEntry(kind: cekEmpty)
 
-func cxxContext*(name: sink CxxNamePair, ctx: CxxNameContext): CxxNamePair =
-  result = name
-  name.context = ctx
+func cxxEnumValue*(name: CxxNamePair, value: BiggestInt): CxxEnumValue =
+  result = CxxEnumValue(name: name, value: value)
+  result.name.context = cncEnumField
 
-func cxxContext*(name: sink CxxTypeDecl, ctx: CxxNameContext): CxxTypeDecl =
-  result = name
-  result.name.context = ctx
 
 func cxxProc*(
     name: CxxNamePair,

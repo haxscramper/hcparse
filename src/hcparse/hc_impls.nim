@@ -21,6 +21,7 @@ import
 import
   hnimast
 
+export namegen, wrap_store
 
 proc contains*(dir: AbsDir, file: AbsFile): bool =
   let dir = dir.getStr()
@@ -184,6 +185,24 @@ proc fixTypeName*(ntype: var NimType, conf: WrapConf, idx: int = 0) =
             arg.name
 
         conf.fixtypename(arg.nimType, conf, idx)
+
+proc fixContextedName*(name: CxxNamePair, base: string = name.nim): string =
+  result = base.keepNimIdentChars()
+  let (prefix, suffix) =
+    case name.context:
+      of cncType: ("", "T")
+      of cncArg: ("arg", "")
+      of cncProc: ("c", "")
+      of cncField: ("f", "")
+      of cncMethod: ("m", "")
+      of cncVar: ("v", "")
+      of cncEnumField: ("en", "")
+
+  if name.context != cncType and isReservedNimType(result):
+    result = prefix & result & suffix
+
+  if isReservedNimIdent(result):
+    result = prefix & result & suffix
 
 proc getBaseFile*(conf: WrapConf, wrapped: WrappedFile): AbsFile =
   ## Return base file for generated wrapped one. For generated grouped

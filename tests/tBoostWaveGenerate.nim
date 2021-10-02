@@ -18,21 +18,9 @@ fixConf.libName = "wave"
 
 starthax()
 
-func isSharedTypeName*(name: string): bool =
-  const sharedNames = toHashSet [
-    "void", "int", "float", "bool", "char", # ...
-  ]
-
-  return name in sharedNames
-
 suite "Generate":
   test "Boost wave C API":
-    fixConf.fixNameImpl = proc(
-        name: CxxNamePair,
-        cache: var StringNameCache,
-        context: CxxNameFixContext,
-        conf: CxxFixConf
-      ): string =
+    fixConf.onFixName():  
       if cache.knownRename(name.nim):
         return cache.getRename(name.nim)
 
@@ -42,19 +30,7 @@ suite "Generate":
       else:
         result = name.nim
 
-      let (prefix, suffix) =
-        case name.context:
-          of cncType: ("", "T")
-          of cncArg: ("arg", "")
-          of cncProc: ("c", "")
-          else: raise newImplementKindError(name.context)
-
-      if name.context != cncType and isReservedNimType(result):
-        result = prefix & result & suffix
-
-      if isReservedNimIdent(result):
-        result = prefix & result & suffix
-
+      result = fixContextedName(name, result)
       cache.newRename(name.nim, result)
 
     let dynProcs = cxxDynlibVar("cwaveDl")
