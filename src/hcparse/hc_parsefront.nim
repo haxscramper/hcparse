@@ -197,6 +197,7 @@ proc wrapViaTsWave*(
     sysIncludes: seq[string] = @[]
   ): CxxFile =
 
+  ploc()
   let relative = file.string.dropPrefix(libRoot.string)
   var reader = newWaveReader(file, waveCache, userIncludes, sysIncludes)
   wrapViaTs(reader.getExpanded(), conf).cxxFile(

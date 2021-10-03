@@ -30,7 +30,9 @@ type
 proc first*(ctx: WaveContext): ptr WaveIteratorHandle = ctx.handle.beginIterator()
 proc last*(ctx: WaveContext): ptr WaveIteratorHandle = ctx.handle.endIterator()
 proc getTok*(iter: ptr WaveIteratorHandle): ptr WaveTokenHandle = iter.iterGetTok()
-proc advance*(iter: ptr WaveIteratorHandle) = iter.advanceIterator()
+proc advance*(iter: ptr WaveIteratorHandle) =
+  iter.advanceIterator()
+
 proc `!=`*(iter1, iter2: ptr WaveIteratorHandle): bool = neqIterator(iter1, iter2)
 proc `==`*(iter1, iter2: ptr WaveIteratorHandle): bool {.error.}
 proc getValue*(tok: ptr WaveTokenHandle): cstring = tok.tokGetValue()
@@ -73,6 +75,7 @@ proc formatIncludes(ctx: WaveContext): string =
 
 proc raiseErrors*(ctx: var WaveContext) =
   while ctx.hasErrors():
+    ploc()
     var diag = ctx.popDiag()
     if diag.level in {wslError, wslFatal}:
       var extra: string
@@ -84,6 +87,7 @@ proc raiseErrors*(ctx: var WaveContext) =
         else:
           discard
 
+      echov "Raise exceptions"
       raise (ref WaveException)(
         diag: diag,
         msg: &"Input processing failed with {diag.code}." &
@@ -120,6 +124,7 @@ proc skipAll*(ctx: var WaveContext) =
 
 
 proc getExpanded*(ctx: var WaveContext, ignoreHashLine: bool = true): string =
+  ploc()
   for tok in items(ctx, ignoreHashLine):
     result.add $tok
 
@@ -203,7 +208,7 @@ proc addIncludePath*(ctx: var WaveContext, path: string): bool =
   ## After a call to the set_sysinclude_delimiter() this function adds the
   ## given file system path to the system include search paths. Note
   ## though, that the given path is validated against the file system.
-  ## 
+  ##
   ## If the given path string does not form a name of a valid file system
   ## directory item, the function returns false. If the given path was
   ## successfully added to the include search paths in question, the
@@ -216,7 +221,7 @@ proc addSysincludePath*(ctx: var WaveContext, path: string): bool =
   ## function operates on the system include search path regardless of the mode
   ## of operation of the `add_include_path()`. Note though, that the given path
   ## is validated against the file system.
-  ## 
+  ##
   ## If the given path string does not form a name of a valid file system
   ## directory item, the function returns false. If the given path was
   ## successfully added to the system include search paths, the function returns
@@ -284,7 +289,7 @@ proc setIncludePaths*(ctx: var WaveContext, user, sys: seq[string]) =
 ## #+end_group
 
 proc newWaveContext*(
-    str: string, 
+    str: string,
     file: string = "<unknown>",
     userIncludes: seq[string] = @[],
     sysIncludes: seq[string] = @[]
@@ -295,9 +300,10 @@ proc newWaveContext*(
   ##   meaning subsequent configurations are not supported.
   new(
     result,
-    proc(ctx: WaveContext) =
-      destroyContext(ctx.handle)
-      deallocCStringArray(ctx.str)
+    # proc(ctx: WaveContext) =
+    #   echov "Destroying context"
+      # destroyContext(ctx.handle)
+      # deallocCStringArray(ctx.str)
   )
 
   result.str = allocCStringArray([str])

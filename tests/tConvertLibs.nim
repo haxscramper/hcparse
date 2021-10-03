@@ -9,7 +9,6 @@ import compiler/ast
 proc fixGit*(name: string, isType: bool): string =
   dropPrefix(name, "git_").snakeToCamelCase()
 
-
 suite "libgit":
   var enumMap: PegCallReplaceMap
   for prefix in @[
@@ -64,9 +63,10 @@ suite "libgit":
     let res = getTestTempFile("nim")
     var cache = newWaveCache()
 
+    ploc()
     res.writeFile(
       $toNNode[PNode](wrapViaTsWave(
         file, lib, fixConf, cache,
         @[],
-        @["/usr/include/sys"]
+        @["/usr/include/sys", "/usr/include", "/usr/include/linux"]
         ), cCodegenConf))

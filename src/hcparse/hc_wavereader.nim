@@ -1,6 +1,6 @@
 import ./boost_wave/boost_wave
 import hmisc/other/oswrap
-import hmisc/core/all
+import hmisc/core/[all, code_errors]
 import std/[strutils, options, tables]
 
 type
@@ -12,7 +12,7 @@ type
       tuple[name: string, args, body: seq[string]]]]
 
 proc newWaveReader*(
-    file: AbsFile, 
+    file: AbsFile,
     cache: WaveCache,
     userIncludes: seq[string] = @[],
     sysIncludes: seq[string] = @[]
@@ -31,8 +31,6 @@ proc newWaveReader*(
       for def in macroNames(subcontext):
         let mdef = subcontext.getMacroDefinition($def)
         if not mdef.isPredefined:
-          echo "def> [", def, "] = <", mdef.definition, ">"
-
           var args, body: seq[string]
 
           for arg in mdef.parameters: args.add $arg

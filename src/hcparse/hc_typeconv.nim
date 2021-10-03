@@ -575,6 +575,8 @@ func mapPrimitiveNameImpl*(name: string):
     of "size_t": ("size_t", cptSizeT)
 
     of "int16_t": ("int16", cptI16)
+    of "int32_t": ("int32", cptI32)
+    of "int64_t": ("int64", cptI64)
 
     of "uint8_t": ("uint8", cptU8)
     of "uint16_t": ("uint16", cptU16)
