@@ -201,7 +201,8 @@ proc wrapViaTsWave*(
     conf: CxxFixConf,
     waveCache: var WaveCache,
     userIncludes: seq[string] = @[],
-    sysIncludes: seq[string] = @[]
+    sysIncludes: seq[string] = @[],
+    subTargets: seq[string] = @[]
   ): CxxFile =
 
   /// "Wrap via TS wave":
@@ -209,7 +210,8 @@ proc wrapViaTsWave*(
       let relative = file.string.dropPrefix(libRoot.string)
 
     /// "Construct wave reader object":
-      var reader = newWaveReader(file, waveCache, userIncludes, sysIncludes)
+      var reader = newWaveReader(
+        file, waveCache, userIncludes, sysIncludes, subTargets)
 
     /// "Get sequence of elements for wrapping":
       var s = wrapViaTs(reader.getExpanded(), conf)

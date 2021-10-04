@@ -17,39 +17,37 @@ proc newWaveReader*(
     file: AbsFile,
     cache: WaveCache,
     userIncludes: seq[string] = @[],
-    sysIncludes: seq[string] = @[]
+    sysIncludes: seq[string] = @[],
+    subTargets: seq[string] = @[]
   ): WaveReader =
   var resCtx: WaveContext = newWaveContext(
     readFile(file), file.string, userIncludes, sysIncludes)
 
+  echov "main processed file", file
   resCtx.onFoundIncludeDirective():
-    /// "Finding include file":
-      let file = resCtx.findIncludeFile(unescapeInclude(impl))
+    let inclf = unescapeInclude(impl)
+    if inclf in subTargets or subTargets.len == 0:
+      let file = resCtx.findIncludeFile(inclf)
+      echov file
+      if file notin cache.defines:
+        var subcontext = newWaveContext(
+          readFile($file), $file, userIncludes, sysIncludes)
+        var first: ptr WaveIteratorHandle = subcontext.first()
+        var last: ptr WaveIteratorHandle = subcontext.last()
+        subcontext.skipAll()
 
-    if file notin cache.defines:
-      var subcontext = newWaveContext(
-        readFile($file), $file, userIncludes, sysIncludes)
-      var first: ptr WaveIteratorHandle = subcontext.first()
-      var last: ptr WaveIteratorHandle = subcontext.last()
-      subcontext.skipAll()
-      # /// "Advance iterator in loop":
-      #   while first != last:
-      #     /// "Advance":
-      #       first.advanceIterator()
-      # subcontext.skipAll()
+        for def in macroNames(subcontext):
+          let mdef = subcontext.getMacroDefinition($def)
+          if not mdef.isPredefined:
+            var args, body: seq[string]
 
-      for def in macroNames(subcontext):
-        let mdef = subcontext.getMacroDefinition($def)
-        if not mdef.isPredefined:
-          var args, body: seq[string]
+            for arg in mdef.parameters: args.add $arg
+            for arg in mdef.definition: body.add $arg
 
-          for arg in mdef.parameters: args.add $arg
-          for arg in mdef.definition: body.add $arg
+            cache.defines.mgetOrPut(file, @[]).add(($def, args, body))
 
-          cache.defines.mgetOrPut(file, @[]).add(($def, args, body))
-
-    for (name, args, body) in cache.defines[file]:
-      resCtx.addMacroDefinition(name, args, some body.join(""))
+      for (name, args, body) in cache.defines[file]:
+        resCtx.addMacroDefinition(name, args, some body.join(""))
 
     return EntryHandlingSkip
 

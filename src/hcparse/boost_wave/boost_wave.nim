@@ -88,7 +88,6 @@ proc raiseErrors*(ctx: var WaveContext) =
         else:
           discard
 
-      echov "Raise exceptions"
       raise (ref WaveError)(
         diag: diag,
         msg: &"Input processing failed with {diag.code}." &
