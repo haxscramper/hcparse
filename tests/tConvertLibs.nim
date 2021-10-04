@@ -110,18 +110,12 @@ suite "libgit":
 
     mkWithDirStructure lib:
       file "types.h": "#include \"common.h\"\n"
-      file "common.h": 
-        lit3"""
-        #ifndef __always_inline
-        #define __always_inline __inline__
-        #endif
-          """
+      file "common.h": "0xff00000000000000ull\n"
 
     var cache = newWaveCache()
 
     /// "Minimized libgit test":
-      let f = wrapViaTsWave(file, lib, fixConf, cache)
-
+      let f = wrapViaTsWave(file, lib, baseFixConf, cache)
 
   test "libgit types":
     let lib = AbsDir"/usr/include/git2"

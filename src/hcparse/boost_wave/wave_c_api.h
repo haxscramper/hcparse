@@ -305,7 +305,18 @@ TYPE enum WaveErrorCode {
     wekIncompatibleConfig,
     wekIllFormedPragmaMessage,
     wekPragmaMessageDirective,
-    wekLastErrorNumber = wekPragmaMessageDirective
+
+    wekLastErrorNumber = wekPragmaMessageDirective,
+
+    wekLexerErrorBegin = wekLastErrorNumber + 1,
+
+    wekLexerUnexpectedError,
+    wekLexerUniversalCharInvalid,
+    wekLexerUniversalCharBaseCharset,
+    wekLexerUniversalCharNotAllowed,
+    wekLexerInvalidLongLongLiteral,
+    wekLexerGenericLexingError,
+    wekLexerGenericLexingWarning
 } TYPE_NAME(WaveErrorCode);
 
 

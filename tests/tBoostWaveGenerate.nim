@@ -35,13 +35,12 @@ suite "Generate":
 
     let dynProcs = cxxDynlibVar("cwaveDl")
 
-    fixConf.getBind =
-      proc(e: CxxEntry): CxxBind =
-        if e of cekProc:
-          dynProcs
+    fixConf.onGetBind():
+      if entry of cekProc:
+        dynProcs
 
-        else:
-          cxxHeader("wave_c_api.h")
+      else:
+        cxxHeader("wave_c_api.h")
 
 
     let res = dir /. "boost_wave_wrap.nim"

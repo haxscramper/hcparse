@@ -7,6 +7,11 @@ static_assert(
     "Mismatched C API enum size");
 
 
+static_assert(
+    ((int)wekLexerUnexpectedError - (int)wekLexerErrorBegin - 1)
+        == (int)cpplexer::lexing_exception::error_code::unexpected_error,
+    "Mismatched C API enum size");
+
 const char* to_string(EntryHandling handling) {
     switch (handling) {
         case EntryHandlingSkip: return "skip";
@@ -147,6 +152,32 @@ void WaveHooksImpl::throw_exception(
         this->context->diagnostics.push(diag);
 
         isError = (sev == wslError) || (sev == wslFatal);
+
+    } else if (
+        const cpplexer::lexing_exception* exception = dynamic_cast<
+            const cpplexer::lexing_exception*>(&e)) {
+
+        const char* filename    = exception->file_name();
+        const char* description = exception->description();
+
+        auto sev = (WaveSeverityLevel)exception->get_severity();
+
+        auto diag = WaveDiagnostics{
+            (int)exception->line_no(),
+            (int)exception->column_no(),
+            (WaveErrorCode)(exception->get_errorcode() + (int)wekLexerErrorBegin + 1),
+            sev,
+            copyalloc(filename),
+            copyalloc(description),
+        };
+
+        this->context->diagnostics.push(diag);
+
+        isError = (sev == wslError) || (sev == wslFatal);
+    } else {
+        std::cerr << "boost wave side raised unspecified object. Total "
+                     "program abort is called.";
+        abort();
     }
 
     if (isError) {
@@ -908,15 +939,69 @@ WaveTokenHandle* wave_iterGetTok(WaveIteratorHandle* iter) {
 
 void wave_deleteTok(WaveTokenHandle* tok) { delete (WaveToken*)(tok); }
 
+
+#define CXX_FAIL(e)                                                       \
+    std::cerr << "boost wave side raised C++ exception on the "           \
+                 "toplevel of the wrapper function. Right now exception " \
+                 "propagation is not implemented, so total program "      \
+                 "abort is called. The error 'what' was - "               \
+              << e.what() << ". Exception was caught by " << __FUNCTION__ \
+              << " on line " << __LINE__ << ".";                          \
+    abort();
+
+#define BOOST_FAIL(e)                                                     \
+    std::cerr << "boost wave side raised boost::wave exception on the "   \
+                 "toplevel of the wrapper function. Right now exception " \
+                 "propagation is not implemented, so total program "      \
+                 "abort is called. The error description was - "          \
+              << e.description() << ". 'what' was - " << e.what()         \
+              << ". Exception was caught by " << __FUNCTION__             \
+              << " on line " << __LINE__ << ".";                          \
+    abort();
+
+#define ANY_FAIL()                                                        \
+    std::cerr                                                             \
+        << "boost wave side raised unspecified object.Right now "         \
+           "exception propagation is not implemented, so total program "  \
+           "abort is called. Exception was caught by "                    \
+        << __FUNCTION__ << " on line " << __LINE__ << ".";                \
+    abort();
+
+#define DO_CATCH                                                          \
+    catch (boost::wave::cpp_exception & e) {                              \
+        BOOST_FAIL(e);                                                    \
+    }                                                                     \
+    catch (boost::wave::cpplexer::lexing_exception & e) {                 \
+        BOOST_FAIL(e);                                                    \
+    }                                                                     \
+    catch (std::exception & e) {                                          \
+        CXX_FAIL(e);                                                      \
+    }                                                                     \
+    catch (...) {                                                         \
+        ANY_FAIL();                                                       \
+    }
+
 bool wave_neqIterator(
     WaveIteratorHandle* iter1,
     WaveIteratorHandle* iter2) {
     const CxxWaveIterator* it1 = toCxx(iter1);
     const CxxWaveIterator* it2 = toCxx(iter2);
-    return it1->d != it2->d;
+
+    try {
+        return it1->d != it2->d;
+    } catch (boost::wave::cpplexer::lexing_exception& e) {
+        it1->ctx->context->get_hooks().throw_exception(
+            *it1->ctx->context, e);
+        return true;
+    } catch (...) { ANY_FAIL(); }
 }
 
-void wave_advanceIterator(WaveIteratorHandle* iter) { ++(toCxx(iter)->d); }
+void wave_advanceIterator(WaveIteratorHandle* iter) {
+    try {
+        ++(toCxx(iter)->d);
+    }
+    DO_CATCH;
+}
 
 
 WaveContext::WaveContext(std::string _text, const char* filename) {
@@ -937,23 +1022,34 @@ void WaveContext::processAll() {
 }
 
 WaveIteratorHandle* wave_beginIterator(WaveContextHandle* context) {
-    auto cxx = toCxx(context);
-    auto res = new CxxWaveIterator{
-        cxx->context->begin(cxx->text.begin(), cxx->text.end())};
-    return (WaveIteratorHandle*)(res);
+    try {
+
+        auto cxx = toCxx(context);
+        auto res = new CxxWaveIterator(
+            cxx->context->begin(cxx->text.begin(), cxx->text.end()), cxx);
+        return (WaveIteratorHandle*)(res);
+    }
+    DO_CATCH;
 }
 
 WaveIteratorHandle* wave_endIterator(WaveContextHandle* context) {
-    return (WaveIteratorHandle*)(new CxxWaveIterator{
-        toCxx(context)->context->end()});
+    try {
+
+        return (WaveIteratorHandle*)(new CxxWaveIterator(
+            toCxx(context)->context->end(), toCxx(context)));
+    }
+    DO_CATCH;
 }
 
 WaveContextHandle* wave_newWaveContext(
     const char* instring,
     const char* filename) {
-    auto res = new WaveContext(std::string(instring), filename);
-    res->context->get_hooks().context = res;
-    return (WaveContextHandle*)(res);
+    try {
+        auto res = new WaveContext(std::string(instring), filename);
+        res->context->get_hooks().context = res;
+        return (WaveContextHandle*)(res);
+    }
+    DO_CATCH;
 }
 
 void wave_destroyContext(WaveContextHandle* context) {
@@ -970,20 +1066,29 @@ bool wave_contextHasWarnings(WaveContextHandle* context) {
 }
 
 WaveDiagnostics wave_contextPopDiagnostics(WaveContextHandle* context) {
-    auto res = toCxx(context)->diagnostics.front();
-    toCxx(context)->diagnostics.pop();
-    if (res.level == wslError) {
-        toCxx(context)->errorCount--;
+    try {
+        auto res = toCxx(context)->diagnostics.front();
+        toCxx(context)->diagnostics.pop();
+        if (res.level == wslError) {
+            toCxx(context)->errorCount--;
+        }
+        return res;
     }
-    return res;
+    DO_CATCH;
 }
 
 void wave_contextSetData(WaveContextHandle* context, void* data) {
-    toCxx(context)->contextData = data;
+    try {
+        toCxx(context)->contextData = data;
+    }
+    DO_CATCH;
 }
 
 void* wave_contextGetData(WaveContextHandle* context) {
-    return toCxx(context)->contextData;
+    try {
+        return toCxx(context)->contextData;
+    }
+    DO_CATCH;
 }
 
 
@@ -994,7 +1099,10 @@ void wave_deleteDiagnostics(WaveDiagnostics diag) {
 
 
 void wave_processAll(WaveContextHandle* context) {
-    toCxx(context)->processAll();
+    try {
+        toCxx(context)->processAll();
+    }
+    DO_CATCH;
 }
 
 
@@ -1075,7 +1183,10 @@ bool wave_getMacroDefinition(
 }
 
 int wave_tokenVectorLen(WaveTokenVectorHandle* vec) {
-    return toCxx(vec)->size();
+    try {
+        return toCxx(vec)->size();
+    }
+    DO_CATCH;
 }
 
 WaveTokenHandle* wave_tokenVectorGetAt(

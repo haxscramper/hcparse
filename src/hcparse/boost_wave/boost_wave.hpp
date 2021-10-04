@@ -390,6 +390,10 @@ struct WaveContext {
 
 struct CxxWaveIterator {
     WaveIterator d;
+    WaveContext* ctx;
+
+    inline CxxWaveIterator(WaveIterator _d, WaveContext* _ctx)
+        : d(_d), ctx(_ctx) {}
 };
 
 

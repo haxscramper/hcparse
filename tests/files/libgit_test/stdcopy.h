@@ -1,3 +1,1 @@
-#ifndef __always_inline
-#define __always_inline __inline__
-#endif
+0xff00000000000000ull

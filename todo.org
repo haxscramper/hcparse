@@ -64,6 +64,23 @@
 - [ ] Multiple annonymous enums are converter to the same name
 - [ ] Generated ~importcpp~ for nested anonymous enums is incorrect.
 
+
+Curious how boost::wave and c2nim each handle things like this.
+
+#+begin_src c
+  #        if (                                                             \
+              defined __USE_GNU                                             \
+              && (defined __cplusplus                                       \
+                      ? (__cplusplus < 201103L                              \
+                         && !defined __GXX_EXPERIMENTAL_CXX0X__)            \
+                      : (!defined __STDC_VERSION__                          \
+                         || __STDC_VERSION__ < 199901L)))
+  #            define __GLIBC_USE_DEPRECATED_SCANF 1
+  #        else
+  #            define __GLIBC_USE_DEPRECATED_SCANF 0
+  #        endif
+#+end_src
+
 * else
 
 - https://news.ycombinator.com/item?id=28507758

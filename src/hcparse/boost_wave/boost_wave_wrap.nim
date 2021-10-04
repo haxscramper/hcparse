@@ -108,7 +108,11 @@ type
     wekIllFormedIntegerLiteral = 42, wekIllFormedCharacterLiteral = 43,
     wekUnbalancedIfEndif = 44, wekCharacterLiteralOutOfRange = 45,
     wekCouldNotOpenOutputFile = 46, wekIncompatibleConfig = 47,
-    wekIllFormedPragmaMessage = 48, wekPragmaMessageDirective = 49
+    wekIllFormedPragmaMessage = 48, wekPragmaMessageDirective = 49,
+    wekLexerErrorBegin = 50, wekLexerUnexpectedError = 51,
+    wekLexerUniversalCharInvalid = 52, wekLexerUniversalCharBaseCharset = 53,
+    wekLexerUniversalCharNotAllowed = 54, wekLexerInvalidLongLongLiteral = 55,
+    wekLexerGenericLexingError = 56, wekLexerGenericLexingWarning = 57
   WaveSeverityLevel* = enum
     wslRemark = 0, wslWarning = 1, wslError = 2, wslFatal = 3,
     wslCommandlineError = 4
@@ -134,6 +138,9 @@ type
                                  header: "wave_c_api.h".} = object
   
   WavePosition* {.bycopy, header: "wave_c_api.h", importc: "WavePosition".} = object
+    ## TYPE struct WaveTokenHandle {
+                                                                                     ## char fake
+                                                                                     ## } TYPE_NAME(WaveTokenHandle);
   
   FoundWarningDirectiveImplType* = proc (ctx: ptr WaveContextImplHandle;
       message: ptr WaveTokenListHandle; env: pointer): EntryHandling {.cdecl.}
@@ -242,6 +249,20 @@ type
       env: pointer): void {.cdecl.}
   ReturningFromIncludeFileImplTypeNim* = proc (arg0: ptr WaveContextImplHandle): void
   WaveDiagnostics* {.bycopy, header: "wave_c_api.h", importc: "WaveDiagnostics".} = object
+    ## Expanding function like macro
+                                                                                           ## Expanding object like macro
+                                                                                           ## Expanded macro
+                                                                                           ## Rescanned macro
+                                                                                           ## Found directive
+                                                                                           ## Found include directive
+                                                                                           ## Skipped token
+                                                                                           ## Emit line directive
+                                                                                           ## Found line directive
+                                                                                           ## Found error directive
+                                                                                           ## Defined macro
+                                                                                           ## Locate include file
+                                                                                           ## Opened include file
+                                                                                           ## Returning from include file
     line*: cint
     column*: cint
     code*: WaveErrorCode
