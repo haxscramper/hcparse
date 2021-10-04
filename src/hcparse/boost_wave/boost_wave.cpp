@@ -1051,6 +1051,31 @@ WaveContextHandle* wave_newWaveContext(
     }
     DO_CATCH;
 }
+void wave_setLanguageMode(WaveContextHandle* ctx, unsigned int mode) {
+    unsigned int res = 0;
+    using boost::wave::language_support;
+    // clang-format off
+    if (mode & wlmSupportNormal) { res |= support_normal; }
+    if (mode & wlmLongLong) { res |= support_option_long_long; }
+    if (mode & wlmVariadics) { res |= support_option_variadics; }
+    if (mode & wlmNoNewlineAtEndOfFIle) { res |= support_option_no_newline_at_end_of_file; }
+    if (mode & wlmHasInclude) { res |= support_option_has_include; }
+    if (mode & wlmVaOpt) { res |= support_option_va_opt; }
+    if (mode & wlmMask) { res |= support_option_mask; }
+    if (mode & wlmEmitContline) { res |= support_option_emit_contnewlines; }
+    if (mode & wlmInsertWhitespace) { res |= support_option_insert_whitespace; }
+    if (mode & wlmPreserveComments) { res |= support_option_preserve_comments; }
+    if (mode & wlmNoCharacterValidation) { res |= support_option_no_character_validation; }
+    if (mode & wlmConvertTrigraphs) { res |= support_option_convert_trigraphs; }
+    if (mode & wlmSingleLine) { res |= support_option_single_line; }
+    if (mode & wlmPreferPpNumbers) { res |= support_option_prefer_pp_numbers; }
+    if (mode & wlmEmitLineDirectives) { res |= support_option_emit_line_directives; }
+    if (mode & wlmIncludeGuardDetection) { res |= support_option_include_guard_detection; }
+    if (mode & wlmEmitPragmaDirectives) { res |= support_option_emit_pragma_directives; }
+    // clang-format on
+
+    toCxx(ctx)->context->set_language((language_support)res);
+}
 
 void wave_destroyContext(WaveContextHandle* context) {
     delete toCxx(context);

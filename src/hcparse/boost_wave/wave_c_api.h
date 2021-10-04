@@ -329,6 +329,26 @@ TYPE enum WaveSeverityLevel {
     wslLastCode = wslCommandlineError
 } TYPE_NAME(WaveSeverityLevel);
 
+TYPE enum WaveLanguageMode {
+    wlmNormal                = 1 << 1,
+    wlmLongLong              = 1 << 2,
+    wlmVariadics             = 1 << 3,
+    wlmNoNewlineAtEndOfFIle  = 1 << 4,
+    wlmHasInclude            = 1 << 5,
+    wlmVaOpt                 = 1 << 6,
+    wlmMask                  = 1 << 7,
+    wlmEmitContline          = 1 << 8,
+    wlmInsertWhitespace      = 1 << 9,
+    wlmPreserveComments      = 1 << 10,
+    wlmNoCharacterValidation = 1 << 11,
+    wlmConvertTrigraphs      = 1 << 12,
+    wlmSingleLine            = 1 << 13,
+    wlmPreferPpNumbers       = 1 << 14,
+    wlmEmitLineDirectives    = 1 << 15,
+    wlmIncludeGuardDetection = 1 << 16,
+    wlmEmitPragmaDirectives  = 1 << 17
+} TYPE_NAME(WaveLanguageMode);
+
 
 TYPE enum EntryHandling {
     EntryHandlingSkip,
@@ -390,6 +410,10 @@ BOOST_WAVE_EXPORT void                       wave_destroyProcessingHooks(
 BOOST_WAVE_EXPORT WaveContextHandle* wave_newWaveContext(
     const char* instring,
     const char* filename);
+
+BOOST_WAVE_EXPORT void wave_setLanguageMode(
+    WaveContextImplHandle* ctx,
+    unsigned int           mode);
 
 BOOST_WAVE_EXPORT void wave_processAll(WaveContextHandle* context);
 
