@@ -102,21 +102,26 @@ suite "libgit":
     cache.newRename(name.nim, result)
 
   test "libgit types minimized":
-    let lib = AbsDir(relToSource"files/libgit_test")
-    let file = lib /. "types.h"
-    let res = getTestTempFile("nim")
+    let
+      lib = getTestTempDir()
+      copyLib = AbsDir(relToSource"files/libgit_test")
+      file = lib /. "types.h"
+      res = getTestTempFile("nim")
+
+    mkWithDirStructure lib:
+      file "types.h": "#include \"common.h\"\n"
+      file "common.h": 
+        lit3"""
+        #ifndef __always_inline
+        #define __always_inline __inline__
+        #endif
+          """
+
     var cache = newWaveCache()
 
-    echov "Starting minimized libgit test"
-    res.writeFile(
-      $toNNode[PNode](wrapViaTsWave(
-        file, lib, fixConf, cache,
-        @[],
-        @["/usr/include/sys", "/usr/include", "/usr/include/linux"],
-        @["common.h"]
-        ), cCodegenConf))
+    /// "Minimized libgit test":
+      let f = wrapViaTsWave(file, lib, fixConf, cache)
 
-    echov "Ending minimized libgit test"
 
   test "libgit types":
     let lib = AbsDir"/usr/include/git2"
