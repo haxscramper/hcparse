@@ -2,6 +2,8 @@ import hmisc/wrappers/wraphelp
 
 import ./boost_wave_wrap
 export boost_wave_wrap
+
+export boost_wave_wrap
 import hmisc/core/all
 import hmisc/other/oswrap
 
@@ -11,7 +13,7 @@ import std/[os, strformat, options]
 
 
 type
-  WaveContext* = ref object
+  WaveContext* = object
     handle*: ptr WaveContextHandle
     str*: cstringArray
 
@@ -24,7 +26,7 @@ type
     ## error messages we maintain copy of the include paths for the
     ## context.
 
-  WaveException* = object of CatchableError
+  WaveError* = object of CatchableError
     diag*: WaveDiagnostics
 
 proc first*(ctx: WaveContext): ptr WaveIteratorHandle = ctx.handle.beginIterator()
@@ -75,7 +77,6 @@ proc formatIncludes(ctx: WaveContext): string =
 
 proc raiseErrors*(ctx: var WaveContext) =
   while ctx.hasErrors():
-    ploc()
     var diag = ctx.popDiag()
     if diag.level in {wslError, wslFatal}:
       var extra: string
@@ -88,7 +89,7 @@ proc raiseErrors*(ctx: var WaveContext) =
           discard
 
       echov "Raise exceptions"
-      raise (ref WaveException)(
+      raise (ref WaveError)(
         diag: diag,
         msg: &"Input processing failed with {diag.code}." &
           &" Error was - '{diag.errorText}' at {diag.filename}:{diag.line}:{diag.column}{extra}"
@@ -103,20 +104,26 @@ iterator items*(
   ##   code is needed, witout correct line position information.
   var inHashLine = false
   var first: ptr WaveIteratorHandle = ctx.first()
+  var last: ptr WaveIteratorHandle =  ctx.last()
   while first != ctx.last():
-    raiseErrors(ctx)
-    let tok = first.getTok()
-    if tok.kind == tokIdPpLine and ignoreHashLine:
-      inHashLine = true
+    /// "Items iterator over wave tokens":
+      raiseErrors(ctx)
+      let tok = first.getTok()
+      if tok.kind == tokIdPpLine and ignoreHashLine:
+        inHashLine = true
 
-    if inHashLine:
-      if tok.kind == tokIdNewline:
-        inHashLine = false
+      if inHashLine:
+        if tok.kind == tokIdNewline:
+          inHashLine = false
 
-    else:
-      yield tok
+      else:
+        yield tok
 
-    first.advance()
+      # echov "advancing", $first.getTok()
+      first.advanceIterator()
+      # echov "ending advance"
+
+  // "Finished items iterator"
 
 proc skipAll*(ctx: var WaveContext) =
   for item in items(ctx):
@@ -124,7 +131,6 @@ proc skipAll*(ctx: var WaveContext) =
 
 
 proc getExpanded*(ctx: var WaveContext, ignoreHashLine: bool = true): string =
-  ploc()
   for tok in items(ctx, ignoreHashLine):
     result.add $tok
 
@@ -244,21 +250,24 @@ proc setCurrentFilename*(ctx: var WaveContext, name: string) =
   ctx.handle.setCurrentFilename(name.cstring)
 
 proc findIncludeFile*(
-    ctx: var WaveContext,
+    ctx: WaveContext,
     file: string,
     isSystem: bool = false
   ): AbsFile =
   var sRes: cstringArray = allocCStringArray([ file ])
   var dirRes: cstring
-  assertRef(ctx)
+  # assertRef(ctx)
   assertRef(ctx.handle)
-  let curr = ctx.handle.getCurrentFilename()
-  let res = ctx.handle.findIncludeFile(
-    addr sRes[0],
-    addr dirRes,
-    isSystem,
-    nil
-  )
+  /// "Getting current filename":
+    let curr = ctx.handle.getCurrentFilename()
+
+  /// "Calling C include file implementation":
+    let res = ctx.handle.findIncludeFile(
+      addr sRes[0],
+      addr dirRes,
+      isSystem,
+      nil
+    )
 
   if res:
     result = AbsFile($sRes[0])
@@ -298,13 +307,13 @@ proc newWaveContext*(
   ## - NOTE if @arg{userIncludes} *or* @arg{sysIncludes} is a non-empty
   ##   sequence then [[code:setIncludePath]] is called for one-time configuration,
   ##   meaning subsequent configurations are not supported.
-  new(
-    result,
-    # proc(ctx: WaveContext) =
-    #   echov "Destroying context"
-      # destroyContext(ctx.handle)
-      # deallocCStringArray(ctx.str)
-  )
+  # new(
+  #   result,
+  #   # proc(ctx: WaveContext) =
+  #   #   echov "Destroying context"
+  #     # destroyContext(ctx.handle)
+  #     # deallocCStringArray(ctx.str)
+  # )
 
   result.str = allocCStringArray([str])
   result.handle = newWaveContext(result.str[0], file)
@@ -871,7 +880,7 @@ proc addMacroDefinition*(
     ctx: var WaveContext,
     str: string,
     isPredefined: bool = false
-  ) =
+  ): bool =
 
   ##[
 
@@ -910,7 +919,7 @@ using `hasErrors`, and accessed using `popDiagnostics`
 
   ]##
 
-  ctx.handle.addMacroDefinition(str.cstring, isPredefined)
+  return ctx.handle.addMacroDefinition(str.cstring, isPredefined)
 
 import std/options
 export options
@@ -947,7 +956,8 @@ proc addMacroDefinition*(
     def.add "="
     def.add definition.get()
 
-  ctx.addMacroDefinition(def, isPredefined)
+  if not ctx.addMacroDefinition(def, isPredefined):
+    raiseErrors(ctx)
 
 # proc addMacroDefinition*(
 #     ctx: var WaveContext,

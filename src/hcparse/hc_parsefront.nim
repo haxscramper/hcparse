@@ -168,10 +168,17 @@ proc wrapViaTs*(
     str: string,
     conf: CxxFixConf
   ): seq[CxxEntry] =
-  var str = str
-  let node = parseCppString(addr str)
-  var coms: seq[CxxComment]
-  result = toCxx(node, coms)
+  /// "Copy input string to local mutable variable":
+    var str = str
+
+  /// "Parse CXX string":
+    let node = parseCppString(addr str)
+
+  /// "Create comment sequence":
+    var coms: seq[CxxComment]
+
+  /// "Convert to CXX":
+    result = toCxx(node, coms)
 
   var cache: StringNameCache
   for item in mitems(result):
@@ -197,11 +204,18 @@ proc wrapViaTsWave*(
     sysIncludes: seq[string] = @[]
   ): CxxFile =
 
-  ploc()
-  let relative = file.string.dropPrefix(libRoot.string)
-  var reader = newWaveReader(file, waveCache, userIncludes, sysIncludes)
-  wrapViaTs(reader.getExpanded(), conf).cxxFile(
-    cxxLibImport(libRoot.name(), relative.split("/")))
+  /// "Wrap via TS wave":
+    /// "Get relative path of the file using library root and file path":
+      let relative = file.string.dropPrefix(libRoot.string)
+
+    /// "Construct wave reader object":
+      var reader = newWaveReader(file, waveCache, userIncludes, sysIncludes)
+
+    /// "Get sequence of elements for wrapping":
+      var s = wrapViaTs(reader.getExpanded(), conf)
+
+    /// "Wrap results in file":
+      result = s.cxxFile(cxxLibImport(libRoot.name(), relative.split("/")))
 
 proc wrapViaClang*(conf: WrapConf, file: AbsFile): CxxFile =
   var cache: WrapCache

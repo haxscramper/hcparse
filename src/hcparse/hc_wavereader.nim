@@ -3,6 +3,8 @@ import hmisc/other/oswrap
 import hmisc/core/[all, code_errors]
 import std/[strutils, options, tables]
 
+export boost_wave
+
 type
   WaveReader* = object
     ctx*: WaveContext
@@ -21,12 +23,20 @@ proc newWaveReader*(
     readFile(file), file.string, userIncludes, sysIncludes)
 
   resCtx.onFoundIncludeDirective():
-    let file = resCtx.findIncludeFile(unescapeInclude(impl))
+    /// "Finding include file":
+      let file = resCtx.findIncludeFile(unescapeInclude(impl))
 
     if file notin cache.defines:
       var subcontext = newWaveContext(
         readFile($file), $file, userIncludes, sysIncludes)
+      var first: ptr WaveIteratorHandle = subcontext.first()
+      var last: ptr WaveIteratorHandle = subcontext.last()
       subcontext.skipAll()
+      # /// "Advance iterator in loop":
+      #   while first != last:
+      #     /// "Advance":
+      #       first.advanceIterator()
+      # subcontext.skipAll()
 
       for def in macroNames(subcontext):
         let mdef = subcontext.getMacroDefinition($def)

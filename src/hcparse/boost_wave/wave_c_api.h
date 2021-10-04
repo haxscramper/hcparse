@@ -647,7 +647,7 @@ BOOST_WAVE_EXPORT bool wave_contextHasWarnings(WaveContextHandle* context);
 BOOST_WAVE_EXPORT void wave_deleteDiagnostics(WaveDiagnostics* diag);
 BOOST_WAVE_EXPORT WaveDiagnostics
     wave_contextPopDiagnostics(WaveContextHandle* context);
-BOOST_WAVE_EXPORT void wave_addMacroDefinition(
+BOOST_WAVE_EXPORT bool wave_addMacroDefinition(
     WaveContextHandle* context,
     const char*        macrostring,
     bool               is_predefined);

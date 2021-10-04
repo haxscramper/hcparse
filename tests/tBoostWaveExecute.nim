@@ -126,18 +126,34 @@ void GIT_CALLBACK(free)(git_writestream *stream);
 
   test "Get expanded with explicitly defined macros":
     var ctx = newWaveContext("GIT_CALLBACK(free)(git_writestream *stream);")
-    ctx.addMacroDefinition("GIT_CALLBACK(name)=(*name)")
-    check ctx.getExpanded() == "(*free)(git_writestream *stream);"
+    check:
+      ctx.addMacroDefinition("GIT_CALLBACK(name)=(*name)")
+      ctx.getExpanded() == "(*free)(git_writestream *stream);"
 
   test "Get expanded with explicitly defined macros via overload":
     var ctx = newWaveContext("GIT_CALLBACK(free)(git_writestream *stream);")
     ctx.addMacroDefinition("GIT_CALLBACK", @["name"], some "(*name)")
-    check ctx.getExpanded() == "(*free)(git_writestream *stream);"
+    check:
+      ctx.getExpanded() == "(*free)(git_writestream *stream);"
+
+  test "Object macro definition":
+    var ctx = newWaveContext("sys_macro")
+    ctx.addMacroDefinition("sys_macro", @[], some "expanded")
+
+    var expandedMacro = false
+    ctx.onExpandingObjectLikeMacro():
+      expandedMacro = true
+
+      return EntryHandlingProcess
+
+    check:
+      ctx.getExpanded() == "expanded"
+      expandedMacro == true
 
 suite "Include directive handling":
   test "Raised exception for invalid include":
 
-    expect WaveException as ewave:
+    expect WaveError as ewave:
       var ctx = newWaveContext("#include \"asdf.h\"")
       for tok in items(ctx):
         discard tok

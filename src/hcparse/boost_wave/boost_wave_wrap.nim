@@ -348,7 +348,7 @@ proc deleteDiagnostics*(diag: ptr WaveDiagnostics): void {.dynlib: cwaveDl,
 proc contextPopDiagnostics*(context: ptr WaveContextHandle): WaveDiagnostics {.
     dynlib: cwaveDl, importc: "wave_contextPopDiagnostics".}
 proc addMacroDefinition*(context: ptr WaveContextHandle; macrostring: cstring;
-                         is_predefined: bool): void {.dynlib: cwaveDl,
+                         is_predefined: bool): bool {.dynlib: cwaveDl,
     importc: "wave_addMacroDefinition".}
 proc removeMacroDefinition*(context: ptr WaveContextHandle;
                             macrostring: cstring; is_predefined: bool): bool {.

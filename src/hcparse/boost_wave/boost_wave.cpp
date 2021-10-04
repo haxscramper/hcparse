@@ -126,7 +126,6 @@ void WaveHooksImpl::throw_exception(
     const WaveContextImpl& ctx,
     const std::exception&  e) {
 
-
     bool isError = false;
 
     if (const cpp_exception* exception = dynamic_cast<
@@ -1030,11 +1029,11 @@ void wave_setExpandingFunctionLikeMacro(
 
 void wave_destroyContext(WaveContext* context) { delete context; }
 
-void wave_addMacroDefinition(
+bool wave_addMacroDefinition(
     WaveContextHandle* context,
     const char*        macrostring,
     bool               is_predefined) {
-    toCxx(context)->context->add_macro_definition(
+    return toCxx(context)->context->add_macro_definition(
         macrostring, is_predefined);
 }
 
