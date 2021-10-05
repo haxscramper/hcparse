@@ -152,14 +152,14 @@ void GIT_CALLBACK(free)(git_writestream *stream);
 
 suite "Language mode handling":
   test "No 'ull' literals":
-    var context = newWaveContext("0xff00000000000000ull")
+    var context = newWaveContext("0xff00000000000000ull\n")
     context.skipAll()
     check context.hasWarnings()
     let diag = context.popDiag()
     check diag.code == wekLexerInvalidLongLongLiteral
 
   test "support 'ull' literals":
-    var context = newWaveContext("0xff00000000000000ull")
+    var context = newWaveContext("0xff00000000000000ull\n")
     context.setLanguageMode(iwlmC99)
     context.skipAll()
     check not context.hasWarnings()
