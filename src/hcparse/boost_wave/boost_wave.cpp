@@ -1051,30 +1051,41 @@ WaveContextHandle* wave_newWaveContext(
     }
     DO_CATCH;
 }
-void wave_setLanguageMode(WaveContextHandle* ctx, unsigned int mode) {
-    unsigned int res = 0;
-    using boost::wave::language_support;
-    // clang-format off
-    if (mode & wlmSupportNormal) { res |= support_normal; }
-    if (mode & wlmLongLong) { res |= support_option_long_long; }
-    if (mode & wlmVariadics) { res |= support_option_variadics; }
-    if (mode & wlmNoNewlineAtEndOfFIle) { res |= support_option_no_newline_at_end_of_file; }
-    if (mode & wlmHasInclude) { res |= support_option_has_include; }
-    if (mode & wlmVaOpt) { res |= support_option_va_opt; }
-    if (mode & wlmMask) { res |= support_option_mask; }
-    if (mode & wlmEmitContline) { res |= support_option_emit_contnewlines; }
-    if (mode & wlmInsertWhitespace) { res |= support_option_insert_whitespace; }
-    if (mode & wlmPreserveComments) { res |= support_option_preserve_comments; }
-    if (mode & wlmNoCharacterValidation) { res |= support_option_no_character_validation; }
-    if (mode & wlmConvertTrigraphs) { res |= support_option_convert_trigraphs; }
-    if (mode & wlmSingleLine) { res |= support_option_single_line; }
-    if (mode & wlmPreferPpNumbers) { res |= support_option_prefer_pp_numbers; }
-    if (mode & wlmEmitLineDirectives) { res |= support_option_emit_line_directives; }
-    if (mode & wlmIncludeGuardDetection) { res |= support_option_include_guard_detection; }
-    if (mode & wlmEmitPragmaDirectives) { res |= support_option_emit_pragma_directives; }
-    // clang-format on
+void wave_setLanguageMode(
+    WaveContextHandle*   ctx,
+    WaveLanguageModeImpl mode) {
+    auto c = toCxx(ctx)->context.get();
 
-    toCxx(ctx)->context->set_language((language_support)res);
+    language_support get = c->get_language();
+    language_support res = support_normal;
+    using boost::wave::language_support;
+
+
+    // clang-format off
+    switch(mode) {
+    case iwlmSupportNormal: { c->set_language(support_normal); } break;
+    case iwlmC99: { c->set_language(support_c99); } break;
+    case iwlmCpp11: { c->set_language(support_cpp11); } break;
+    case iwlmCpp17: { c->set_language(support_cpp17); } break;
+    case iwlmCpp20: { c->set_language(support_cpp20); } break;
+
+    case iwlmLongLong: { c->set_language(enable_long_long(get)); } break;
+    case iwlmVariadics: { c->set_language(enable_variadics(get)); } break;
+    case iwlmNoNewlineAtEndOfFIle: { c->set_language(enable_no_newline_at_end_of_file(get)); } break;
+    case iwlmHasInclude: { c->set_language(enable_has_include(get)); } break;
+    case iwlmVaOpt: { c->set_language(enable_va_opt(get)); } break;
+    case iwlmEmitContline: { c->set_language(enable_emit_contnewlines(get)); } break;
+    case iwlmInsertWhitespace: { c->set_language(enable_insert_whitespace(get)); } break;
+    case iwlmPreserveComments: { c->set_language(enable_preserve_comments(get)); } break;
+    case iwlmNoCharacterValidation: { c->set_language(enable_no_character_validation(get)); } break;
+    case iwlmConvertTrigraphs: { c->set_language(enable_convert_trigraphs(get)); } break;
+    case iwlmSingleLine: { c->set_language(enable_single_line(get));} break;
+    case iwlmPreferPpNumbers: { c->set_language(enable_prefer_pp_numbers(get)); } break;
+    case iwlmEmitLineDirectives: { c->set_language(enable_emit_line_directives(get)); } break;
+    case iwlmIncludeGuardDetection: { c->set_language(enable_include_guard_detection(get)); } break;
+    case iwlmEmitPragmaDirectives: { c->set_language(enable_emit_pragma_directives(get)); } break;
+    }
+    // clang-format on
 }
 
 void wave_destroyContext(WaveContextHandle* context) {

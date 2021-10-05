@@ -116,6 +116,14 @@ type
   WaveSeverityLevel* = enum
     wslRemark = 0, wslWarning = 1, wslError = 2, wslFatal = 3,
     wslCommandlineError = 4
+  WaveLanguageModeImpl* = enum
+    iwlmSupportNormal = 0, iwlmLongLong = 1, iwlmVariadics = 2,
+    iwlmNoNewlineAtEndOfFIle = 3, iwlmHasInclude = 4, iwlmVaOpt = 5,
+    iwlmEmitContline = 6, iwlmInsertWhitespace = 7, iwlmPreserveComments = 8,
+    iwlmNoCharacterValidation = 9, iwlmConvertTrigraphs = 10,
+    iwlmSingleLine = 11, iwlmPreferPpNumbers = 12, iwlmEmitLineDirectives = 13,
+    iwlmIncludeGuardDetection = 14, iwlmEmitPragmaDirectives = 15, iwlmC99 = 16,
+    iwlmCpp11 = 17, iwlmCpp17 = 18, iwlmCpp20 = 19
   EntryHandling* = enum
     EntryHandlingSkip = 0, EntryHandlingProcess = 1, EntryHandlingRaise = 2
   WaveProcessingHooksHandle* {.bycopy, incompleteStruct, header: "wave_c_api.h".} = object
@@ -297,6 +305,8 @@ proc destroyProcessingHooks*(hooks: ptr WaveProcessingHooksHandle): void {.
     dynlib: cwaveDl, importc: "wave_destroyProcessingHooks".}
 proc newWaveContext*(instring: cstring; filename: cstring): ptr WaveContextHandle {.
     dynlib: cwaveDl, importc: "wave_newWaveContext".}
+proc setLanguageMode*(ctx: ptr WaveContextHandle; mode: WaveLanguageModeImpl): void {.
+    dynlib: cwaveDl, importc: "wave_setLanguageMode".}
 proc processAll*(context: ptr WaveContextHandle): void {.dynlib: cwaveDl,
     importc: "wave_processAll".}
 proc setFoundWarningDirective*(context: ptr WaveContextHandle;

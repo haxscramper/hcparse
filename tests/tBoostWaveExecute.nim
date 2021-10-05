@@ -150,6 +150,20 @@ void GIT_CALLBACK(free)(git_writestream *stream);
       ctx.getExpanded() == "expanded"
       expandedMacro == true
 
+suite "Language mode handling":
+  test "No 'ull' literals":
+    var context = newWaveContext("0xff00000000000000ull")
+    context.skipAll()
+    check context.hasWarnings()
+    let diag = context.popDiag()
+    check diag.code == wekLexerInvalidLongLongLiteral
+
+  test "support 'ull' literals":
+    var context = newWaveContext("0xff00000000000000ull")
+    context.setLanguageMode(iwlmC99)
+    context.skipAll()
+    check not context.hasWarnings()
+
 suite "Include directive handling":
   test "Raised exception for invalid include":
 

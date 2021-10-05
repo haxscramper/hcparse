@@ -6,6 +6,7 @@ export boost_wave_wrap
 export boost_wave_wrap
 import hmisc/core/all
 import hmisc/other/oswrap
+import hmisc/wrappers/wraphelp
 
 import std/[os, strformat, options]
 
@@ -320,6 +321,34 @@ proc newWaveContext*(
   discard result.addIncludePath(".")
   if ?userIncludes or ?sysIncludes:
     result.setIncludePaths(userIncludes, sysIncludes)
+
+# type
+#   WaveLanguageMode* = enum
+#     wlmSupportNormal
+#     wlmLongLong
+#     wlmVariadics
+#     wlmNoNewlineAtEndOfFIle
+#     wlmHasInclude
+#     wlmVaOpt
+#     wlmMask
+#     wlmEmitContline
+#     wlmInsertWhitespace
+#     wlmPreserveComments
+#     wlmNoCharacterValidation
+#     wlmConvertTrigraphs
+#     wlmSingleLine
+#     wlmPreferPpNumbers
+#     wlmEmitLineDirectives
+#     wlmIncludeGuardDetection
+#     wlmEmitPragmaDirectives
+
+#     wlmC99
+#     wlmCpp11
+#     wlmCpp17
+#     wlmCpp20
+
+proc setLanguageMode*(context: var WaveContext, mode: WaveLanguageModeImpl) =
+  context.handle.setLanguageMode(mode)
 
 proc setFoundWarningDirective*(
     ctx: var WaveContext,
