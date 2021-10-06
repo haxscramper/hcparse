@@ -999,8 +999,10 @@ bool wave_neqIterator(
 void wave_advanceIterator(WaveIteratorHandle* iter) {
     try {
         ++(toCxx(iter)->d);
-    }
-    DO_CATCH;
+    } catch (boost::wave::cpplexer::lexing_exception& e) {
+        toCxx(iter)->ctx->context->get_hooks().throw_exception(
+            *toCxx(iter)->ctx->context, e);
+    } catch (...) { ANY_FAIL(); };
 }
 
 
@@ -1027,6 +1029,7 @@ WaveIteratorHandle* wave_beginIterator(WaveContextHandle* context) {
         auto cxx = toCxx(context);
         auto res = new CxxWaveIterator(
             cxx->context->begin(cxx->text.begin(), cxx->text.end()), cxx);
+
         return (WaveIteratorHandle*)(res);
     }
     DO_CATCH;
@@ -1061,31 +1064,69 @@ void wave_setLanguageMode(
     using boost::wave::language_support;
 
 
-    // clang-format off
-    switch(mode) {
-    case iwlmSupportNormal: { c->set_language(support_normal); } break;
-    case iwlmC99: { c->set_language(support_c99); } break;
-    case iwlmCpp11: { c->set_language(support_cpp11); } break;
-    case iwlmCpp17: { c->set_language(support_cpp17); } break;
-    case iwlmCpp20: { c->set_language(support_cpp20); } break;
+    switch (mode) {
+        case iwlmSupportNormal: {
+            c->set_language(support_normal);
+        } break;
+        case iwlmC99: {
+            c->set_language(support_c99);
+        } break;
+        case iwlmCpp11: {
+            c->set_language(support_cpp11);
+        } break;
+        case iwlmCpp17: {
+            c->set_language(support_cpp17);
+        } break;
+        case iwlmCpp20: {
+            c->set_language(support_cpp20);
+        } break;
 
-    case iwlmLongLong: { c->set_language(enable_long_long(get)); } break;
-    case iwlmVariadics: { c->set_language(enable_variadics(get)); } break;
-    case iwlmNoNewlineAtEndOfFIle: { c->set_language(enable_no_newline_at_end_of_file(get)); } break;
-    case iwlmHasInclude: { c->set_language(enable_has_include(get)); } break;
-    case iwlmVaOpt: { c->set_language(enable_va_opt(get)); } break;
-    case iwlmEmitContline: { c->set_language(enable_emit_contnewlines(get)); } break;
-    case iwlmInsertWhitespace: { c->set_language(enable_insert_whitespace(get)); } break;
-    case iwlmPreserveComments: { c->set_language(enable_preserve_comments(get)); } break;
-    case iwlmNoCharacterValidation: { c->set_language(enable_no_character_validation(get)); } break;
-    case iwlmConvertTrigraphs: { c->set_language(enable_convert_trigraphs(get)); } break;
-    case iwlmSingleLine: { c->set_language(enable_single_line(get));} break;
-    case iwlmPreferPpNumbers: { c->set_language(enable_prefer_pp_numbers(get)); } break;
-    case iwlmEmitLineDirectives: { c->set_language(enable_emit_line_directives(get)); } break;
-    case iwlmIncludeGuardDetection: { c->set_language(enable_include_guard_detection(get)); } break;
-    case iwlmEmitPragmaDirectives: { c->set_language(enable_emit_pragma_directives(get)); } break;
+        case iwlmLongLong: {
+            c->set_language(enable_long_long(get));
+        } break;
+        case iwlmVariadics: {
+            c->set_language(enable_variadics(get));
+        } break;
+        case iwlmNoNewlineAtEndOfFIle: {
+            c->set_language(enable_no_newline_at_end_of_file(get));
+        } break;
+        case iwlmHasInclude: {
+            c->set_language(enable_has_include(get));
+        } break;
+        case iwlmVaOpt: {
+            c->set_language(enable_va_opt(get));
+        } break;
+        case iwlmEmitContline: {
+            c->set_language(enable_emit_contnewlines(get));
+        } break;
+        case iwlmInsertWhitespace: {
+            c->set_language(enable_insert_whitespace(get));
+        } break;
+        case iwlmPreserveComments: {
+            c->set_language(enable_preserve_comments(get));
+        } break;
+        case iwlmNoCharacterValidation: {
+            c->set_language(enable_no_character_validation(get));
+        } break;
+        case iwlmConvertTrigraphs: {
+            c->set_language(enable_convert_trigraphs(get));
+        } break;
+        case iwlmSingleLine: {
+            c->set_language(enable_single_line(get));
+        } break;
+        case iwlmPreferPpNumbers: {
+            c->set_language(enable_prefer_pp_numbers(get));
+        } break;
+        case iwlmEmitLineDirectives: {
+            c->set_language(enable_emit_line_directives(get));
+        } break;
+        case iwlmIncludeGuardDetection: {
+            c->set_language(enable_include_guard_detection(get));
+        } break;
+        case iwlmEmitPragmaDirectives: {
+            c->set_language(enable_emit_pragma_directives(get));
+        } break;
     }
-    // clang-format on
 }
 
 void wave_destroyContext(WaveContextHandle* context) {

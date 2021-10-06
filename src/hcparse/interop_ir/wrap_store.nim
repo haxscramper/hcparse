@@ -396,6 +396,7 @@ type
 
   CxxNameFixContext* = array[CxxAdjacentNameContext, Option[CxxNamePair]]
   CxxFixConf* = object
+    typeStore*: CxxTypeStore
     fixNameImpl*: proc(
       name: CxxNamePair,
       cache: var StringNameCache,
@@ -1071,6 +1072,8 @@ func getCbindAs*(pr: CxxProc, onConstructor: CxxTypeKind): CxxBind =
       else:
         result.icpp.standaloneProc(pr.getIcppName())
 
+func newTypeStore*(): CxxTypeStore = CxxTypeStore()
+
 func setTypeStoreRec*(
     entry: var CxxEntry, store: var CxxTypeStore, lib: CxxLibImport) =
 
@@ -1086,7 +1089,10 @@ func setTypeStoreRec*(
         use.cxxType.typeLib = some lib.library
 
   func aux(decl: var CxxProc, store: var CxxTypeStore) =
-    raise newImplementError()
+    for arg in mitems(decl.arguments):
+      aux(arg, store)
+
+    aux(decl.returnType, store)
 
   case entry.kind:
     of cekProc:
@@ -1110,6 +1116,7 @@ func setTypeStoreRec*(
     of cekAlias:
       entry.cxxAlias.decl.typeImport = some lib
       store.addDecl(entry.cxxAlias.decl)
+      aux(entry.cxxAlias.baseType, store)
 
     of cekObject:
       entry.cxxObject.decl.typeImport = some lib
@@ -1252,7 +1259,7 @@ func toRealDecl*(entry: CxxEntry): CxxEntry =
   raise newImplementError()
 
 func add*[
-  E: CxxMacro | CxxAlias | CxxObject | CxxForward | 
+  E: CxxMacro | CxxAlias | CxxObject | CxxForward |
      CxxProc | CxxEnum | CxxEnumValue
   ](
     s: var E, comment: CxxComment | seq[CxxComment]) =

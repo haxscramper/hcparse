@@ -110,7 +110,7 @@ test2
 suite "Get expanded text":
   test "Simple token":
     var ctx = newWaveContext("test()")
-    check ctx.getExpanded() == "test()"
+    check ctx.getExpanded().strip() == "test()"
 
   test "Get expanded with macros":
     var ctx = newWaveContext("""
@@ -128,13 +128,13 @@ void GIT_CALLBACK(free)(git_writestream *stream);
     var ctx = newWaveContext("GIT_CALLBACK(free)(git_writestream *stream);")
     check:
       ctx.addMacroDefinition("GIT_CALLBACK(name)=(*name)")
-      ctx.getExpanded() == "(*free)(git_writestream *stream);"
+      ctx.getExpanded().strip() == "(*free)(git_writestream *stream);"
 
   test "Get expanded with explicitly defined macros via overload":
     var ctx = newWaveContext("GIT_CALLBACK(free)(git_writestream *stream);")
     ctx.addMacroDefinition("GIT_CALLBACK", @["name"], some "(*name)")
     check:
-      ctx.getExpanded() == "(*free)(git_writestream *stream);"
+      ctx.getExpanded().strip() == "(*free)(git_writestream *stream);"
 
   test "Object macro definition":
     var ctx = newWaveContext("sys_macro")
@@ -147,12 +147,12 @@ void GIT_CALLBACK(free)(git_writestream *stream);
       return EntryHandlingProcess
 
     check:
-      ctx.getExpanded() == "expanded"
+      ctx.getExpanded().strip() == "expanded"
       expandedMacro == true
 
 suite "Language mode handling":
   test "No 'ull' literals":
-    var context = newWaveContext("0xff00000000000000ull\n")
+    var context = newWaveContext("0xff00000000000000ull\n", languageMode = {})
     context.skipAll()
     check context.hasWarnings()
     let diag = context.popDiag()
@@ -160,7 +160,6 @@ suite "Language mode handling":
 
   test "support 'ull' literals":
     var context = newWaveContext("0xff00000000000000ull\n")
-    context.setLanguageMode(iwlmC99)
     context.skipAll()
     check not context.hasWarnings()
 
@@ -172,7 +171,7 @@ suite "Include directive handling":
       for tok in items(ctx):
         discard tok
 
-    check ewave.diag.code == wekIllFormedDirective
+    check ewave.diag.code == wekBadIncludeFile
 
   test "Ignore include":
     var ctx = newWaveContext("#include \"asdf.h\"\n")
@@ -187,3 +186,29 @@ suite "Include directive handling":
       discard
 
     check trigger == "\"asdf.h\""
+
+suite "Comment handling":
+  test "Trailing comment":
+    var ctx = newWaveContext("int var; /* Trailing */\n")
+    check ctx.getExpanded().strip() == "int var; /* Trailing */"
+
+  test "Trailing CPP comment":
+    skip()
+
+    let txt = "// some c++ comment\n"
+    var ctx = newWaveContext(txt)
+    check ctx.getExpanded() == txt
+
+  test "Multiline comments":
+    skip()
+    let txt = """
+/**
+ * Submodule ignore values
+ *
+ */
+typedef enum {
+	GIT_SUBMODULE_IGNORE_UNSPECIFIED  = -1, /**< use the submodule's configuration */
+} git_submodule_ignore_t;
+"""
+    var ctx = newWaveContext(txt)
+    check ctx.getExpanded() == txt

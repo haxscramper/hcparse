@@ -95,6 +95,8 @@ proc raiseErrors*(ctx: var WaveContext) =
           &" Error was - '{diag.errorText}' at {diag.filename}:{diag.line}:{diag.column}{extra}"
       )
 
+    # else:
+
 iterator items*(
     ctx: var WaveContext,
     ignoreHashLine: bool = true
@@ -119,9 +121,7 @@ iterator items*(
       else:
         yield tok
 
-      # echov "advancing", $first.getTok()
       first.advanceIterator()
-      # echov "ending advance"
 
   // "Finished items iterator"
 
@@ -132,7 +132,7 @@ proc skipAll*(ctx: var WaveContext) =
 
 proc getExpanded*(ctx: var WaveContext, ignoreHashLine: bool = true): string =
   for tok in items(ctx, ignoreHashLine):
-    result.add $tok
+    result.add tok.strVal()
 
 proc `$`*(l: ptr WaveTokenListHandle): string = $tokenListToStr(l)
 proc len*(l: ptr WaveTokenListHandle): int = tokenListLen(l)
@@ -297,31 +297,6 @@ proc setIncludePaths*(ctx: var WaveContext, user, sys: seq[string]) =
 
 ## #+end_group
 
-proc newWaveContext*(
-    str: string,
-    file: string = "<unknown>",
-    userIncludes: seq[string] = @[],
-    sysIncludes: seq[string] = @[]
-  ): WaveContext =
-  ## Construct new wave context object.
-  ## - NOTE if @arg{userIncludes} *or* @arg{sysIncludes} is a non-empty
-  ##   sequence then [[code:setIncludePath]] is called for one-time configuration,
-  ##   meaning subsequent configurations are not supported.
-  # new(
-  #   result,
-  #   # proc(ctx: WaveContext) =
-  #   #   echov "Destroying context"
-  #     # destroyContext(ctx.handle)
-  #     # deallocCStringArray(ctx.str)
-  # )
-
-  result.str = allocCStringArray([str])
-  result.handle = newWaveContext(result.str[0], file)
-
-  discard result.addIncludePath(".")
-  if ?userIncludes or ?sysIncludes:
-    result.setIncludePaths(userIncludes, sysIncludes)
-
 # type
 #   WaveLanguageMode* = enum
 #     wlmSupportNormal
@@ -349,6 +324,56 @@ proc newWaveContext*(
 
 proc setLanguageMode*(context: var WaveContext, mode: WaveLanguageModeImpl) =
   context.handle.setLanguageMode(mode)
+
+const
+  wlmVersions* = {iwlmC99, iwlmCpp11, iwlmCpp17, iwlmCpp20}
+  wlmDefault* = {
+    iwlmCpp20,
+    iwlmSupportNormal,
+    iwlmLongLong,
+    iwlmVaOpt,
+    iwlmVariadics,
+    iwlmPreserveComments
+  }
+
+
+proc setLanguageMode*(context: var WaveContext, mode: set[WaveLanguageModeImpl]) =
+  if len(mode * wlmVersions) > 1:
+    raise newArgumentError(
+      "Cannot set more than one language version at the same time - ",
+      mode * wlmVersions, " were specified.")
+
+  for item in mode:
+    context.handle.setLanguageMode(item)
+
+proc newWaveContext*(
+    str: string,
+    file: string = "<unknown>",
+    userIncludes: seq[string] = @[],
+    sysIncludes: seq[string] = @[],
+    languageMode: set[WaveLanguageModeImpl] = wlmDefault
+  ): WaveContext =
+  ## Construct new wave context object.
+  ## - NOTE if @arg{userIncludes} *or* @arg{sysIncludes} is a non-empty
+  ##   sequence then [[code:setIncludePath]] is called for one-time configuration,
+  ##   meaning subsequent configurations are not supported.
+  # new(
+  #   result,
+  #   # proc(ctx: WaveContext) =
+  #     # destroyContext(ctx.handle)
+  #     # deallocCStringArray(ctx.str)
+  # )
+
+  result.str = allocCStringArray([str])
+  result.handle = newWaveContext(result.str[0], file)
+
+  discard result.addIncludePath(".")
+  if ?userIncludes or ?sysIncludes:
+    result.setIncludePaths(userIncludes, sysIncludes)
+
+  result.setLanguageMode(languageMode)
+
+
 
 proc setFoundWarningDirective*(
     ctx: var WaveContext,

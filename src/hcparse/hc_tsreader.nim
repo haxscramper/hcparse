@@ -113,7 +113,7 @@ proc evalEnumValue(node: CppNode, ctx: CxxEvalCtx): BiggestInt =
         of "-": result = lhs - rhs
         of "<<": result = lhs shl rhs
         of ">>": result = lhs shr rhs
-        else: raise newImplementKindError(node{1}.strVal()) 
+        else: raise newImplementKindError(node{1}.strVal())
 
 
     else:
@@ -302,6 +302,107 @@ proc toCxxObject*(node: CppNode, coms): CxxObject =
         raise newImplementKindError(field, field.treeRepr())
 
 
+proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
+  if node.len == 1:
+    case node[0].kind:
+      of cppEnumSpecifier:
+        result.add toCxxEnum(node[0], coms).withIt do:
+          it.add coms
+          coms.clear()
+
+      else:
+        raise newImplementKindError(node[0])
+
+  elif node.len == 2:
+    case node[1].kind:
+      of cppTypeIdentifier,
+         cppPointerDeclarator,
+         cppPrimitiveType:
+        let newType = toCxxType(node["declarator"]).toDecl()
+        let baseBody = node[0]
+        if baseBody of {
+          cppSizedTypeSpecifier, cppPrimitiveType, cppTypeIdentifier
+        } or (
+          baseBody of {
+            cppStructSpecifier, cppUnionSpecifier, cppEnumSpecifier} and
+          "body" notin baseBody
+        ):
+          var alias = cxxAlias(newType, toCxxType(node["type"])).withIt do:
+                it.add coms
+                coms.clear()
+          pointerWraps(node["declarator"], alias.baseType)
+
+          if alias.baseType of ctkIdent and
+            alias.decl.cxxName() == alias.baseType.cxxName():
+            # `typedef struct T T;`
+            result.add cxxForward(alias.decl.name).withIt do:
+              it.add coms
+              coms.clear()
+
+          else:
+            result.add alias
+
+        elif baseBody of {cppStructSpecifier, cppUnionSpecifier}:
+          # FIXME handle multiple trailing typedefs
+          var struct = toCxxObject(baseBody, coms)
+          if struct.cxxName().isEmpty():
+            # Handle `typedef struct {} struct_name;`
+            struct.name = newType.name
+            result.add struct
+
+          else:
+            result.add struct
+            if struct.cxxName() != newType.cxxName():
+              result.add cxxAlias(newType, struct.decl.cxxTypeUse()).withIt do:
+                it.add coms
+                coms.clear()
+
+        elif baseBody of {cppEnumSpecifier}:
+          var enumd = toCxxEnum(node[0], coms)
+          if enumd.cxxName().isEmpty():
+            enumd.name = newType.name
+            result.add enumd
+
+          else:
+            result.add enumd
+            if enumd.cxxName() != newType.cxxName():
+              result.add cxxAlias(newType, enumd.decl.cxxTypeUse()).withIt do:
+                it.add coms
+                coms.clear()
+
+        else:
+          raise newImplementKindError(
+            baseBody, $node & " " & node.treeRepr())
+
+      of cppFunctionDeclarator:
+        let d = "declarator"
+        let body = node[d]
+        var args: seq[CxxArg]
+        for arg in body["parameters"]:
+          let name =
+            if d in arg and (arg[d].kind != cppAbstractPointerDeclarator):
+              arg[d].getName()
+
+            else:
+              ""
+
+
+          var t = toCxxType(arg["type"])
+          if d in arg:
+            pointerWraps(arg[d], t)
+
+          args.add cxxArg(cxxPair(name), t)
+
+        result.add cxxAlias(
+          body[d].getName().cxxPair().cxxTypeDecl(),
+          cxxTypeUse(args, toCxxType(node["type"])))
+
+      else:
+        raise newImplementKindError(node, node.treeRepr())
+
+  else:
+    raise newImplementError(node.treeRepr())
+
 
 proc toCxx*(node: CppNode, coms): seq[CxxEntry] =
   case node.kind:
@@ -356,105 +457,7 @@ proc toCxx*(node: CppNode, coms): seq[CxxEntry] =
       result.add toCxxEnum(node, coms).box()
 
     of cppTypeDefinition:
-      if node.len == 1:
-        case node[0].kind:
-          of cppEnumSpecifier:
-            result.add toCxxEnum(node[0], coms).withIt do:
-              it.add coms
-              coms.clear()
-
-          else:
-            raise newImplementKindError(node[0])
-
-      elif node.len == 2:
-        case node[1].kind:
-          of cppTypeIdentifier,
-             cppPointerDeclarator,
-             cppPrimitiveType:
-            let newType = toCxxType(node["declarator"]).toDecl()
-            let baseBody = node[0]
-            if baseBody of {
-              cppSizedTypeSpecifier, cppPrimitiveType, cppTypeIdentifier
-            } or (
-              baseBody of {
-                cppStructSpecifier, cppUnionSpecifier, cppEnumSpecifier} and
-              "body" notin baseBody
-            ):
-              var alias = cxxAlias(newType, toCxxType(node["type"])).withIt do:
-                    it.add coms
-                    coms.clear()
-              pointerWraps(node["declarator"], alias.baseType)
-
-              if alias.baseType of ctkIdent and
-                alias.decl.cxxName() == alias.baseType.cxxName():
-                # `typedef struct T T;`
-                result.add cxxForward(alias.decl.name).withIt do:
-                  it.add coms
-                  coms.clear()
-
-              else:
-                result.add alias
-
-            elif baseBody of {cppStructSpecifier, cppUnionSpecifier}:
-              # FIXME handle multiple trailing typedefs
-              var struct = toCxxObject(baseBody, coms)
-              if struct.cxxName().isEmpty():
-                # Handle `typedef struct {} struct_name;`
-                struct.name = newType.name
-                result.add struct
-
-              else:
-                result.add struct
-                if struct.cxxName() != newType.cxxName():
-                  result.add cxxAlias(newType, struct.decl.cxxTypeUse()).withIt do:
-                    it.add coms
-                    coms.clear()
-
-            elif baseBody of {cppEnumSpecifier}:
-              var enumd = toCxxEnum(node[0], coms)
-              if enumd.cxxName().isEmpty():
-                enumd.name = newType.name
-                result.add enumd
-
-              else:
-                result.add enumd
-                if enumd.cxxName() != newType.cxxName():
-                  result.add cxxAlias(newType, enumd.decl.cxxTypeUse()).withIt do:
-                    it.add coms
-                    coms.clear()
-
-            else:
-              raise newImplementKindError(
-                baseBody, $node & " " & node.treeRepr())
-
-          of cppFunctionDeclarator:
-            let d = "declarator"
-            let body = node[d]
-            var args: seq[CxxArg]
-            for arg in body["parameters"]:
-              let name =
-                if d in arg and (arg[d].kind != cppAbstractPointerDeclarator):
-                  arg[d].getName()
-
-                else:
-                  ""
-
-
-              var t = toCxxType(arg["type"])
-              if d in arg:
-                pointerWraps(arg[d], t)
-
-              args.add cxxArg(cxxPair(name), t)
-
-            result.add cxxAlias(
-              body[d].getName().cxxPair().cxxTypeDecl(),
-              cxxTypeUse(args, toCxxType(node["type"])))
-
-          else:
-            raise newImplementKindError(node, node.treeRepr())
-
-      else:
-        raise newImplementError(node.treeRepr())
+      result.add toCxxTypeDefinition(node, coms)
 
     of cppDeclaration:
       case node["declarator"].skipPointer().kind:

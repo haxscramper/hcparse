@@ -23,13 +23,12 @@ proc newWaveReader*(
   var resCtx: WaveContext = newWaveContext(
     readFile(file), file.string, userIncludes, sysIncludes)
 
-  echov "main processed file", file
   resCtx.onFoundIncludeDirective():
     let inclf = unescapeInclude(impl)
     if inclf in subTargets or subTargets.len == 0:
       let file = resCtx.findIncludeFile(inclf)
-      echov file
       if file notin cache.defines:
+        cache.defines[file] = @[]
         var subcontext = newWaveContext(
           readFile($file), $file, userIncludes, sysIncludes)
         var first: ptr WaveIteratorHandle = subcontext.first()
@@ -44,10 +43,10 @@ proc newWaveReader*(
             for arg in mdef.parameters: args.add $arg
             for arg in mdef.definition: body.add $arg
 
-            cache.defines.mgetOrPut(file, @[]).add(($def, args, body))
+            cache.defines[file].add(($def, args, body))
 
-      for (name, args, body) in cache.defines[file]:
-        resCtx.addMacroDefinition(name, args, some body.join(""))
+        for (name, args, body) in cache.defines[file]:
+          resCtx.addMacroDefinition(name, args, some body.join(""))
 
     return EntryHandlingSkip
 

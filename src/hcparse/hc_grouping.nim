@@ -410,7 +410,7 @@ proc getUsedTypes*(file: CxxFile): UsedGroups =
   for e in file.entries:
     e.registerUsedTypes(result)
 
-proc updateImports*(wrapped: seq[CxxFile]): seq[CxxFile] =
+proc regroupFiles*(wrapped: seq[CxxFile]): seq[CxxFile] =
   ## Construct new group of wrapped files based on the input. Group
   ## mutually recursive types in new temporary files and add needed imports
   ## and exports.
@@ -427,23 +427,21 @@ proc updateImports*(wrapped: seq[CxxFile]): seq[CxxFile] =
   for decl, vals in usedApis.inTypes.cursors:
     if notNil(decl.store): store = decl.store; break
 
-  var
-    importGraph = newHGraph[CxxLibImport, CxxTypeUse]()
-    fileMap: Table[CxxLibImport, CxxFile]
-
-  for file in wrapped:
-    fileMap[file.savePath] = file
+  var importGraph = newHGraph[CxxLibImport, CxxTypeUse]()
 
   proc addImports(
       graph: var HGraph[CxxLibImport, CxxTypeUse],
       file: CxxFile, used: UsedSet
     ) =
+    ## Add imports from used set to file group
 
     block cursorBasedImportrs:
+      # Library imports based on type definition location
       let user = file.savePath
       for typeCursor, typeSet in used.cursors:
         let dep = typeCursor.getImport()
-        if user != dep:
+        if user != dep: # Avoid self-imports (creates unnecessary
+                        # self-loops in graphs)
           for item in typeSet:
             graph.addOrGetEdge(
               graph.addOrGetNode(user),
@@ -451,6 +449,7 @@ proc updateImports*(wrapped: seq[CxxFile]): seq[CxxFile] =
               item)
 
     block libraryOverrideImports:
+      # Direct library overrides for imports
       let base = file.savePath
       for usedLib, typeSet in used.libs:
         for usedType in typeSet:
@@ -471,6 +470,7 @@ proc updateImports*(wrapped: seq[CxxFile]): seq[CxxFile] =
       importGraph.addImports(file, usedApis.inTypes)
       importGraph.addImports(file, usedApis.inProcs)
 
+    # Create debug graph of grouped imports and nodes
     onlyTypes.
       dotRepr(
         dotReprDollarNode[CxxLibImport],
@@ -515,6 +515,13 @@ proc updateImports*(wrapped: seq[CxxFile]): seq[CxxFile] =
         if save != usedLib:
           file.imports.incl usedLib
 
+  var fileMap: Table[CxxLibImport, CxxFile] # Mapping of the file import
+                                            # location to the actual file
+                                            # content
+
+  for file in wrapped:
+    fileMap[file.savePath] = file
+
   # Pass files that were not directly affected
   for file, wrapped in mpairs(fileMap):
     if file notin clusteredNodes:
@@ -535,6 +542,11 @@ proc updateImports*(wrapped: seq[CxxFile]): seq[CxxFile] =
 
       generatedFile: CxxLibImport = cxxLibImport(mergedLib, @[
         mergedFiles.mapIt(it.getFilename()).sorted().join("_")])
+        # Name of the generated file
+        #
+        # TODO allow overriding into someting more manageable. With large
+        # libraries it would be possible to hit file name lenght limit on
+        # windows and other oses that have this limitation
 
       ignoreImports: HashSet[CxxLibImport] = mapIt(
         group, importGraph[it]).toHashSet()

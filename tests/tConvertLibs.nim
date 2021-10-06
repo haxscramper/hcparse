@@ -1,6 +1,6 @@
 import hmisc/preludes/unittest
 import hmisc/other/oswrap
-import hcparse/[hc_parsefront, hc_codegen, hc_impls, hc_wavereader]
+import hcparse/[hc_parsefront, hc_codegen, hc_impls, hc_wavereader, hc_grouping]
 import hnimast/hast_common
 import hmisc/algo/hstring_algo
 import hmisc/algo/hparse_pegs
@@ -101,21 +101,7 @@ suite "libgit":
 
     cache.newRename(name.nim, result)
 
-  test "libgit types minimized":
-    let
-      lib = getTestTempDir()
-      copyLib = AbsDir(relToSource"files/libgit_test")
-      file = lib /. "types.h"
-      res = getTestTempFile("nim")
-
-    mkWithDirStructure lib:
-      file "types.h": "#include \"common.h\"\n"
-      file "common.h": "0xff00000000000000ull\n"
-
-    var cache = newWaveCache()
-
-    /// "Minimized libgit test":
-      let f = wrapViaTsWave(file, lib, baseFixConf, cache)
+  fixConf.typeStore = newTypeStore()
 
   test "libgit types":
     let lib = AbsDir"/usr/include/git2"
@@ -123,10 +109,11 @@ suite "libgit":
     let res = getTestTempFile("nim")
     var cache = newWaveCache()
 
-    res.writeFile(
-      $toNNode[PNode](wrapViaTsWave(
-        file, lib, fixConf, cache,
-        @[],
-        @["/usr/include/sys", "/usr/include", "/usr/include/linux"],
-        @["common.h"]
-        ), cCodegenConf))
+    let wrapped: CxxFile = wrapViaTsWave(
+      file, lib, fixConf, cache,
+      @[],
+      @["/usr/include/sys", "/usr/include", "/usr/include/linux"])
+
+    let fixWrapped = regroupFiles(@[wrapped])
+
+    res.writeFile($toNNode[PNode](fixWrapped[0], cCodegenConf))

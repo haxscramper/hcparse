@@ -166,34 +166,38 @@ proc convertViaTs*(text: string): PNode =
 
 proc wrapViaTs*(
     str: string,
-    conf: CxxFixConf
+    conf: CxxFixConf,
+    lib: CxxLibImport
   ): seq[CxxEntry] =
-  /// "Copy input string to local mutable variable":
-    var str = str
+  assertRef conf.typeStore
+  # "Copy input string to local mutable variable":
+  var str = str
 
-  /// "Parse CXX string":
-    let node = parseCppString(addr str)
+  # "Parse CXX string":
+  let node = parseCppString(addr str)
 
-  /// "Create comment sequence":
-    var coms: seq[CxxComment]
+  # "Create comment sequence":
+  var coms: seq[CxxComment]
 
-  /// "Convert to CXX":
-    result = toCxx(node, coms)
+  # "Convert to CXX":
+  result = toCxx(node, coms)
 
   var cache: StringNameCache
+  var store: CxxTypeStore = conf.typeStore
   for item in mitems(result):
     setHeaderRec(item, conf)
     fixIdentsRec(item, cache, conf)
+    setTypeStoreRec(item, store, lib)
 
 proc wrapViaTs*(
     file: AbsFile,
     libRoot: AbsDir,
     conf: CxxFixConf
   ): CxxFile =
-
+  assertRef conf.typeStore
   let relative = file.string.dropPrefix(libRoot.string)
-  wrapViaTs(file.readFile(), conf).cxxFile(
-    cxxLibImport(libRoot.name(), relative.split("/")))
+  let lib = cxxLibImport(libRoot.name(), relative.split("/"))
+  wrapViaTs(file.readFile(), conf, lib).cxxFile(lib)
 
 proc wrapViaTsWave*(
     file: AbsFile,
@@ -204,20 +208,23 @@ proc wrapViaTsWave*(
     sysIncludes: seq[string] = @[],
     subTargets: seq[string] = @[]
   ): CxxFile =
+  assertRef conf.typeStore
+  # "Wrap via TS wave":
 
-  /// "Wrap via TS wave":
-    /// "Get relative path of the file using library root and file path":
-      let relative = file.string.dropPrefix(libRoot.string)
+  # "Get relative path of the file using library root and file path":
+  let relative = file.string.dropPrefix(libRoot.string)
 
-    /// "Construct wave reader object":
-      var reader = newWaveReader(
-        file, waveCache, userIncludes, sysIncludes, subTargets)
+  # "Construct wave reader object":
+  var reader = newWaveReader(
+    file, waveCache, userIncludes, sysIncludes, subTargets)
 
-    /// "Get sequence of elements for wrapping":
-      var s = wrapViaTs(reader.getExpanded(), conf)
+  let lib = cxxLibImport(libRoot.name(), relative.split("/"))
 
-    /// "Wrap results in file":
-      result = s.cxxFile(cxxLibImport(libRoot.name(), relative.split("/")))
+  # "Get sequence of elements for wrapping":
+  var s = wrapViaTs(reader.getExpanded(), conf, lib)
+
+  # "Wrap results in file":
+  result = s.cxxFile(lib)
 
 proc wrapViaClang*(conf: WrapConf, file: AbsFile): CxxFile =
   var cache: WrapCache
