@@ -285,7 +285,10 @@ proc toNNode*[N](entries: seq[CxxEntry], conf: CodegenConf): seq[NimDecl[N]] =
   var other: seq[NimDecl[N]]
   var visited: HashSet[CxxNamePair]
   for item in entries:
-    if item.name notin visited:
+    if item of cekEmpty:
+      discard
+
+    elif item.name notin visited:
       if item of cekForward:
         visited.incl item.name
 

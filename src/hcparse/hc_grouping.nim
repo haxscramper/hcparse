@@ -7,7 +7,7 @@ import
 import
   hmisc/types/[hgraph, colorstring],
   hmisc/hasts/graphviz_ast,
-  hmisc/other/oswrap,
+  hmisc/other/[oswrap, hpprint],
   hmisc/algo/halgorithm,
   hmisc/core/all
 
@@ -440,6 +440,7 @@ proc regroupFiles*(wrapped: seq[CxxFile]): seq[CxxFile] =
       let user = file.savePath
       for typeCursor, typeSet in used.cursors:
         let dep = typeCursor.getImport()
+        echov user, "->", dep, "for", typeCursor
         if user != dep: # Avoid self-imports (creates unnecessary
                         # self-loops in graphs)
           for item in typeSet:
@@ -489,9 +490,19 @@ proc regroupFiles*(wrapped: seq[CxxFile]): seq[CxxFile] =
         it.rankdir = grdLeftRight
         it.toPng(getAppTempFile("onlyProcs.png"))
 
-
+    importGraph.
+      dotRepr(
+        dotReprDollarNode[CxxLibImport],
+        dotReprCollapseEdgesJoin[CxxTypeUse],
+        clusters = onlyTypes.findCycles(ignoreSelf = true).
+      mergeCycleSets().mapIt((it, ""))).withResIt do:
+        it.rankdir = grdLeftRight
+        it.toPng(getAppTempFile("importGraph.png"))
 
   let groups = importGraph.findCycles().mergeCycleSets()
+  logicAssert groups.len > 0,
+    "Import graph must contain at least one type cycle"
+
   let clusteredNodes = groups.mapIt(
     toHashSet(importGraph[it])).foldl(union(a, b))
 

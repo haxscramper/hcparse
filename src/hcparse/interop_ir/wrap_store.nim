@@ -723,6 +723,9 @@ func name*(e: CxxEntry): CxxNamePair =
     of cekObject: result = e.cxxObject.decl.name
     of cekProc: result = e.cxxProc.head.name
     of cekAlias: result = e.cxxAlias.decl.name
+    of cekEmpty:
+      raise newUnexpectedKindError(e)
+
     else:
       raise newImplementKindError(e)
 
