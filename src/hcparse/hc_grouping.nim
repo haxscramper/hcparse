@@ -40,10 +40,10 @@ func hash(typeNode: TypeNode): Hash = hash(typeNode.decl)
 func initTypeNode*(decl: CxxTypeDecl): TypeNode =
   TypeNode(decl: decl)
 
-proc getTypeGraph(wrapped: var seq[CxxFile]): TypeGraph =
+proc getTypeGraph(wrapped: seq[CxxFile]): TypeGraph =
+  ## Construct type graph from forward declarations
   result = newHGraph[TypeNode, Link]()
-  for file in mitems(wrapped):
-    var extraEntries: seq[CxxEntry]
+  for file in wrapped:
     for entry in file.entries:
       case entry.kind:
         of cekProc:
@@ -68,7 +68,8 @@ proc getTypeGraph(wrapped: var seq[CxxFile]): TypeGraph =
 
         of cekObject:
           # Get node for current type
-          var objectNode = result.addOrGetNode(initTypeNode(entry.cxxObject.decl))
+          var objectNode = result.addOrGetNode(
+            initTypeNode(entry.cxxObject.decl))
 
           # Add outgoing edges for all types that were explicitly used.
           # info entry.genObject.name.nimName
@@ -93,8 +94,6 @@ proc getTypeGraph(wrapped: var seq[CxxFile]): TypeGraph =
 
         else:
           discard
-
-    file.entries.add extraEntries
 
   for t1 in nodes(result):
     for t2 in nodes(result):
@@ -227,7 +226,7 @@ proc dotRepr(typeGraph: TypeGraph, groups: seq[TypeGroup] = @[]): DotGraph =
   result.ranksep = some 1.2
 
 proc patchForward*(wrapped: var seq[CxxFile]): seq[CxxFile] =
-  ## Replace `GenForward` declarations with required import. Return list of
+  ## Replace forward declarations with required import. Return list of
   ## additional generated files.
 
   var typeGraph = getTypeGraph(wrapped)
@@ -410,6 +409,54 @@ proc getUsedTypes*(file: CxxFile): UsedGroups =
   for e in file.entries:
     e.registerUsedTypes(result)
 
+proc addImports(
+    file: var CxxFile,
+    usedGroup: UsedSet,
+    ignoreImport: HashSet[CxxLibImport] = default(HashSet[CxxLibImport])
+  ) =
+
+  let save = file.savePath
+  for typeCursor, _ in usedGroup.cursors:
+    if typeCursor.hasImport():
+      let usedLib = typeCursor.getImport()
+      if usedLib notin ignoreImport:
+        if save != usedLib:
+          file.imports.incl usedLib
+
+  for usedLib, _ in usedGroup.libs:
+    if usedLib notin ignoreImport:
+      if save != usedLib:
+        file.imports.incl usedLib
+
+proc addImports(
+    graph: var HGraph[CxxLibImport, CxxTypeUse],
+    file: CxxFile, used: UsedSet
+  ) =
+  ## Add imports from used set to file group
+
+  block cursorBasedImportrs:
+    # Library imports based on type definition location
+    let user = file.savePath
+    for typeCursor, typeSet in used.cursors:
+      let dep = typeCursor.getImport()
+      if user != dep: # Avoid self-imports (creates unnecessary
+                      # self-loops in graphs)
+        for item in typeSet:
+          graph.addOrGetEdge(
+            graph.addOrGetNode(user),
+            graph.addOrGetNode(dep),
+            item)
+
+  block libraryOverrideImports:
+    # Direct library overrides for imports
+    let base = file.savePath
+    for usedLib, typeSet in used.libs:
+      for usedType in typeSet:
+        graph.addOrGetEdge(
+          graph.addOrGetNode(base),
+          graph.addOrGetNode(usedLib),
+          usedType)
+
 proc regroupFiles*(wrapped: seq[CxxFile]): seq[CxxFile] =
   ## Construct new group of wrapped files based on the input. Group
   ## mutually recursive types in new temporary files and add needed imports
@@ -419,45 +466,38 @@ proc regroupFiles*(wrapped: seq[CxxFile]): seq[CxxFile] =
   # cursors pointing to declarations for different types used in the file
   # entries (procedure argument and return, field, global variable types).
 
+  var store: CxxTypeStore
   for file in wrapped:
     for entry in file.entries:
       registerUsedTypes(entry, usedApis)
 
-  var store: CxxTypeStore
-  for decl, vals in usedApis.inTypes.cursors:
-    if notNil(decl.store): store = decl.store; break
+      case entry.kind:
+        of cekObject:
+          store = entry.cxxObject.decl.store
+          assertRef(store, $entry)
+
+        of cekEnum:
+          store = entry.cxxEnum.decl.store
+          assertRef(store, $entry)
+
+        of cekAlias:
+          store = entry.cxxAlias.decl.store
+          assertRef(store, $entry)
+
+        else:
+          discard
+
+  if isNil(store):
+    for decl, vals in usedApis.inTypes.cursors:
+      assertRef decl.store, "Missing store ref for " & $decl
+      store = decl.store
+      break
+
+  assertRef store
 
   var importGraph = newHGraph[CxxLibImport, CxxTypeUse]()
-
-  proc addImports(
-      graph: var HGraph[CxxLibImport, CxxTypeUse],
-      file: CxxFile, used: UsedSet
-    ) =
-    ## Add imports from used set to file group
-
-    block cursorBasedImportrs:
-      # Library imports based on type definition location
-      let user = file.savePath
-      for typeCursor, typeSet in used.cursors:
-        let dep = typeCursor.getImport()
-        echov user, "->", dep, "for", typeCursor
-        if user != dep: # Avoid self-imports (creates unnecessary
-                        # self-loops in graphs)
-          for item in typeSet:
-            graph.addOrGetEdge(
-              graph.addOrGetNode(user),
-              graph.addOrGetNode(dep),
-              item)
-
-    block libraryOverrideImports:
-      # Direct library overrides for imports
-      let base = file.savePath
-      for usedLib, typeSet in used.libs:
-        for usedType in typeSet:
-          graph.addOrGetEdge(
-            graph.addOrGetNode(base),
-            graph.addOrGetNode(usedLib),
-            usedType)
+  # Type use graph - nodes represent files and `CxxTypeUse` is an edge
+  # between two files. If one file uses type from another link is formed.
 
   block registerImports:
     var
@@ -471,60 +511,63 @@ proc regroupFiles*(wrapped: seq[CxxFile]): seq[CxxFile] =
       importGraph.addImports(file, usedApis.inTypes)
       importGraph.addImports(file, usedApis.inProcs)
 
-    # Create debug graph of grouped imports and nodes
-    onlyTypes.
-      dotRepr(
-        dotReprDollarNode[CxxLibImport],
-        dotReprCollapseEdgesJoin[CxxTypeUse],
-        clusters = onlyTypes.findCycles(ignoreSelf = true).
-      mergeCycleSets().mapIt((it, ""))).withResIt do:
-        it.rankdir = grdLeftRight
-        it.toPng(getAppTempFile("onlyTypes.png"))
+    block:
+      # Create debug graph of grouped imports and nodes
+      onlyTypes.
+        dotRepr(
+          dotReprDollarNode[CxxLibImport],
+          dotReprCollapseEdgesJoin[CxxTypeUse],
+          clusters = onlyTypes.findCycles(ignoreSelf = true).
+        mergeCycleSets().mapIt((it, ""))).withResIt do:
+          it.rankdir = grdLeftRight
+          it.toPng(getAppTempFile("onlyTypes.png"))
 
-    onlyProcs.
-      dotRepr(
-        dotReprDollarNode[CxxLibImport],
-        dotReprCollapseEdgesJoin[CxxTypeUse],
-        clusters = onlyTypes.findCycles(ignoreSelf = true).
-      mergeCycleSets().mapIt((it, ""))).withResIt do:
-        it.rankdir = grdLeftRight
-        it.toPng(getAppTempFile("onlyProcs.png"))
+      onlyProcs.
+        dotRepr(
+          dotReprDollarNode[CxxLibImport],
+          dotReprCollapseEdgesJoin[CxxTypeUse],
+          clusters = onlyTypes.findCycles(ignoreSelf = true).
+        mergeCycleSets().mapIt((it, ""))).withResIt do:
+          it.rankdir = grdLeftRight
+          it.toPng(getAppTempFile("onlyProcs.png"))
 
-    importGraph.
-      dotRepr(
-        dotReprDollarNode[CxxLibImport],
-        dotReprCollapseEdgesJoin[CxxTypeUse],
-        clusters = onlyTypes.findCycles(ignoreSelf = true).
-      mergeCycleSets().mapIt((it, ""))).withResIt do:
-        it.rankdir = grdLeftRight
-        it.toPng(getAppTempFile("importGraph.png"))
+      importGraph.
+        dotRepr(
+          dotReprDollarNode[CxxLibImport],
+          dotReprCollapseEdgesJoin[CxxTypeUse],
+          clusters = onlyTypes.findCycles(ignoreSelf = true).
+        mergeCycleSets().mapIt((it, ""))).withResIt do:
+          it.rankdir = grdLeftRight
+          it.toPng(getAppTempFile("importGraph.png"))
 
   let groups = importGraph.findCycles().mergeCycleSets()
-  logicAssert groups.len > 0,
-    "Import graph must contain at least one type cycle"
+  if groups.len == 0:
+    # There is no mutually recursive type cycles in the passed files,
+    # returning whole list unmodified.
+    var mergedFiles = wrapped
+
+    for file in mitems(mergedFiles):
+      for entry in mitems(file.entries):
+        # Drop forward type declarations that were defined in some other
+        # file (can be imported).
+        if entry of cekForward:
+          let decl = store.getDecl(
+            entry.cxxForward.decl.name.cxx,
+            some file.savePath.library)
+
+          # echov decl
+          if decl.isSome():
+            entry = cxxEmpty()
+
+            if decl.get().typeImport.get() != file.savePath:
+              file.imports.incl decl.get().typeImport.get()
+
+    return mergedFiles
 
   let clusteredNodes = groups.mapIt(
     toHashSet(importGraph[it])).foldl(union(a, b))
 
 
-  proc addImports(
-      file: var CxxFile,
-      usedGroup: UsedSet,
-      ignoreImport: HashSet[CxxLibImport] = default(HashSet[CxxLibImport])
-    ) =
-
-    let save = file.savePath
-    for typeCursor, _ in usedGroup.cursors:
-      if typeCursor.hasImport():
-        let usedLib = typeCursor.getImport()
-        if usedLib notin ignoreImport:
-          if save != usedLib:
-            file.imports.incl usedLib
-
-    for usedLib, _ in usedGroup.libs:
-      if usedLib notin ignoreImport:
-        if save != usedLib:
-          file.imports.incl usedLib
 
   var fileMap: Table[CxxLibImport, CxxFile] # Mapping of the file import
                                             # location to the actual file

@@ -426,11 +426,11 @@ proc toCxx*(node: CppNode, coms): seq[CxxEntry] =
       discard
 
     of cppClassSpecifier, cppStructSpecifier, cppUnionSpecifier:
-      if "body" notin node:
-        result.add toCxxForwardType(node, coms)
+      if "body" in node:
+        result.add toCxxObject(node, coms)
 
       else:
-        result.add toCxxObject(node, coms)
+        result.add toCxxForwardType(node, coms)
 
     of cppPreprocDef:
       if node.len < 2:

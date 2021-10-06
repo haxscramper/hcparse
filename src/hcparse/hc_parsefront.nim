@@ -17,7 +17,7 @@ import
   hnimast
 
 import
-  hmisc/other/[oswrap, hshell],
+  hmisc/other/[oswrap, hshell, hpprint],
   hmisc/types/colorstring,
   hmisc/algo/[hstring_algo, namegen],
   hmisc/core/all
@@ -246,8 +246,8 @@ proc expandViaCc*(file: AbsFile, parseConf: ParseConf): string =
 
   result = evalShellStdout(cmd)
 
-proc registerTypes*(files: var seq[CxxFile]) =
-  var store = CxxTypeStore()
-  for file in mitems(files):
-    for entry in mitems(file.entries):
-      setTypeStoreRec(entry, store, file.savePath)
+# proc registerTypes*(files: var seq[CxxFile]) =
+#   var store = CxxTypeStore()
+#   for file in mitems(files):
+#     for entry in mitems(file.entries):
+#       setTypeStoreRec(entry, store, file.savePath)

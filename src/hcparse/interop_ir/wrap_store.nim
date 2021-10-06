@@ -1,6 +1,6 @@
 import
   hmisc/other/oswrap,
-  hmisc/core/all,
+  hmisc/core/[all, code_errors],
   hmisc/algo/namegen,
   std/[options, macros, json, strutils, strformat, parseutils,
        tables, hashes, sets, sequtils]
@@ -826,6 +826,25 @@ func toDecl*(use: CxxTypeUse): CxxTypeDecl =
 func addDecl*(store: var CxxTypeStore, decl: CxxTypeDecl) =
   store.typeDecls.mgetOrPut(decl.name.cxx, @[]).add decl
 
+func getDecl*(
+    store: CxxTypeStore,
+    name: CxxName,
+    lib: Option[string]
+  ): Option[CxxTypeDecl] =
+
+  assertRef store
+  if name in store.typeDecls:
+    for decl in store.typeDecls[name]:
+      # No library for import, or no library for the type declaration
+      if lib.isNone() or decl.typeImport.isNone():
+        return some decl
+
+      else:
+        # Has library name for both type declaration and use
+        if decl.typeImport.get().library == lib.get():
+          return some decl
+
+
 func getDecl*(use: CxxTypeUse): Option[CxxTypeDecl] =
   ## Get first type declaration with matching cxx name. In case of multiple
   ## identical types present they are disambiguated based on the library
@@ -833,16 +852,9 @@ func getDecl*(use: CxxTypeUse): Option[CxxTypeDecl] =
   assertKind(use, {ctkIdent})
   assert not use.cxxType.isParam
   assertRef use.cxxType.typeStore
-  if use.cxxName() in use.cxxType.typeStore.typeDecls:
-    for decl in use.cxxType.typeStore.typeDecls[use.cxxName()]:
-      # No library for import, or no library for the type declaration
-      if use.cxxType.typeLib.isNone() or decl.typeImport.isNone():
-        return some decl
+  return use.cxxType.typeStore.getDecl(
+    use.cxxName(), use.cxxType.typeLib)
 
-      else:
-        # Has library name for both type declaration and use
-        if decl.typeImport.get().library == use.cxxType.typeLib.get():
-          return some decl
 
 func hasImport*(use: CxxTypeUse): bool =
   if use of ctkIdent:
@@ -1111,6 +1123,7 @@ func setTypeStoreRec*(
 
     of cekEnum:
       entry.cxxEnum.decl.typeImport = some lib
+      entry.cxxEnum.decl.store = store
       store.addDecl(entry.cxxEnum.decl)
 
     of cekForward:
@@ -1118,11 +1131,13 @@ func setTypeStoreRec*(
 
     of cekAlias:
       entry.cxxAlias.decl.typeImport = some lib
+      entry.cxxAlias.decl.store = store
       store.addDecl(entry.cxxAlias.decl)
       aux(entry.cxxAlias.baseType, store)
 
     of cekObject:
       entry.cxxObject.decl.typeImport = some lib
+      entry.cxxObject.decl.store = store
       store.addDecl(entry.cxxObject.decl)
 
       for meth in mitems(entry.cxxObject.methods):
