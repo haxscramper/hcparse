@@ -117,3 +117,4 @@ suite "libgit":
     let fixWrapped = regroupFiles(@[wrapped])
 
     res.writeFile($toNNode[PNode](fixWrapped[0], cCodegenConf))
+    echov res

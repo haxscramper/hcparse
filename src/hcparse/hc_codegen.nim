@@ -135,7 +135,7 @@ proc toNNode*[N](header: CxxBind, conf: CodegenConf): seq[N] =
         $header.icpp
 
       else:
-        assertKind(header.icpp[0], { ipkTextPart })
+        assertKind(header.icpp[0], { ipkTextPart }, $header.icpp)
         $header.icpp[0]
 
     result.add newIdentColonExpr[N](

@@ -57,6 +57,9 @@ proc mapTypeName*(node: CppNode): string =
   else:
     mapPrimitiveName(node.primitiveName())
 
+
+proc toCxxArg*(node: CppNode, idx: int): CxxArg
+
 proc toCxxType*(node: CppNode): CxxTypeUse =
   case node.kind:
     of cppTypeIdentifier,
@@ -72,6 +75,15 @@ proc toCxxType*(node: CppNode): CxxTypeUse =
 
     of cppStructSpecifier, cppEnumSpecifier, cppUnionSpecifier:
       result = toCxxType(node[0])
+
+    of cppFieldDeclaration:
+      var args: seq[CxxArg]
+      var idx = 0
+      for param in node["declarator"]["parameters"]:
+        args.add toCxxArg(param, idx)
+        inc idx
+
+      result = cxxTypeUse(args, toCxxType(node["type"]))
 
     else:
       raise newImplementKindError(node, node.treeRepr())
@@ -260,11 +272,17 @@ proc toCxxProc*(
 
 proc toCxxField*(node: CppNode, coms): CxxField =
   assertKind(node, {cppFieldDeclaration})
-  result = cxxField(
-    cxxPair(getName(node["declarator"])),
-    toCxxType(node["type"]))
+  let decl = node["declarator"]
 
-  pointerWraps(node["declarator"], result.nimType)
+  if decl of cppFunctionDeclarator:
+    result = cxxField(cxxPair(getName(decl)), toCxxType(node))
+
+  else:
+    result = cxxField(
+      cxxPair(getName(decl)),
+      toCxxType(node["type"]))
+
+    pointerWraps(decl, result.nimType)
 
 proc toCxxForwardType*(node: CppNode, coms): CxxForward =
   result = cxxForward(cxxPair(node["name"].strVal()))
@@ -290,7 +308,12 @@ proc toCxxObject*(node: CppNode, coms): CxxObject =
     case field.kind:
       of cppFieldDeclaration:
         if field["declarator"] of cppFunctionDeclarator:
-          result.methods.add toCxxProc(field, coms, some result)
+          let name = field["declarator"]["declarator"]
+          if name of cppParenthesizedDeclarator:
+            result.mfields.add toCxxField(field, coms)
+
+          else:
+            result.methods.add toCxxProc(field, coms, some result)
 
         else:
           result.mfields.add toCxxField(field, coms)
