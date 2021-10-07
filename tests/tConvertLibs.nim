@@ -122,7 +122,7 @@ suite "libgit":
           @[],
           @["/usr/include/sys", "/usr/include", "/usr/include/linux"])
 
-    # echov "Collected files"
+    echo "Collected files"
 
     for fix in regroupFiles(wrapped):
       let res = resDir / fix.getFile().withExt("nim")
