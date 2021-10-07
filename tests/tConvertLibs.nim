@@ -86,19 +86,6 @@ suite "libgit":
       return cache.getRename(name.nim)
 
     result = keepNimIdentChars(name.nim)
-    # case name.context:
-    #   of cncEnumField:
-    #     result = replaceInterpolAny(name.nim, enumMap)
-
-    #   of cncType:
-    #     if isSharedTypename(name.nim):
-    #       result = name.nim
-
-    #     else:
-    #       result = cache.fixTypeName(name.nim)
-
-    #   else:
-    #     result = fixContextedName(name)
 
     cache.newRename(name.nim, result)
 
@@ -106,7 +93,6 @@ suite "libgit":
 
   test "libgit types":
     let lib = AbsDir"/usr/include/git2"
-    # let file = lib /. "types.h"
     let resDir = getTestTempDir()
     var cache = newWaveCache()
 

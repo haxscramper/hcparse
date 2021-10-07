@@ -58,7 +58,6 @@ proc newWaveReader*(
       echov "Died here"
       echov getCurrentExceptionMsg()
       raise
-      # quit 1
 
     return EntryHandlingSkip
 
