@@ -12,6 +12,52 @@ static_assert(
         == (int)cpplexer::lexing_exception::error_code::unexpected_error,
     "Mismatched C API enum size");
 
+
+#define CXX_FAIL(e)                                                       \
+    std::cerr << "boost wave side raised C++ exception on the "           \
+                 "toplevel of the wrapper function. Right now exception " \
+                 "propagation is not implemented, so total program "      \
+                 "abort is called. The error 'what' was - "               \
+              << e.what() << ". Exception was caught by " << __FUNCTION__ \
+              << " on line " << __LINE__ << ".";                          \
+    abort();
+
+#define BOOST_FAIL(e)                                                     \
+    std::cerr << "boost wave side raised boost::wave exception on the "   \
+                 "toplevel of the wrapper function. Right now exception " \
+                 "propagation is not implemented, so total program "      \
+                 "abort is called. The error description was - "          \
+              << e.description() << ". 'what' was - " << e.what()         \
+              << ". Exception was caught by " << __FUNCTION__             \
+              << " on line " << __LINE__ << ".";                          \
+    abort();
+
+#define ANY_FAIL()                                                        \
+    std::cerr                                                             \
+        << "boost wave side raised unspecified object. Right now "        \
+           "exception propagation is not implemented, so total program "  \
+           "abort is called. Exception was caught by "                    \
+        << __FUNCTION__ << " on line " << __LINE__ << ".";                \
+    abort();
+
+#define DO_CATCH                                                          \
+    catch (boost::wave::cpp_exception & e) {                              \
+        BOOST_FAIL(e);                                                    \
+    }                                                                     \
+    catch (boost::wave::cpplexer::lexing_exception & e) {                 \
+        BOOST_FAIL(e);                                                    \
+    }                                                                     \
+    catch (std::exception & e) {                                          \
+        CXX_FAIL(e);                                                      \
+    }                                                                     \
+    catch (...) {                                                         \
+        ANY_FAIL();                                                       \
+    }
+
+#define GOT_ERR                                                           \
+    std::cerr << "Exception was raised in " << __FUNCTION__               \
+              << " on line " << __LINE__ << "\n";
+
 const char* to_string(EntryHandling handling) {
     switch (handling) {
         case EntryHandlingSkip: return "skip";
@@ -24,68 +70,80 @@ const char* to_string(EntryHandling handling) {
 bool WaveHooksImpl::found_directive(
     const WaveContextImpl& ctx,
     const WaveToken&       token) {
-    if (found_directive_impl.isActive()) {
-        auto handling = found_directive_impl(
-            (const WaveContextImplHandle*)&ctx, &token);
+    try {
+        if (found_directive_impl.isActive()) {
+            auto handling = found_directive_impl(
+                (const WaveContextImplHandle*)&ctx, &token);
 
-        switch (handling) {
-            case EntryHandlingProcess: return false;
-            case EntryHandlingSkip: return true;
-            default:
-                throw std::logic_error(
-                    std::string(
-                        "'found_directive_impl' returned "
-                        "unexpected "
-                        "entry handling value - wanted 'process' or "
-                        "'skip', but "
-                        "got ")
-                    + to_string(handling));
+            switch (handling) {
+                case EntryHandlingProcess: return false;
+                case EntryHandlingSkip: return true;
+                default:
+                    throw std::logic_error(
+                        std::string(
+                            "'found_directive_impl' returned "
+                            "unexpected "
+                            "entry handling value - wanted 'process' or "
+                            "'skip', but "
+                            "got ")
+                        + to_string(handling));
+            }
+        } else {
+            return default_preprocessing_hooks::found_directive(
+                ctx, token);
         }
-    } else {
-        return default_preprocessing_hooks::found_directive(ctx, token);
     }
+    DO_CATCH;
 }
 
 bool WaveHooksImpl::found_unknown_directive(
     const WaveContextImpl& ctx,
     const WaveTokenList&   line,
     WaveTokenList&         pending) {
-    if (found_unknown_directive_impl.isActive()) {
-        auto handling = found_unknown_directive_impl(
-            (const WaveContextImplHandle*)&ctx,
-            (const WaveTokenListHandle*)&line,
-            (WaveTokenListHandle*)&pending);
+    try {
+        if (found_unknown_directive_impl.isActive()) {
+            auto handling = found_unknown_directive_impl(
+                (const WaveContextImplHandle*)&ctx,
+                (const WaveTokenListHandle*)&line,
+                (WaveTokenListHandle*)&pending);
 
-        switch (handling) {
-            case EntryHandlingProcess: return false;
-            case EntryHandlingSkip: return true;
-            default:
-                throw std::logic_error(
-                    std::string(
-                        "'found_directive_impl' returned "
-                        "unexpected "
-                        "entry handling value - wanted 'process' or "
-                        "'skip', but "
-                        "got ")
-                    + to_string(handling));
+            switch (handling) {
+                case EntryHandlingProcess: return false;
+                case EntryHandlingSkip: return true;
+                default:
+                    throw std::logic_error(
+                        std::string(
+                            "'found_directive_impl' returned "
+                            "unexpected "
+                            "entry handling value - wanted 'process' or "
+                            "'skip', but "
+                            "got ")
+                        + to_string(handling));
+            }
+        } else {
+            return default_preprocessing_hooks::found_unknown_directive(
+                ctx, line, pending);
         }
-    } else {
-        return default_preprocessing_hooks::found_unknown_directive(
-            ctx, line, pending);
     }
+    DO_CATCH;
 }
 
 bool WaveHooksImpl::may_skip_whitespace(
     WaveContextImpl const& ctx,
     WaveToken&             token,
     bool&                  skipped_newline) {
-    if (may_skip_whitespace_impl.isActive()) {
-        return may_skip_whitespace_impl(
-            (const WaveContextImplHandle*)&ctx, &token, &skipped_newline);
-    } else {
-        return default_preprocessing_hooks::may_skip_whitespace(
-            ctx, token, skipped_newline);
+    try {
+        if (may_skip_whitespace_impl.isActive()) {
+            return may_skip_whitespace_impl(
+                (const WaveContextImplHandle*)&ctx,
+                &token,
+                &skipped_newline);
+        } else {
+            return default_preprocessing_hooks::may_skip_whitespace(
+                ctx, token, skipped_newline);
+        }
     }
+    DO_CATCH;
 }
 
 
@@ -94,135 +152,155 @@ bool WaveHooksImpl::evaluated_conditional_expression(
     WaveToken const&       directive,
     WaveTokenList const&   expression,
     bool                   expression_value) {
-    if (evaluated_conditional_expression_impl.isActive()) {
-        return evaluated_conditional_expression_impl(
-            (const WaveContextImplHandle*)&ctx,
-            (const WaveTokenHandle*)&directive,
-            (const WaveTokenListHandle*)&expression,
-            expression_value);
-    } else {
-        return default_preprocessing_hooks::
-            evaluated_conditional_expression(
-                ctx, directive, expression, expression_value);
+    try {
+        if (evaluated_conditional_expression_impl.isActive()) {
+            return evaluated_conditional_expression_impl(
+                (const WaveContextImplHandle*)&ctx,
+                (const WaveTokenHandle*)&directive,
+                (const WaveTokenListHandle*)&expression,
+                expression_value);
+        } else {
+            return default_preprocessing_hooks::
+                evaluated_conditional_expression(
+                    ctx, directive, expression, expression_value);
+        }
     }
+    DO_CATCH;
 }
 
 void wave_setEvaluatedConditionalExpression(
     WaveContextHandle*                     context,
     EvaluatedConditionalExpressionImplType impl,
     void*                                  env) {
-    toCxx(context)
-        ->context->get_hooks()
-        .evaluated_conditional_expression_impl.impl
-        = (bool (*)(
-            const WaveContextImplHandle*,
-            const WaveTokenHandle*,
-            const WaveTokenListHandle*,
-            bool,
-            void*))(impl);
-    toCxx(context)
-        ->context->get_hooks()
-        .evaluated_conditional_expression_impl.env
-        = env;
+    try {
+        toCxx(context)
+            ->context->get_hooks()
+            .evaluated_conditional_expression_impl.impl
+            = (bool (*)(
+                const WaveContextImplHandle*,
+                const WaveTokenHandle*,
+                const WaveTokenListHandle*,
+                bool,
+                void*))(impl);
+        toCxx(context)
+            ->context->get_hooks()
+            .evaluated_conditional_expression_impl.env
+            = env;
+    }
+    DO_CATCH;
 }
 
 
 void WaveHooksImpl::throw_exception(
     const WaveContextImpl& ctx,
     const std::exception&  e) {
+    try {
 
-    bool isError = false;
+        bool isError = false;
 
-    if (const cpp_exception* exception = dynamic_cast<
-            const cpp_exception*>(&e)) {
-        const char* filename    = exception->file_name();
-        const char* description = exception->description();
+        if (const cpp_exception* exception = dynamic_cast<
+                const cpp_exception*>(&e)) {
+            const char* filename    = exception->file_name();
+            const char* description = exception->description();
 
-        auto sev = (WaveSeverityLevel)exception->get_severity();
+            auto sev = (WaveSeverityLevel)exception->get_severity();
 
-        auto diag = WaveDiagnostics{
-            (int)exception->line_no(),
-            (int)exception->column_no(),
-            (WaveErrorCode)exception->get_errorcode(),
-            sev,
-            copyalloc(filename),
-            copyalloc(description),
-        };
+            auto diag = WaveDiagnostics{
+                (int)exception->line_no(),
+                (int)exception->column_no(),
+                (WaveErrorCode)exception->get_errorcode(),
+                sev,
+                copyalloc(filename),
+                copyalloc(description),
+            };
 
-        this->context->diagnostics.push(diag);
+            this->context->diagnostics.push(diag);
 
-        isError = (sev == wslError) || (sev == wslFatal);
+            isError = (sev == wslError) || (sev == wslFatal);
 
-    } else if (
-        const cpplexer::lexing_exception* exception = dynamic_cast<
-            const cpplexer::lexing_exception*>(&e)) {
+        } else if (
+            const cpplexer::lexing_exception* exception = dynamic_cast<
+                const cpplexer::lexing_exception*>(&e)) {
 
-        const char* filename    = exception->file_name();
-        const char* description = exception->description();
+            const char* filename    = exception->file_name();
+            const char* description = exception->description();
 
-        auto sev = (WaveSeverityLevel)exception->get_severity();
+            auto sev = (WaveSeverityLevel)exception->get_severity();
 
-        auto diag = WaveDiagnostics{
-            (int)exception->line_no(),
-            (int)exception->column_no(),
-            (WaveErrorCode)(exception->get_errorcode() + (int)wekLexerErrorBegin + 1),
-            sev,
-            copyalloc(filename),
-            copyalloc(description),
-        };
+            auto diag = WaveDiagnostics{
+                (int)exception->line_no(),
+                (int)exception->column_no(),
+                (WaveErrorCode)(exception->get_errorcode() + (int)wekLexerErrorBegin + 1),
+                sev,
+                copyalloc(filename),
+                copyalloc(description),
+            };
 
-        this->context->diagnostics.push(diag);
+            this->context->diagnostics.push(diag);
 
-        isError = (sev == wslError) || (sev == wslFatal);
-    } else {
-        std::cerr << "boost wave side raised unspecified object. Total "
-                     "program abort is called.";
-        abort();
+            isError = (sev == wslError) || (sev == wslFatal);
+        } else {
+            std::cerr
+                << "boost wave side raised unspecified object. Total "
+                   "program abort is called.";
+            abort();
+        }
+
+        if (isError) {
+            this->context->errorCount++;
+        }
     }
-
-    if (isError) {
-        this->context->errorCount++;
-    }
+    DO_CATCH;
 }
 
 
 void WaveHooksImpl::skipped_token(
     WaveContextImpl const& ctx,
     WaveToken const&       token) {
-    if (skipped_token_impl.isActive()) {
-        skipped_token_impl(
-            (const WaveContextImplHandle*)&ctx,
-            (const WaveTokenHandle*)&token);
-    } else {
-        default_preprocessing_hooks::skipped_token(ctx, token);
+    try {
+        if (skipped_token_impl.isActive()) {
+            skipped_token_impl(
+                (const WaveContextImplHandle*)&ctx,
+                (const WaveTokenHandle*)&token);
+        } else {
+            default_preprocessing_hooks::skipped_token(ctx, token);
+        }
     }
+    DO_CATCH;
 }
 
 void wave_setSkippedToken(
     WaveContextHandle*   context,
     SkippedTokenImplType impl,
     void*                env) {
-    toCxx(context)->context->get_hooks().skipped_token_impl.impl = (void (*)(
-        const WaveContextImplHandle*, const WaveTokenHandle*, void*))(
-        impl);
-    toCxx(context)->context->get_hooks().skipped_token_impl.env = env;
+    try {
+        toCxx(context)->context->get_hooks().skipped_token_impl.impl = (void (*)(
+            const WaveContextImplHandle*, const WaveTokenHandle*, void*))(
+            impl);
+        toCxx(context)->context->get_hooks().skipped_token_impl.env = env;
+    }
+    DO_CATCH;
 }
 
 
 const WaveToken& WaveHooksImpl::generated_token(
     WaveContextImpl const& ctx,
     WaveToken const&       token) {
-    if (generated_token_impl.isActive()) {
-        WaveToken& res = const_cast<WaveToken&>(token);
-        generated_token_impl(
-            (const WaveContextImplHandle*)&ctx,
-            (const WaveTokenHandle*)&token,
-            (WaveTokenHandle*)&res);
+    try {
+        if (generated_token_impl.isActive()) {
+            WaveToken& res = const_cast<WaveToken&>(token);
+            generated_token_impl(
+                (const WaveContextImplHandle*)&ctx,
+                (const WaveTokenHandle*)&token,
+                (WaveTokenHandle*)&res);
 
-        return res;
-    } else {
-        return default_preprocessing_hooks::generated_token(ctx, token);
+            return res;
+        } else {
+            return default_preprocessing_hooks::generated_token(
+                ctx, token);
+        }
     }
+    DO_CATCH;
 }
 
 
@@ -231,88 +309,115 @@ bool WaveHooksImpl::expanding_object_like_macro(
     const WaveToken&       macro,
     const WaveTokenList&   definition,
     const WaveToken&       macrocall) {
-    if (expanding_object_like_macro_impl.isActive()) {
+    try {
+        if (expanding_object_like_macro_impl.isActive()) {
 
-        auto handling = expanding_object_like_macro_impl(
-            (const WaveContextImplHandle*)&ctx,
-            (const WaveTokenHandle*)&macro,
-            (const WaveTokenListHandle*)&definition,
-            (const WaveTokenHandle*)&macrocall);
+            auto handling = expanding_object_like_macro_impl(
+                (const WaveContextImplHandle*)&ctx,
+                (const WaveTokenHandle*)&macro,
+                (const WaveTokenListHandle*)&definition,
+                (const WaveTokenHandle*)&macrocall);
 
-        switch (handling) {
-            case EntryHandlingProcess: return false;
-            case EntryHandlingSkip: return true;
-            default:
-                throw std::logic_error(
-                    std::string(
-                        "'expanding_object_like_macro' returned "
-                        "unexpected "
-                        "entry handling value - wanted 'process' or "
-                        "'skip', but "
-                        "got ")
-                    + to_string(handling));
+            switch (handling) {
+                case EntryHandlingProcess: return false;
+                case EntryHandlingSkip: return true;
+                default:
+                    throw std::logic_error(
+                        std::string(
+                            "'expanding_object_like_macro' returned "
+                            "unexpected "
+                            "entry handling value - wanted 'process' or "
+                            "'skip', but "
+                            "got ")
+                        + to_string(handling));
+            }
+        } else {
+            return default_preprocessing_hooks::
+                expanding_object_like_macro(
+                    ctx, macro, definition, macrocall);
         }
-    } else {
-        return default_preprocessing_hooks::expanding_object_like_macro(
-            ctx, macro, definition, macrocall);
     }
+    DO_CATCH;
 }
 
 void wave_setExpandingObjectLikeMacro(
     WaveContextHandle*               context,
     ExpandingObjectLikeMacroImplType impl,
     void*                            env) {
-    toCxx(context)->context->get_hooks().expanding_object_like_macro_impl.impl = (EntryHandling(*)(
-        const WaveContextImplHandle*,
-        const WaveTokenHandle*,
-        const WaveTokenListHandle*,
-        const WaveTokenHandle*,
-        void*))(impl);
-    toCxx(context)->context->get_hooks().expanding_object_like_macro_impl.env = env;
+    try {
+        toCxx(context)
+            ->context->get_hooks()
+            .expanding_object_like_macro_impl.impl
+            = (EntryHandling(*)(
+                const WaveContextImplHandle*,
+                const WaveTokenHandle*,
+                const WaveTokenListHandle*,
+                const WaveTokenHandle*,
+                void*))(impl);
+        toCxx(context)
+            ->context->get_hooks()
+            .expanding_object_like_macro_impl.env
+            = env;
+    }
+    DO_CATCH;
 }
 
 void WaveHooksImpl::expanded_macro(
     WaveContextImpl const& ctx,
     WaveTokenList const&   result) {
-    if (expanded_macro_impl.isActive()) {
-        expanded_macro_impl(
-            (const WaveContextImplHandle*)&ctx,
-            (const WaveTokenListHandle*)&result);
-    } else {
-        default_preprocessing_hooks::expanded_macro(ctx, result);
+    try {
+        if (expanded_macro_impl.isActive()) {
+            expanded_macro_impl(
+                (const WaveContextImplHandle*)&ctx,
+                (const WaveTokenListHandle*)&result);
+        } else {
+            default_preprocessing_hooks::expanded_macro(ctx, result);
+        }
     }
+    DO_CATCH;
 }
 
 void wave_setExpandedMacro(
     WaveContextHandle*    context,
     ExpandedMacroImplType impl,
     void*                 env) {
-    toCxx(context)->context->get_hooks().expanded_macro_impl.impl = (void (*)(
-        const WaveContextImplHandle*, const WaveTokenListHandle*, void*))(
-        impl);
-    toCxx(context)->context->get_hooks().expanded_macro_impl.env = env;
+    try {
+        toCxx(context)->context->get_hooks().expanded_macro_impl.impl = (void (*)(
+            const WaveContextImplHandle*,
+            const WaveTokenListHandle*,
+            void*))(impl);
+        toCxx(context)->context->get_hooks().expanded_macro_impl.env = env;
+    }
+    DO_CATCH;
 }
 
 void WaveHooksImpl::rescanned_macro(
     const WaveContextImpl& ctx,
     const WaveTokenList&   result) {
-    if (rescanned_macro_impl.isActive()) {
-        rescanned_macro_impl(
-            (const WaveContextImplHandle*)&ctx,
-            (WaveTokenListHandle*)&result);
-    } else {
-        default_preprocessing_hooks::rescanned_macro(ctx, result);
+    try {
+        if (rescanned_macro_impl.isActive()) {
+            rescanned_macro_impl(
+                (const WaveContextImplHandle*)&ctx,
+                (WaveTokenListHandle*)&result);
+        } else {
+            default_preprocessing_hooks::rescanned_macro(ctx, result);
+        }
     }
+    DO_CATCH;
 }
 
 void wave_setRescannedMacro(
     WaveContextHandle*     context,
     RescannedMacroImplType impl,
     void*                  env) {
-    toCxx(context)->context->get_hooks().rescanned_macro_impl.impl = (void (*)(
-        const WaveContextImplHandle*, const WaveTokenListHandle*, void*))(
-        impl);
-    toCxx(context)->context->get_hooks().rescanned_macro_impl.env = env;
+    try {
+        toCxx(context)->context->get_hooks().rescanned_macro_impl.impl = (void (*)(
+            const WaveContextImplHandle*,
+            const WaveTokenListHandle*,
+            void*))(impl);
+        toCxx(context)->context->get_hooks().rescanned_macro_impl.env = env;
+    }
+    DO_CATCH;
 }
 
 
@@ -320,29 +425,33 @@ bool WaveHooksImpl::found_include_directive(
     const WaveContextImpl& ctx,
     const std::string&     filename,
     bool                   include_next) {
-    if (found_include_directive_impl.isActive()) {
-        auto handling = found_include_directive_impl(
-            (const WaveContextImplHandle*)&ctx,
-            filename.c_str(),
-            include_next);
+    try {
+        if (found_include_directive_impl.isActive()) {
+            auto handling = found_include_directive_impl(
+                (const WaveContextImplHandle*)&ctx,
+                filename.c_str(),
+                include_next);
 
-        switch (handling) {
-            case EntryHandlingProcess: return false;
-            case EntryHandlingSkip: return true;
-            default:
-                throw std::logic_error(
-                    std::string(
-                        "'found_include_directive' returned "
-                        "unexpected "
-                        "entry handling value - wanted 'process' or "
-                        "'skip', but "
-                        "got ")
-                    + to_string(handling));
+            switch (handling) {
+                case EntryHandlingProcess: return false;
+                case EntryHandlingSkip: return true;
+                default:
+                    throw std::logic_error(
+                        std::string(
+                            "'found_include_directive' returned "
+                            "unexpected "
+                            "entry handling value - wanted 'process' or "
+                            "'skip', but "
+                            "got ")
+                        + to_string(handling));
+            }
+
+        } else {
+            return default_preprocessing_hooks::found_include_directive(
+                ctx, filename, include_next);
         }
-    } else {
-        return default_preprocessing_hooks::found_include_directive(
-            ctx, filename, include_next);
     }
+    DO_CATCH;
 }
 
 
@@ -350,9 +459,12 @@ void wave_setFoundIncludeDirective(
     WaveContextHandle*            context,
     FoundIncludeDirectiveImplType impl,
     void*                         env) {
-    toCxx(context)->context->get_hooks().found_include_directive_impl.impl = (EntryHandling(*)(
-        const WaveContextImplHandle*, const char*, bool, void*))(impl);
-    toCxx(context)->context->get_hooks().found_include_directive_impl.env = env;
+    try {
+        toCxx(context)->context->get_hooks().found_include_directive_impl.impl = (EntryHandling(*)(
+            const WaveContextImplHandle*, const char*, bool, void*))(impl);
+        toCxx(context)->context->get_hooks().found_include_directive_impl.env = env;
+    }
+    DO_CATCH;
 }
 
 bool WaveHooksImpl::locate_include_file(
@@ -928,58 +1040,29 @@ WaveTokId wave_tokGetId(WaveTokenHandle* tok) {
     }
 }
 
+
 const char* wave_tokGetValue(WaveTokenHandle* tok) {
-    return toCxx(tok)->get_value().c_str();
+    try {
+        return toCxx(tok)->get_value().c_str();
+    }
+    DO_CATCH;
 }
 
 
 WaveTokenHandle* wave_iterGetTok(WaveIteratorHandle* iter) {
-    return (WaveTokenHandle*)&(*(toCxx(iter)->d));
+    try {
+        return (WaveTokenHandle*)&(*(toCxx(iter)->d));
+    }
+    DO_CATCH;
 }
 
-void wave_deleteTok(WaveTokenHandle* tok) { delete (WaveToken*)(tok); }
-
-
-#define CXX_FAIL(e)                                                       \
-    std::cerr << "boost wave side raised C++ exception on the "           \
-                 "toplevel of the wrapper function. Right now exception " \
-                 "propagation is not implemented, so total program "      \
-                 "abort is called. The error 'what' was - "               \
-              << e.what() << ". Exception was caught by " << __FUNCTION__ \
-              << " on line " << __LINE__ << ".";                          \
-    abort();
-
-#define BOOST_FAIL(e)                                                     \
-    std::cerr << "boost wave side raised boost::wave exception on the "   \
-                 "toplevel of the wrapper function. Right now exception " \
-                 "propagation is not implemented, so total program "      \
-                 "abort is called. The error description was - "          \
-              << e.description() << ". 'what' was - " << e.what()         \
-              << ". Exception was caught by " << __FUNCTION__             \
-              << " on line " << __LINE__ << ".";                          \
-    abort();
-
-#define ANY_FAIL()                                                        \
-    std::cerr                                                             \
-        << "boost wave side raised unspecified object.Right now "         \
-           "exception propagation is not implemented, so total program "  \
-           "abort is called. Exception was caught by "                    \
-        << __FUNCTION__ << " on line " << __LINE__ << ".";                \
-    abort();
-
-#define DO_CATCH                                                          \
-    catch (boost::wave::cpp_exception & e) {                              \
-        BOOST_FAIL(e);                                                    \
-    }                                                                     \
-    catch (boost::wave::cpplexer::lexing_exception & e) {                 \
-        BOOST_FAIL(e);                                                    \
-    }                                                                     \
-    catch (std::exception & e) {                                          \
-        CXX_FAIL(e);                                                      \
-    }                                                                     \
-    catch (...) {                                                         \
-        ANY_FAIL();                                                       \
+void wave_deleteTok(WaveTokenHandle* tok) {
+    try {
+        delete (WaveToken*)(tok);
     }
+    DO_CATCH;
+}
+
 
 bool wave_neqIterator(
     WaveIteratorHandle* iter1,
@@ -990,6 +1073,7 @@ bool wave_neqIterator(
     try {
         return it1->d != it2->d;
     } catch (boost::wave::cpplexer::lexing_exception& e) {
+        GOT_ERR;
         it1->ctx->context->get_hooks().throw_exception(
             *it1->ctx->context, e);
         return true;
@@ -999,33 +1083,43 @@ bool wave_neqIterator(
 void wave_advanceIterator(WaveIteratorHandle* iter) {
     try {
         ++(toCxx(iter)->d);
-    } catch (boost::wave::cpplexer::lexing_exception& e) {
+    } catch (std::exception& e) {
+        GOT_ERR;
         toCxx(iter)->ctx->context->get_hooks().throw_exception(
             *toCxx(iter)->ctx->context, e);
-    } catch (...) { ANY_FAIL(); };
+    } catch (...) {
+        //
+        ANY_FAIL();
+        //
+    };
 }
 
 
 WaveContext::WaveContext(std::string _text, const char* filename) {
-    text    = _text;
-    context = std::make_unique<WaveContextImpl>(
-        text.begin(), text.end(), filename);
+    try {
+        text    = _text;
+        context = std::make_unique<WaveContextImpl>(
+            text.begin(), text.end(), filename);
+    }
+    DO_CATCH;
 }
 
 void WaveContext::processAll() {
-    auto first = context->begin(text.begin(), text.end());
-    auto last  = context->end();
+    try {
+        auto first = context->begin(text.begin(), text.end());
+        auto last  = context->end();
 
-    while (first != last) {
-        current_position = (*first).get_position();
-        std::cout << (*first).get_value();
-        ++first;
+        while (first != last) {
+            current_position = (*first).get_position();
+            std::cout << (*first).get_value();
+            ++first;
+        }
     }
+    DO_CATCH;
 }
 
 WaveIteratorHandle* wave_beginIterator(WaveContextHandle* context) {
     try {
-
         auto cxx = toCxx(context);
         auto res = new CxxWaveIterator(
             cxx->context->begin(cxx->text.begin(), cxx->text.end()), cxx);
@@ -1037,7 +1131,6 @@ WaveIteratorHandle* wave_beginIterator(WaveContextHandle* context) {
 
 WaveIteratorHandle* wave_endIterator(WaveContextHandle* context) {
     try {
-
         return (WaveIteratorHandle*)(new CxxWaveIterator(
             toCxx(context)->context->end(), toCxx(context)));
     }
@@ -1057,89 +1150,101 @@ WaveContextHandle* wave_newWaveContext(
 void wave_setLanguageMode(
     WaveContextHandle*   ctx,
     WaveLanguageModeImpl mode) {
-    auto c = toCxx(ctx)->context.get();
+    try {
+        auto c = toCxx(ctx)->context.get();
 
-    language_support get = c->get_language();
-    language_support res = support_normal;
-    using boost::wave::language_support;
+        language_support get = c->get_language();
+        language_support res = support_normal;
+        using boost::wave::language_support;
 
 
-    switch (mode) {
-        case iwlmSupportNormal: {
-            c->set_language(support_normal);
-        } break;
-        case iwlmC99: {
-            c->set_language(support_c99);
-        } break;
-        case iwlmCpp11: {
-            c->set_language(support_cpp11);
-        } break;
-        case iwlmCpp17: {
-            c->set_language(support_cpp17);
-        } break;
-        case iwlmCpp20: {
-            c->set_language(support_cpp20);
-        } break;
+        switch (mode) {
+            case iwlmSupportNormal: {
+                c->set_language(support_normal);
+            } break;
+            case iwlmC99: {
+                c->set_language(support_c99);
+            } break;
+            case iwlmCpp11: {
+                c->set_language(support_cpp11);
+            } break;
+            case iwlmCpp17: {
+                c->set_language(support_cpp17);
+            } break;
+            case iwlmCpp20: {
+                c->set_language(support_cpp20);
+            } break;
 
-        case iwlmLongLong: {
-            c->set_language(enable_long_long(get));
-        } break;
-        case iwlmVariadics: {
-            c->set_language(enable_variadics(get));
-        } break;
-        case iwlmNoNewlineAtEndOfFIle: {
-            c->set_language(enable_no_newline_at_end_of_file(get));
-        } break;
-        case iwlmHasInclude: {
-            c->set_language(enable_has_include(get));
-        } break;
-        case iwlmVaOpt: {
-            c->set_language(enable_va_opt(get));
-        } break;
-        case iwlmEmitContline: {
-            c->set_language(enable_emit_contnewlines(get));
-        } break;
-        case iwlmInsertWhitespace: {
-            c->set_language(enable_insert_whitespace(get));
-        } break;
-        case iwlmPreserveComments: {
-            c->set_language(enable_preserve_comments(get));
-        } break;
-        case iwlmNoCharacterValidation: {
-            c->set_language(enable_no_character_validation(get));
-        } break;
-        case iwlmConvertTrigraphs: {
-            c->set_language(enable_convert_trigraphs(get));
-        } break;
-        case iwlmSingleLine: {
-            c->set_language(enable_single_line(get));
-        } break;
-        case iwlmPreferPpNumbers: {
-            c->set_language(enable_prefer_pp_numbers(get));
-        } break;
-        case iwlmEmitLineDirectives: {
-            c->set_language(enable_emit_line_directives(get));
-        } break;
-        case iwlmIncludeGuardDetection: {
-            c->set_language(enable_include_guard_detection(get));
-        } break;
-        case iwlmEmitPragmaDirectives: {
-            c->set_language(enable_emit_pragma_directives(get));
-        } break;
+            case iwlmLongLong: {
+                c->set_language(enable_long_long(get));
+            } break;
+            case iwlmVariadics: {
+                c->set_language(enable_variadics(get));
+            } break;
+            case iwlmNoNewlineAtEndOfFIle: {
+                c->set_language(enable_no_newline_at_end_of_file(get));
+            } break;
+            case iwlmHasInclude: {
+                c->set_language(enable_has_include(get));
+            } break;
+            case iwlmVaOpt: {
+                c->set_language(enable_va_opt(get));
+            } break;
+            case iwlmEmitContline: {
+                c->set_language(enable_emit_contnewlines(get));
+            } break;
+            case iwlmInsertWhitespace: {
+                c->set_language(enable_insert_whitespace(get));
+            } break;
+            case iwlmPreserveComments: {
+                c->set_language(enable_preserve_comments(get));
+            } break;
+            case iwlmNoCharacterValidation: {
+                c->set_language(enable_no_character_validation(get));
+            } break;
+            case iwlmConvertTrigraphs: {
+                c->set_language(enable_convert_trigraphs(get));
+            } break;
+            case iwlmSingleLine: {
+                c->set_language(enable_single_line(get));
+            } break;
+            case iwlmPreferPpNumbers: {
+                c->set_language(enable_prefer_pp_numbers(get));
+            } break;
+            case iwlmEmitLineDirectives: {
+                c->set_language(enable_emit_line_directives(get));
+            } break;
+            case iwlmIncludeGuardDetection: {
+                c->set_language(enable_include_guard_detection(get));
+            } break;
+            case iwlmEmitPragmaDirectives: {
+                c->set_language(enable_emit_pragma_directives(get));
+            } break;
+        }
     }
+    DO_CATCH;
 }
 
 void wave_destroyContext(WaveContextHandle* context) {
-    delete toCxx(context);
+    try {
+        delete toCxx(context);
+    }
+    DO_CATCH;
 }
 
 
 bool wave_contextHasErrors(WaveContextHandle* context) {
-    return 0 < toCxx(context)->errorCount;
+    try {
+        return 0 < toCxx(context)->errorCount;
+    }
+    DO_CATCH;
 }
 
 bool wave_contextHasWarnings(WaveContextHandle* context) {
-    return toCxx(context)->diagnostics.size() > 0;
+    try {
+        return toCxx(context)->diagnostics.size() > 0;
+    }
+    DO_CATCH;
 }
 
 WaveDiagnostics wave_contextPopDiagnostics(WaveContextHandle* context) {
@@ -1170,8 +1275,11 @@ void* wave_contextGetData(WaveContextHandle* context) {
 
 
 void wave_deleteDiagnostics(WaveDiagnostics diag) {
-    std::free(diag.filename);
-    std::free(diag.errorText);
+    try {
+        std::free(diag.filename);
+        std::free(diag.errorText);
+    }
+    DO_CATCH;
 }
 
 
@@ -1187,9 +1295,17 @@ void wave_setExpandingFunctionLikeMacro(
     WaveContextHandle*                 context,
     ExpandingFunctionLikeMacroImplType impl,
     void*                              env) {
-    toCxx(context)->context->get_hooks().expanding_function_like_macro_impl.impl = (bool (*)(
-        void*, void*))(impl);
-    toCxx(context)->context->get_hooks().expanding_function_like_macro_impl.env = env;
+    try {
+        toCxx(context)
+            ->context->get_hooks()
+            .expanding_function_like_macro_impl.impl
+            = (bool (*)(void*, void*))(impl);
+        toCxx(context)
+            ->context->get_hooks()
+            .expanding_function_like_macro_impl.env
+            = env;
+    }
+    DO_CATCH;
 }
 
 
@@ -1218,20 +1334,30 @@ bool wave_addMacroDefinition(
     WaveContextHandle* context,
     const char*        macrostring,
     bool               is_predefined) {
-    return toCxx(context)->context->add_macro_definition(
-        macrostring, is_predefined);
+    try {
+        auto ctx = toCxx(context);
+        return ctx->context->add_macro_definition(
+            macrostring, is_predefined);
+    }
+    DO_CATCH;
 }
 
 bool wave_removeMacroDefinition(
     WaveContextHandle* context,
     const char*        macrostring,
     bool               is_predefined) {
-    return toCxx(context)->context->remove_macro_definition(
-        macrostring, is_predefined);
+    try {
+        return toCxx(context)->context->remove_macro_definition(
+            macrostring, is_predefined);
+    }
+    DO_CATCH;
 }
 
 bool wave_isDefinedMacro(WaveContextHandle* context, const char* name) {
-    return toCxx(context)->context->is_defined_macro(name);
+    try {
+        return toCxx(context)->context->is_defined_macro(name);
+    }
+    DO_CATCH;
 }
 
 bool wave_getMacroDefinition(
@@ -1242,21 +1368,24 @@ bool wave_getMacroDefinition(
     WavePosition*           pos,
     WaveTokenVectorHandle** parameters,
     WaveTokenListHandle**   definition) {
-    auto                     outParams     = new std::vector<WaveToken>();
-    auto                     outDefinition = new WaveTokenList();
-    util::file_position_type outPos;
-    bool res = toCxx(context)->context->get_macro_definition(
-        name,
-        *is_function_style,
-        *is_predefined,
-        outPos,
-        *outParams,
-        *outDefinition);
+    try {
+        auto                     outParams = new std::vector<WaveToken>();
+        auto                     outDefinition = new WaveTokenList();
+        util::file_position_type outPos;
+        bool res = toCxx(context)->context->get_macro_definition(
+            name,
+            *is_function_style,
+            *is_predefined,
+            outPos,
+            *outParams,
+            *outDefinition);
 
-    *parameters = (WaveTokenVectorHandle*)outParams;
-    *definition = (WaveTokenListHandle*)outDefinition;
+        *parameters = (WaveTokenVectorHandle*)outParams;
+        *definition = (WaveTokenListHandle*)outDefinition;
 
-    return res;
+        return res;
+    }
+    DO_CATCH;
 }
 
 int wave_tokenVectorLen(WaveTokenVectorHandle* vec) {
@@ -1269,75 +1398,120 @@ int wave_tokenVectorLen(WaveTokenVectorHandle* vec) {
 WaveTokenHandle* wave_tokenVectorGetAt(
     WaveTokenVectorHandle* vec,
     int                    idx) {
-    WaveToken* tmp = &(toCxx(vec)->operator[](idx));
-    return (WaveTokenHandle*)tmp;
+    try {
+        WaveToken* tmp = &(toCxx(vec)->operator[](idx));
+        return (WaveTokenHandle*)tmp;
+    }
+    DO_CATCH;
 }
 
 void wave_deleteWaveTokenVector(WaveTokenVectorHandle* vec) {
-    delete toCxx(vec);
+    try {
+        delete toCxx(vec);
+    }
+    DO_CATCH;
 }
 
 int wave_tokenListLen(WaveTokenListHandle* list) {
-    return toCxx(list)->size();
+    try {
+        return toCxx(list)->size();
+    }
+    DO_CATCH;
 }
 
 const char* wave_tokenListToStr(WaveTokenListHandle* list) {
-    return util::impl::as_string(*toCxx(list)).c_str();
+    try {
+        return util::impl::as_string(*toCxx(list)).c_str();
+    }
+    DO_CATCH;
 }
 
 
 WaveTokenListIteratorHandle* wave_tokenListBeginIterator(
     WaveTokenListHandle* l) {
-    return (WaveTokenListIteratorHandle*)new WaveTokenList::iterator(
-        toCxx(l)->begin());
+    try {
+        return (WaveTokenListIteratorHandle*)new WaveTokenList::iterator(
+            toCxx(l)->begin());
+    }
+    DO_CATCH;
 }
 
 WaveTokenListIteratorHandle* wave_tokenListEndIterator(
     WaveTokenListHandle* l) {
-    return (WaveTokenListIteratorHandle*)new WaveTokenList::iterator(
-        toCxx(l)->end());
+    try {
+        return (WaveTokenListIteratorHandle*)new WaveTokenList::iterator(
+            toCxx(l)->end());
+    }
+    DO_CATCH;
 }
 
 bool wave_neqListIterator(
     WaveTokenListIteratorHandle* i1,
     WaveTokenListIteratorHandle* i2) {
-    return (*toCxx(i1)) != (*toCxx(i2));
+    try {
+        return (*toCxx(i1)) != (*toCxx(i2));
+    }
+    DO_CATCH;
 }
 
 WaveTokenHandle* wave_listIterDeref(WaveTokenListIteratorHandle* i) {
     WaveToken* tmp = &(**toCxx(i));
-    return (WaveTokenHandle*)tmp;
+    try {
+        return (WaveTokenHandle*)tmp;
+    }
+    DO_CATCH;
 }
 
 void wave_listIterAdvance(WaveTokenListIteratorHandle* i) {
-    ++(*toCxx(i));
+    try {
+        ++(*toCxx(i));
+    }
+    DO_CATCH;
 }
 
 
 bool wave_addSysincludePath(WaveContextHandle* context, char const* path) {
-    return toCxx(context)->context->add_sysinclude_path(path);
+    try {
+        return toCxx(context)->context->add_sysinclude_path(path);
+    }
+    DO_CATCH;
 }
 
 bool wave_addIncludePath(WaveContextHandle* context, char const* path) {
-    return toCxx(context)->context->add_include_path(path);
+    try {
+        return toCxx(context)->context->add_include_path(path);
+    }
+    DO_CATCH;
 }
 
 void wave_setSysincludeDelimiter(WaveContextHandle* context) {
-    toCxx(context)->context->set_sysinclude_delimiter();
+    try {
+        toCxx(context)->context->set_sysinclude_delimiter();
+    }
+    DO_CATCH;
 }
 
 void wave_setCurrentFilename(
     WaveContextHandle* context,
     const char*        name) {
-    toCxx(context)->context->set_current_filename(name);
+    try {
+        toCxx(context)->context->set_current_filename(name);
+    }
+    DO_CATCH;
 }
 
 const char* wave_getCurrentFilename(WaveContextHandle* context) {
-    return toCxx(context)->context->get_current_filename().c_str();
+    try {
+        return toCxx(context)->context->get_current_filename().c_str();
+    }
+    DO_CATCH;
 }
 
 const char* wave_getCurrentDirectory(WaveContextHandle* context) {
-    return toCxx(context)->context->get_current_directory().c_str();
+    try {
+        return toCxx(context)->context->get_current_directory().c_str();
+    }
+    DO_CATCH;
 }
 
 bool wave_findIncludeFile(
@@ -1346,52 +1520,76 @@ bool wave_findIncludeFile(
     char**             dir,
     bool               is_system,
     char const*        current_file) {
-    std::string s{*str};
-    std::string d;
-    bool        res = toCxx(ctx)->context->find_include_file(
-        s, d, is_system, current_file);
-    //    std::cout << "s: " << s << std::endl;
-    //    std::cout << "d: " << d << std::endl;
-    *str = copyalloc(s.c_str());
-    *dir = copyalloc(d.c_str());
+    try {
+        std::string s{*str};
+        std::string d;
+        bool        res = toCxx(ctx)->context->find_include_file(
+            s, d, is_system, current_file);
+        //    std::cout << "s: " << s << std::endl;
+        //    std::cout << "d: " << d << std::endl;
+        *str = copyalloc(s.c_str());
+        *dir = copyalloc(d.c_str());
 
-    return res;
+        return res;
+    }
+    DO_CATCH;
 }
 
 WaveMacroIteratorHandle* wave_macroBeginIterator(
     WaveContextHandle* context) {
-    return (WaveMacroIteratorHandle*)new WaveMacroNameIterator(
-        toCxx(context)->context->macro_names_begin());
+    try {
+        return (WaveMacroIteratorHandle*)new WaveMacroNameIterator(
+            toCxx(context)->context->macro_names_begin());
+    }
+    DO_CATCH;
 }
 
 WaveMacroIteratorHandle* wave_macroEndIterator(
     WaveContextHandle* context) {
-    return (WaveMacroIteratorHandle*)new WaveMacroNameIterator(
-        toCxx(context)->context->macro_names_end());
+    try {
+        return (WaveMacroIteratorHandle*)new WaveMacroNameIterator(
+            toCxx(context)->context->macro_names_end());
+    }
+    DO_CATCH;
 }
 
 bool wave_neqMacroIterator(
     WaveMacroIteratorHandle* i1,
     WaveMacroIteratorHandle* i2) {
-    return *toCxx(i1) != *toCxx(i2);
+    try {
+        return *toCxx(i1) != *toCxx(i2);
+    }
+    DO_CATCH;
 }
 
 void wave_macroIteratorAdvance(WaveMacroIteratorHandle* i) {
-    WaveMacroNameIterator* iter = toCxx(i);
-    **iter;
-    iter->operator++();
+    try {
+        WaveMacroNameIterator* iter = toCxx(i);
+        **iter;
+        iter->operator++();
+    }
+    DO_CATCH;
 }
 const char* wave_macroIteratorDeref(WaveMacroIteratorHandle* i) {
-    return (*(*toCxx(i))).c_str();
+    try {
+        return (*(*toCxx(i))).c_str();
+    }
+    DO_CATCH;
 }
 
 
 int getIterationDepth(WaveContextHandle* context) {
-    return toCxx(context)->context->get_iteration_depth();
+    try {
+        return toCxx(context)->context->get_iteration_depth();
+    }
+    DO_CATCH;
 }
 
 
 const char* wave_unescapeIncludeToken(const char* s) {
-    auto tmp = boost::wave::util::impl::unescape_lit(std::string(s));
-    return copyalloc(tmp.c_str());
+    try {
+        auto tmp = boost::wave::util::impl::unescape_lit(std::string(s));
+        return copyalloc(tmp.c_str());
+    }
+    DO_CATCH;
 }

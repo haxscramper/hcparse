@@ -24,29 +24,41 @@ proc newWaveReader*(
     readFile(file), file.string, userIncludes, sysIncludes)
 
   resCtx.onFoundIncludeDirective():
-    let inclf = unescapeInclude(impl)
-    if inclf in subTargets or subTargets.len == 0:
-      let file = resCtx.findIncludeFile(inclf)
-      if file notin cache.defines:
-        cache.defines[file] = @[]
-        var subcontext = newWaveContext(
-          readFile($file), $file, userIncludes, sysIncludes)
-        var first: ptr WaveIteratorHandle = subcontext.first()
-        var last: ptr WaveIteratorHandle = subcontext.last()
-        subcontext.skipAll()
+    try:
+      let inclf = unescapeInclude(impl)
+      if inclf in subTargets or subTargets.len == 0:
+        let file = resCtx.findIncludeFile(inclf)
+        if file notin cache.defines:
+          cache.defines[file] = @[]
+          var subcontext = newWaveContext(
+            readFile($file), $file, userIncludes, sysIncludes)
+          var first: ptr WaveIteratorHandle = subcontext.first()
+          var last: ptr WaveIteratorHandle = subcontext.last()
+          subcontext.skipAll()
 
-        for def in macroNames(subcontext):
-          let mdef = subcontext.getMacroDefinition($def)
-          if not mdef.isPredefined:
-            var args, body: seq[string]
+          for def in macroNames(subcontext):
+            let mdef = subcontext.getMacroDefinition($def)
+            if not mdef.isPredefined:
+              var args, body: seq[string]
 
-            for arg in mdef.parameters: args.add $arg
-            for arg in mdef.definition: body.add $arg
+              for arg in mdef.parameters: args.add $arg
+              for arg in mdef.definition: body.add $arg
 
-            cache.defines[file].add(($def, args, body))
+              cache.defines[file].add(($def, args, body))
 
         for (name, args, body) in cache.defines[file]:
+          if isNil(resCtx):
+            echov "FUCKING PIECE OF SHIT"
+            quit(1)
+
+          assertRef resCtx
           resCtx.addMacroDefinition(name, args, some body.join(""))
+
+    except:
+      echov "Died here"
+      echov getCurrentExceptionMsg()
+      raise
+      # quit 1
 
     return EntryHandlingSkip
 

@@ -58,6 +58,9 @@ proc mapTypeName*(node: CppNode): string =
     mapPrimitiveName(node.primitiveName())
 
 
+proc toCxxComment*(comm: CppNode): CxxComment =
+  cxxComment(comm.strVal().stripComment())
+
 proc toCxxArg*(node: CppNode, idx: int): CxxArg
 
 proc toCxxType*(node: CppNode): CxxTypeUse =
@@ -114,6 +117,9 @@ proc evalEnumValue(node: CppNode, ctx: CxxEvalCtx): BiggestInt =
     of cppIdentifier:
       result = ctx.table[node.strVal()]
 
+    of cppCharLiteral:
+      result = BiggestInt(node.strVal()[0])
+
     of cppBinaryExpression:
       let lhs = evalEnumValue(node[0], ctx)
       let rhs = evalEnumValue(node[1], ctx)
@@ -127,9 +133,14 @@ proc evalEnumValue(node: CppNode, ctx: CxxEvalCtx): BiggestInt =
         of ">>": result = lhs shr rhs
         else: raise newImplementKindError(node{1}.strVal())
 
+    of cppParenthesizedExpression:
+      result = evalEnumValue(node[0], ctx)
 
     else:
-      raise newImplementKindError(node, node.treeRepr())
+      raise newImplementKindError(
+        node,
+        $node & "\n" & node.treeRepr(),
+      )
 
 proc toCxxEnum*(node: CppNode, coms): CxxEnum =
   var name: CxxNamePair
@@ -152,11 +163,13 @@ proc toCxxEnum*(node: CppNode, coms): CxxEnum =
         let name = en["name"].strVal()
         env.table[name] = value
         result.values.add cxxEnumValue(cxxPair(name), value)
+        result.values[^1].add coms
+        coms.clear()
         inc value
 
 
       of cppComment:
-        result.values[^1].add cxxComment(en.strVal().stripComment())
+        coms.add toCxxComment(en)
 
       else:
         raise newImplementKindError(en)
@@ -233,8 +246,13 @@ proc toCxxArg*(node: CppNode, idx: int): CxxArg =
     argt: CxxTypeUse = toCxxType(node["type"])
 
   if "declarator" in node:
-    name = cxxPair(getName(node["declarator"]))
-    pointerWraps(node["declarator"], argt)
+    if node["declarator"] of cppAbstractPointerDeclarator:
+      name = cxxPair("a" & $idx)
+      argt = argt.wrap(ctkPtr)
+
+    else:
+      name = cxxPair(getName(node["declarator"]))
+      pointerWraps(node["declarator"], argt)
 
   else:
     name = cxxPair("a" & $idx)
@@ -266,8 +284,17 @@ proc toCxxProc*(
     else:
       node["declarator"]
 
+  var argComs: seq[CxxComment]
+  # echov decl
+  # echov decl.treeRepr()
   for idx, arg in decl["parameters"]:
-    result.arguments.add toCxxArg(arg, idx)
+    if arg of cppComment:
+      argComs.add toCxxComment(arg)
+
+    else:
+      result.arguments.add toCxxArg(arg, idx).withIt do:
+        it.add argComs
+        argComs.clear()
 
 
 proc toCxxField*(node: CppNode, coms): CxxField =
@@ -310,16 +337,22 @@ proc toCxxObject*(node: CppNode, coms): CxxObject =
         if field["declarator"] of cppFunctionDeclarator:
           let name = field["declarator"]["declarator"]
           if name of cppParenthesizedDeclarator:
-            result.mfields.add toCxxField(field, coms)
+            result.mfields.add toCxxField(field, coms).withIt do:
+              it.add coms
+              coms.clear()
 
           else:
-            result.methods.add toCxxProc(field, coms, some result)
+            result.methods.add toCxxProc(field, coms, some result).withIt do:
+              it.add coms
+              coms.clear()
 
         else:
-          result.mfields.add toCxxField(field, coms)
+          result.mfields.add toCxxField(field, coms).withIt do:
+            it.add coms
+            coms.clear()
 
       of cppComment:
-        result.mfields[^1].docComment.add cxxComment(field.strVal().stripComment())
+        coms.add toCxxComment(field)
 
       else:
         raise newImplementKindError(field, field.treeRepr())
@@ -401,20 +434,27 @@ proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
         let d = "declarator"
         let body = node[d]
         var args: seq[CxxArg]
+        var coms: seq[CxxComment]
         for arg in body["parameters"]:
-          let name =
-            if d in arg and (arg[d].kind != cppAbstractPointerDeclarator):
-              arg[d].getName()
+          if arg of cppComment:
+            coms.add toCxxComment(arg)
 
-            else:
-              ""
+          else:
+            let name =
+              if d in arg and (arg[d].kind != cppAbstractPointerDeclarator):
+                arg[d].getName()
+
+              else:
+                ""
 
 
-          var t = toCxxType(arg["type"])
-          if d in arg:
-            pointerWraps(arg[d], t)
+            var t = toCxxType(arg["type"])
+            if d in arg:
+              pointerWraps(arg[d], t)
 
-          args.add cxxArg(cxxPair(name), t)
+            args.add cxxArg(cxxPair(name), t).withIt do:
+              it.add coms
+              coms.clear()
 
         result.add cxxAlias(
           body[d].getName().cxxPair().cxxTypeDecl(),

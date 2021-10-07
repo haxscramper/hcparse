@@ -563,13 +563,25 @@ func mapPrimitiveNameImpl*(name: string):
     tuple[nim: string, pod: CxxPodTypeKind] =
 
   case name:
-    of "unsigned long": ("ulong", cptU32)
-    of "long long": ("clonglong", cptI64)
-    of "long": ("clong", cptI32)
-    of "void": ("void", cptVoid)
+    of "short": ("cshort", cptI16)
+    of "unsigned short": ("cushort", cptU32)
+
     of "int": ("cint", cptInt)
-    of "char": ("char", cptChar)
     of "unsigned", "unsigned int": ("cuint", cptUInt)
+
+    of "long": ("clong", cptI32)
+    of "unsigned long": ("ulong", cptU32)
+
+    of "long long": ("clonglong", cptI64)
+
+
+
+    of "void": ("void", cptVoid)
+
+    of "char": ("char", cptChar)
+    of "unsigned char": ("uchar", cptUChar)
+
+
     of "float": ("cfloat", cptFloat)
     of "bool": ("bool", cptBool)
     of "size_t": ("size_t", cptSizeT)
@@ -580,6 +592,7 @@ func mapPrimitiveNameImpl*(name: string):
 
     of "uint8_t": ("uint8", cptU8)
     of "uint16_t": ("uint16", cptU16)
+    of "uint32_t": ("uint32", cptU32)
     of "uint64_t": ("uint64", cptU64)
     # of tkBool:       ("bool")
     # of tkint:        ("cint")

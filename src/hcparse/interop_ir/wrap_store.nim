@@ -269,6 +269,7 @@ type
     name*: CxxNamePair
     nimType*: CxxTypeUse
     default*: Option[CxxExpr]
+    # docComment*: seq[CxxComment]
 
   CxxFieldFlag* = enum
     cffStatic
@@ -1278,7 +1279,8 @@ func toRealDecl*(entry: CxxEntry): CxxEntry =
 
 func add*[
   E: CxxMacro | CxxAlias | CxxObject | CxxForward |
-     CxxProc | CxxEnum | CxxEnumValue
+     CxxProc | CxxEnum | CxxEnumValue | CxxField |
+     CxxArg
   ](
     s: var E, comment: CxxComment | seq[CxxComment]) =
   s.docComment.add comment

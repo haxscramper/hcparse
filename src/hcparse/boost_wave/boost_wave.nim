@@ -14,7 +14,7 @@ import std/[os, strformat, options]
 
 
 type
-  WaveContext* = object
+  WaveContext* = ref object
     handle*: ptr WaveContextHandle
     str*: cstringArray
 
@@ -95,7 +95,10 @@ proc raiseErrors*(ctx: var WaveContext) =
           &" Error was - '{diag.errorText}' at {diag.filename}:{diag.line}:{diag.column}{extra}"
       )
 
-    # else:
+    else:
+      echov diag.filename
+      echov (diag.line, diag.column)
+      echov diag.errorText
 
 iterator items*(
     ctx: var WaveContext,
@@ -357,12 +360,12 @@ proc newWaveContext*(
   ## - NOTE if @arg{userIncludes} *or* @arg{sysIncludes} is a non-empty
   ##   sequence then [[code:setIncludePath]] is called for one-time configuration,
   ##   meaning subsequent configurations are not supported.
-  # new(
-  #   result,
-  #   # proc(ctx: WaveContext) =
-  #     # destroyContext(ctx.handle)
-  #     # deallocCStringArray(ctx.str)
-  # )
+  new(
+    result,
+    # proc(ctx: WaveContext) =
+    #   destroyContext(ctx.handle)
+    #   deallocCStringArray(ctx.str)
+  )
 
   result.str = allocCStringArray([str])
   result.handle = newWaveContext(result.str[0], file)
@@ -972,7 +975,11 @@ using `hasErrors`, and accessed using `popDiagnostics`
 
   ]##
 
-  return ctx.handle.addMacroDefinition(str.cstring, isPredefined)
+  # echov "...", globalTick()
+  assertRef ctx
+  assertRef ctx.handle
+  result = ctx.handle.addMacroDefinition(str.cstring, isPredefined)
+  # echov "ok"
 
 import std/options
 export options
@@ -994,6 +1001,7 @@ proc addMacroDefinition*(
   ##   defines it as `1`. That's what `none(string)` does. Other alternatives
   ##   pass definition using `=<definition>`. If you want to define macro as
   ##   nothing (explicitly empty string), use `some("")`
+  assertRef ctx
 
   var def = name
   if 0 < args.len:
