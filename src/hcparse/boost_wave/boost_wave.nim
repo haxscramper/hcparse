@@ -381,7 +381,7 @@ template echov1*(variable: untyped): untyped =
     var vart = $variable
     let pref = astToStr(variable) & vart
     var text = pref
-    debugecho(text)
+    # debugecho(text)
 
 proc newWaveContext*(
     str: string,

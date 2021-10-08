@@ -94,6 +94,7 @@ suite "libgit":
   test "libgit types":
     let resDir = getTestTempDir()
     var cache = newWaveCache()
+    var resultWrapped: seq[CxxFile]
 
     block:
       let lib = AbsDir"/usr/include/git2"
@@ -101,11 +102,13 @@ suite "libgit":
         if file.name() notin [
           "stdint" # Use this header only with Microsoft Visual C++ compilers!
         ]:
-          echov file
           let wrapped = wrapViaTsWave(
             file, lib, fixConf, cache,
             @[],
             @["/usr/include/sys", "/usr/include", "/usr/include/linux"])
+
+          resultWrapped.add wrapped
+
 
     echo "Collected files"
 
