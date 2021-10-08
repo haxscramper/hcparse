@@ -292,17 +292,13 @@ proc setIncludePaths*(ctx: var WaveContext, user, sys: seq[string]) =
   #   [[code:addSysIncludePath]] with [[code:setSysIncludeDelimiter]] called
   #   where appropriate.
   for path in user:
-    if not ctx.addIncludePath(path):
-      echov path
-      raiseErrors(ctx)
+    assert ctx.addIncludePath(path), $path
 
   # assert not ctx.wasSysInclude
   # ctx.setSysIncludeDelimiter()
 
   for path in sys:
-    if not ctx.addSysIncludePath(path):
-      raiseErrors(ctx)
-      assert false
+    assert ctx.addSysIncludePath(path), $path
 
 ## #+end_group
 

@@ -91,27 +91,40 @@ suite "libgit":
 
   fixConf.typeStore = newTypeStore()
 
-  test "libgit types":
-    let resDir = getTestTempDir()
-    var cache = newWaveCache()
-    var resultWrapped: seq[CxxFile]
+  let outDir = getTestTempDir()
 
-    block:
-      let lib = AbsDir"/usr/include/git2"
-      for file in walkDir(lib, AbsFile):
-        if file.name() notin [
-          "stdint" # Use this header only with Microsoft Visual C++ compilers!
-        ]:
-          let wrapped = wrapViaTsWave(
-            file, lib, fixConf, cache,
-            @[],
+  test "Expand libgit":
+    # This is not a tests, this is a fucking joke, but I have no idea how
+    # to debug spontaneous nim closure failures when they are passed to the
+    # boost wave side, so for now I just repeatedly run the same test file
+    # until I get all entries wrapped correctly.
+
+    mkDir outDir
+    let lib = AbsDir"/usr/include/git2"
+    var cache = newWaveCache()
+    for file in walkDir(lib, AbsFile):
+      if file.name() notin [
+        "stdint" # Use this header only with Microsoft Visual C++ compilers!
+      ]:
+        let resFile = (outDir /. file.name()) &. "h"
+
+        if not exists(resFile):
+          var reader = newWaveReader(file, cache, @[],
             @["/usr/include/sys", "/usr/include", "/usr/include/linux"])
 
-          resultWrapped.add wrapped
 
+          resFile.writeFile(reader.getExpanded())
+
+
+  test "libgit types":
+    var resultWrapped: seq[CxxFile]
+    block:
+      for file in walkDir(outDir, AbsFile, exts = @["h"]):
+        resultWrapped.add wrapViaTs(file, outDir, fixConf)
 
     echo "Collected files"
 
-    # for fix in regroupFiles(wrapped):
+    # for fix in regroupFiles(resultWrapped):
     #   let res = resDir / fix.getFile().withExt("nim")
     #   res.writeFile($toNNode[PNode](fix, cCodegenConf))
+    #   echov res
