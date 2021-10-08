@@ -8,13 +8,15 @@ import hmisc/core/all
 import hmisc/other/oswrap
 import hmisc/wrappers/wraphelp
 
-import std/[os, strformat, options]
+from hmisc/core/colored import toLink
+
+import std/[os, strformat, options, strutils]
 
 {.passc:"-I" & currentSourcePath().splitFile().dir .}
 
 
 type
-  WaveContext* = ref object
+  WaveContext* = object
     handle*: ptr WaveContextHandle
     str*: cstringArray
 
@@ -290,13 +292,17 @@ proc setIncludePaths*(ctx: var WaveContext, user, sys: seq[string]) =
   #   [[code:addSysIncludePath]] with [[code:setSysIncludeDelimiter]] called
   #   where appropriate.
   for path in user:
-    assert ctx.addIncludePath(path)
+    if not ctx.addIncludePath(path):
+      echov path
+      raiseErrors(ctx)
 
   # assert not ctx.wasSysInclude
   # ctx.setSysIncludeDelimiter()
 
   for path in sys:
-    assert ctx.addSysIncludePath(path)
+    if not ctx.addSysIncludePath(path):
+      raiseErrors(ctx)
+      assert false
 
 ## #+end_group
 
@@ -349,6 +355,34 @@ proc setLanguageMode*(context: var WaveContext, mode: set[WaveLanguageModeImpl])
   for item in mode:
     context.handle.setLanguageMode(item)
 
+
+
+func toLink1(link: string, desc: string = link): string =
+  &"\e]8;;{link}\e\\{desc}\e]8;;\e\\"
+
+func toLink1(
+    pos: (string, int, int),
+    desc: string = "file://" & pos[0] & ":" & $pos[1] & ":" & $pos[2]
+  ): string =
+
+  toLink1(&"file://{pos[0]}:{pos[1]}:{pos[2]}", desc)
+
+
+var keepInt: int
+template keep(value: untyped) =
+  keepInt += 1
+  {.emit: [keepInt, "+= (void*)&", value,";"].}
+  keepInt = keepInt and 0xFFFF
+
+template echov1*(variable: untyped): untyped =
+  block:
+    let iinfo = instantiationInfo(fullpaths = true)
+    var line = " [" & toLink(iinfo, strutils.align($iinfo.line, 4)) & "] "
+    var vart = $variable
+    let pref = astToStr(variable) & vart
+    var text = pref
+    debugecho(text)
+
 proc newWaveContext*(
     str: string,
     file: string = "<unknown>",
@@ -360,15 +394,21 @@ proc newWaveContext*(
   ## - NOTE if @arg{userIncludes} *or* @arg{sysIncludes} is a non-empty
   ##   sequence then [[code:setIncludePath]] is called for one-time configuration,
   ##   meaning subsequent configurations are not supported.
-  new(
-    result,
-    # proc(ctx: WaveContext) =
-    #   destroyContext(ctx.handle)
-    #   deallocCStringArray(ctx.str)
-  )
+  # new(
+  #   result,
+  #   # proc(ctx: WaveContext) =
+  #   #   destroyContext(ctx.handle)
+  #   #   deallocCStringArray(ctx.str)
+  # )
 
   result.str = allocCStringArray([str])
   result.handle = newWaveContext(result.str[0], file)
+  /// "Echo result handle":
+    /// "Cast to integer":
+      let c = cast[int](result.handle)
+
+    /// "Execute echov":
+      echov1 c
 
   discard result.addIncludePath(".")
   if ?userIncludes or ?sysIncludes:
@@ -976,8 +1016,9 @@ using `hasErrors`, and accessed using `popDiagnostics`
   ]##
 
   # echov "...", globalTick()
-  assertRef ctx
+  # assertRef ctx
   assertRef ctx.handle
+  # echov cast[int](ctx.handle)
   result = ctx.handle.addMacroDefinition(str.cstring, isPredefined)
   # echov "ok"
 
@@ -1001,7 +1042,7 @@ proc addMacroDefinition*(
   ##   defines it as `1`. That's what `none(string)` does. Other alternatives
   ##   pass definition using `=<definition>`. If you want to define macro as
   ##   nothing (explicitly empty string), use `some("")`
-  assertRef ctx
+  # assertRef ctx
 
   var def = name
   if 0 < args.len:

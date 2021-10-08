@@ -11,7 +11,6 @@
 #include <boost/wave/util/file_position.hpp>
 
 #include <iostream>
-#include <memory>
 #include <queue>
 #include <string>
 
@@ -369,15 +368,16 @@ using WaveIterator          = WaveContextImpl::iterator_type;
 using WaveMacroNameIterator = WaveContextImpl::name_iterator;
 
 struct WaveContext {
-    std::unique_ptr<WaveContextImpl> context;
-    std::string                      text;
-    util::file_position_type         current_position;
-    void*                            contextData = nullptr;
-    int                              errorCount  = 0;
-    std::queue<WaveDiagnostics>      diagnostics;
+    WaveContextImpl*            context;
+    std::string                 text;
+    util::file_position_type    current_position;
+    void*                       contextData = nullptr;
+    int                         errorCount  = 0;
+    std::queue<WaveDiagnostics> diagnostics;
 
     WaveContext(std::string _text, const char* filename);
     void processAll();
+    ~WaveContext();
 };
 
 // DECL_STRUCT(CWaveProcessingHooks);

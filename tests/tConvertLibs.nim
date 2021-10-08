@@ -92,24 +92,23 @@ suite "libgit":
   fixConf.typeStore = newTypeStore()
 
   test "libgit types":
-    let lib = AbsDir"/usr/include/git2"
     let resDir = getTestTempDir()
     var cache = newWaveCache()
 
-    var wrapped: seq[CxxFile]
-
-    for file in walkDir(lib, AbsFile):
-      if file.name() notin [
-        "stdint" # Use this header only with Microsoft Visual C++ compilers!
-      ]:
-        echov file
-        wrapped.add wrapViaTsWave(
-          file, lib, fixConf, cache,
-          @[],
-          @["/usr/include/sys", "/usr/include", "/usr/include/linux"])
+    block:
+      let lib = AbsDir"/usr/include/git2"
+      for file in walkDir(lib, AbsFile):
+        if file.name() notin [
+          "stdint" # Use this header only with Microsoft Visual C++ compilers!
+        ]:
+          echov file
+          let wrapped = wrapViaTsWave(
+            file, lib, fixConf, cache,
+            @[],
+            @["/usr/include/sys", "/usr/include", "/usr/include/linux"])
 
     echo "Collected files"
 
-    for fix in regroupFiles(wrapped):
-      let res = resDir / fix.getFile().withExt("nim")
-      res.writeFile($toNNode[PNode](fix, cCodegenConf))
+    # for fix in regroupFiles(wrapped):
+    #   let res = resDir / fix.getFile().withExt("nim")
+    #   res.writeFile($toNNode[PNode](fix, cCodegenConf))

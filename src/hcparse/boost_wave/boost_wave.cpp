@@ -475,40 +475,46 @@ bool WaveHooksImpl::locate_include_file(
     std::string&     dir_path,
     std::string&     native_name) {
 
-    if (locate_include_file_impl.isActive()) {
-        // FIXME `dir_path` and other mutable strings might need to be
-        // corrected for length.
-        return locate_include_file_impl(
-            (WaveContextImplHandle*)&ctx,
-            file_path.data(),
-            is_system,
-            current_name,
-            dir_path.data(),
-            native_name.data());
-    } else {
-        return default_preprocessing_hooks::locate_include_file(
-            ctx,
-            file_path,
-            is_system,
-            current_name,
-            dir_path,
-            native_name);
+    try {
+        if (locate_include_file_impl.isActive()) {
+            // FIXME `dir_path` and other mutable strings might need to be
+            // corrected for length.
+            return locate_include_file_impl(
+                (WaveContextImplHandle*)&ctx,
+                file_path.data(),
+                is_system,
+                current_name,
+                dir_path.data(),
+                native_name.data());
+        } else {
+            return default_preprocessing_hooks::locate_include_file(
+                ctx,
+                file_path,
+                is_system,
+                current_name,
+                dir_path,
+                native_name);
+        }
     }
+    DO_CATCH;
 }
 
 void wave_setLocateIncludeFile(
     WaveContextHandle*        context,
     LocateIncludeFileImplType impl,
     void*                     env) {
-    toCxx(context)->context->get_hooks().locate_include_file_impl.impl = (EntryHandling(*)(
-        WaveContextImplHandle*,
-        char*,
-        bool,
-        char const*,
-        char*,
-        char*,
-        void*))(impl);
-    toCxx(context)->context->get_hooks().locate_include_file_impl.env = env;
+    try {
+        toCxx(context)->context->get_hooks().locate_include_file_impl.impl = (EntryHandling(*)(
+            WaveContextImplHandle*,
+            char*,
+            bool,
+            char const*,
+            char*,
+            char*,
+            void*))(impl);
+        toCxx(context)->context->get_hooks().locate_include_file_impl.env = env;
+    }
+    DO_CATCH;
 }
 
 void WaveHooksImpl::opened_include_file(
@@ -516,78 +522,101 @@ void WaveHooksImpl::opened_include_file(
     const std::string&     rel_filename,
     const std::string&     abs_filename,
     bool                   is_system_include) {
-    if (opened_include_file_impl.isActive()) {
-        opened_include_file_impl(
-            (const WaveContextImplHandle*)&ctx,
-            rel_filename.data(),
-            abs_filename.data(),
-            is_system_include);
-    } else {
-        default_preprocessing_hooks::opened_include_file(
-            ctx, rel_filename, abs_filename, is_system_include);
+    try {
+        if (opened_include_file_impl.isActive()) {
+            opened_include_file_impl(
+                (const WaveContextImplHandle*)&ctx,
+                rel_filename.data(),
+                abs_filename.data(),
+                is_system_include);
+        } else {
+            default_preprocessing_hooks::opened_include_file(
+                ctx, rel_filename, abs_filename, is_system_include);
+        }
     }
+    DO_CATCH;
 }
 
 void wave_setOpenedIncludeFile(
     WaveContextHandle*        context,
     OpenedIncludeFileImplType impl,
     void*                     env) {
-    toCxx(context)->context->get_hooks().opened_include_file_impl.impl = (void (*)(
-        const WaveContextImplHandle*,
-        const char*,
-        const char*,
-        bool,
-        void*))(impl);
-    toCxx(context)->context->get_hooks().opened_include_file_impl.env = env;
+    try {
+        toCxx(context)->context->get_hooks().opened_include_file_impl.impl = (void (*)(
+            const WaveContextImplHandle*,
+            const char*,
+            const char*,
+            bool,
+            void*))(impl);
+        toCxx(context)->context->get_hooks().opened_include_file_impl.env = env;
+    }
+    DO_CATCH;
 }
 
 void WaveHooksImpl::returning_from_include_file(
     const WaveContextImpl& ctx) {
-    if (returning_from_include_file_impl.isActive()) {
-        returning_from_include_file_impl(
-            (const WaveContextImplHandle*)&ctx);
-    } else {
-        default_preprocessing_hooks::returning_from_include_file(ctx);
+    try {
+        if (returning_from_include_file_impl.isActive()) {
+            returning_from_include_file_impl(
+                (const WaveContextImplHandle*)&ctx);
+        } else {
+            default_preprocessing_hooks::returning_from_include_file(ctx);
+        }
     }
+    DO_CATCH;
 }
 
 void wave_setReturningFromIncludeFile(
     WaveContextHandle*               context,
     ReturningFromIncludeFileImplType impl,
     void*                            env) {
-    toCxx(context)->context->get_hooks().returning_from_include_file_impl.impl = (void (*)(
-        const WaveContextImplHandle*, void*))(impl);
-    toCxx(context)->context->get_hooks().returning_from_include_file_impl.env = env;
+    try {
+        toCxx(context)
+            ->context->get_hooks()
+            .returning_from_include_file_impl.impl
+            = (void (*)(const WaveContextImplHandle*, void*))(impl);
+        toCxx(context)
+            ->context->get_hooks()
+            .returning_from_include_file_impl.env
+            = env;
+    }
+    DO_CATCH;
 }
 
 void WaveHooksImpl::detected_include_guard(
     const WaveContextImpl& ctx,
     const std::string&     filename,
     const std::string&     include_guard) {
-    if (detected_include_guard_impl.isActive()) {
-        detected_include_guard_impl(
-            (const WaveContextImplHandle*)&ctx,
-            filename.data(),
-            include_guard.data());
-    } else {
-        default_preprocessing_hooks::detected_include_guard(
-            ctx, filename, include_guard);
+    try {
+        if (detected_include_guard_impl.isActive()) {
+            detected_include_guard_impl(
+                (const WaveContextImplHandle*)&ctx,
+                filename.data(),
+                include_guard.data());
+        } else {
+            default_preprocessing_hooks::detected_include_guard(
+                ctx, filename, include_guard);
+        }
     }
+    DO_CATCH;
 }
 
 void WaveHooksImpl::detected_pragma_once(
     const WaveContextImpl& ctx,
     const WaveToken&       pragma_token,
     const std::string&     filename) {
-    if (detected_pragma_once_impl.isActive()) {
-        detected_pragma_once_impl(
-            (const WaveContextImplHandle*)&ctx,
-            (const WaveTokenHandle*)&pragma_token,
-            filename.data());
-    } else {
-        default_preprocessing_hooks::detected_pragma_once(
-            ctx, pragma_token, filename);
+    try {
+        if (detected_pragma_once_impl.isActive()) {
+            detected_pragma_once_impl(
+                (const WaveContextImplHandle*)&ctx,
+                (const WaveTokenHandle*)&pragma_token,
+                filename.data());
+        } else {
+            default_preprocessing_hooks::detected_pragma_once(
+                ctx, pragma_token, filename);
+        }
     }
+    DO_CATCH;
 }
 
 bool WaveHooksImpl::interpret_pragma(
@@ -596,18 +625,21 @@ bool WaveHooksImpl::interpret_pragma(
     const WaveToken&       option,
     const WaveTokenList&   values,
     const WaveToken&       pragma_token) {
-    if (interpret_pragma_impl.isActive()) {
-        return interpret_pragma_impl(
-            (const WaveContextImplHandle*)&ctx,
-            (WaveTokenListHandle*)&pending,
-            (const WaveTokenHandle*)&option,
-            (const WaveTokenListHandle*)&values,
-            (const WaveTokenHandle*)&pragma_token);
+    try {
+        if (interpret_pragma_impl.isActive()) {
+            return interpret_pragma_impl(
+                (const WaveContextImplHandle*)&ctx,
+                (WaveTokenListHandle*)&pending,
+                (const WaveTokenHandle*)&option,
+                (const WaveTokenListHandle*)&values,
+                (const WaveTokenHandle*)&pragma_token);
 
-    } else {
-        return default_preprocessing_hooks::interpret_pragma(
-            ctx, pending, option, values, pragma_token);
+        } else {
+            return default_preprocessing_hooks::interpret_pragma(
+                ctx, pending, option, values, pragma_token);
+        }
     }
+    DO_CATCH;
 }
 
 void WaveHooksImpl::defined_macro(
@@ -617,89 +649,106 @@ void WaveHooksImpl::defined_macro(
     const WaveTokenVector& parameters,
     const WaveTokenList&   definition,
     bool                   is_predefined) {
-    if (defined_macro_impl.isActive()) {
-        defined_macro_impl(
-            (const WaveContextImplHandle*)&ctx,
-            (const WaveTokenHandle*)&name,
-            is_functionlike,
-            (const WaveTokenVectorHandle*)&parameters,
-            (const WaveTokenListHandle*)&definition,
-            is_predefined);
+    try {
+        if (defined_macro_impl.isActive()) {
+            defined_macro_impl(
+                (const WaveContextImplHandle*)&ctx,
+                (const WaveTokenHandle*)&name,
+                is_functionlike,
+                (const WaveTokenVectorHandle*)&parameters,
+                (const WaveTokenListHandle*)&definition,
+                is_predefined);
 
-    } else {
-        default_preprocessing_hooks::defined_macro(
-            ctx,
-            name,
-            is_functionlike,
-            parameters,
-            definition,
-            is_predefined);
+        } else {
+            default_preprocessing_hooks::defined_macro(
+                ctx,
+                name,
+                is_functionlike,
+                parameters,
+                definition,
+                is_predefined);
+        }
     }
+    DO_CATCH;
 }
 
 void wave_setDefinedMacro(
     WaveContextHandle*   context,
     DefinedMacroImplType impl,
     void*                env) {
-    toCxx(context)->context->get_hooks().defined_macro_impl.impl = (void (*)(
-        const WaveContextImplHandle*,
-        const WaveTokenHandle*,
-        bool,
-        const WaveTokenVectorHandle*,
-        const WaveTokenListHandle*,
-        bool,
-        void*))(impl);
-    toCxx(context)->context->get_hooks().defined_macro_impl.env = env;
+    try {
+        toCxx(context)->context->get_hooks().defined_macro_impl.impl = (void (*)(
+            const WaveContextImplHandle*,
+            const WaveTokenHandle*,
+            bool,
+            const WaveTokenVectorHandle*,
+            const WaveTokenListHandle*,
+            bool,
+            void*))(impl);
+        toCxx(context)->context->get_hooks().defined_macro_impl.env = env;
+    }
+    DO_CATCH;
 }
 
 
 void WaveHooksImpl::undefined_macro(
     const WaveContextImpl& ctx,
     const WaveToken&       name) {
-    if (undefined_macro_impl.isActive()) {
-        undefined_macro_impl(
-            (const WaveContextImplHandle*)&ctx,
-            (const WaveTokenHandle*)&name);
-    } else {
-        default_preprocessing_hooks::undefined_macro(ctx, name);
+    try {
+        if (undefined_macro_impl.isActive()) {
+            undefined_macro_impl(
+                (const WaveContextImplHandle*)&ctx,
+                (const WaveTokenHandle*)&name);
+        } else {
+            default_preprocessing_hooks::undefined_macro(ctx, name);
+        }
     }
+    DO_CATCH;
 }
 
 
 bool WaveHooksImpl::found_error_directive(
     WaveContextImpl const& ctx,
     WaveTokenList const&   message) {
-    if (found_error_directive_impl.isActive()) {
-        auto handling = found_error_directive_impl(
-            (const WaveContextImplHandle*)&ctx,
-            (const WaveTokenListHandle*)&message);
+    try {
+        if (found_error_directive_impl.isActive()) {
+            auto handling = found_error_directive_impl(
+                (const WaveContextImplHandle*)&ctx,
+                (const WaveTokenListHandle*)&message);
 
-        switch (handling) {
-            case EntryHandlingRaise: return false;
-            case EntryHandlingSkip: return true;
-            default:
-                throw std::logic_error(
-                    std::string("'found_error_directive' returned "
-                                "unexpected "
-                                "entry handling value - wanted 'raise' or "
-                                "'skip', but "
-                                "got ")
-                    + to_string(handling));
+            switch (handling) {
+                case EntryHandlingRaise: return false;
+                case EntryHandlingSkip: return true;
+                default:
+                    throw std::logic_error(
+                        std::string(
+                            "'found_error_directive' returned "
+                            "unexpected "
+                            "entry handling value - wanted 'raise' or "
+                            "'skip', but "
+                            "got ")
+                        + to_string(handling));
+            }
+        } else {
+            return default_preprocessing_hooks::found_error_directive(
+                ctx, message);
         }
-    } else {
-        return default_preprocessing_hooks::found_error_directive(
-            ctx, message);
     }
+    DO_CATCH;
 }
 
 void wave_setFoundErrorDirective(
     WaveContextHandle*         context,
     FoundLineDirectiveImplType impl,
     void*                      env) {
-    toCxx(context)->context->get_hooks().found_error_directive_impl.impl = (EntryHandling(*)(
-        const WaveContextImplHandle*, const WaveTokenListHandle*, void*))(
-        impl);
-    toCxx(context)->context->get_hooks().found_error_directive_impl.env = env;
+    try {
+        toCxx(context)->context->get_hooks().found_error_directive_impl.impl = (EntryHandling(*)(
+            const WaveContextImplHandle*,
+            const WaveTokenListHandle*,
+            void*))(impl);
+        toCxx(context)->context->get_hooks().found_error_directive_impl.env = env;
+    }
+    DO_CATCH;
 }
 
 
@@ -708,29 +757,35 @@ void WaveHooksImpl::found_line_directive(
     const WaveTokenList&   arguments,
     unsigned int           line,
     const std::string&     filename) {
-    if (found_line_directive_impl.isActive()) {
-        found_line_directive_impl(
-            (const WaveContextImplHandle*)&ctx,
-            (const WaveTokenListHandle*)&arguments,
-            line,
-            filename.data());
-    } else {
-        default_preprocessing_hooks::found_line_directive(
-            ctx, arguments, line, filename);
+    try {
+        if (found_line_directive_impl.isActive()) {
+            found_line_directive_impl(
+                (const WaveContextImplHandle*)&ctx,
+                (const WaveTokenListHandle*)&arguments,
+                line,
+                filename.data());
+        } else {
+            default_preprocessing_hooks::found_line_directive(
+                ctx, arguments, line, filename);
+        }
     }
+    DO_CATCH;
 }
 
 void wave_setFoundLineDirective(
     WaveContextHandle*         context,
     FoundLineDirectiveImplType impl,
     void*                      env) {
-    toCxx(context)->context->get_hooks().found_line_directive_impl.impl = (EntryHandling(*)(
-        const WaveContextImplHandle*,
-        const WaveTokenListHandle*,
-        unsigned int,
-        const char*,
-        void*))(impl);
-    toCxx(context)->context->get_hooks().found_line_directive_impl.env = env;
+    try {
+        toCxx(context)->context->get_hooks().found_line_directive_impl.impl = (EntryHandling(*)(
+            const WaveContextImplHandle*,
+            const WaveTokenListHandle*,
+            unsigned int,
+            const char*,
+            void*))(impl);
+        toCxx(context)->context->get_hooks().found_line_directive_impl.env = env;
+    }
+    DO_CATCH;
 }
 
 
@@ -738,65 +793,79 @@ bool WaveHooksImpl::emit_line_directive(
     const WaveContextImpl& ctx,
     WaveTokenList&         pending,
     const WaveToken&       act_token) {
-    if (emit_line_directive_impl.isActive()) {
-        return emit_line_directive_impl(
-            (const WaveContextImplHandle*)&ctx,
-            (WaveTokenListHandle*)&pending,
-            (const WaveTokenHandle*)&act_token);
+    try {
+        if (emit_line_directive_impl.isActive()) {
+            return emit_line_directive_impl(
+                (const WaveContextImplHandle*)&ctx,
+                (WaveTokenListHandle*)&pending,
+                (const WaveTokenHandle*)&act_token);
 
-    } else {
-        return default_preprocessing_hooks::emit_line_directive(
-            ctx, pending, act_token);
+        } else {
+            return default_preprocessing_hooks::emit_line_directive(
+                ctx, pending, act_token);
+        }
     }
+    DO_CATCH;
 }
 
 void wave_setEmitLineDirective(
     WaveContextHandle*        context,
     EmitLineDirectiveImplType impl,
     void*                     env) {
-    toCxx(context)->context->get_hooks().emit_line_directive_impl.impl = (bool (*)(
-        const WaveContextImplHandle*,
-        WaveTokenListHandle*,
-        const WaveTokenHandle*,
-        void*))(impl);
-    toCxx(context)->context->get_hooks().emit_line_directive_impl.env = env;
+    try {
+        toCxx(context)->context->get_hooks().emit_line_directive_impl.impl = (bool (*)(
+            const WaveContextImplHandle*,
+            WaveTokenListHandle*,
+            const WaveTokenHandle*,
+            void*))(impl);
+        toCxx(context)->context->get_hooks().emit_line_directive_impl.env = env;
+    }
+    DO_CATCH;
 }
 
 
 bool WaveHooksImpl::found_warning_directive(
     WaveContextImpl const& ctx,
     WaveTokenList const&   message) {
-    if (found_warning_directive_impl.isActive()) {
-        auto handling = found_warning_directive_impl(
-            (const WaveContextImplHandle*)&ctx,
-            (const WaveTokenListHandle*)&message);
+    try {
+        if (found_warning_directive_impl.isActive()) {
+            auto handling = found_warning_directive_impl(
+                (const WaveContextImplHandle*)&ctx,
+                (const WaveTokenListHandle*)&message);
 
-        switch (handling) {
-            case EntryHandlingRaise: return false;
-            case EntryHandlingSkip: return true;
-            default:
-                throw std::logic_error(
-                    std::string("'found_warning_directive_impl' returned "
-                                "unexpected "
-                                "entry handling value - wanted 'raise' or "
-                                "'skip', but "
-                                "got ")
-                    + to_string(handling));
+            switch (handling) {
+                case EntryHandlingRaise: return false;
+                case EntryHandlingSkip: return true;
+                default:
+                    throw std::logic_error(
+                        std::string(
+                            "'found_warning_directive_impl' returned "
+                            "unexpected "
+                            "entry handling value - wanted 'raise' or "
+                            "'skip', but "
+                            "got ")
+                        + to_string(handling));
+            }
+        } else {
+            return default_preprocessing_hooks::found_warning_directive(
+                ctx, message);
         }
-    } else {
-        return default_preprocessing_hooks::found_warning_directive(
-            ctx, message);
     }
+    DO_CATCH;
 }
 
 void wave_setFoundWarningDirective(
     WaveContextHandle*            context,
     FoundWarningDirectiveImplType impl,
     void*                         env) {
-    toCxx(context)->context->get_hooks().found_warning_directive_impl.impl = (EntryHandling(*)(
-        const WaveContextImplHandle*, const WaveTokenListHandle*, void*))(
-        impl);
-    toCxx(context)->context->get_hooks().found_warning_directive_impl.env = env;
+    try {
+        toCxx(context)->context->get_hooks().found_warning_directive_impl.impl = (EntryHandling(*)(
+            const WaveContextImplHandle*,
+            const WaveTokenListHandle*,
+            void*))(impl);
+        toCxx(context)->context->get_hooks().found_warning_directive_impl.env = env;
+    }
+    DO_CATCH;
 }
 
 WaveTokId wave_tokGetId(WaveTokenHandle* tok) {
@@ -1095,11 +1164,14 @@ void wave_advanceIterator(WaveIteratorHandle* iter) {
 }
 
 
+WaveContext::~WaveContext() { std::cerr << "Destroying wave context"; }
+
+
 WaveContext::WaveContext(std::string _text, const char* filename) {
     try {
         text    = _text;
-        context = std::make_unique<WaveContextImpl>(
-            text.begin(), text.end(), filename);
+        context = new WaveContextImpl(text.begin(), text.end(), filename);
+        this->context->get_hooks().context = this;
     }
     DO_CATCH;
 }
@@ -1142,7 +1214,6 @@ WaveContextHandle* wave_newWaveContext(
     const char* filename) {
     try {
         auto res = new WaveContext(std::string(instring), filename);
-        res->context->get_hooks().context = res;
         return (WaveContextHandle*)(res);
     }
     DO_CATCH;
@@ -1151,7 +1222,7 @@ void wave_setLanguageMode(
     WaveContextHandle*   ctx,
     WaveLanguageModeImpl mode) {
     try {
-        auto c = toCxx(ctx)->context.get();
+        auto c = toCxx(ctx)->context;
 
         language_support get = c->get_language();
         language_support res = support_normal;
@@ -1335,9 +1406,9 @@ bool wave_addMacroDefinition(
     const char*        macrostring,
     bool               is_predefined) {
     try {
-        auto ctx = toCxx(context);
-        return ctx->context->add_macro_definition(
-            macrostring, is_predefined);
+        WaveContext*     ctx  = toCxx(context);
+        WaveContextImpl* ctx1 = ctx->context;
+        return ctx1->add_macro_definition(macrostring, is_predefined);
     }
     DO_CATCH;
 }

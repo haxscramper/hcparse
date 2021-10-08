@@ -47,12 +47,14 @@ proc newWaveReader*(
               cache.defines[file].add(($def, args, body))
 
         for (name, args, body) in cache.defines[file]:
-          if isNil(resCtx):
-            echov "FUCKING PIECE OF SHIT"
-            quit(1)
+          # echov cast[int](resCtx.handle), globalTick()
+          # if isNil(resCtx):
+          #   echov "FUCKING PIECE OF SHIT"
+          #   quit(1)
 
-          assertRef resCtx
+          # assertRef resCtx
           resCtx.addMacroDefinition(name, args, some body.join(""))
+
 
     except:
       echov "Died here"
