@@ -124,7 +124,6 @@ suite "libgit":
 
     echo "Collected files"
 
-    # for fix in regroupFiles(resultWrapped):
-    #   let res = resDir / fix.getFile().withExt("nim")
-    #   res.writeFile($toNNode[PNode](fix, cCodegenConf))
-    #   echov res
+    for fix in regroupFiles(resultWrapped):
+      let res = outDir / fix.getFile().withExt("nim")
+      res.writeFile($toNNode[PNode](fix, cCodegenConf))

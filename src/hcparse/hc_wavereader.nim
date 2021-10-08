@@ -47,12 +47,9 @@ proc newWaveReader*(
               cache.defines[file].add(($def, args, body))
 
         for (name, args, body) in cache.defines[file]:
-          # echov cast[int](resCtx.handle), globalTick()
-          # if isNil(resCtx):
-          #   echov "FUCKING PIECE OF SHIT"
-          #   quit(1)
-
-          # assertRef resCtx
+          # FIXME keep track of all defined macros to avoid illegal macro
+          # redefinition excepsions that might potentially be reaised
+          # here.?
           resCtx.addMacroDefinition(name, args, some body.join(""))
 
 

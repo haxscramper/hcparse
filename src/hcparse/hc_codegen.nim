@@ -34,7 +34,7 @@ func toNNode*[N](lib: CxxLibImport, asImport: bool): N =
   if asImport:
     result = newNTree[N](
       nnkImportStmt,
-      lib.importPath.mapIt(newNIdent[N](it)).
+      lib.getPathNoExt().mapIt(newNIdent[N](it)).
         foldl(newXCall("/", a, b)))
 
   else:
@@ -66,6 +66,13 @@ proc toNNode*[N](t: CxxTypeUse, conf: CodegenConf): NType[N] =
       result = newProcNType[N](
         t.arguments.mapIt(toNNode[N](it, conf)),
         toNNode[N](t.returnType, conf), pragma)
+
+    of ctkDynamicArray:
+      result = newNType[N]("ptr", @[
+        newNType[N]("UncheckedArray", @[
+          toNNode[N](t.wrapped, conf)
+        ])
+      ])
 
     else:
       raise newImplementKindError(t)
@@ -100,7 +107,7 @@ proc toNNode*[N](field: CxxField, conf: CodegenConf): ObjectField[N] =
       conf.getImport(), newNLit[N, string](field.cxxName.cxxStr()))
 
 
-proc toNNode*[N](header: CxxBind, conf: CodegenConf): seq[N] =
+proc toNNode*[N](header: CxxBind, conf: CodegenConf, name: string): seq[N] =
   case header.kind:
     of cbkGlobal:
       result.add newIdentColonExpr(
@@ -138,9 +145,16 @@ proc toNNode*[N](header: CxxBind, conf: CodegenConf): seq[N] =
         assertKind(header.icpp[0], { ipkTextPart }, $header.icpp)
         $header.icpp[0]
 
-    result.add newIdentColonExpr[N](
-      conf.getImport(),
-      newPLit[N, string](str))
+    if name != str:
+      result.add newIdentColonExpr[N](
+        conf.getImport(),
+        newPLit[N, string](str))
+
+    else:
+      result.add newNIdent[N](conf.getImport)
+
+  else:
+    result.add newNIdent[N](conf.getImport)
 
 proc toNNode*[N](def: CxxAlias, conf: CodegenConf):
   tuple[alias: AliasDecl[N], extra: seq[NimDecl[N]]] =
@@ -153,7 +167,10 @@ proc toNNode*[N](def: CxxAlias, conf: CodegenConf):
 
   if def.baseType of ctkProc:
     let base = def.baseType
-    if base[^1] of ctkPtr and base[^1][0].podKind == cptVoid:
+    if
+      base[^1] of ctkPtr and
+      base[^1][0] of ctkIdent and
+      base[^1][0].podKind == cptVoid:
       var newDef = def
       newDef.nimName = newDef.nimName & "Nim"
       discard newDef.baseType.arguments.pop()
@@ -179,7 +196,8 @@ proc toNNode*[N](
     result.addPragma("exportc", newNLit[N, string](def.cxxName.cxxStr()))
 
   else:
-    result.addPragma toNNode[N](def.getCbindAs(ctkIdent), conf)
+    result.addPragma toNNode[N](
+      def.getCbindAs(ctkIdent), conf, def.nimName)
     # result.addPragma(conf.getImport(), newNLit[N, string](def.getIcppStr(ctkPtr)))
 
   if def.isConstructor and onConstructor == ctkIdent:
@@ -204,9 +222,9 @@ proc toNNode*[N](obj: CxxObject, conf: CodegenConf): seq[NimDecl[N]] =
   # res.addPragma("inheritable")
   # res.addPragma("byref")
 
-  res.addPragma toNNode[N](obj.cbind, conf)
+  res.addPragma toNNode[N](obj.cbind, conf, obj.nimName)
   # res.addPragma("header", toNNode[N](obj.header.get()))
-  res.addPragma(conf.getImport(), newNLit[N, string](obj.getIcppStr()))
+  # res.addPragma(conf.getImport(), newNLit[N, string](obj.getIcppStr()))
 
   for field in obj.mfields:
     res.add toNNode[N](field, conf)
@@ -223,7 +241,7 @@ proc toNNode*[N](obj: CxxForward, conf: CodegenConf): ObjectDecl[N] =
   result = newObjectDecl[N](obj.nimName)
   result.addPragma("bycopy")
   result.addPragma("incompleteStruct")
-  result.addPragma toNNode[N](obj.cbind, conf)
+  result.addPragma toNNode[N](obj.cbind, conf, obj.nimName)
   result.docComment.add toNimComment(obj.docComment)
 
 proc toNNode*[N](field: CxxEnumValue, conf: CodegenConf): EnumField[N] =
@@ -338,9 +356,13 @@ proc genDynDecl*[N](conf: CodegenConf): N =
 proc toNNode*[N](file: CxxFile, conf: CodegenConf): N =
   result = newNTree[N](nnkStmtList)
 
-  for dep in items(file.imports):
+  var imports = file.imports
+  imports.incl file.getBindImports()
+
+  for dep in items(imports):
     if dep.getLibrary() == file.getLibrary():
       let (pDep, pFile) = (dep.getFile(), file.getFile())
+
       let (depth, parts) = importSplit(
         AbsDir"/tmp" / pFile, AbsDir"/tmp" / pDep)
 

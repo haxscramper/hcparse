@@ -1,7 +1,7 @@
 import
   hmisc/other/oswrap,
   hmisc/core/[all, code_errors],
-  hmisc/algo/namegen,
+  hmisc/algo/[namegen, hstring_algo],
   std/[options, macros, json, strutils, strformat, parseutils,
        tables, hashes, sets, sequtils]
 
@@ -50,7 +50,10 @@ type
     importPath*: seq[string]
 
   CxxBind* = object
-    icpp*: IcppPattern
+    icpp*: IcppPattern ## Binding pattern for header imports
+    imports*: seq[CxxLibImport] ## Additional imports that are required for
+                                ## object binding
+
     case kind*: CxxBindKind
       of cbkNone:
         discard
@@ -405,6 +408,7 @@ type
       conf: CxxFixConf
     ): string
 
+    libNameStyle*: IdentStyle
     getBindImpl*: proc(entry: CxxEntry, conf: CxxFixConf): CxxBind
     libName*: string
     isIcpp*: bool
@@ -445,6 +449,8 @@ template onFixName*(fixConf: var CxxFixConf, body: untyped): untyped =
 
 func `$`*(cxx: CxxLibImport): string =
   cxx.library & "@" & cxx.importPath.join("/")
+
+func `$`*(file: CxxFile): string = $file.savePath
 
 func cxxStr*(name: CxxName): string = name.scopes.join("::")
 func `$`*(name: CxxName): string = name.cxxStr()
@@ -557,6 +563,7 @@ func `$`*(e: CxxEntry): string =
     of cekAlias: result = "alias!" & $e.cxxAlias
     of cekForward: result = "forward!" & $e.cxxForward.decl
     of cekMacro: result = "macro!" & $e.cxxMacro.name
+    of cekEmpty: result = "empty!()"
 
     else:
       raise newImplementKindError(e)
@@ -730,6 +737,23 @@ func name*(e: CxxEntry): CxxNamePair =
     else:
       raise newImplementKindError(e)
 
+func getLocation*(e: CxxEntry): CxxSpellingLocation =
+  var tmp: Option[CxxSpellingLocation]
+  case e.kind:
+    of cekEnum:    tmp = e.cxxEnum.spellingLocation
+    of cekForward: tmp = e.cxxForward.spellingLocation
+    of cekObject:  tmp = e.cxxObject.spellingLocation
+    of cekProc:    tmp = e.cxxProc.spellingLocation
+    of cekAlias:   tmp = e.cxxAlias.spellingLocation
+    of cekEmpty:
+      raise newUnexpectedKindError(e)
+
+    else:
+      raise newImplementKindError(e)
+
+  assertOption tmp, $e
+  return tmp.get
+
 func cxxPair*(nim: string, cxx: CxxName): CxxNamePair =
   CxxNamePair(nim: nim, cxx: cxx)
 
@@ -883,6 +907,17 @@ func getFilename*(limport: CxxLibImport): string =
   let idx = result.find('.')
   if idx != -1:
     result = result[0 ..< idx]
+
+func getPathNoExt*(limport: CxxLibImport): seq[string] =
+  result.add limport.importPath[0..^2]
+  let tmp = limport.importPath[^1]
+  let idx = tmp.find('.')
+  if idx != -1:
+    result.add tmp[0 ..< idx]
+
+  else:
+    result.add tmp
+
 
 func getFile*(lib: CxxLibImport): RelFile =
   assertHasIdx(lib.importPath, 0)
@@ -1052,6 +1087,9 @@ func setCxxBind*(target: var CxxBind, source: CxxBind) =
   target.icpp = icpp
 
 
+
+
+
 proc setHeaderRec*(entry: var CxxEntry, conf: CxxFixConf) =
   case entry.kind:
     of cekPass, cekImport, cekEmpty, cekComment:
@@ -1071,6 +1109,65 @@ proc setHeaderRec*(entry: var CxxEntry, conf: CxxFixConf) =
 
       for nest in mitems(entry.cxxObject.nested):
         setHeaderRec(nest, conf)
+
+template setFile(entry: typed, file: AbsFile): untyped =
+  if entry.spellingLocation.isSome:
+    entry.spellingLocation.get().file = file
+
+  else:
+    entry.spellingLocation = some CxxSpellingLocation(file: file)
+
+proc setFileRec*(entry: var CxxEntry, file: AbsFile) =
+  case entry.kind:
+    of cekPass, cekImport, cekEmpty, cekComment:
+      discard
+
+    of cekTypeGroup, cekMacroGroup, cekMacro:
+      raise newImplementKindError(entry)
+
+    of cekForward: entry.cxxForward.setFile(file)
+    of cekEnum: entry.cxxEnum.setFile(file)
+    of cekProc: entry.cxxProc.setFile(file)
+    of cekAlias: entry.cxxAlias.setFile(file)
+    of cekObject:
+      entry.cxxObject.setFile(file)
+      for meth in mitems(entry.cxxObject.methods):
+        meth.setFile(file)
+
+      for nest in mitems(entry.cxxObject.nested):
+        setFileRec(nest, file)
+
+
+
+func incl[A](s: var HashSet[A], its: seq[A]) =
+  for i in its:
+    s.incl i
+
+func getBindImports*(file: CxxFile): HashSet[CxxLibImport] =
+
+  func aux(entry: CxxEntry, res: var HashSet[CxxLibImport]) =
+    case entry.kind:
+      of cekPass, cekImport, cekEmpty, cekComment:
+        discard
+
+      of cekTypeGroup, cekMacroGroup, cekMacro:
+        raise newImplementKindError(entry)
+
+      of cekForward: res.incl entry.cxxForward.cbind.imports
+      of cekEnum: res.incl entry.cxxEnum.cbind.imports
+      of cekProc: res.incl entry.cxxProc.cbind.imports
+      of cekAlias: res.incl entry.cxxAlias.cbind.imports
+      of cekObject:
+        res.incl entry.cxxObject.cbind.imports
+        for meth in mitems(entry.cxxObject.methods):
+          res.incl meth.cbind.imports
+
+        for nest in mitems(entry.cxxObject.nested):
+          aux(nest, res)
+
+  for entry in file.entries:
+    aux(entry, result)
+
 
 func getCbindAs*(pr: CxxProc, onConstructor: CxxTypeKind): CxxBind =
   result = pr.cbind

@@ -186,23 +186,50 @@ proc fixTypeName*(ntype: var NimType, conf: WrapConf, idx: int = 0) =
 
         conf.fixtypename(arg.nimType, conf, idx)
 
-proc fixContextedName*(name: CxxNamePair, base: string = name.nim): string =
+proc fixContextedName*(
+    name: CxxNamePair,
+    base: string = name.nim,
+    style: IdentStyle = idsCamel
+  ): string =
+
+  const map = toMapArray({
+    cncType:      toMapArray({
+      idsCamel: ("",    "T"), idsSnake: ("",    "_t")}),
+    cncArg:       toMapArray({
+      idsCamel: ("arg", ""),  idsSnake: ("arg_", "")}),
+    cncProc:      toMapArray({
+      idsCamel: ("c",   ""),  idsSnake: ("c",   "")}),
+    cncField:     toMapArray({
+      idsCamel: ("f",   ""),  idsSnake: ("",   "_f")}),
+    cncMethod:    toMapArray({
+      idsCamel: ("m",   ""),  idsSnake: ("",   "_m")}),
+    cncVar:       toMapArray({
+      idsCamel: ("v",   ""),  idsSnake: ("",   "_v")}),
+    cncEnumField: toMapArray({
+      idsCamel: ("en",  ""),  idsSnake: ("",  "_en")})
+  })
+
   result = base.keepNimIdentChars()
-  let (prefix, suffix) =
-    case name.context:
-      of cncType: ("", "T")
-      of cncArg: ("arg", "")
-      of cncProc: ("c", "")
-      of cncField: ("f", "")
-      of cncMethod: ("m", "")
-      of cncVar: ("v", "")
-      of cncEnumField: ("en", "")
+  let (prefix, suffix) = map[name.context][style]
 
   if name.context != cncType and isReservedNimType(result):
     result = prefix & result & suffix
 
   if isReservedNimIdent(result):
     result = prefix & result & suffix
+
+proc fixContextedName*(
+    cache: var StringNameCache,
+    name: CxxNamePair,
+    style: IdentStyle = idsSnake
+  ): string =
+  if cache.knownRename(name.nim):
+    return cache.getRename(name.nim)
+
+  result = fixContextedName(name, name.nim, style)
+
+  cache.newRename(name.nim, result)
+
 
 proc getBaseFile*(conf: WrapConf, wrapped: WrappedFile): AbsFile =
   ## Return base file for generated wrapped one. For generated grouped

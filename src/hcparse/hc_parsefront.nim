@@ -11,6 +11,7 @@ import
   ./hc_codegen,
   ./hc_irgen,
   ./hc_wavereader,
+  ./hc_grouping,
   ./interop_ir/wrap_store
 
 import
@@ -23,7 +24,7 @@ import
   hmisc/core/all
 
 export
-  hc_wavereader
+  hc_wavereader, hc_grouping, hc_impls, hc_codegen
 
 proc parseTranslationUnit*(
     trIndex: CXIndex,
@@ -167,7 +168,8 @@ proc convertViaTs*(text: string): PNode =
 proc wrapViaTs*(
     str: string,
     conf: CxxFixConf,
-    lib: CxxLibImport
+    lib: CxxLibImport,
+    file: Option[AbsFile] = none AbsFile
   ): seq[CxxEntry] =
   assertRef conf.typeStore
   # "Copy input string to local mutable variable":
@@ -185,6 +187,9 @@ proc wrapViaTs*(
   var cache: StringNameCache
   var store: CxxTypeStore = conf.typeStore
   for item in mitems(result):
+    if file.isSome():
+      setFileRec(item, file.get())
+
     setHeaderRec(item, conf)
     fixIdentsRec(item, cache, conf)
     setTypeStoreRec(item, store, lib)
@@ -196,8 +201,8 @@ proc wrapViaTs*(
   ): CxxFile =
   assertRef conf.typeStore
   let relative = file.string.dropPrefix(libRoot.string)
-  let lib = cxxLibImport(libRoot.name(), relative.split("/"))
-  wrapViaTs(file.readFile(), conf, lib).cxxFile(lib)
+  let lib = cxxLibImport(conf.libName, relative.split("/"))
+  wrapViaTs(file.readFile(), conf, lib, some file).cxxFile(lib)
 
 proc wrapViaTsWave*(
     file: AbsFile,
