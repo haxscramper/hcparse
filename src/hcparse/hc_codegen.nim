@@ -8,7 +8,7 @@ import
   hmisc/core/all,
   hmisc/macros/argpass,
   hmisc/other/oswrap,
-  std/[macros, sequtils, sets, strformat]
+  std/[macros, sequtils, sets, strformat, algorithm]
 
 type
   CodegenConf* = object
@@ -317,7 +317,7 @@ proc toNNode*[N](entries: seq[CxxEntry], conf: CodegenConf): seq[NimDecl[N]] =
         else:
           other.add conv
 
-  result.add toNimDecl(types)
+  result.add toNimDecl(sortedByIt(types, it.getName()))
   result.add other
 
 proc genDynDecl*[N](conf: CodegenConf): N =
