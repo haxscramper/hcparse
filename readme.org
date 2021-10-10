@@ -210,10 +210,12 @@ proof-of-concept quality.
 note: this section describes unstable functionality that might potentially
 be changed in the future.
 
+[[./it_works.jpg]]
+
 hcparse is built on top of several C and C++ code processing toolss,
 specifically ~boost::wave~, ~libclang~ and ~tree-sitter~ C++ parser.
 Convenience wrappers for all of these libraries are provided as a part of
-hcparse library - full wrapper for the libclang API, **C** API for large
+hcparse library - full wrapper for the libclang API, *C* API for large
 section of the boost wave (not constrained to the C++ backed!).
 
 In addition to the wrappers for lower-level C analysis tools hcparse also
