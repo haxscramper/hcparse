@@ -579,12 +579,12 @@ func mapPrimitiveNameImpl*(name: string):
     of "void": ("void", cptVoid)
 
     of "char": ("char", cptChar)
-    of "unsigned char": ("uchar", cptUChar)
+    of "unsigned char": ("uint8", cptUChar)
 
 
     of "float": ("cfloat", cptFloat)
     of "bool": ("bool", cptBool)
-    of "size_t": ("size_t", cptSizeT)
+    of "size_t": ("csize_t", cptSizeT)
 
     of "int16_t": ("int16", cptI16)
     of "int32_t": ("int32", cptI32)

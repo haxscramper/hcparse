@@ -254,7 +254,7 @@ proc toNNode*[N](en: CxxEnum, conf: CodegenConf): EnumDecl[N] =
   result = newEnumDecl[N](en.nimName)
 
   var fieldList: seq[EnumField[N]]
-  var values = en.values
+  var values = en.values.sortedByIt(it.value)
   # TODO sort deduplicate
 
   var visited: HashSet[BiggestInt]
