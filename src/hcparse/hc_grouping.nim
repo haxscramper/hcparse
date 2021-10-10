@@ -42,6 +42,7 @@ proc registerUse*(ctype: CxxTypeUse, used: var UsedSet) =
   if isNil(ctype): return
   var used = used
 
+
   eachIdent(ctype) do (use: CxxTypeUse):
     let decl = use.getDecl()
     if decl.isSome():
@@ -113,9 +114,10 @@ proc addImports(
     # Library imports based on type definition location
     let user = file.savePath
     for typeCursor, typeSet in used.cursors:
+
       let dep = typeCursor.getImport()
       if user != dep: # Avoid self-imports (creates unnecessary
-                      # self-loops in graphs)
+                      # self-loops in graphs)A
         for item in typeSet:
           graph.addOrGetEdge(
             graph.addOrGetNode(user),
@@ -168,6 +170,28 @@ proc getUsedApis*(wrapped: seq[CxxFile]): tuple[usedApis: UsedGroups, store: Cxx
 
 type TypeGraph* = HGraph[CxxLibImport, CxxTypeUse]
 
+
+proc getGroups*(importGraph: TypeGraph): seq[HNodeSet] =
+  importGraph.findCycles().mergeCycleSets()
+
+proc mergeFileName*(names: seq[string]): string =
+  result = sorted(names).join("_")
+  var pos = min(result.high, 239)
+  while result[pos] == '_': dec pos
+  result = result[0 .. pos]
+
+proc groupFileName*(group: HNodeSet, graph: TypeGraph): string =
+  mapIt(group, graph[it].getFilename()).mergeFileName()
+
+proc dotRepr*(g: TypeGraph): DotGraph =
+  let groups = getGroups(g)
+  dotRepr(
+    g,
+    dotReprDollarNode[CxxLibImport],
+    dotReprCollapseEdgesJoin[CxxTypeUse],
+    clusters = groups.mapIt((it, it.groupFileName(g)))
+  )
+
 proc buildTypeGraph*(wrapped: seq[CxxFile], usedApis: UsedGroups): TypeGraph =
   result = newHGraph[CxxLibImport, CxxTypeUse]()
   # Type use graph - nodes represent files and `CxxTypeUse` is an edge
@@ -184,10 +208,6 @@ proc buildTypeGraph*(wrapped: seq[CxxFile], usedApis: UsedGroups): TypeGraph =
     result.addImports(file, usedApis.inTypes)
     result.addImports(file, usedApis.inProcs)
 
-proc mergeFileName*(names: seq[string]): string =
-  result = sorted(names).join("_")
-  result = result[0 .. min(result.len, 240)]
-
 proc removeForwardDeclared*(
     wrapped: seq[CxxFile], store: CxxtypeStore): seq[CxxFile] =
   result = wrapped
@@ -200,23 +220,24 @@ proc removeForwardDeclared*(
           entry.cxxForward.decl.name.cxx,
           some file.savePath.library)
 
-        # echov decl
         if decl.isSome():
           entry = cxxEmpty()
 
           if decl.get().typeImport.get() != file.savePath:
             file.imports.incl decl.get().typeImport.get()
 
+proc buildTypeGraph*(wrapped: seq[Cxxfile]):
+  tuple[store: CxxTypestore, graph: TypeGraph] =
+  let (usedApis, store) = getUsedAPis(wrapped)
+  result.store = store
+  result.graph = buildTypeGraph(wrapped, usedApis)
 
 proc regroupFiles*(wrapped: seq[CxxFile]): seq[CxxFile] =
   ## Construct new group of wrapped files based on the input. Group
   ## mutually recursive types in new temporary files and add needed imports
   ## and exports.
-
-  let (usedApis, store) = getUsedAPis(wrapped)
-
-  let importGraph = buildTypeGraph(wrapped, usedApis)
-  let groups = importGraph.findCycles().mergeCycleSets()
+  let (store, importGraph) = buildTypeGraph(wrapped)
+  let groups = importGraph.getGroups()
   if groups.len == 0:
     # There is no mutually recursive type cycles in the passed files,
     # returning whole list unmodified.
@@ -252,8 +273,8 @@ proc regroupFiles*(wrapped: seq[CxxFile]): seq[CxxFile] =
         # for type graphs that spans multiple packages. This is unlikely,
         # but possible in case of inter-*project* circular dependencies.
 
-      generatedFile: CxxLibImport = cxxLibImport(mergedLib, @[
-        mergedFiles.mapIt(it.getFilename()).mergeFileName()])
+      generatedFile: CxxLibImport = cxxLibImport(
+        mergedLib, @[group.groupFileName(importGraph)])
         # Name of the generated file
         #
         # TODO allow overriding into someting more manageable. With large
@@ -268,10 +289,11 @@ proc regroupFiles*(wrapped: seq[CxxFile]): seq[CxxFile] =
     for file in mitems(mergedFiles):
       var recycle: seq[CxxEntry]
       for entry in mitems(file.entries):
+        echov entry
         # Split all type declarations in the each file. Re-add procedure
         # declarations back, add type declarations to the global list.
         if entry of cekForward:
-          if entry.cxxForward.decl.hasImport():
+          if entry.cxxForward.decl.hasFullDecl():
             entry = cxxEmpty()
 
         else:

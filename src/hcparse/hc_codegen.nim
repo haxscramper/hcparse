@@ -1,6 +1,6 @@
 import
   ./interop_ir/[wrap_store, wrap_icpp],
-  hnimast/hast_common,
+  hnimast/[hast_common, pprint],
   hnimast,
   hnimast/[proc_decl, nim_decl]
 
@@ -8,7 +8,7 @@ import
   hmisc/core/all,
   hmisc/macros/argpass,
   hmisc/other/oswrap,
-  std/[macros, sequtils, sets]
+  std/[macros, sequtils, sets, strformat]
 
 type
   CodegenConf* = object
@@ -385,13 +385,19 @@ proc toNNode*[N](file: CxxFile, conf: CodegenConf): N =
     result.add toNNode[N](decl)
 
 proc toString*(file: CxxFile, conf: CodegenConf): string =
-  `$`(toNNode[PNode](file, conf))
+  let node = toNNode[PNode](file, conf)
+  return toPString(node)
 
 proc toString*(entries: seq[CxxEntry], conf: CodegenConf): string =
   var gen = newPStmtList()
   gen.add genDyndecl[PNode](conf)
   gen.add toNNode[PNode](entries, conf).toNNode()
-  `$`(gen)
+
+  toPString(gen)
+
+proc toString*(files: seq[CxxFile], conf: CodegenConf): string =
+  for file in files:
+    result.add &">>> {file.savePath}\n{file.toString(conf)}\n"
 
 import std/[strutils, strformat]
 

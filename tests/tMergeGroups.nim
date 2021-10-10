@@ -2,6 +2,9 @@ import hmisc/preludes/unittest
 import hmisc/algo/hseq_mapping
 import hnimast
 
+import hmisc/hasts/graphviz_ast
+
+
 import
   hcparse/[hc_parsefront, hc_codegen, hc_grouping, hc_impls],
   hcparse/interop_ir/wrap_store
@@ -62,6 +65,19 @@ suite "Forward-declare in files":
     check:
       lib("forward.hpp") in user.imports
 
+  test "Two separate files, get pointer":
+    conf.typeStore = newTypeStore()
+    let files = @[
+      convFile(
+        "struct Forward; struct GetForward { Forward* get(); };",
+        "get_forward.hpp"),
+      convFile("struct Forward {};", "forward.hpp")
+    ]
+
+    # TEST should generate two separate files with 'get_forward' importing
+    # 'forward'
+    # assert false
+
   test "two separate types, mutually recursive":
     conf.typeStore = newTypeStore()
     let files = @[
@@ -70,7 +86,12 @@ suite "Forward-declare in files":
       convFile("struct C { A* ptrA; B* ptrB; };", "decl_C.hpp")
     ]
 
+    let path = getTestTempFile("graph", "png")
+    echov path
+    buildTypeGraph(files).graph.dotRepr().toPng(path)
+
     let group = regroupFiles(files)
+    echov group.toString(cxxCodegenConf)
 
     let
       fileA = group.findFile("decl_A")
@@ -84,8 +105,8 @@ suite "Forward-declare in files":
 
     let
       typesM = codeM.findItFirst(it of nekMultitype).typedecls
-      declA = typesM[0].objectDecl
-      declB = typesM[1].objectDecl
+      declA = typesM.getFirst("A").objectDecl
+      declB = typesM.getFirst("B").objectDecl
       fieldB = declA.getField("ptrB")
       fieldA = declB.getField("ptrA")
 

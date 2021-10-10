@@ -124,6 +124,7 @@ type
     ## duplicates.
 
     typeDecls*: Table[CxxName, seq[CxxTypeDecl]]
+    forwardDecls*: Table[CxxName, seq[CxxTypeDecl]]
     classDecls*: Table[CxxName, seq[CxxObject]]
 
 
@@ -849,7 +850,11 @@ func toDecl*(use: CxxTypeUse): CxxTypeDecl =
   return cxxTypeDecl(use.cxxType.name)
 
 func addDecl*(store: var CxxTypeStore, decl: CxxTypeDecl) =
+  store.forwardDecls.del(decl.name.cxx)
   store.typeDecls.mgetOrPut(decl.name.cxx, @[]).add decl
+
+func addForwardDecl*(store: var CxxTypeStore, decl: CxxTypeDecl) =
+  store.forwardDecls.mgetOrPut(decl.name.cxx, @[]).add decl
 
 func getDecl*(
     store: CxxTypeStore,
@@ -857,17 +862,25 @@ func getDecl*(
     lib: Option[string]
   ): Option[CxxTypeDecl] =
 
+
   assertRef store
   if name in store.typeDecls:
     for decl in store.typeDecls[name]:
       # No library for import, or no library for the type declaration
       if lib.isNone() or decl.typeImport.isNone():
-        return some decl
+        result = some decl
+        break
 
       else:
         # Has library name for both type declaration and use
         if decl.typeImport.get().library == lib.get():
-          return some decl
+          result = some decl
+          break
+
+
+  elif name in store.forwardDecls:
+    result = some store.forwardDecls[name][0]
+
 
 
 func getDecl*(use: CxxTypeUse): Option[CxxTypeDecl] =
@@ -879,7 +892,6 @@ func getDecl*(use: CxxTypeUse): Option[CxxTypeDecl] =
   assertRef use.cxxType.typeStore
   return use.cxxType.typeStore.getDecl(
     use.cxxName(), use.cxxType.typeLib)
-
 
 func hasImport*(use: CxxTypeUse): bool =
   if use of ctkIdent:
@@ -895,6 +907,14 @@ func getImport*(use: CxxTypeUse): CxxLibImport =
 
 func hasImport*(decl: CxxTypeDecl): bool =
   decl.typeImport.isSome()
+
+func hasAnyDecl*(use: CxxTypeUse): bool =
+  use.getDecl().isSome()
+
+func hasFullDecl*(decl: CxxTypeDecl): bool =
+  assertRef(decl.store)
+  decl.name.cxx in decl.store.typeDecls
+
 
 func cxxLibImport*(library: string, path: seq[string]): CxxLibImport =
   CxxLibImport(library: library, importPath: path)
@@ -1226,6 +1246,8 @@ func setTypeStoreRec*(
 
     of cekForward:
       entry.cxxForward.decl.typeImport = some lib
+      entry.cxxForward.decl.store = store
+      store.addForwardDecl(entry.cxxForward.decl)
 
     of cekAlias:
       entry.cxxAlias.decl.typeImport = some lib
