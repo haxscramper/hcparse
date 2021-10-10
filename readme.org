@@ -212,13 +212,13 @@ be changed in the future.
 
 [[./it_works.jpg]]
 
-hcparse is built on top of several C and C++ code processing toolss,
+hcparse is built on top of several C and C++ code processing tools,
 specifically ~boost::wave~, ~libclang~ and ~tree-sitter~ C++ parser.
 Convenience wrappers for all of these libraries are provided as a part of
 hcparse library - full wrapper for the libclang API, *C* API for large
 section of the boost wave (not constrained to the C++ backed!).
 
-In addition to the wrappers for lower-level C analysis tools hcparse also
+In addition to the wrappers for lower-level C analysis tools ~hcparse~ also
 provides parse for the doxygen XML format (to be able to automatically port
 documentation without loosing important semantic information).
 
@@ -228,4 +228,4 @@ can theoretically be generated using other frontends. Code generation
 facility can also be decoupled into separate tool that provides different
 features, or even generates code for the different languages if needed
 (note that original implementation is fully focused on nim, and as of right
-now there is no plans to make hcparse fully source **and** target-agnositc)
+now there is no plans to make hcparse fully source *and* target-agnositc)

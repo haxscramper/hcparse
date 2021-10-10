@@ -86,12 +86,7 @@ suite "Forward-declare in files":
       convFile("struct C { A* ptrA; B* ptrB; };", "decl_C.hpp")
     ]
 
-    let path = getTestTempFile("graph", "png")
-    echov path
-    buildTypeGraph(files).graph.dotRepr().toPng(path)
-
     let group = regroupFiles(files)
-    echov group.toString(cxxCodegenConf)
 
     let
       fileA = group.findFile("decl_A")
@@ -126,3 +121,36 @@ suite "Forward-declare in files":
 
       lib("decl_A.hpp") in fileC.imports
       lib("decl_B.hpp") in fileC.imports
+
+  test "Depends on forward declaration and recursive":
+    conf.typeStore = newTypeStore()
+    let files = @[
+      convFile("struct Forward {}; struct BaseUser{ Forward* forward; };", "forward.hpp"),
+
+      convFile(lit3"""
+        struct Forward;
+
+        struct User1B;
+        struct User1A { User1B* ptrB; Forward* forward; }
+        """, "user_1A.hpp"),
+
+      convFile(lit3"""
+        struct User1A;
+        struct User1B { User1A* ptrA; }
+        """, "user_1B.hpp"),
+
+      convFile(lit3"""
+        struct Forward;
+
+        struct User2B;
+        struct User2A { User2B* ptrB; Forward* forward; }
+        """, "user_2A.hpp"),
+
+      convFile(lit3"""
+        struct User2A;
+        struct User2B { User2A* ptrA; }
+        """, "user_2B.hpp")
+    ]
+
+    let group = regroupFiles(files)
+    echo group.toString(cxxCodegenConf)

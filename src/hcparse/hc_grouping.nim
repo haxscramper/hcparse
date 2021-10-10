@@ -289,7 +289,6 @@ proc regroupFiles*(wrapped: seq[CxxFile]): seq[CxxFile] =
     for file in mitems(mergedFiles):
       var recycle: seq[CxxEntry]
       for entry in mitems(file.entries):
-        echov entry
         # Split all type declarations in the each file. Re-add procedure
         # declarations back, add type declarations to the global list.
         if entry of cekForward:
