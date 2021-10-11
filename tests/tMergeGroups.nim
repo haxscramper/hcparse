@@ -29,6 +29,12 @@ configureDefaultTestContext(
 proc findFile(files: seq[CxxFile], name: string): CxxFile =
   files[files.findIt(it.getFilename().startsWith(name))]
 
+func getTypes(decl: seq[NimDecl[PNode]]): seq[NimTypeDecl[PNode]] =
+  decl.findItFirst(it of nekMultitype).typedecls
+
+func genEntries(file: CxxFile): seq[NimDecl[PNode]] =
+  toNNode[PNode](file.entries, cxxCodegenConf)
+
 suite "Forward-declare in files":
   var conf = baseFixConf.withIt do:
     it.typeStore = newTypeStore()
@@ -96,10 +102,7 @@ suite "Forward-declare in files":
       merged = "decl_A_decl_B"
 
     let
-      codeM = group.findFile(merged).entries.toNNode[:PNode](cxxCodegenConf)
-
-    let
-      typesM = codeM.findItFirst(it of nekMultitype).typedecls
+      typesM = group.findFile(merged).genEntries().getTypes()
       declA = typesM.getFirst("A").objectDecl
       declB = typesM.getFirst("B").objectDecl
       fieldB = declA.getField("ptrB")
@@ -122,35 +125,25 @@ suite "Forward-declare in files":
       lib("decl_A.hpp") in fileC.imports
       lib("decl_B.hpp") in fileC.imports
 
-  test "Depends on forward declaration and recursive":
+  test "Depends on forward declaration":
     conf.typeStore = newTypeStore()
     let files = @[
-      convFile("struct Forward {}; struct BaseUser{ Forward* forward; };", "forward.hpp"),
-
-      convFile(lit3"""
-        struct Forward;
-
-        struct User1B;
-        struct User1A { User1B* ptrB; Forward* forward; }
-        """, "user_1A.hpp"),
-
-      convFile(lit3"""
-        struct User1A;
-        struct User1B { User1A* ptrA; }
-        """, "user_1B.hpp"),
-
-      convFile(lit3"""
-        struct Forward;
-
-        struct User2B;
-        struct User2A { User2B* ptrB; Forward* forward; }
-        """, "user_2A.hpp"),
-
-      convFile(lit3"""
-        struct User2A;
-        struct User2B { User2A* ptrA; }
-        """, "user_2B.hpp")
+      convFile("struct Forward;", "forward.hpp"),
+      convFile("typedef struct User { Forward* forward; } User;", "user.hpp")
     ]
 
     let group = regroupFiles(files)
-    echo group.toString(cxxCodegenConf)
+
+    let
+      userFile = group.findFile("user")
+      userCode = userFile.genEntries().getTypes()
+      userDecl = userCode.getFirst("User").objectDecl
+
+      forwardFile = group.findFile("forward")
+      forwardCode = forwardFile.genEntries().getTypes()
+      forwardDecl = forwardCode.getFirst("Forward").objectDecl
+
+    check:
+       lib("forward.hpp") in userFile.imports
+
+       forwardDecl.hasPragma("incompleteStruct")

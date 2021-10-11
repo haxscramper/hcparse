@@ -950,6 +950,16 @@ func getFilename*(file: CxxFile): string = file.savePath.getFilename()
 func getType*(arg: CxxArg): CxxTypeUse = arg.nimType
 func getType*(field: CxxField): CxxTypeUse = field.nimType
 
+func addImport*(file: var CxxFile, cimport: CxxLibImport) =
+  file.imports.incl cimport
+
+func addExport*(file: var CxxFile, cexport: CxxLibImport) =
+  file.exports.incl cexport
+
+func addReExport*(file: var CxxFile, cimport: CxxLibImport) =
+  addImport(file, cimport)
+  addExport(file, cimport)
+
 template eachIdentAux*(inUse, cb, iterateWith: untyped) =
   case inUse.kind:
     of ctkWrapKinds: eachIdent(inUse.wrapped, cb)
@@ -1045,7 +1055,8 @@ func cxxObject*(name: CxxNamePair, genParams: CxxGenParams = @[]): CxxObject =
   CxxObject(decl: cxxTypeDecl(name, genParams), haxdocIdent: newJNull())
 
 func cxxForward*(name: CxxNamePair): CxxForward =
-  CxxForward(decl: cxxTypeDecl(name, @[]), haxdocIdent: newJNull())
+  result = CxxForward(decl: cxxTypeDecl(name, @[]), haxdocIdent: newJNull())
+  result.decl.isForward = true
 
 func cxxEnum*(name: CxxNamePair): CxxEnum =
   CxxEnum(decl: cxxTypeDecl(name), haxdocIdent: newJNull())

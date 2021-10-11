@@ -39,9 +39,10 @@ func mgetOrDefault*[K, V](table: var Table[K, V], key: K): var V =
   return table[key]
 
 proc registerUse*(ctype: CxxTypeUse, used: var UsedSet) =
+  ## Register type and all it's inner used types (proctype arguments,
+  ## generic parameters etc) in the used set.
   if isNil(ctype): return
   var used = used
-
 
   eachIdent(ctype) do (use: CxxTypeUse):
     let decl = use.getDecl()
@@ -50,13 +51,15 @@ proc registerUse*(ctype: CxxTypeUse, used: var UsedSet) =
 
 
 proc registerUsedTypes*(genProc: CxxProc, used: var UsedSet) =
+  ## Register return type and all argument's types in used set
   for arg in genProc.arguments:
     registerUse(arg.getType(), used)
 
   registerUse(genProc.returnType, used)
 
 proc registerUsedTypes*(entry: CxxEntry, used: var UsedGroups) =
-
+  ## Register all used types (fields, type alias bases, procedure
+  ## parameters etc.) for any entry kinds in used set
   case entry.kind:
     of cekEnum, cekMacro, cekComment, cekTypeGroup, cekMacroGroup:
       discard
@@ -81,6 +84,7 @@ proc registerUsedTypes*(entry: CxxEntry, used: var UsedGroups) =
       discard
 
 proc getUsedTypes*(file: CxxFile): UsedGroups =
+  ## Get set of used types for all entries declared in the file
   result = UsedGroups(inProcs: UsedSet(), inTypes: UsedSet())
   for e in file.entries:
     e.registerUsedTypes(result)
@@ -97,12 +101,12 @@ proc addImports(
       let usedLib = typeCursor.getImport()
       if usedLib notin ignoreImport:
         if save != usedLib:
-          file.imports.incl usedLib
+          file.addImport(usedLib)
 
   for usedLib, _ in usedGroup.libs:
     if usedLib notin ignoreImport:
       if save != usedLib:
-        file.imports.incl usedLib
+        file.addImport(usedLib)
 
 proc addImports(
     graph: var HGraph[CxxLibImport, CxxTypeUse],
@@ -208,10 +212,8 @@ proc buildTypeGraph*(wrapped: seq[CxxFile], usedApis: UsedGroups): TypeGraph =
     result.addImports(file, usedApis.inTypes)
     result.addImports(file, usedApis.inProcs)
 
-proc removeForwardDeclared*(
-    wrapped: seq[CxxFile], store: CxxtypeStore): seq[CxxFile] =
-  result = wrapped
-  for file in mitems(result):
+proc removeForwardDeclared*(wrapped: var seq[CxxFile], store: CxxtypeStore) =
+  for file in mitems(wrapped):
     for entry in mitems(file.entries):
       # Drop forward type declarations that were defined in some other
       # file (can be imported).
@@ -221,10 +223,14 @@ proc removeForwardDeclared*(
           some file.savePath.library)
 
         if decl.isSome():
-          entry = cxxEmpty()
+          let decl = decl.get()
+          if not decl.isForward:
+            # Has real type declaration, all forwards declarations can be
+            # removed
+            entry = cxxEmpty()
 
-          if decl.get().typeImport.get() != file.savePath:
-            file.imports.incl decl.get().typeImport.get()
+          if decl.typeImport.get() != file.savePath:
+            file.addImport(decl.typeImport.get())
 
 proc buildTypeGraph*(wrapped: seq[Cxxfile]):
   tuple[store: CxxTypestore, graph: TypeGraph] =
@@ -241,12 +247,14 @@ proc regroupFiles*(wrapped: seq[CxxFile]): seq[CxxFile] =
   if groups.len == 0:
     # There is no mutually recursive type cycles in the passed files,
     # returning whole list unmodified.
-    return removeForwardDeclared(wrapped, store)
+    result = wrapped
+    removeForwardDeclared(result, store)
+    for file in mitems(result):
+      let used = file.getUsedTypes()
+      file.addImports(used.inTypes)
+      file.addImports(used.inProcs)
 
-  let clusteredNodes = groups.mapIt(
-    toHashSet(importGraph[it])).foldl(union(a, b))
-
-
+    return
 
   var fileMap: Table[CxxLibImport, CxxFile] # Mapping of the file import
                                             # location to the actual file
@@ -254,6 +262,9 @@ proc regroupFiles*(wrapped: seq[CxxFile]): seq[CxxFile] =
 
   for file in wrapped:
     fileMap[file.savePath] = file
+
+  let clusteredNodes = groups.mapIt(
+    toHashSet(importGraph[it])).foldl(union(a, b))
 
   # Pass files that were not directly affected
   for file, wrapped in mpairs(fileMap):
@@ -305,8 +316,7 @@ proc regroupFiles*(wrapped: seq[CxxFile]): seq[CxxFile] =
       block getProcImports:
         let usedGroup = file.getUsedTypes()
         file.addImports(usedGroup.inProcs, ignoreImports)
-        file.imports.incl generatedFile
-        file.exports.incl generatedFile
+        file.addReExport(generatedFile)
 
 
     result.add mergedFiles
@@ -331,8 +341,7 @@ proc regroupFiles*(wrapped: seq[CxxFile]): seq[CxxFile] =
       let mergedLibs = group.mapIt(importGraph[it]).toHashSet()
       for imp in typeImports:
         if imp notin mergedLibs:
-          merged.imports.incl imp
-          merged.exports.incl imp
+          merged.addReExport(imp)
 
       result.add merged
 
