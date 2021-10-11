@@ -83,9 +83,12 @@ proc registerUsedTypes*(entry: CxxEntry, used: var UsedGroups) =
     of cekPass, cekImport, cekForward, cekEmpty:
       discard
 
+proc newUsedGroups*(): UsedGroups =
+  UsedGroups(inProcs: UsedSet(), inTypes: UsedSet())
+
 proc getUsedTypes*(file: CxxFile): UsedGroups =
   ## Get set of used types for all entries declared in the file
-  result = UsedGroups(inProcs: UsedSet(), inTypes: UsedSet())
+  result = newUsedGroups()
   for e in file.entries:
     e.registerUsedTypes(result)
 
@@ -138,42 +141,36 @@ proc addImports(
           graph.addOrGetNode(usedLib),
           usedType)
 
-proc getUsedApis*(wrapped: seq[CxxFile]): tuple[usedApis: UsedGroups, store: CxxTypeStore] =
-  result.usedApis = UsedGroups(inProcs: UsedSet(), inTypes: UsedSet()) # Set of
-  # cursors pointing to declarations for different types used in the file
-  # entries (procedure argument and return, field, global variable types).
-
-  var store: CxxTypeStore
+proc getTypeStore*(wrapped: seq[CxxFile]): CxxTypeStore =
   for file in wrapped:
     for entry in file.entries:
-      registerUsedTypes(entry, result.usedApis)
-
       case entry.kind:
         of cekObject:
-          result.store = entry.cxxObject.decl.store
-          assertRef(result.store, $entry)
+          result = entry.cxxObject.decl.store
+          assertRef(result, $entry)
 
         of cekEnum:
-          result.store = entry.cxxEnum.decl.store
-          assertRef(result.store, $entry)
+          result = entry.cxxEnum.decl.store
+          assertRef(result, $entry)
 
         of cekAlias:
-          result.store = entry.cxxAlias.decl.store
-          assertRef(result.store, $entry)
+          result = entry.cxxAlias.decl.store
+          assertRef(result, $entry)
 
         else:
           discard
 
-  if isNil(store):
-    for decl, vals in result.usedApis.inTypes.cursors:
-      assertRef decl.store, "Missing store ref for " & $decl
-      result.store = decl.store
-      break
+      if isNil(result):
+        var used = newUsedGroups()
+        registerUsedTypes(entry, used)
+        for decl, vals in used.inTypes.cursors:
+          assertRef decl.store, "Missing store ref for " & $decl
+          result = decl.store
+          break
 
-  assertRef result.store
+  assertRef result
 
 type TypeGraph* = HGraph[CxxLibImport, CxxTypeUse]
-
 
 proc getGroups*(importGraph: TypeGraph): seq[HNodeSet] =
   importGraph.findCycles().mergeCycleSets()
@@ -196,21 +193,16 @@ proc dotRepr*(g: TypeGraph): DotGraph =
     clusters = groups.mapIt((it, it.groupFileName(g)))
   )
 
-proc buildTypeGraph*(wrapped: seq[CxxFile], usedApis: UsedGroups): TypeGraph =
-  result = newHGraph[CxxLibImport, CxxTypeUse]()
-  # Type use graph - nodes represent files and `CxxTypeUse` is an edge
-  # between two files. If one file uses type from another link is formed.
+proc buildTypeGraph*(wrapped: seq[CxxFile]): TypeGraph =
+  ## Type use graph - nodes represent files and `CxxTypeUse` is an edge
+  ## between two files. If one file uses type from another link is formed.
 
-  var
-    onlyTypes = newHGraph[CxxLibImport, CxxTypeUse]()
-    onlyProcs = newHGraph[CxxLibImport, CxxTypeUse]()
+  result = newHGraph[CxxLibImport, CxxTypeUse]()
 
   for file in wrapped:
-    onlyTypes.addImports(file, usedApis.inTypes)
-    onlyProcs.addImports(file, usedApis.inProcs)
-
-    result.addImports(file, usedApis.inTypes)
-    result.addImports(file, usedApis.inProcs)
+    let used = file.getUsedTypes()
+    result.addImports(file, used.inTypes)
+    result.addImports(file, used.inProcs)
 
 proc removeForwardDeclared*(wrapped: var seq[CxxFile], store: CxxtypeStore) =
   for file in mitems(wrapped):
@@ -232,17 +224,12 @@ proc removeForwardDeclared*(wrapped: var seq[CxxFile], store: CxxtypeStore) =
           if decl.typeImport.get() != file.savePath:
             file.addImport(decl.typeImport.get())
 
-proc buildTypeGraph*(wrapped: seq[Cxxfile]):
-  tuple[store: CxxTypestore, graph: TypeGraph] =
-  let (usedApis, store) = getUsedAPis(wrapped)
-  result.store = store
-  result.graph = buildTypeGraph(wrapped, usedApis)
-
 proc regroupFiles*(wrapped: seq[CxxFile]): seq[CxxFile] =
   ## Construct new group of wrapped files based on the input. Group
   ## mutually recursive types in new temporary files and add needed imports
   ## and exports.
-  let (store, importGraph) = buildTypeGraph(wrapped)
+  let store = getTypeStore(wrapped)
+  let importGraph = buildTypeGraph(wrapped)
   let groups = importGraph.getGroups()
   if groups.len == 0:
     # There is no mutually recursive type cycles in the passed files,

@@ -355,6 +355,9 @@ proc genDynDecl*[N](conf: CodegenConf): N =
 proc toNNode*[N](file: CxxFile, conf: CodegenConf): N =
   result = newNTree[N](nnkStmtList)
 
+  result.add pquote do:
+    {.push warning[UnusedImport]:off.}
+
   var imports = file.imports
   imports.incl file.getBindImports()
 

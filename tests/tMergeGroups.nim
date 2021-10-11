@@ -1,5 +1,6 @@
 import hmisc/preludes/unittest
 import hmisc/algo/hseq_mapping
+import hmisc/types/hgraph
 import hnimast
 
 import hmisc/hasts/graphviz_ast
@@ -144,6 +145,55 @@ suite "Forward-declare in files":
       forwardDecl = forwardCode.getFirst("Forward").objectDecl
 
     check:
-       lib("forward.hpp") in userFile.imports
+      lib("forward.hpp") in userFile.imports
 
-       forwardDecl.hasPragma("incompleteStruct")
+      forwardDecl.hasPragma("incompleteStruct")
+
+  test "Forward declaration and recursive":
+    conf.typeStore = newTypeStore()
+    let files = @[
+      convFile("struct Forward1;", "forward1.hpp"),
+      convFile("struct Forward2;", "forward2.hpp"),
+      convFile(lit3"""
+        struct User1 {
+          Forward1* forward1;
+          Forward2* forward2;
+          User2* user2;
+        };
+        """, "user1.hpp"),
+      convFile(lit3"""
+        struct User2 {
+          Forward1* forward1;
+          Forward2* forward2;
+          User1* user1;
+        };
+        """, "user2.hpp")
+    ]
+
+    let group = regroupFiles(files)
+
+    let
+      merged = "user1_user2"
+      f1     = group.findFile("forward1")
+      f2     = group.findFile("forward2")
+      m      = group.findFile(merged)
+      u1     = group.findFile("user1")
+      u2     = group.findFile("user2")
+
+    check:
+      lib(merged) in u1.exports
+      lib(merged) in u2.exports
+
+      lib(merged) in u1.imports
+      lib(merged) in u2.imports
+
+      lib("forward1.hpp") in m.imports
+      lib("forward2.hpp") in m.imports
+
+      lib("forward1.hpp") in m.imports
+      lib("forward2.hpp") in m.imports
+
+    let path = getTestTempFile("png")
+    let g = files.buildTypeGraph()
+    g.dotRepr().toPng(path)
+    echo group.toString(cxxCodegenConf)
