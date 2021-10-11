@@ -25,6 +25,9 @@ iterator pairs*[K, V](s1, s2: Table[K, V]): (K, V) =
 
 type
   UsedSet {.requiresinit.} = ref object
+    ## Set of cursors used in each declaration. Becase procedures also use
+    ## `CxxTypeDecl` for their head declarations `UsedSet` can store any
+    ## kind of declaration entry dependencies.
     cursors: Table[CxxTypeDecl, HashSet[CxxTypeUse]]
     libs: Table[CxxLibImport, HashSet[CxxTypeUse]]
 
@@ -186,12 +189,14 @@ proc groupFileName*(group: HNodeSet, graph: TypeGraph): string =
 
 proc dotRepr*(g: TypeGraph): DotGraph =
   let groups = getGroups(g)
-  dotRepr(
+  result = dotRepr(
     g,
     dotReprDollarNode[CxxLibImport],
     dotReprCollapseEdgesJoin[CxxTypeUse],
     clusters = groups.mapIt((it, it.groupFileName(g)))
   )
+
+  result.rankdir = grdLeftRight
 
 proc buildTypeGraph*(wrapped: seq[CxxFile]): TypeGraph =
   ## Type use graph - nodes represent files and `CxxTypeUse` is an edge
@@ -221,8 +226,8 @@ proc removeForwardDeclared*(wrapped: var seq[CxxFile], store: CxxtypeStore) =
             # removed
             entry = cxxEmpty()
 
-          if decl.typeImport.get() != file.savePath:
-            file.addImport(decl.typeImport.get())
+          # if decl.typeImport.get() != file.savePath:
+          #   file.addImport(decl.typeImport.get())
 
 proc regroupFiles*(wrapped: seq[CxxFile]): seq[CxxFile] =
   ## Construct new group of wrapped files based on the input. Group

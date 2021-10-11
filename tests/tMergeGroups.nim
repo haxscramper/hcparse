@@ -160,6 +160,9 @@ suite "Forward-declare in files":
           Forward2* forward2;
           User2* user2;
         };
+
+        Forward1* procForward1_1();
+        Forward2* procForward1_2();
         """, "user1.hpp"),
       convFile(lit3"""
         struct User2 {
@@ -167,6 +170,9 @@ suite "Forward-declare in files":
           Forward2* forward2;
           User1* user1;
         };
+
+        Forward1* procForward2_1();
+        Forward2* procForward2_2();
         """, "user2.hpp")
     ]
 
@@ -196,4 +202,3 @@ suite "Forward-declare in files":
     let path = getTestTempFile("png")
     let g = files.buildTypeGraph()
     g.dotRepr().toPng(path)
-    echo group.toString(cxxCodegenConf)

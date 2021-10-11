@@ -455,7 +455,16 @@ func `$`*(file: CxxFile): string = $file.savePath
 
 func cxxStr*(name: CxxName): string = name.scopes.join("::")
 func `$`*(name: CxxName): string = name.cxxStr()
-func `$`*(name: CxxNamePair): string = $name.context & "." & $name.nim & "/" & $name.cxx
+func `$`*(name: CxxNamePair): string =
+  let nim = $name.nim
+  let cxx = $name.cxx
+  result = $name.context & "."
+  if nim == cxx:
+    result &= nim & "-//-"
+
+  else:
+    result &= cxx & "/" & nim
+
 func `$`*(expr: CxxExpr): string = raise newImplementError()
 
 func `$`*(tref: CxxTypeRef): string =
