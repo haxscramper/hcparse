@@ -25,7 +25,7 @@ import
   hmisc/core/all
 
 export
-  hc_wavereader, hc_grouping, hc_impls, hc_codegen
+  hc_wavereader, hc_grouping, hc_impls, hc_codegen, oswrap
 
 proc parseTranslationUnit*(
     trIndex: CXIndex,
@@ -284,6 +284,7 @@ proc expandViaWave*(
 proc initCSharedLibFixConf*(
     lib: string,
     isIcpp: bool,
+    libRoot: AbsDir,
     expandMap: CxxExpandMap,
     configFiles: seq[string] = @["lib" & lib & "_config"],
     base: CxxFixConf = baseFixConf,
@@ -300,7 +301,7 @@ proc initCSharedLibFixConf*(
       of cekProc: result = cxxDynlibVar("lib" & lib & "Dl")
       of cekObject:
         let base = expandMap[entry.getLocation.file].string
-        let path = base.string.dropPrefix(libIncludePrefix.string)
+        let path = base.string.dropPrefix(libRoot.string)
         result = cxxHeader("<" & libIncludePrefix & path & ">")
 
       else:
@@ -338,6 +339,39 @@ proc writeFiles*(
     let res = outDir / fix.getFile().withExt("nim")
     res.writeFile(toNNode[PNode](fix, codegenConf).toPString())
     result.add res
+
+
+proc wrapCSharedLibViaTsWave*(
+    inDir, tmpDir, outDir: AbsDir,
+    libName: string,
+    ignoreIn: seq[string] = @[],
+    persistentOut: seq[string] = @[
+      "hcparse_generate", "lib" & libName & "_config"],
+  ): seq[AbsFile] =
+  var expandMap = expandViaWave(
+    listFiles(inDir, ignoreNames = ignoreIn),
+    tmpDir, baseCParseConf
+  )
+
+  rmFiles(outDir, @["nim"], persistentOut)
+
+  let
+    fixConf = initCSharedLibFixConf(
+      libName, false, inDir, expandMap)
+
+    resultWrapped = tmpDir.wrapViaTs(fixConf)
+    resultGrouped = writeFiles(outDir, resultWrapped, cCodegenConf)
+
+  return resultGrouped
+
+proc validateGenerated*(files: seq[AbsFile]) =
+  for file in items(files):
+    try:
+      execShell shellCmd(nim, check, errormax = 3, $file)
+
+    except ShellError:
+      echo "> ", file
+      echo "file fail"
 
 
 # proc registerTypes*(files: var seq[CxxFile]) =
