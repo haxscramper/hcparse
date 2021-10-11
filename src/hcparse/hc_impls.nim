@@ -364,6 +364,11 @@ let baseCppParseConf* = ParseConf(
 
 let baseCParseConf* = ParseConf(
   includePaths: getBuiltinHeaders(),
+  sysIncludes: @[
+    "/usr/include/sys",
+    "/usr/include",
+    "/usr/include/linux"
+  ],
   globalFlags: @[]
 )
 

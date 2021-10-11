@@ -40,6 +40,19 @@ func toNNode*[N](lib: CxxLibImport, asImport: bool): N =
   else:
     result = newNTree[N](nnkExportStmt, newNIdent[N](lib.getFilename()))
 
+func toNNode*[N](libs: seq[CxxLibImport], asImport: bool): N =
+  let libs = sortedByIt(libs, it)
+  if asImport:
+    result = newNTree[N](nnkImportStmt)
+    for lib in libs:
+      result.add lib.getPathNoExt().mapIt(newNIdent[N](it)).foldl(newXCall("/", a, b)):
+
+  else:
+    result = newNTree[N](nnkExportStmt)
+    for lib in libs:
+      result.add newNIdent[N](lib.getFilename())
+
+
 
 proc toNNode*[N](arg: CxxArg, conf: CodegenConf): NIdentDefs[N]
 
@@ -279,20 +292,22 @@ proc toNNode*[N](entry: CxxEntry, conf: CodegenConf): seq[NimDecl[N]] =
 
     of cekForward:
       result.add toNNode[N](entry.cxxForward, conf)
-      # raise newUnexpectedKindError(
-      #   entry,
-      #   "forward declaration must be converted to pass/import",
-      #   "or promoted into full type declartions ",
-      #   "by forward declaration patch stage. This code should",
-      #   "not be reached. declaration is ", $entry)
 
     of cekEmpty:
       discard
 
     of cekAlias:
-      let (alias, extra) = toNNode[N](entry.cxxAlias, conf)
-      result.add alias.toNimDecl()
-      result.add extra
+      let a = entry.cxxAlias
+      if a.baseType of ctkIdent and
+         a.decl.nimName() == a.baseType.nimName():
+        # WARNING unconditionally discarding typedefs might be an invalid
+        # behavior
+        discard
+
+      else:
+        let (alias, extra) = toNNode[N](a, conf)
+        result.add alias.toNimDecl()
+        result.add extra
 
     else:
       raise newImplementKindError(entry)
@@ -361,6 +376,8 @@ proc toNNode*[N](file: CxxFile, conf: CodegenConf): N =
   var imports = file.imports
   imports.incl file.getBindImports()
 
+  var relImports: seq[CxxLibImport]
+
   for dep in items(imports):
     if dep.getLibrary() == file.getLibrary():
       let (pDep, pFile) = (dep.getFile(), file.getFile())
@@ -371,13 +388,17 @@ proc toNNode*[N](file: CxxFile, conf: CodegenConf): N =
       let depthDots = tern(depth == 0, @["."], mapIt(0 ..< depth, ".."))
       let newImp = cxxLibImport(file.getLibrary(), depthDots & parts)
 
-      result.add toNNode[N](newImp, true)
+      relImports.add newIMp
+      # result.add toNNode[N](newImp, true)
 
     else:
       let newImp = cxxLibImport(
         dep.getLibrary(), dep.getLibrary() & dep.importPath)
 
-      result.add toNNode[N](newImp, true)
+      relImports.add newImp
+      # result.add toNNode[N](newImp, true)
+
+  result.add toNNode[N](relImports, true)
 
   for exp in items(file.exports):
     result.add toNNode[N](exp, false)

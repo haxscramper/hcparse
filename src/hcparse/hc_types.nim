@@ -296,6 +296,9 @@ type
 
     includepaths*: seq[AbsDir] ## List of absolute include directoires. `-I` in Cxx compilers
 
+    sysIncludes*: seq[string]
+    userIncludes*: seq[string]
+
   FileIndex* = object
     index*: Table[AbsFile, ParsedFile] ## Index of all parsed files
 

@@ -654,6 +654,19 @@ func `==`*(n1, n2: CxxName): bool = n1.scopes == n2.scopes
 func `==`*(l1, l2: CxxLibImport): bool =
   l1.library == l2.library and l1.importPath == l2.importPath
 
+func `<`*(l1, l2: CxxLibImport): bool =
+  if l1.library == l2.library:
+    if l1.importPath.len != l2.importPath.len:
+      return l1.importPath.len < l2.importPath.len
+
+    else:
+      for (p1, p2) in zip(l1.importPath, l2.importPath):
+        if p1 != p2:
+          return p1 < p2
+
+  else:
+    return l1.library < l2.library
+
 func hash*(name: CxxName): Hash = hash(name.scopes)
 
 func hash*[T](opt: Option[T]): Hash =

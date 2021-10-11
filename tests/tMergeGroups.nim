@@ -176,7 +176,9 @@ suite "Forward-declare in files":
         """, "user2.hpp")
     ]
 
+
     let group = regroupFiles(files)
+    echo group.toString(cxxCodegenConf)
 
     let
       merged = "user1_user2"

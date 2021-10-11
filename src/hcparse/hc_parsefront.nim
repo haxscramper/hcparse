@@ -15,7 +15,8 @@ import
   ./interop_ir/wrap_store
 
 import
-  hnimast
+  hnimast,
+  hnimast/pprint
 
 import
   hmisc/other/[oswrap, hshell, hpprint],
@@ -250,6 +251,94 @@ proc expandViaCc*(file: AbsFile, parseConf: ParseConf): string =
   cmd.arg file
 
   result = evalShellStdout(cmd)
+
+proc expandViaWave*(
+    file: AbsFile,
+    cache: var WaveCache,
+    conf: ParseConf
+  ): string =
+
+  var reader = newWaveReader(
+    file, cache, conf.userIncludes, conf.sysIncludes)
+
+  return reader.getExpanded()
+
+type CxxExpandMap* = Table[AbsFile, AbsFile]
+
+proc expandViaWave*(
+    files: seq[AbsFile],
+    outDir: AbsDir,
+    conf: ParseConf,
+    force: bool = false
+  ): CxxExpandMap =
+
+  mkDir outDir
+  var cache = newWaveCache()
+  for file in files:
+    let resFile = (outDir /. file.name()) &. "h"
+    result[resFile] = file
+
+    if not exists(resFile) or force:
+      resFile.writeFile(expandViaWave(file, cache, conf))
+
+proc initCSharedLibFixConf*(
+    lib: string,
+    isIcpp: bool,
+    expandMap: CxxExpandMap,
+    configFiles: seq[string] = @["lib" & lib & "_config"],
+    base: CxxFixConf = baseFixConf,
+    libIncludePrefix: string = lib,
+    nameStyle: IdentStyle = idsSnake
+  ): CxxFixConf =
+
+  var fixConf = base
+  fixConf.isIcpp = isIcpp
+  fixConf.libName = lib
+
+  fixConf.onGetBind():
+    case entry.kind:
+      of cekProc: result = cxxDynlibVar("lib" & lib & "Dl")
+      of cekObject:
+        let base = expandMap[entry.getLocation.file].string
+        let path = base.string.dropPrefix(libIncludePrefix.string)
+        result = cxxHeader("<" & libIncludePrefix & path & ">")
+
+      else:
+        result = cxxNoBind()
+
+    result.imports.add cxxLibImport(fixConf.libName, configFiles)
+
+  fixConf.libNameStyle = nameStyle
+
+  fixConf.onFixName():
+    cache.fixContextedName(name, fixConf.libNameStyle)
+
+  fixConf.typeStore = newTypeStore()
+  return fixConf
+
+proc wrapViaTs*(
+    root: AbsDir,
+    fixConf: CxxFixConf,
+    exts: seq[string] = @["h"]
+  ): seq[CxxFile] =
+
+  for file in walkDir(root, AbsFile, exts = exts):
+    result.add wrapViaTs(file, root, fixConf)
+
+
+proc writeFiles*(
+    outDir: AbsDir,
+    files: seq[CxxFile],
+    codegenConf: CodegenConf
+  ): seq[AbsFile] =
+
+  let group = regroupFiles(files)
+
+  for fix in group:
+    let res = outDir / fix.getFile().withExt("nim")
+    res.writeFile(toNNode[PNode](fix, codegenConf).toPString())
+    result.add res
+
 
 # proc registerTypes*(files: var seq[CxxFile]) =
 #   var store = CxxTypeStore()
