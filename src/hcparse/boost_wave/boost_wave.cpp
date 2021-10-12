@@ -1405,12 +1405,14 @@ bool wave_addMacroDefinition(
     WaveContextHandle* context,
     const char*        macrostring,
     bool               is_predefined) {
+    WaveContext*     ctx  = toCxx(context);
+    WaveContextImpl* ctx1 = ctx->context;
     try {
-        WaveContext*     ctx  = toCxx(context);
-        WaveContextImpl* ctx1 = ctx->context;
         return ctx1->add_macro_definition(macrostring, is_predefined);
-    }
-    DO_CATCH;
+    } catch (boost::wave::cpp_exception& e) {
+        ctx1->get_hooks().throw_exception(*ctx1, e);
+        return false;
+    } catch (...) { ANY_FAIL(); }
 }
 
 bool wave_removeMacroDefinition(

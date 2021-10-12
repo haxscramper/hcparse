@@ -40,6 +40,7 @@ func toNNode*[N](lib: CxxLibImport, asImport: bool): N =
   else:
     result = newNTree[N](nnkExportStmt, newNIdent[N](lib.getFilename()))
 
+
 func toNNode*[N](libs: seq[CxxLibImport], asImport: bool): N =
   let libs = sortedByIt(libs, it)
   if asImport:
@@ -54,9 +55,16 @@ func toNNode*[N](libs: seq[CxxLibImport], asImport: bool): N =
 
 
 
-proc toNNode*[N](arg: CxxArg, conf: CodegenConf): NIdentDefs[N]
+proc toNNode*[N](
+    arg: CxxArg, conf: CodegenConf,
+    anon: var seq[NimTypeDecl[N]]
+  ): NIdentDefs[N]
 
-proc toNNode*[N](t: CxxTypeUse, conf: CodegenConf): NType[N] =
+proc toNNode*[N](
+    t: CxxTypeUse, conf: CodegenConf,
+    anon: var seq[NimTypeDecl[N]]
+  ): NType[N] =
+
   case t.kind:
     of ctkIdent:
       result = newNNType[N](t.nimName, @[])
@@ -66,10 +74,10 @@ proc toNNode*[N](t: CxxTypeUse, conf: CodegenConf): NType[N] =
         case t.wrapped.nimName:
           of "char": result = newNNType[N]("cstring", @[])
           of "void": result = newNNType[N]("pointer", @[])
-          else: result = newNType[N]("ptr", @[toNNode[N](t.wrapped, conf)])
+          else: result = newNType[N]("ptr", @[toNNode[N](t.wrapped, conf, anon)])
 
       else:
-        result = newNType[N]("ptr", @[toNNode[N](t.wrapped, conf)])
+        result = newNType[N]("ptr", @[toNNode[N](t.wrapped, conf, anon)])
 
     of ctkProc:
       var pragma: Pragma[N]
@@ -77,28 +85,42 @@ proc toNNode*[N](t: CxxTypeUse, conf: CodegenConf): NType[N] =
         pragma = newNPragma[N](newNIdent[N]("cdecl"))
 
       result = newProcNType[N](
-        t.arguments.mapIt(toNNode[N](it, conf)),
-        toNNode[N](t.returnType, conf), pragma)
+        t.arguments.mapIt(toNNode[N](it, conf, anon)),
+        toNNode[N](t.returnType, conf, anon), pragma)
 
     of ctkDynamicArray:
       result = newNType[N]("ptr", @[
         newNType[N]("UncheckedArray", @[
-          toNNode[N](t.wrapped, conf)
-        ])
-      ])
+          toNNode[N](t.wrapped, conf, anon)])])
+
+    of ctkAnonObject:
+      let anon = toNNode[N](t.objDef, conf, anon)
+      result = newNNType[N]("ANON_OBJECT")
+
+    of ctkAnonEnum:
+      let anon = toNNode[N](t.enumDef, conf)
+      result = newNNType[N]("ANON_ENUM")
 
     else:
       raise newImplementKindError(t)
 
-proc toNNode*[N](t: CxxTypeDecl, conf: CodegenConf): NType[N] =
+proc toNNode*[N](
+    t: CxxTypeDecl, conf: CodegenConf,
+    anon: var seq[NimTypeDecl[N]]
+  ): NType[N] =
+
   newNType[N](
     t.nimName,
     t.genParams.mapIt(newNNType[N](it.name.nim, @[])))
 
-proc toNNode*[N](arg: CxxArg, conf: CodegenConf): NIdentDefs[N] =
+proc toNNode*[N](
+    arg: CxxArg, conf: CodegenConf,
+    anon: var seq[NimTypeDecl[N]]
+  ): NIdentDefs[N] =
+
   newNIdentDefs[N](
     arg.nimName,
-    toNNode[N](arg.nimType, conf),
+    toNNode[N](arg.nimType, conf, anon),
     value = some newEmptyNNode[N]())
 
 proc toNimComment*(com: seq[CxxComment]): string =
@@ -106,13 +128,17 @@ proc toNimComment*(com: seq[CxxComment]): string =
     if idx > 0: result.add "\n"
     result.add c.text
 
-proc toNNode*[N](field: CxxField, conf: CodegenConf): ObjectField[N] =
+proc toNNode*[N](
+    field: CxxField, conf: CodegenConf,
+    anon: var seq[NimTypeDecl[N]]
+  ): ObjectField[N] =
+
   result = ObjectField[N](
     isTuple: false,
     name: field.nimName(),
     isExported: true,
     docComment: field.docComment.toNimComment(),
-    fldType: toNNode[N](field.getType(), conf))
+    fldType: toNNode[N](field.getType(), conf, anon))
 
   let cxx = field.cxxName.cxxStr()
   if cxx != field.nimName():
@@ -169,12 +195,14 @@ proc toNNode*[N](header: CxxBind, conf: CodegenConf, name: string): seq[N] =
   else:
     result.add newNIdent[N](conf.getImport)
 
-proc toNNode*[N](def: CxxAlias, conf: CodegenConf):
-  tuple[alias: AliasDecl[N], extra: seq[NimDecl[N]]] =
+proc toNNode*[N](
+    def: CxxAlias, conf: CodegenConf,
+    anon: var seq[NimTypeDecl[N]]
+  ): tuple[alias: AliasDecl[N], extra: seq[NimDecl[N]]] =
 
   result.alias = newAliasDecl(
-    toNNode[N](def.decl, conf),
-    toNNode[N](def.baseType, conf),
+    toNNode[N](def.decl, conf, anon),
+    toNNode[N](def.baseType, conf, anon),
     isDistinct = false
   )
 
@@ -190,14 +218,15 @@ proc toNNode*[N](def: CxxAlias, conf: CodegenConf):
       newDef.baseType.flags.incl ctfNoCdeclProc
 
       result.extra.add toNimDecl[N](newAliasDecl(
-        toNNode[N](newDef.decl, conf),
-        toNNode[N](newDef.baseType, conf),
+        toNNode[N](newDef.decl, conf, anon),
+        toNNode[N](newDef.baseType, conf, anon),
         isDistinct = false
       ))
 
 proc toNNode*[N](
     def: CxxProc,
     conf: CodegenConf,
+    anon: var seq[NimTypeDecl[N]],
     onConstructor: CxxTypeKind = ctkIdent
   ): ProcDecl[N] =
 
@@ -219,16 +248,20 @@ proc toNNode*[N](
 
   # nim's overload-resolution-in-generics magic
   proc_decl.`returnType=`(
-    result, toNNode[N](def.getReturn(onConstructor), conf))
+    result, toNNode[N](def.getReturn(onConstructor), conf, anon))
 
   if def.methodOf.isSome():
     result.addArgument(
-      "this", toNNode[N](def.methodOf.get(), conf))
+      "this", toNNode[N](def.methodOf.get(), conf, anon))
 
   for arg in def.arguments:
-    result.addArgument toNNode[N](arg, conf)
+    result.addArgument toNNode[N](arg, conf, anon)
 
-proc toNNode*[N](obj: CxxObject, conf: CodegenConf): seq[NimDecl[N]] =
+proc toNNode*[N](
+    obj: CxxObject, conf: CodegenConf,
+    anon: var seq[NimTypeDecl[N]]
+  ): seq[NimDecl[N]] =
+
   var res = newObjectDecl[N](obj.nimName)
   res.docComment = obj.docComment.toNimComment()
   res.addPragma("bycopy")
@@ -240,15 +273,15 @@ proc toNNode*[N](obj: CxxObject, conf: CodegenConf): seq[NimDecl[N]] =
   # res.addPragma(conf.getImport(), newNLit[N, string](obj.getIcppStr()))
 
   for field in obj.mfields:
-    res.add toNNode[N](field, conf)
+    res.add toNNode[N](field, conf, anon)
 
   result.add toNimDecl(res)
 
   for meth in obj.methods:
-    result.add toNNode[N](meth, conf, ctkPtr)
+    result.add toNNode[N](meth, conf, anon, ctkPtr)
 
   for n in obj.nested:
-    result.add toNNode[N](n, conf)
+    result.add toNNode[N](n, conf, anon)
 
 proc toNNode*[N](obj: CxxForward, conf: CodegenConf): ObjectDecl[N] =
   result = newObjectDecl[N](obj.nimName)
@@ -278,17 +311,21 @@ proc toNNode*[N](en: CxxEnum, conf: CodegenConf): EnumDecl[N] =
   result.docComment.add toNimComment(en.docComment)
 
 
-proc toNNode*[N](entry: CxxEntry, conf: CodegenConf): seq[NimDecl[N]] =
+proc toNNode*[N](
+    entry: CxxEntry, conf: CodegenConf,
+    anon: var seq[NimTypeDecl[N]]
+  ): seq[NimDecl[N]] =
+
   case entry.kind:
     of cekObject:
-      result.add toNNode[N](entry.cxxObject, conf)
+      result.add toNNode[N](entry.cxxObject, conf, anon)
 
     of cekEnum:
       result.add toNNode[N](entry.cxxEnum, conf).toNimDecl()
 
     of cekProc:
       result.add toNNode[N](
-        entry.cxxProc, conf, ctkPtr).toNimDecl()
+        entry.cxxProc, conf, anon, ctkPtr).toNimDecl()
 
     of cekForward:
       result.add toNNode[N](entry.cxxForward, conf)
@@ -305,7 +342,7 @@ proc toNNode*[N](entry: CxxEntry, conf: CodegenConf): seq[NimDecl[N]] =
         discard
 
       else:
-        let (alias, extra) = toNNode[N](a, conf)
+        let (alias, extra) = toNNode[N](a, conf, anon)
         result.add alias.toNimDecl()
         result.add extra
 
@@ -324,7 +361,7 @@ proc toNNode*[N](entries: seq[CxxEntry], conf: CodegenConf): seq[NimDecl[N]] =
       if item of cekForward:
         visited.incl item.name
 
-      for conv in toNNode[N](item, conf):
+      for conv in toNNode[N](item, conf, types):
         if conv of {nekObjectDecl, nekAliasDecl, nekEnumDecl}:
             types.add toNimTypeDecl(conv)
 

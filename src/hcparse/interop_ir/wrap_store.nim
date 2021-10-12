@@ -22,6 +22,9 @@ type
 
     ctkStaticParam
 
+    ctkAnonObject ## Anonymous object, struct or union declared in-place
+    ctkAnonEnum ## Anonymous enum declared in-place
+
 const
   ctkWrapKinds* = { ctkPtr, ctkLVRef, ctkRVRef, ctkDynamicArray }
   ctkArrayKinds* = { ctkFixedArray, ctkDependentArray }
@@ -196,6 +199,21 @@ type
       of ctkProc:
         arguments*: seq[CxxArg]
         returnType*: CxxTypeUse
+
+      of ctkAnonObject:
+        ## This code is valid and allowed
+        ##
+        ## ```c
+        ## struct { int x,y; } foo() {
+        ##    typeof(foo()) ret = {1, 10};
+        ##    return ret;
+        ## }
+        ## ```
+        objDef*: CxxObject
+
+      of ctkAnonEnum:
+        enumDef*: CxxEnum
+
 
 
   CxxProcKind* = enum
@@ -515,6 +533,12 @@ func `$`*(ct: CxxTypeUse): string =
           result &= ct.genParams.mapIt($it).join(", ")
           result &= "]"
 
+      of ctkAnonEnum:
+        result &= "anon-enum"
+
+      of ctkAnonObject:
+        result &= "anon-object"
+
       of ctkProc:
         result &= "proc("
         for idx, arg in ct.arguments:
@@ -634,13 +658,19 @@ func `[]`*(t: CxxTypeUse, idx: int): CxxTypeUse =
       raise newUnexpectedKindError(
         t, "Static param does not support generic parameter indexing")
 
+    of ctkAnonObject, ctkAnonEnum:
+      raise newUnexpectedKindError(
+        t, "Anonymous enum/object does not support generic parameter indexing")
+
+
+
 func len*(t: CxxTypeUse): int =
   case t.kind:
     of ctkWrapKinds: 1
     of ctkArrayKinds: 2
     of ctkIdent: t.genParams.len
     of ctkProc: 1 + t.arguments.len
-    of ctkStaticParam: 0
+    of ctkStaticParam, ctkAnonObject, ctkAnonEnum: 0
 
 func `[]`*(back: CxxTypeUse, idx: BackwardsIndex): CxxTypeUse =
   back[back.len - idx.int]
@@ -691,6 +721,16 @@ func hash*(arg: CxxArg): Hash = hash(arg.name) !& hash(arg.nimType)
 func hash*(use: CxxTypeUse): Hash =
   result = hash(use.kind) !& hash(use.flags)
   case use.kind:
+    of ctkAnonEnum:
+      result = hash(use.enumDef.values.len)
+      for value in items(use.enumDef.values):
+        result = hash(value.name) !& result
+
+    of ctkAnonObject:
+      result = hash(use.objDef.mfields.len)
+      for field in items(use.objDef.mfields):
+        result = hash(field.nimType) !& result
+
     of ctkStaticParam:
       raise newImplementKindError(use)
 
@@ -867,6 +907,12 @@ func cxxTypeUse*(
   CxxTypeUse(
     kind: ctkIdent, cxxType: cxxTypeRef(head, store), genParams: @genParams)
 
+func cxxTypeUse*(objDef: CxxObject): CxxTypeUse =
+  CxxTypeUse(kind: ctkAnonObject, objDef: objDef)
+
+func cxxTypeUse*(enumDef: CxxEnum): CxxTypeUse =
+  CxxTypeUse(kind: ctkAnonEnum, enumDef: enumDef)
+
 func toDecl*(use: CxxTypeUse): CxxTypeDecl =
   assertKind(use, {ctkIdent})
   return cxxTypeDecl(use.cxxType.name)
@@ -982,8 +1028,19 @@ func addReExport*(file: var CxxFile, cimport: CxxLibImport) =
   addImport(file, cimport)
   addExport(file, cimport)
 
-template eachIdentAux*(inUse, cb, iterateWith: untyped) =
+# proc eachIdent*(use: var CxxTypeUse, cb: proc(ident: var CxxTypeUse))
+# proc eachIdent*(use: CxxTypeUse, cb: proc(ident: CxxTypeUse))
+
+template eachIdentAux(inUse, cb, iterateWith: untyped) =
+  # bind eachIdent
   case inUse.kind:
+    of ctkAnonEnum:
+      discard
+
+    of ctkAnonObject:
+      for field in iterateWith(inUse.objDef.mfields):
+        eachIdent(field.nimType, cb)
+
     of ctkWrapKinds: eachIdent(inUse.wrapped, cb)
     of ctkStaticParam: discard
     of ctkArrayKinds: eachIdent(inUse.arrayElement, cb)
@@ -1325,11 +1382,15 @@ proc fixIdentsRec*(
     proc auxArg(use: var CxxTypeUse, cache: var StringNameCache) =
       case use.kind:
         of ctkWrapKinds: auxArg(use.wrapped, cache)
-        of ctkStaticParam: discard
+        of ctkStaticParam, ctkAnonEnum: discard
         of ctkArrayKinds: auxArg(use.arrayElement, cache)
         of ctkIdent:
           for param in mitems(use.genParams):
             auxArg(param, cache)
+
+        of ctkAnonObject:
+          for field in mitems(use.objDef.mfields):
+            aux(field.nimType, cache)
 
         of ctkProc:
           for idx, arg in mpairs(use.arguments):

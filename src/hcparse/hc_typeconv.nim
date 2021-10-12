@@ -570,9 +570,10 @@ func mapPrimitiveNameImpl*(name: string):
     of "unsigned", "unsigned int": ("cuint", cptUInt)
 
     of "long": ("clong", cptI32)
-    of "unsigned long": ("ulong", cptU32)
+    of "unsigned long": ("culong", cptU32)
 
     of "long long": ("clonglong", cptI64)
+    of "unsigned long long": ("culonglong", cptU64)
 
 
 
@@ -585,6 +586,7 @@ func mapPrimitiveNameImpl*(name: string):
     of "float": ("cfloat", cptFloat)
     of "bool": ("bool", cptBool)
     of "size_t": ("csize_t", cptSizeT)
+    of "ssize_t": ("csize_t", cptSizeT)
 
     of "int16_t": ("int16", cptI16)
     of "int32_t": ("int32", cptI32)
@@ -835,6 +837,9 @@ proc genParamsForIdent*(
 func fixTypeParams*(nt: var NimType, params: seq[NimType]) =
   func aux(nt: var NimType, idx: var int) =
     case nt.kind:
+      of ctkAnonObject, ctkAnonEnum:
+        raise newImplementKindError(nt)
+
       of ctkWrapKinds:
         aux(nt.wrapped, idx)
 
@@ -864,6 +869,9 @@ func fixTypeParams*(nt: var NimType, params: seq[NimType]) =
 
 func hasSpecial*(nt: NimType, special: seq[string]): bool =
   case nt.kind:
+    of ctkAnonEnum, ctkAnonObject:
+      raise newImplementKindError(nt)
+
     of ctkWrapKinds:
       nt.wrapped.hasSpecial(special)
 

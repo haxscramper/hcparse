@@ -63,6 +63,9 @@ proc toCxxComment*(comm: CppNode): CxxComment =
 
 proc toCxxArg*(node: CppNode, idx: int): CxxArg
 
+proc toCxxEnum*(node: CppNode, coms): CxxEnum
+proc toCxxObject*(node: CppNode, coms): CxxObject
+
 proc toCxxType*(node: CppNode): CxxTypeUse =
   case node.kind:
     of cppTypeIdentifier,
@@ -77,7 +80,20 @@ proc toCxxType*(node: CppNode): CxxTypeUse =
         result.flags.incl ctfIsPodType
 
     of cppStructSpecifier, cppEnumSpecifier, cppUnionSpecifier:
-      result = toCxxType(node[0])
+      if node[0] of cppFieldDeclarationList:
+        var coms: seq[CxxComment]
+        case node.kind:
+          of cppEnumSpecifier:
+            result = cxxTypeUse(toCxxEnum(node, coms))
+
+          of cppUnionSpecifier, cppStructSpecifier:
+            result = cxxTypeUse(toCxxObject(node, coms))
+
+          else:
+            raise newUnexpectedKindError(node)
+
+      else:
+        result = toCxxType(node[0])
 
     of cppFieldDeclaration:
       var args: seq[CxxArg]

@@ -84,6 +84,9 @@ type
         arraySize*: CXCursor
         arrayElement*: NimType
 
+      of ctkAnonObject, ctkAnonEnum:
+        discard
+
 
   CDeclKind* = enum
     ## Raw C declaration kind
@@ -1394,6 +1397,9 @@ func initCxxLibImport*(conf: WrapConf, path: seq[string]): CxxLibImport =
 
 func hash*(nt: NimType): Hash =
   case nt.kind:
+    of ctkAnonEnum, ctkAnonObject:
+      raise newImplementKindError(nt)
+
     of ctkWrapKinds:
       result = !$(hash(nt.kind) !& hash(nt.wrapped))
 
@@ -1425,6 +1431,9 @@ func hash*(nt: NimType): Hash =
 func `==`*(t1, t2: NimType): bool =
   if t1.kind == t2.kind:
     case t1.kind:
+      of ctkAnonObject, ctkAnonEnum:
+        raise newImplementKindError(t1)
+
       of ctkWrapKinds:
         return t1.wrapped == t2.wrapped
 
@@ -1510,6 +1519,9 @@ proc `$`*(nimType: NimType): string =
 
   else:
     case nimType.kind:
+      of ctkAnonEnum, ctkAnonObject:
+        raise newImplementKindError(nimType)
+
       of ctkPtr:
         result = $nimType.wrapped & "*"
 
@@ -1827,6 +1839,9 @@ proc allUsedTypes*(
 
 
   case nimType.kind:
+    of ctkAnonObject, ctkAnonEnum:
+      raise newImplementKindError(nimType)
+
     of ctkWrapKinds:
       result.add allUsedTypes(nimType.wrapped)
 
@@ -1855,6 +1870,9 @@ proc allGenericParams*(nimType: NimType): seq[NimType] =
 
 
   case nimType.kind:
+    of ctkAnonEnum, ctkAnonObject:
+      raise newImplementKindError(nimType)
+
     of ctkWrapKinds:
       result = allGenericparams(nimType.wrapped)
 

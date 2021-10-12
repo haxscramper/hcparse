@@ -324,7 +324,12 @@ proc wrapViaTs*(
   ): seq[CxxFile] =
 
   for file in walkDir(root, AbsFile, exts = exts):
-    result.add wrapViaTs(file, root, fixConf)
+    try:
+      result.add wrapViaTs(file, root, fixConf)
+
+    except ImplementKindError as err:
+      err.msg.add "\nException raised while processing file " & file.string
+      raise err
 
 
 proc writeFiles*(

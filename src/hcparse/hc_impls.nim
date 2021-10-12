@@ -155,6 +155,9 @@ proc fixTypeName*(str: string, idx: int, conf: WrapConf): string =
 
 proc fixTypeName*(ntype: var NimType, conf: WrapConf, idx: int = 0) =
   case ntype.kind:
+    of ctkAnonObject, ctkAnonEnum:
+      raise newImplementKindError(ntype)
+
     of ctkWrapKinds:
       fixTypeName(ntype.wrapped, conf, idx)
 
