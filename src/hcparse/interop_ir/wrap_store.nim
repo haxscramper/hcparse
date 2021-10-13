@@ -90,10 +90,14 @@ type
     isAnonymous*: bool
     isPromotedForward*: bool
 
+  CxxNameString* = distinct string
+  CxxTypeImportMap* = OrderedTable[CxxNameString, CxxLibImport]
   CxxName* = object
     scopes*: seq[string]
 
   CxxNameContext* = enum
+    cncNone
+
     cncType
     cncArg
     cncVar
@@ -130,6 +134,7 @@ type
     forwardDecls*: Table[CxxName, seq[CxxTypeDecl]]
     classDecls*: Table[CxxName, seq[CxxObject]]
 
+    importDecls*: Table[CxxName, CxxLibImport]
 
   CxxTypeRef* = object
     ## Reference to used C++ type
@@ -210,9 +215,13 @@ type
         ## }
         ## ```
         objDef*: CxxObject
+        objParent*: CxxNamePair
+        objUser*: CxxNamePair
 
       of ctkAnonEnum:
         enumDef*: CxxEnum
+        enumParent*: CxxNamePair
+        enumUser*: CxxNamePair
 
 
 
@@ -680,6 +689,7 @@ iterator items*(use: CxxTypeUse): CxxTypeUse =
     yield use[i]
 
 
+func `==`*(s1, s2: CxxNameString): bool = s1.string == s2.string
 func `==`*(n1, n2: CxxName): bool = n1.scopes == n2.scopes
 func `==`*(l1, l2: CxxLibImport): bool =
   l1.library == l2.library and l1.importPath == l2.importPath
@@ -697,6 +707,7 @@ func `<`*(l1, l2: CxxLibImport): bool =
   else:
     return l1.library < l2.library
 
+func hash*(s: CxxNameString): Hash = hash(s.string)
 func hash*(name: CxxName): Hash = hash(name.scopes)
 
 func hash*[T](opt: Option[T]): Hash =
@@ -800,6 +811,8 @@ func name*(e: CxxEntry): CxxNamePair =
     else:
       raise newImplementKindError(e)
 
+func cxxName*(e: CxxEntry): CxxName = e.name.cxx
+
 func getLocation*(e: CxxEntry): CxxSpellingLocation =
   var tmp: Option[CxxSpellingLocation]
   case e.kind:
@@ -817,10 +830,24 @@ func getLocation*(e: CxxEntry): CxxSpellingLocation =
   assertOption tmp, $e
   return tmp.get
 
-func cxxPair*(nim: string, cxx: CxxName): CxxNamePair =
-  CxxNamePair(nim: nim, cxx: cxx)
+func cxxPair*(
+    nim: string, cxx: CxxName,
+    context: CxxNameContext = cncNone
+  ): CxxNamePair =
 
-func cxxPair*(name: string): CxxNamePair = cxxPair(name, cxxName(@[name]))
+  CxxNamePair(nim: nim, cxx: cxx, context: context)
+
+func cxxPair*(
+    name: string,
+    context: CxxNameContext = cncNone
+  ): CxxNamePair =
+
+  cxxPair(name, cxxName(@[name]), context)
+
+func `&`*(p1, p2: CxxNamePair): CxxNamePair =
+  CxxNamePair(
+    context: p2.context, nim: p1.nim & p2.nim,
+    cxx: CxxName(scopes: p1.cxx.scopes & p2.cxx.scopes))
 
 func isConst*(pr: CxxProc): bool = cpfConst in pr.flags
 func isConstructor*(pr: CxxProc): bool = pr.constructorOf.isSome()
@@ -907,11 +934,19 @@ func cxxTypeUse*(
   CxxTypeUse(
     kind: ctkIdent, cxxType: cxxTypeRef(head, store), genParams: @genParams)
 
-func cxxTypeUse*(objDef: CxxObject): CxxTypeUse =
-  CxxTypeUse(kind: ctkAnonObject, objDef: objDef)
+func cxxTypeUse*(
+    objDef: CxxObject, parent, user: CxxNamePair
+  ): CxxTypeUse =
+  CxxTypeUse(
+    kind: ctkAnonObject, objDef: objDef,
+    objParent: parent, objUser: user)
 
-func cxxTypeUse*(enumDef: CxxEnum): CxxTypeUse =
-  CxxTypeUse(kind: ctkAnonEnum, enumDef: enumDef)
+func cxxTypeUse*(
+    enumDef: CxxEnum, parent, user: CxxNamePair
+  ): CxxTypeUse =
+  CxxTypeUse(
+    kind: ctkAnonEnum, enumDef: enumDef,
+    enumParent: parent, enumUser: user)
 
 func toDecl*(use: CxxTypeUse): CxxTypeDecl =
   assertKind(use, {ctkIdent})
@@ -961,10 +996,20 @@ func getDecl*(use: CxxTypeUse): Option[CxxTypeDecl] =
   return use.cxxType.typeStore.getDecl(
     use.cxxName(), use.cxxType.typeLib)
 
+func hasExternalImport*(use: CxxTypeuse): bool =
+  if use of ctkIdent:
+    let store = use.cxxType.typeStore
+    result = use.cxxName() in store.importDecls
+
+func getExternalImport*(use: CxxTypeUse): CxxLibImport =
+  assertKind(use, ctkIdent)
+  use.cxxType.typeStore.importDecls.getOr(
+    use.cxxName(), "missing mapping for type in external import list")
+
 func hasImport*(use: CxxTypeUse): bool =
   if use of ctkIdent:
     let decl = use.getDecl()
-    result = decl.isSome() and decl.get().typeImport.isSome()
+    result = decl.get().typeImport.isSome()
 
   else:
     result = false
@@ -985,6 +1030,10 @@ func hasFullDecl*(decl: CxxTypeDecl): bool =
 
 
 func cxxLibImport*(library: string, path: seq[string]): CxxLibImport =
+  for item in path:
+    if item.len == 0:
+      raise newArgumentError("Lib import path cannot contain elements of length 0")
+
   CxxLibImport(library: library, importPath: path)
 
 func getImport*(decl: CxxTypeDecl): CxxLibImport = decl.typeImport.get()
@@ -1382,13 +1431,19 @@ proc fixIdentsRec*(
     proc auxArg(use: var CxxTypeUse, cache: var StringNameCache) =
       case use.kind:
         of ctkWrapKinds: auxArg(use.wrapped, cache)
-        of ctkStaticParam, ctkAnonEnum: discard
+        of ctkStaticParam: discard
+        of ctkAnonEnum:
+          aux(use.enumParent)
+          aux(use.enumUser)
+
         of ctkArrayKinds: auxArg(use.arrayElement, cache)
         of ctkIdent:
           for param in mitems(use.genParams):
             auxArg(param, cache)
 
         of ctkAnonObject:
+          aux(use.objParent)
+          aux(use.objUser)
           for field in mitems(use.objDef.mfields):
             aux(field.nimType, cache)
 

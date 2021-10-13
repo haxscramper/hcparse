@@ -35,12 +35,6 @@ type
     inProcs: UsedSet
     inTypes: UsedSet
 
-func mgetOrDefault*[K, V](table: var Table[K, V], key: K): var V =
-  if key notin table:
-    table[key] = default(V)
-
-  return table[key]
-
 proc registerUse*(ctype: CxxTypeUse, used: var UsedSet) =
   ## Register type and all it's inner used types (proctype arguments,
   ## generic parameters etc) in the used set.
@@ -51,6 +45,10 @@ proc registerUse*(ctype: CxxTypeUse, used: var UsedSet) =
     let decl = use.getDecl()
     if decl.isSome():
       used.cursors.mgetOrDefault(decl.get()).incl use
+
+    elif use.hasExternalImport():
+      let lib = use.getExternalImport()
+      used.libs.mgetOrDefault(lib).incl use
 
 
 proc registerUsedTypes*(genProc: CxxProc, used: var UsedSet) =

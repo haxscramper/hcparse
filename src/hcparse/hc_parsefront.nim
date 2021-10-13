@@ -2,6 +2,9 @@ import
   std/[sequtils, strformat, bitops, strutils, tables]
 
 import
+  pkg/[jsony]
+
+import
   ./cxtypes,
   ./hc_types,
   ./hc_impls,
@@ -202,7 +205,7 @@ proc wrapViaTs*(
   ): CxxFile =
   assertRef conf.typeStore
   let relative = file.string.dropPrefix(libRoot.string)
-  let lib = cxxLibImport(conf.libName, relative.split("/"))
+  let lib = cxxLibImport(conf.libName, relative.split("/").filterIt(it.len > 0))
   wrapViaTs(file.readFile(), conf, lib, some file).cxxFile(lib)
 
 proc wrapViaTsWave*(
@@ -281,20 +284,49 @@ proc expandViaWave*(
     if not exists(resFile) or force:
       resFile.writeFile(expandViaWave(file, cache, conf))
 
+
+const importMapFile* = "type_import.json"
+
+proc getImportMap*(files: seq[CxxFile]): CxxTypeImportMap =
+  for file in files:
+    for entry in file.entries:
+      if entry of {cekObject, cekAlias, cekEnum}:
+        result[CxxNameString(entry.cxxName.scopes.join("::"))] = file.savePath
+
+func `$`*(s: CxxNameString): string = s.string
+
+proc readImportMap*(store: var CxxTypeStore, file: AbsFile) =
+  assertExists(file)
+  let j = readFile(file)
+  let map = j.fromJson(Table[string, CxxLibImport])
+  for key, val in map:
+    store.importDecls[cxxName(key.split("::"))] = val
+
+proc readImportMap*(store: var CxxTypeStore, dirs: seq[AbsDir]) =
+  for dir in dirs:
+    for file in walkDir(dir, AbsFile, exts = @["json"]):
+      if file.name() == "type_import":
+        readImportMap(store, file)
+        break
+
+
+
 proc initCSharedLibFixConf*(
     lib: string,
+    packageName: string,
     isIcpp: bool,
     libRoot: AbsDir,
     expandMap: CxxExpandMap,
     configFiles: seq[string] = @["lib" & lib & "_config"],
-    base: CxxFixConf = baseFixConf,
+    base: CxxFixConf         = baseFixConf,
     libIncludePrefix: string = lib,
-    nameStyle: IdentStyle = idsSnake
+    nameStyle: IdentStyle    = idsSnake,
+    depDirs: seq[AbsDir] = @[]
   ): CxxFixConf =
 
   var fixConf = base
   fixConf.isIcpp = isIcpp
-  fixConf.libName = lib
+  fixConf.libName = packageName
 
   fixConf.onGetBind():
     case entry.kind:
@@ -315,6 +347,8 @@ proc initCSharedLibFixConf*(
     cache.fixContextedName(name, fixConf.libNameStyle)
 
   fixConf.typeStore = newTypeStore()
+  fixConf.typeStore.readImportMap(depDirs)
+
   return fixConf
 
 proc wrapViaTs*(
@@ -331,28 +365,43 @@ proc wrapViaTs*(
       err.msg.add "\nException raised while processing file " & file.string
       raise err
 
+type
+  GenFiles = object
+    genNim*: seq[AbsFile]
+    genTypeMap*: Option[AbsFile]
 
 proc writeFiles*(
     outDir: AbsDir,
     files: seq[CxxFile],
-    codegenConf: CodegenConf
-  ): seq[AbsFile] =
+    codegenConf: CodegenConf,
+    extraTypes: seq[(CxxName, CxxLibImport)] = @[]
+  ): GenFiles =
+
+  let mapFile = outDir /. importMapFile
+  result.genTypeMap = some mapFile
+  var map = getImportMap(files)
+  for (ctype, cimport) in extraTypes:
+    map[CxxNameString(ctype.scopes.join("::"))] = cimport
+
+  writeFile(mapFile, toJson(map))
 
   let group = regroupFiles(files)
 
   for fix in group:
     let res = outDir / fix.getFile().withExt("nim")
     res.writeFile(toNNode[PNode](fix, codegenConf).toPString())
-    result.add res
+    result.genNim.add res
 
 
 proc wrapCSharedLibViaTsWave*(
     inDir, tmpDir, outDir: AbsDir,
-    libName: string,
+    libName, packageName: string,
     ignoreIn: seq[string] = @[],
     persistentOut: seq[string] = @[
       "hcparse_generate", "lib" & libName & "_config"],
-  ): seq[AbsFile] =
+    depDirs: seq[AbsDir] = @[],
+    extraTypes: seq[(CxxName, CxxLibImport)] = @[]
+  ): GenFiles =
   var expandMap = expandViaWave(
     listFiles(inDir, ignoreNames = ignoreIn),
     tmpDir, baseCParseConf
@@ -362,15 +411,15 @@ proc wrapCSharedLibViaTsWave*(
 
   let
     fixConf = initCSharedLibFixConf(
-      libName, false, inDir, expandMap)
+      libName, packageName, false, inDir, expandMap, depDirs = depDirs)
 
     resultWrapped = tmpDir.wrapViaTs(fixConf)
-    resultGrouped = writeFiles(outDir, resultWrapped, cCodegenConf)
+    resultGrouped = writeFiles(outDir, resultWrapped, cCodegenConf, extraTypes = extraTypes)
 
   return resultGrouped
 
-proc validateGenerated*(files: seq[AbsFile]) =
-  for file in items(files):
+proc validateGenerated*(files: GenFiles) =
+  for file in items(files.genNim):
     try:
       execShell shellCmd(nim, check, errormax = 3, $file)
 

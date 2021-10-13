@@ -42,27 +42,32 @@ func toNNode*[N](lib: CxxLibImport, asImport: bool): N =
 
 
 func toNNode*[N](libs: seq[CxxLibImport], asImport: bool): N =
-  let libs = sortedByIt(libs, it)
-  if asImport:
-    result = newNTree[N](nnkImportStmt)
-    for lib in libs:
-      result.add lib.getPathNoExt().mapIt(newNIdent[N](it)).foldl(newXCall("/", a, b)):
+  if libs.len == 0:
+    result = newEmptyNNode[N]()
 
   else:
-    result = newNTree[N](nnkExportStmt)
-    for lib in libs:
-      result.add newNIdent[N](lib.getFilename())
+    let libs = sortedByIt(libs, it)
+    if asImport:
+      result = newNTree[N](nnkImportStmt)
+      for lib in libs:
+        result.add lib.getPathNoExt().mapIt(newNIdent[N](it)).foldl(newXCall("/", a, b)):
+
+    else:
+      result = newNTree[N](nnkExportStmt)
+      for lib in libs:
+        result.add newNIdent[N](lib.getFilename())
 
 
 
 proc toNNode*[N](
     arg: CxxArg, conf: CodegenConf,
-    anon: var seq[NimTypeDecl[N]]
+    anon: var seq[NimDecl[N]]
   ): NIdentDefs[N]
+
 
 proc toNNode*[N](
     t: CxxTypeUse, conf: CodegenConf,
-    anon: var seq[NimTypeDecl[N]]
+    anon: var seq[NimDecl[N]]
   ): NType[N] =
 
   case t.kind:
@@ -94,19 +99,25 @@ proc toNNode*[N](
           toNNode[N](t.wrapped, conf, anon)])])
 
     of ctkAnonObject:
-      let anon = toNNode[N](t.objDef, conf, anon)
-      result = newNNType[N]("ANON_OBJECT")
+      var def = t.objDef
+      def.decl.name = t.objParent & t.objUser
+      let gen = toNNode[N](def, conf, anon)
+      anon.add gen
+      result = newNNType[N](def.nimName)
 
     of ctkAnonEnum:
-      let anon = toNNode[N](t.enumDef, conf)
-      result = newNNType[N]("ANON_ENUM")
+      var def = t.enumDef
+      def.decl.name = t.enumParent & t.enumUser
+      let gen = toNNode[N](def, conf)
+      anon.add gen
+      result = newNNType[N](def.nimName)
 
     else:
       raise newImplementKindError(t)
 
 proc toNNode*[N](
     t: CxxTypeDecl, conf: CodegenConf,
-    anon: var seq[NimTypeDecl[N]]
+    anon: var seq[NimDecl[N]]
   ): NType[N] =
 
   newNType[N](
@@ -115,7 +126,7 @@ proc toNNode*[N](
 
 proc toNNode*[N](
     arg: CxxArg, conf: CodegenConf,
-    anon: var seq[NimTypeDecl[N]]
+    anon: var seq[NimDecl[N]]
   ): NIdentDefs[N] =
 
   newNIdentDefs[N](
@@ -130,7 +141,7 @@ proc toNimComment*(com: seq[CxxComment]): string =
 
 proc toNNode*[N](
     field: CxxField, conf: CodegenConf,
-    anon: var seq[NimTypeDecl[N]]
+    anon: var seq[NimDecl[N]]
   ): ObjectField[N] =
 
   result = ObjectField[N](
@@ -197,7 +208,7 @@ proc toNNode*[N](header: CxxBind, conf: CodegenConf, name: string): seq[N] =
 
 proc toNNode*[N](
     def: CxxAlias, conf: CodegenConf,
-    anon: var seq[NimTypeDecl[N]]
+    anon: var seq[NimDecl[N]]
   ): tuple[alias: AliasDecl[N], extra: seq[NimDecl[N]]] =
 
   result.alias = newAliasDecl(
@@ -226,7 +237,7 @@ proc toNNode*[N](
 proc toNNode*[N](
     def: CxxProc,
     conf: CodegenConf,
-    anon: var seq[NimTypeDecl[N]],
+    anon: var seq[NimDecl[N]],
     onConstructor: CxxTypeKind = ctkIdent
   ): ProcDecl[N] =
 
@@ -259,12 +270,14 @@ proc toNNode*[N](
 
 proc toNNode*[N](
     obj: CxxObject, conf: CodegenConf,
-    anon: var seq[NimTypeDecl[N]]
+    anon: var seq[NimDecl[N]]
   ): seq[NimDecl[N]] =
 
   var res = newObjectDecl[N](obj.nimName)
   res.docComment = obj.docComment.toNimComment()
   res.addPragma("bycopy")
+  if obj.kind == cokUnion:
+    res.addPragma("union")
   # res.addPragma("inheritable")
   # res.addPragma("byref")
 
@@ -313,7 +326,7 @@ proc toNNode*[N](en: CxxEnum, conf: CodegenConf): EnumDecl[N] =
 
 proc toNNode*[N](
     entry: CxxEntry, conf: CodegenConf,
-    anon: var seq[NimTypeDecl[N]]
+    anon: var seq[NimDecl[N]]
   ): seq[NimDecl[N]] =
 
   case entry.kind:
@@ -350,9 +363,12 @@ proc toNNode*[N](
       raise newImplementKindError(entry)
 
 proc toNNode*[N](entries: seq[CxxEntry], conf: CodegenConf): seq[NimDecl[N]] =
-  var types: seq[NimTypeDecl[N]]
-  var other: seq[NimDecl[N]]
-  var visited: HashSet[CxxNamePair]
+  var
+    types: seq[NimTypeDecl[N]]
+    other: seq[NimDecl[N]]
+    anon: seq[NimDecl[N]]
+    visited: HashSet[CxxNamePair]
+
   for item in entries:
     if item of cekEmpty:
       discard
@@ -361,12 +377,19 @@ proc toNNode*[N](entries: seq[CxxEntry], conf: CodegenConf): seq[NimDecl[N]] =
       if item of cekForward:
         visited.incl item.name
 
-      for conv in toNNode[N](item, conf, types):
-        if conv of {nekObjectDecl, nekAliasDecl, nekEnumDecl}:
+      for conv in toNNode[N](item, conf, anon):
+        if conv of nekTypeKinds:
             types.add toNimTypeDecl(conv)
 
         else:
           other.add conv
+
+  for conv in anon:
+    if conv of nekTypeKinds:
+      types.add toNimTypeDecl(conv)
+
+    else:
+      other.add conv
 
   result.add toNimDecl(sortedByIt(types, it.getName()))
   result.add other

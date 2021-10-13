@@ -10,3 +10,6 @@ export
   hc_visitors,
   hc_impls,
   hc_parsefront
+
+import hmisc/core/debug
+export debug

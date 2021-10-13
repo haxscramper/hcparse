@@ -66,11 +66,9 @@ proc toCxxArg*(node: CppNode, idx: int): CxxArg
 proc toCxxEnum*(node: CppNode, coms): CxxEnum
 proc toCxxObject*(node: CppNode, coms): CxxObject
 
-proc toCxxType*(node: CppNode): CxxTypeUse =
+proc toCxxType*(node: CppNode, parent, user: Option[CxxNamePair]): CxxTypeUse =
   case node.kind:
-    of cppTypeIdentifier,
-       cppSizedTypeSpecifier,
-       cppPrimitiveType:
+    of cppTypeIdentifier, cppSizedTypeSpecifier, cppPrimitiveType:
       result = cxxTypeUse(cxxPair(
         mapTypeName(node),
         cxxName(@[node.strVal()])))
@@ -84,16 +82,16 @@ proc toCxxType*(node: CppNode): CxxTypeUse =
         var coms: seq[CxxComment]
         case node.kind:
           of cppEnumSpecifier:
-            result = cxxTypeUse(toCxxEnum(node, coms))
+            result = cxxTypeUse(toCxxEnum(node, coms), parent.get(), user.get())
 
           of cppUnionSpecifier, cppStructSpecifier:
-            result = cxxTypeUse(toCxxObject(node, coms))
+            result = cxxTypeUse(toCxxObject(node, coms), parent.get(), user.get())
 
           else:
             raise newUnexpectedKindError(node)
 
       else:
-        result = toCxxType(node[0])
+        result = toCxxType(node[0], parent, user)
 
     of cppFieldDeclaration:
       var args: seq[CxxArg]
@@ -102,7 +100,7 @@ proc toCxxType*(node: CppNode): CxxTypeUse =
         args.add toCxxArg(param, idx)
         inc idx
 
-      result = cxxTypeUse(args, toCxxType(node["type"]))
+      result = cxxTypeUse(args, toCxxType(node["type"], parent, user))
 
     else:
       raise newImplementKindError(node, node.treeRepr())
@@ -259,19 +257,21 @@ proc toCxxArg*(node: CppNode, idx: int): CxxArg =
   assertKind(node, {cppParameterDeclaration})
   var
     name: CxxNamePair
-    argt: CxxTypeUse = toCxxType(node["type"])
+    argt: CxxTypeUse
 
   if "declarator" in node:
     if node["declarator"] of cppAbstractPointerDeclarator:
-      name = cxxPair("a" & $idx)
-      argt = argt.wrap(ctkPtr)
+      name = cxxPair("a" & $idx, cncArg)
+      argt = toCxxType(node["type"], none CxxNamePair, some name).wrap(ctkPtr)
 
     else:
-      name = cxxPair(getName(node["declarator"]))
+      name = cxxPair(getName(node["declarator"]), cncArg)
+      argt = toCxxType(node["type"], none CxxNamePair, some name)
       pointerWraps(node["declarator"], argt)
 
   else:
-    name = cxxPair("a" & $idx)
+    name = cxxPair("a" & $idx, cncArg)
+    argt = toCxxType(node["type"], none CxxNamePair, some name)
 
   result = cxxArg(name, argt)
 
@@ -283,7 +283,11 @@ proc toCxxProc*(
   ): CxxProc =
 
   result = cxxProc(cxxPair(node["declarator"].getName()))
-  result.returnType = toCxxType(node["type"])
+  result.returnType = toCxxType(
+    node["type"],
+    some result.head.name,
+    some result.head.name
+  )
 
   if parent.isSome():
     result.methodOf = some parent.get().decl.cxxTypeUse()
@@ -313,18 +317,16 @@ proc toCxxProc*(
         argComs.clear()
 
 
-proc toCxxField*(node: CppNode, coms): CxxField =
+proc toCxxField*(node: CppNode, coms; parent: CxxNamePair): CxxField =
   assertKind(node, {cppFieldDeclaration})
   let decl = node["declarator"]
+  let name = cxxPair(getName(decl))
 
   if decl of cppFunctionDeclarator:
-    result = cxxField(cxxPair(getName(decl)), toCxxType(node))
+    result = cxxField(name, toCxxType(node, some parent, some name))
 
   else:
-    result = cxxField(
-      cxxPair(getName(decl)),
-      toCxxType(node["type"]))
-
+    result = cxxField(name, toCxxType(node["type"], some parent, some name))
     pointerWraps(decl, result.nimType)
 
 proc toCxxForwardType*(node: CppNode, coms): CxxForward =
@@ -353,17 +355,20 @@ proc toCxxObject*(node: CppNode, coms): CxxObject =
         if field["declarator"] of cppFunctionDeclarator:
           let name = field["declarator"]["declarator"]
           if name of cppParenthesizedDeclarator:
-            result.mfields.add toCxxField(field, coms).withIt do:
+            result.mfields.add toCxxField(
+                field, coms, result.decl.name).withIt do:
               it.add coms
               coms.clear()
 
           else:
-            result.methods.add toCxxProc(field, coms, some result).withIt do:
+            result.methods.add toCxxProc(
+                field, coms, some result).withIt do:
               it.add coms
               coms.clear()
 
         else:
-          result.mfields.add toCxxField(field, coms).withIt do:
+          result.mfields.add toCxxField(
+              field, coms, result.decl.name).withIt do:
             it.add coms
             coms.clear()
 
@@ -390,7 +395,11 @@ proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
       of cppTypeIdentifier,
          cppPointerDeclarator,
          cppPrimitiveType:
-        let newType = toCxxType(node["declarator"]).toDecl()
+        let newType = toCxxType(
+          node["declarator"],
+          parent = none CxxNamePair,
+          user = none CxxNamePair).toDecl()
+
         let baseBody = node[0]
         if baseBody of {
           cppSizedTypeSpecifier, cppPrimitiveType, cppTypeIdentifier
@@ -399,7 +408,10 @@ proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
             cppStructSpecifier, cppUnionSpecifier, cppEnumSpecifier} and
           "body" notin baseBody
         ):
-          var alias = cxxAlias(newType, toCxxType(node["type"])).withIt do:
+          var alias = cxxAlias(
+            newType,
+            toCxxType(node["type"], none CxxNamePair, none CxxNamePair)
+          ).withIt do:
                 it.add coms
                 coms.clear()
           pointerWraps(node["declarator"], alias.baseType)
@@ -464,7 +476,7 @@ proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
                 ""
 
 
-            var t = toCxxType(arg["type"])
+            var t = toCxxType(arg["type"], none CxxNamePair, none CxxNamePair)
             if d in arg:
               pointerWraps(arg[d], t)
 
@@ -474,7 +486,8 @@ proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
 
         result.add cxxAlias(
           body[d].getName().cxxPair().cxxTypeDecl(),
-          cxxTypeUse(args, toCxxType(node["type"])))
+          cxxTypeUse(
+            args, toCxxType(node["type"], none CxxNamePair, none CxxNamePair)))
 
       else:
         raise newImplementKindError(node, node.treeRepr())
