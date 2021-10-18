@@ -94,8 +94,5 @@ suite "Procedures":
 suite "Enum":
   test "enum":
     echov convStr("""
-enum name { a, b };
-struct other {};
-void call(name arg);
-void call2(other arg);
+enum name { a = 1 << 0, b = 1 << 1 };
 """)

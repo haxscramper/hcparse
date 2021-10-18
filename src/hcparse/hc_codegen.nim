@@ -8,7 +8,7 @@ import
   hmisc/core/all,
   hmisc/macros/argpass,
   hmisc/other/oswrap,
-  std/[macros, sequtils, sets, strformat, algorithm, strutils]
+  std/[macros, sequtils, sets, strformat, algorithm, strutils, math]
 
 type
   CodegenConf* = object
@@ -327,10 +327,26 @@ proc toNNode*[N](obj: CxxForward, conf: CodegenConf): ObjectDecl[N] =
   result.addPragma toNNode[N](obj.cbind, conf, obj.nimName)
   result.docComment.add toNimComment(obj.docComment)
 
-proc toNNode*[N](field: CxxEnumValue, conf: CodegenConf): tuple[c, n: EnumField[N]] =
-  result.c = makeEnumField(
-    conf.getPrefix("c") & field.nimName,
-    some newNLit[N, BiggestInt](field.value))
+func isPowerOfTwo*(x: BiggestInt): bool =
+  return (x > 0) and ((x and (x - 1)) == 0)
+
+proc toNNode*[N](
+    field: CxxEnumValue,
+    conf: CodegenConf
+  ): tuple[c, n: EnumField[N], isPow2: bool] =
+
+  var value: N
+  if isPowerOfTwo(field.value.int):
+    result.isPow2 = true
+    value = newXCall(
+      "shl",
+      newNLit[N, int](1),
+      newNLit[N, int](log2(field.value.float64).int))
+
+  else:
+    value = newNLit[N, BiggestInt](field.value)
+
+  result.c = makeEnumField(conf.getPrefix("c") & field.nimName, some value)
 
   result.c.docComment = toNimComment(field.docComment)
 
@@ -351,11 +367,14 @@ proc toNNode*[N](en: CxxEnum, conf: CodegenConf): seq[NimDecl[N]] =
   var
     forwardConv = newCase(arg)
     backwardConv = newCase(arg)
+    isFullPow = true
 
   for value in values:
     if value.value notin visited:
       visited.incl value.value
-      let (c, n) = toNNode[N](value, conf)
+      let (c, n, isPow2) = toNNode[N](value, conf)
+      if not isPow2: isFullPow = false
+
       cenum.add c
       nenum.add n
 
@@ -364,6 +383,9 @@ proc toNNode*[N](en: CxxEnum, conf: CodegenConf): seq[NimDecl[N]] =
 
       backwardConv.add newOf(
         newNIdent[N](n.name), wrapStmtList(newNIdent[N](c.name)))
+
+  if isFullPow:
+    nenum.addPragma("size", newXCall("sizeof", newNIdent[N]("cint")))
 
   cenum.docComment.add toNimComment(en.docComment)
   nenum.docComment.add toNimComment(en.docComment)
@@ -396,6 +418,11 @@ proc toNNode*[N](en: CxxEnum, conf: CodegenConf): seq[NimDecl[N]] =
       func `+`*(offset: int, arg: `arg`): `arg` = `arg`(ord(arg) + offset)
       func `-`*(arg: `arg`, offset: int): `arg` = `arg`(ord(arg) - offset)
       func `-`*(offset: int, arg: `arg`): `arg` = `arg`(ord(arg) - offset)
+
+    if isFullPow:
+      result.add pquote do:
+        converter toCint*(args: set[`arg`]): cint =
+          cast[cint](args)
 
 
 proc toNNode*[N](
