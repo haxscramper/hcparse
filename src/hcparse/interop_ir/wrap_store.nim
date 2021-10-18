@@ -47,6 +47,7 @@ type
     cbkDynamicPatt
     cbkDynamicExpr
     cbkDynamicCall
+    cbkMacroBind
 
   CxxLibImport* = object
     library*: string
@@ -73,8 +74,9 @@ type
       of cbkDynamicPatt:
         dynPattern*: string
 
-      of cbkDynamicExpr, cbkDynamicCall:
+      of cbkDynamicExpr, cbkDynamicCall, cbkMacroBind:
         dynExpr*: string
+
 
   CxxComment* = object
     text*: string
@@ -882,6 +884,9 @@ func cxxDynlibVar*(name: string): CxxBind =
 func cxxDynlibCall*(name: string): CxxBind =
   CxxBind(dynExpr: name, kind: cbkDynamicCall)
 
+func cxxMacroBind*(name: string): CxxBind =
+  CxxBind(dynExpr: name, kind: cbkMacroBind)
+
 func cxxHeader*(global: string): CxxBind =
   CxxBind(global: global, kind: cbkGlobal)
 
@@ -1521,8 +1526,8 @@ proc fixIdentsRec*(
         aux(entry.cxxProc, cache)
 
       of cekAlias:
-        aux(entry.cxxAlias.decl, cache)
         aux(entry.cxxAlias.baseType, cache)
+        aux(entry.cxxAlias.decl, cache)
 
       else:
         raise newImplementKindError(entry)

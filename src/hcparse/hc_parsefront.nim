@@ -330,7 +330,9 @@ proc initCSharedLibFixConf*(
 
   fixConf.onGetBind():
     case entry.kind:
-      of cekProc: result = cxxDynlibVar("lib" & lib & "Dl")
+      of cekProc:
+        result = cxxMacroBind(lib & "Proc")
+
       of cekObject:
         let base = expandMap[entry.getLocation.file].string
         let path = base.string.dropPrefix(libRoot.string)

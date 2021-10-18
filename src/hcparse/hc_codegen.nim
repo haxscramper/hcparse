@@ -186,6 +186,9 @@ proc toNNode*[N](header: CxxBind, conf: CodegenConf, name: string): seq[N] =
       result.add newIdentColonExpr(
         "dynlib", newXCall(newNIdent[N](header.dynExpr)))
 
+    of cbkMacroBind:
+      result.add newNIdent[N](header.dynExpr)
+
   if header.icpp.len > 0:
     let str =
       if conf.isIcpp:
