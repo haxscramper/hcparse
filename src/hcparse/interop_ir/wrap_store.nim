@@ -119,7 +119,19 @@ type
 
   CxxGenParams* = seq[tuple[name: CxxNamePair, default: Option[CxxTypeUse]]]
 
+  CxxTypeDeclKind* = enum
+    ctdkNone
+
+    ctdkEnum
+    ctdkStruct
+    ctdkClass
+    ctdkUnion
+    ctdkTypedef
+
+    ctdkProc # HACK because proc also uses type declaration for it's head
+
   CxxTypeDecl* = object
+    kind*: CxxTypeDeclKind
     isForward*: bool
     name*: CxxNamePair
     typeImport*: Option[CxxLibImport]
@@ -150,12 +162,21 @@ type
         typeStore*: CxxTypeStore
 
   CxxTypeFlag* = enum
+    ctfNone
+
     ctfConst
     ctfMutable
     ctfComplex
     ctfParam
     ctfDefaultedParam
+
     ctfIsPodType
+    ctfIsEnumType
+    ctfIsStructType
+    ctfIsUnionType
+    ctfIsClassType
+    ctfIsTypedefType
+
 
     ctfPtrToArray
     ctfNoCdeclProc
@@ -443,6 +464,9 @@ type
     libName*: string
     isIcpp*: bool
 
+export IdentStyle
+
+
 proc getBind*(conf: CxxFixConf, entry: CxxEntry): CxxBind =
   assertRef conf.getBindImpl
   return conf.getBindImpl(entry, conf)
@@ -569,6 +593,8 @@ func `$`*(decl: CxxTypeDecl): string =
     result.add "?"
 
 
+  result.add $decl.kind
+  result.add "."
   result.add $decl.name
   if ?decl.genParams:
     result.add "["
@@ -924,8 +950,10 @@ func cxxTypeRef*(
   result.name.context = cncType
 
 func cxxTypeDecl*(
-    head: CxxNamePair, genParams: CxxGenParams = @[]): CxxTypeDecl =
-  result = CxxTypeDecl(name: head, genParams: genParams)
+    head: CxxNamePair,
+    kind: CxxTypeDeclKind,
+    genParams: CxxGenParams = @[]): CxxTypeDecl =
+  result = CxxTypeDecl(name: head, genParams: genParams, kind: kind)
   result.name.context = cncType
 
 func cxxTypeUse*(
@@ -953,9 +981,9 @@ func cxxTypeUse*(
     kind: ctkAnonEnum, enumDef: enumDef,
     enumParent: parent, enumUser: user)
 
-func toDecl*(use: CxxTypeUse): CxxTypeDecl =
+func toDecl*(use: CxxTypeUse, kind: CxxTypeDeclKind): CxxTypeDecl =
   assertKind(use, {ctkIdent})
-  return cxxTypeDecl(use.cxxType.name)
+  return cxxTypeDecl(use.cxxType.name, kind)
 
 func addDecl*(store: var CxxTypeStore, decl: CxxTypeDecl) =
   store.forwardDecls.del(decl.name.cxx)
@@ -1185,14 +1213,18 @@ func cxxTypeUse*(name: string, args: seq[CxxTypeUse]): CxxTypeUse =
   cxxTypeUse(cxxPair(name), args)
 
 func cxxObject*(name: CxxNamePair, genParams: CxxGenParams = @[]): CxxObject =
-  CxxObject(decl: cxxTypeDecl(name, genParams), haxdocIdent: newJNull())
+  CxxObject(
+    decl: cxxTypeDecl(name, ctdkStruct, genParams),
+    haxdocIdent: newJNull())
 
-func cxxForward*(name: CxxNamePair): CxxForward =
-  result = CxxForward(decl: cxxTypeDecl(name, @[]), haxdocIdent: newJNull())
+func cxxForward*(name: CxxNamePair, kind: CxxTypeDeclKind): CxxForward =
+  result = CxxForward(
+    decl: cxxTypeDecl(name, kind, @[]), haxdocIdent: newJNull())
+
   result.decl.isForward = true
 
 func cxxEnum*(name: CxxNamePair): CxxEnum =
-  CxxEnum(decl: cxxTypeDecl(name), haxdocIdent: newJNull())
+  CxxEnum(decl: cxxTypeDecl(name, ctdkEnum), haxdocIdent: newJNull())
 
 
 func cxxContext*(name: sink CxxNamePair, ctx: CxxNameContext): CxxNamePair =
@@ -1230,7 +1262,7 @@ func cxxProc*(
   ): CxxProc =
 
   CxxProc(
-    head: cxxTypeDecl(name, genParams).cxxContext(cncProc),
+    head: cxxTypeDecl(name, ctdkProc, genParams).cxxContext(cncProc),
     haxdocIdent: newJNull(),
     returnType: returnType,
     arguments: arguments
@@ -1364,6 +1396,21 @@ func setTypeStoreRec*(
       if not use.cxxType.isParam:
         use.cxxType.typeStore = store
         use.cxxType.typeLib = some lib.library
+
+        let decl = use.getDecl()
+        if decl.isSome():
+          use.flags.incl():
+            case decl.get().kind:
+              of ctdkEnum: ctfIsEnumType
+              of ctdkStruct: ctfIsStructType
+              of ctdkClass: ctfIsClassType
+              of ctdkUnion: ctfIsUnionType
+              of ctdkTypedef: ctfIsTypedefType
+              of ctdkProc, ctdkNone: ctfNone
+
+
+        else:
+          use.flags.incl(ctfIsPodType)
 
   func aux(decl: var CxxProc, store: var CxxTypeStore) =
     for arg in mitems(decl.arguments):

@@ -505,7 +505,7 @@ proc toCxxAlias*(
       baseType = wrapBase.decl.cxxTypeUse()
 
     for newName in al.newTypes:
-      var newType = cxxPair(conf, newName).cxxTypeDecl()
+      var newType = cxxPair(conf, newName).cxxTypeDecl(ctdkTypedef)
       # newType.genParams = baseType.genParams # FIXME port generic parameters from
       if newType.cxxName() != baseType.cxxName():
         # Alias names might be the same for `typedef struct St {} St;`
@@ -516,7 +516,7 @@ proc toCxxAlias*(
     let aliasof = al.cursor.cxType().getCanonicalType()
 
     # Create new identifier for aliased type
-    var newAlias = conf.cxxPair(al.ident, cache).cxxTypeDecl()
+    var newAlias = conf.cxxPair(al.ident, cache).cxxTypeDecl(ctdkTypedef)
 
     # Identifier for old aliased type
     var baseType: CxxTypeUse

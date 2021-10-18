@@ -398,11 +398,12 @@ proc writeFiles*(
 proc wrapCSharedLibViaTsWave*(
     inDir, tmpDir, outDir: AbsDir,
     libName, packageName: string,
-    ignoreIn: seq[string] = @[],
-    persistentOut: seq[string] = @[
+    ignoreIn: seq[string]                    = @[],
+    persistentOut: seq[string]               = @[
       "hcparse_generate", "lib" & libName & "_config"],
-    depDirs: seq[AbsDir] = @[],
-    extraTypes: seq[(CxxName, CxxLibImport)] = @[]
+    depDirs: seq[AbsDir]                     = @[],
+    extraTypes: seq[(CxxName, CxxLibImport)] = @[],
+    codegen: CodegenConf = cCodegenConf
   ): GenFiles =
   var expandMap = expandViaWave(
     listFiles(inDir, ignoreNames = ignoreIn),
@@ -411,12 +412,17 @@ proc wrapCSharedLibViaTsWave*(
 
   rmFiles(outDir, @["nim"], persistentOut)
 
+  var codegen = codegen
+
   let
     fixConf = initCSharedLibFixConf(
       libName, packageName, false, inDir, expandMap, depDirs = depDirs)
 
+  codegen.nameStyle = fixConf.libNameStyle
+
+  let
     resultWrapped = tmpDir.wrapViaTs(fixConf)
-    resultGrouped = writeFiles(outDir, resultWrapped, cCodegenConf, extraTypes = extraTypes)
+    resultGrouped = writeFiles(outDir, resultWrapped, codegen, extraTypes = extraTypes)
 
   return resultGrouped
 

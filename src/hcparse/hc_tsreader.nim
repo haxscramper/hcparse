@@ -334,7 +334,10 @@ proc toCxxField*(node: CppNode, coms; parent: CxxNamePair): CxxField =
     pointerWraps(decl, result.nimType)
 
 proc toCxxForwardType*(node: CppNode, coms): CxxForward =
-  result = cxxForward(cxxPair(node["name"].strVal()))
+  result = cxxForward(
+    cxxPair(node["name"].strVal()),
+    ctdkStruct #[ TEMP implement better detection ]#)
+
   result.add coms
   coms.clear()
 
@@ -406,7 +409,7 @@ proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
         let newType = toCxxType(
           node["declarator"],
           parent = none CxxNamePair,
-          user = none CxxNamePair).toDecl()
+          user = none CxxNamePair).toDecl(ctdkTypedef #[ XXXX ]#)
 
         let baseBody = node[0]
         if baseBody of {
@@ -427,7 +430,9 @@ proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
           if alias.baseType of ctkIdent and
             alias.decl.cxxName() == alias.baseType.cxxName():
             # `typedef struct T T;`
-            result.add cxxForward(alias.decl.name).withIt do:
+            result.add cxxForward(
+              alias.decl.name, ctdkStruct #[ TEMP ]#).withIt do:
+
               it.add coms
               coms.clear()
 
@@ -493,7 +498,7 @@ proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
               coms.clear()
 
         result.add cxxAlias(
-          body[d].getName().cxxPair().cxxTypeDecl(),
+          body[d].getName().cxxPair().cxxTypeDecl(ctdkTypedef),
           cxxTypeUse(
             args, toCxxType(node["type"], none CxxNamePair, none CxxNamePair)))
 

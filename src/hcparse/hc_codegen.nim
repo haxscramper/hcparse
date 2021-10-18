@@ -8,7 +8,7 @@ import
   hmisc/core/all,
   hmisc/macros/argpass,
   hmisc/other/oswrap,
-  std/[macros, sequtils, sets, strformat, algorithm]
+  std/[macros, sequtils, sets, strformat, algorithm, strutils]
 
 type
   CodegenConf* = object
@@ -18,6 +18,8 @@ type
       perOs: seq[(string, CxxBind)]
     ]]
 
+    nameStyle*: IdentStyle
+
 const
   cxxCodegenConf* = CodegenConf(
     isIcpp: true
@@ -25,6 +27,17 @@ const
 
   cCodegenConf* = cxxCodegenConf.withIt do:
     it.isIcpp = false
+
+
+func getPrefix*(conf: CodegenConf, name: string): string =
+  case conf.nameStyle:
+    of idsSnake: name & "_"
+    of idsCamel: capitalizeAscii(name)
+
+func getSuffix*(conf: CodegenConf, name: string): string =
+  case conf.nameStyle:
+    of idsSnake: "_" & name
+    of idsCamel: capitalizeAscii(name)
 
 
 func getImport*(conf: CodegenConf): string =
@@ -72,7 +85,13 @@ proc toNNode*[N](
 
   case t.kind:
     of ctkIdent:
-      result = newNNType[N](t.nimName, @[])
+      if ctfIsEnumType in t.flags:
+        result = newNNType[N](
+          conf.getPrefix("c") & t.nimName,
+          @[])
+
+      else:
+        result = newNNType[N](t.nimName, @[])
 
     of ctkPtr:
       if t.wrapped of ctkIdent:
@@ -308,25 +327,75 @@ proc toNNode*[N](obj: CxxForward, conf: CodegenConf): ObjectDecl[N] =
   result.addPragma toNNode[N](obj.cbind, conf, obj.nimName)
   result.docComment.add toNimComment(obj.docComment)
 
-proc toNNode*[N](field: CxxEnumValue, conf: CodegenConf): EnumField[N] =
-  result = makeEnumField(
-    field.nimName, some newNLit[N, BiggestInt](field.value))
+proc toNNode*[N](field: CxxEnumValue, conf: CodegenConf): tuple[c, n: EnumField[N]] =
+  result.c = makeEnumField(
+    conf.getPrefix("c") & field.nimName,
+    some newNLit[N, BiggestInt](field.value))
 
-  result.docComment = toNimComment(field.docComment)
+  result.c.docComment = toNimComment(field.docComment)
 
-proc toNNode*[N](en: CxxEnum, conf: CodegenConf): EnumDecl[N] =
-  result = newEnumDecl[N](en.nimName)
+  result.n = makeEnumField[N](field.nimName)
+  result.n.docComment = toNimComment(field.docComment)
 
-  var fieldList: seq[EnumField[N]]
-  var values = en.values.sortedByIt(it.value)
+proc toNNode*[N](en: CxxEnum, conf: CodegenConf): seq[NimDecl[N]] =
+  var
+    cenum = newEnumDecl[N](conf.getPrefix("c") & en.nimName)
+    nenum = newEnumDecl[N](en.nimName)
+    values = en.values.sortedByIt(it.value)
+    visited: HashSet[BiggestInt]
+    generated: seq[tuple[c, n: EnumField[N]]]
 
-  var visited: HashSet[BiggestInt]
+
+  let arg = newNIdent[N]("arg")
+
+  var
+    forwardConv = newCase(arg)
+    backwardConv = newCase(arg)
+
   for value in values:
     if value.value notin visited:
       visited.incl value.value
-      result.add toNNode[N](value, conf)
+      let (c, n) = toNNode[N](value, conf)
+      cenum.add c
+      nenum.add n
 
-  result.docComment.add toNimComment(en.docComment)
+      forwardConv.add newOf(
+        newNIdent[N](c.name), wrapStmtList(newNIdent[N](n.name)))
+
+      backwardConv.add newOf(
+        newNIdent[N](n.name), wrapStmtList(newNIdent[N](c.name)))
+
+  cenum.docComment.add toNimComment(en.docComment)
+  nenum.docComment.add toNimComment(en.docComment)
+
+  result.add cenum
+  result.add nenum
+
+  result.add newPProcDecl(
+    name       = conf.getPrefix("to") & cenum.name,
+    args       = @{"arg": newNNtype[N](nenum.name)},
+    returnType = some newNNtype[N](cenum.name),
+    impl       = backwardConv
+  )
+
+  result.add newPProcDecl(
+    name       = conf.getPrefix("to") & nenum.name,
+    args       = @{"arg": newNNtype[N](cenum.name)},
+    returnType = some newNNtype[N](nenum.name),
+    declType   = ptkConverter,
+    impl       = forwardConv
+  )
+
+  block:
+    let arg = newPident(cenum.name)
+    result.add pquote do:
+      converter toCint*(arg: `arg`): cint =
+        cint(ord(arg))
+
+      func `+`*(arg: `arg`, offset: int): `arg` = `arg`(ord(arg) + offset)
+      func `+`*(offset: int, arg: `arg`): `arg` = `arg`(ord(arg) + offset)
+      func `-`*(arg: `arg`, offset: int): `arg` = `arg`(ord(arg) - offset)
+      func `-`*(offset: int, arg: `arg`): `arg` = `arg`(ord(arg) - offset)
 
 
 proc toNNode*[N](
@@ -339,7 +408,7 @@ proc toNNode*[N](
       result.add toNNode[N](entry.cxxObject, conf, anon)
 
     of cekEnum:
-      result.add toNNode[N](entry.cxxEnum, conf).toNimDecl()
+      result.add toNNode[N](entry.cxxEnum, conf)
 
     of cekProc:
       result.add toNNode[N](

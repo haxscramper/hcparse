@@ -24,10 +24,7 @@ proc lib(path: varargs[string]): CxxLibImport =
   cxxLibImport("test", @path)
 
 proc convStr(str: string, conf: CodegenConf = cxxCodegenConf): string =
-  toString(
-    nim_decl.toNNode(
-      hc_codegen.toNNode[PNode](
-        wrapViaTs(str, fixConf, lib(@["z"])), conf)))
+  toString(wrapViaTs(str, fixConf, lib(@["z"])), conf)
 
 proc convDecls(
     str: string, conf: CodegenConf = cxxCodegenConf): seq[NimDecl[PNode]] =
@@ -93,3 +90,12 @@ suite "Procedures":
 
     check:
       pr.hasPragma("varargs")
+
+suite "Enum":
+  test "enum":
+    echov convStr("""
+enum name { a, b };
+struct other {};
+void call(name arg);
+void call2(other arg);
+""")
