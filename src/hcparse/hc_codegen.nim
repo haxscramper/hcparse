@@ -251,7 +251,9 @@ proc toNNode*[N](
   else:
     result.addPragma toNNode[N](
       def.getCbindAs(ctkIdent), conf, def.nimName)
-    # result.addPragma(conf.getImport(), newNLit[N, string](def.getIcppStr(ctkPtr)))
+
+  if cpfVariadic in def.flags:
+    result.addPragma("varargs")
 
   if def.isConstructor and onConstructor == ctkIdent:
     result.addPragma("constructor")

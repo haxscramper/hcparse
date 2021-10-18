@@ -24,7 +24,7 @@ proc lib(path: varargs[string]): CxxLibImport =
   cxxLibImport("test", @path)
 
 proc convStr(str: string, conf: CodegenConf = cxxCodegenConf): string =
-  renderer.`$`(
+  toString(
     nim_decl.toNNode(
       hc_codegen.toNNode[PNode](
         wrapViaTs(str, fixConf, lib(@["z"])), conf)))
@@ -85,3 +85,11 @@ suite "Repeated names":
     check:
       decls[0].getObject().getName() == "S"
       decls[1].getObject().getName() == "S1"
+
+suite "Procedures":
+  test "Variadic proc":
+    let pr = convDecls("void git_libgit2_opts(int option, ...);").
+      getFirst(nekProcDecl).getProc()
+
+    check:
+      pr.hasPragma("varargs")

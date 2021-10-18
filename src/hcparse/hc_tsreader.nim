@@ -305,8 +305,8 @@ proc toCxxProc*(
       node["declarator"]
 
   var argComs: seq[CxxComment]
-  # echov decl
-  # echov decl.treeRepr()
+
+
   for idx, arg in decl["parameters"]:
     if arg of cppComment:
       argComs.add toCxxComment(arg)
@@ -315,6 +315,10 @@ proc toCxxProc*(
       result.arguments.add toCxxArg(arg, idx).withIt do:
         it.add argComs
         argComs.clear()
+
+  for p in items(decl["parameters"].getTs(), unnamed = true):
+    if p.kind in {cppTripleDotTok}:
+      result.flags.incl cpfVariadic
 
 
 proc toCxxField*(node: CppNode, coms; parent: CxxNamePair): CxxField =
