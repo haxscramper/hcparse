@@ -333,7 +333,7 @@ proc initCSharedLibFixConf*(
       of cekProc:
         result = cxxMacroBind(lib & "Proc")
 
-      of cekObject:
+      of cekObject, cekForward:
         let base = expandMap[entry.getLocation.file].string
         let path = base.string.dropPrefix(libRoot.string)
         result = cxxHeader("<" & libIncludePrefix & path & ">")
