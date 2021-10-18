@@ -11,27 +11,34 @@ import pkg/jsony
 
 func getFields[N](o: ObjectDecl[N]): seq[ObjectField[N]] = getFlatFields(o)
 
+var fixConf = baseFixConf.withIt do:
+  it.onFixName():
+    result = cache.fixContextedName(name)
+
+  it.onGetBind():
+    return cxxHeader("?")
+
+  it.typeStore = newTypeStore()
+
+proc lib(path: varargs[string]): CxxLibImport =
+  cxxLibImport("test", @path)
+
 proc convStr(str: string, conf: CodegenConf = cxxCodegenConf): string =
   renderer.`$`(
     nim_decl.toNNode(
       hc_codegen.toNNode[PNode](
-        wrapViaTs(str, true, cxxHeader("?")), conf)))
+        wrapViaTs(str, fixConf, lib(@["z"])), conf)))
 
 proc convDecls(
     str: string, conf: CodegenConf = cxxCodegenConf): seq[NimDecl[PNode]] =
-  hc_codegen.toNNode[PNode](wrapViaTs(str, true, cxxHeader("?")), conf)
-
-proc convJson(str: string): string =
-  wrapViaTs(str, true, cxxHeader("?")).cxxFile(cxxLibImport("", @[])).
-    toJson().fromJson(CxxFile).toJson()
+  hc_codegen.toNNode[PNode](wrapViaTs(str, fixConf, lib(@["z"])), conf)
 
 proc convPPrint(str: string) =
-  pprint wrapViaTs(str, true)
+  pprint wrapViaTs(str, fixConf, lib(@["z"]))
 
 suite "Convert type declarations":
   test "Regular struct":
     check convDecls("class S {};")[0].getObject().getName() == "S"
-    discard convJson("class S {};")
 
   test "Struct with fields":
     let

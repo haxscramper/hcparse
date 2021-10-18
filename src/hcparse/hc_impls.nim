@@ -231,6 +231,13 @@ proc fixContextedName*(
 
   result = fixContextedName(name, name.nim, style)
 
+  const conf = NameFixConf(
+    strat: nfsNumerateNew
+  )
+
+  if cache.knownGenerated(result):
+    result = cache.fixDuplicated(name.nim, result, conf)
+
   cache.newRename(name.nim, result)
 
 

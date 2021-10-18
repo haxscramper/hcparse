@@ -378,6 +378,10 @@ proc toCxxObject*(node: CppNode, coms): CxxObject =
       else:
         raise newImplementKindError(field, field.treeRepr())
 
+  if ?result.mfields:
+    result.mfields.last().add coms
+    coms.clear()
+
 
 proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
   if node.len == 1:
