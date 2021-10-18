@@ -332,16 +332,20 @@ func isPowerOfTwo*(x: BiggestInt): bool =
 
 proc toNNode*[N](
     field: CxxEnumValue,
-    conf: CodegenConf
-  ): tuple[c, n: EnumField[N], isPow2: bool] =
+    conf: CodegenConf,
+    testPow: bool
+  ): tuple[c, n: EnumField[N]] =
 
   var value: N
-  if isPowerOfTwo(field.value.int):
-    result.isPow2 = true
-    value = newXCall(
-      "shl",
-      newNLit[N, int](1),
-      newNLit[N, int](log2(field.value.float64).int))
+  if testPow and (isPowerOfTwo(field.value) or field.value == 0):
+    if field.value == 0:
+      value = newXCall("shl", newNLit[N, int](0), newNLit[N, int](0))
+
+    else:
+      value = newXCall(
+        "shl",
+        newNLit[N, int](1),
+        newNLit[N, int](log2(field.value.float64).int))
 
   else:
     value = newNLit[N, BiggestInt](field.value)
@@ -368,12 +372,30 @@ proc toNNode*[N](en: CxxEnum, conf: CodegenConf): seq[NimDecl[N]] =
     forwardConv = newCase(arg)
     backwardConv = newCase(arg)
     isFullPow = true
+    isHoleyPow = false
+    prevPow = -1
+    powMap: seq[tuple[nim: N, pow: int]]
 
   for value in values:
     if value.value notin visited:
       visited.incl value.value
-      let (c, n, isPow2) = toNNode[N](value, conf)
-      if not isPow2: isFullPow = false
+
+      if isPowerOfTwo(value.value) or value.value == 0:
+        let pow = log2(value.value.float64).int
+        if not(prevPow + 1 == pow):
+          isHoleyPow = true
+
+        prevPow = pow
+
+      else:
+        isFullPow = false
+
+  visited.clear()
+
+  for value in values:
+    if value.value notin visited:
+      visited.incl value.value
+      let (c, n) = toNNode[N](value, conf, isFullPow)
 
       cenum.add c
       nenum.add n
@@ -384,6 +406,12 @@ proc toNNode*[N](en: CxxEnum, conf: CodegenConf): seq[NimDecl[N]] =
       backwardConv.add newOf(
         newNIdent[N](n.name), wrapStmtList(newNIdent[N](c.name)))
 
+      if value.value == 0:
+        powMap.add((newNIdent[N](n.name), -1))
+
+      else:
+        powMap.add((newNIdent[N](n.name), log2(value.value.float64).int))
+
   if isFullPow:
     nenum.addPragma("size", newXCall("sizeof", newNIdent[N]("cint")))
 
@@ -393,8 +421,9 @@ proc toNNode*[N](en: CxxEnum, conf: CodegenConf): seq[NimDecl[N]] =
   result.add cenum
   result.add nenum
 
+  let toCenum = conf.getPrefix("to") & cenum.name
   result.add newPProcDecl(
-    name       = conf.getPrefix("to") & cenum.name,
+    name       = toCenum,
     args       = @{"arg": newNNtype[N](nenum.name)},
     returnType = some newNNtype[N](cenum.name),
     impl       = backwardConv
@@ -409,20 +438,49 @@ proc toNNode*[N](en: CxxEnum, conf: CodegenConf): seq[NimDecl[N]] =
   )
 
   block:
-    let arg = newPident(cenum.name)
+    let cenum = newPident(cenum.name)
+    let nenum = newPIdent(nenum.name)
     result.add pquote do:
-      converter toCint*(arg: `arg`): cint =
+      converter toCint*(arg: `cenum`): cint =
+        ## Convert nim enum value into cint that can be passed to wrapped C
+        ## procs.
         cint(ord(arg))
 
-      func `+`*(arg: `arg`, offset: int): `arg` = `arg`(ord(arg) + offset)
-      func `+`*(offset: int, arg: `arg`): `arg` = `arg`(ord(arg) + offset)
-      func `-`*(arg: `arg`, offset: int): `arg` = `arg`(ord(arg) - offset)
-      func `-`*(offset: int, arg: `arg`): `arg` = `arg`(ord(arg) - offset)
+      converter toCint*(arg: `nenum`): cint =
+        ## Convert nim enum value into cint that can be passed to wrapped C
+        ## procs.
+        cint(ord(`newPident(toCenum)`(arg)))
+
+      func `+`*(arg: `cenum`, offset: int): `cenum` = `cenum`(ord(arg) + offset)
+      func `+`*(offset: int, arg: `cenum`): `cenum` = `cenum`(ord(arg) + offset)
+      func `-`*(arg: `cenum`, offset: int): `cenum` = `cenum`(ord(arg) - offset)
+      func `-`*(offset: int, arg: `cenum`): `cenum` = `cenum`(ord(arg) - offset)
 
     if isFullPow:
-      result.add pquote do:
-        converter toCint*(args: set[`arg`]): cint =
-          cast[cint](args)
+      if isHoleyPow:
+        var convCase = newCase(newNident[N]("value"))
+        for (name, pow) in items(powMap):
+          if pow == -1:
+            convCase.add newOf(name, pquote(result = result or (0 shl 0)))
+
+          else:
+            let val = newNLit[N, int](pow)
+            convCase.add newOf(name, pquote(result = result or (1 shl `val`)))
+
+
+        result.add pquote do:
+          converter toCint*(args: set[`nenum`]): cint =
+            ## Convert set of nim enum values into cint that can be passed
+            ## to wrapped C procs.
+            for value in items(args):
+              `convCase`
+
+      else:
+        result.add pquote do:
+          converter toCint*(args: set[`nenum`]): cint =
+            ## Convert set of nim enum values into cint that can be passed
+            ## to wrapped C procs.
+            cast[cint](args)
 
 
 proc toNNode*[N](

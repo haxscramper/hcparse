@@ -94,5 +94,5 @@ suite "Procedures":
 suite "Enum":
   test "enum":
     echov convStr("""
-enum name { a = 1 << 0, b = 1 << 1 };
+enum fullpow { q = 0, a = 1 << 0, b = 1 << 1 };
 """)
