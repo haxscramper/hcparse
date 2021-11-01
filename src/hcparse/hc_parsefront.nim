@@ -170,13 +170,15 @@ proc convertViaTs*(text: string): PNode =
   return parseCppString(addr text).conv(text, cache)
 
 
+
+
 proc postFixEntries*(
     conf: CxxFixConf,
     entries: var seq[CxxEntry],
-    cache: var StringNameCache,
     lib: CxxLibImport,
     file: Option[AbsFile] = none AbsFile
   ) =
+  var cache: StringNameCache
 
   var store = conf.typeStore
 
@@ -191,18 +193,47 @@ proc postFixEntries*(
 
   # Register type declarations in the store, add missing flags to type uses
   for item in mitems(entries):
-    setTypeStoreRec(item, store, lib)
+    postprocessTypeUses(item, store, lib)
 
   # Set header for list of entries
   for item in mitems(entries):
     setHeaderRec(item, conf)
 
+iterator mentries*(files: var seq[CxxFile]): var CxxEntry =
+  for file in mitems(files):
+    for entry in mitems(file.entries):
+      yield entry
+
+proc postFixEntries*(conf: CxxFixConf, files: var seq[CxxFile]) =
+  var store = conf.typeStore
+  var cache: StringNameCache
+
+  # Fix all identifier names in entry lists
+  for item in mentries(files):
+    fixIdentsRec(item, cache, conf)
+
+  # Set spelling location file for all entries in the list
+  for file in mitems(files):
+    for item in mitems(file.entries):
+      setFileRec(item, file.original)
+
+  for file in mitems(files):
+    for item in mitems(file.entries):
+      registerDeclarations(item, store, file.savePath)
+
+  # Register type declarations in the store, add missing flags to type uses
+  for file in mitems(files):
+    for item in mitems(file.entries):
+      postprocessTypeUses(item, store, file.savEpath)
+
+  # Set header for list of entries
+  for item in mentries(files):
+    setHeaderRec(item, conf)
+
 proc wrapViaTs*(
     str: string,
     conf: CxxFixConf,
-    lib: CxxLibImport,
-    file: Option[AbsFile] = none AbsFile,
-    doPostFix: bool = true
+    lib: CxxLibImport
   ): seq[CxxEntry] =
   assertRef conf.typeStore
   # "Copy input string to local mutable variable":
@@ -217,9 +248,6 @@ proc wrapViaTs*(
   # "Convert to CXX":
   result = toCxx(node, coms)
 
-  if doPostFix:
-    var cache: StringNameCache
-    conf.postFixEntries(result, cache, lib, file)
 
 
 proc wrapViaTs*(
@@ -234,8 +262,6 @@ proc wrapViaTs*(
     file.readFile(),
     conf,
     lib,
-    some file,
-    doPostFix = doPostFix
   ).cxxFile(lib, file)
 
 
@@ -250,10 +276,6 @@ proc wrapViaTsWave*(
   ): CxxFile =
   assertRef conf.typeStore
   # "Wrap via TS wave":
-
-  # # "Get relative path of the file using library root and file path":
-  # let relative = file.string.dropPrefix(libRoot.string)
-  # let lib = cxxLibImport(libRoot.name(), relative.split("/"))
 
   # "Construct wave reader object":
   var reader = newWaveReader(
@@ -398,15 +420,6 @@ proc wrapViaTs*(
       err.msg.add "\nException raised while processing file " & file.string
       raise err
 
-  var store = conf.typeStore
-  var cache: StringNameCache
-  for file in mitems(result):
-    conf.postFixEntries(
-      entries = file.entries,
-      cache   = cache,
-      file    = some file.original,
-      lib     = file.savePath)
-
 type
   GenFiles = object
     genNim*: seq[AbsFile]
@@ -462,9 +475,12 @@ proc wrapCSharedLibViaTsWave*(
 
   codegen.nameStyle = fixConf.libNameStyle
 
-  let
-    resultWrapped = tmpDir.wrapViaTs(fixConf)
-    resultGrouped = writeFiles(outDir, resultWrapped, codegen, extraTypes = extraTypes)
+  var resultWrapped = tmpDir.wrapViaTs(fixConf)
+
+  fixConf.postFixEntries(resultWrapped)
+
+  var resultGrouped = writeFiles(
+    outDir, resultWrapped, codegen, extraTypes = extraTypes)
 
   return resultGrouped
 

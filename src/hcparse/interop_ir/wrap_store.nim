@@ -1387,13 +1387,45 @@ func newTypeStore*(): CxxTypeStore = CxxTypeStore()
 
 # func registerTypeDeclarations*()
 
-# func registerDeclarations*(
-#     entry: var CxxEntry, 
-#     store: var CxxTypeStore,
-#     lib: CxxLibImport
-#   )
+func registerDeclarations*(
+    entry: var CxxEntry,
+    store: var CxxTypeStore,
+    lib: CxxLibImport
+  ) =
 
-func setTypeStoreRec*(
+  case entry.kind:
+    of cekPass, cekEmpty, cekImport, cekProc,
+       cekMacroGroup, cekMacro, cekComment:
+      discard
+
+    of cekTypeGroup:
+      for decl in mitems(entry.cxxTypes):
+        registerDeclarations(entry, store, lib)
+
+    of cekEnum:
+      entry.cxxEnum.decl.typeImport = some lib
+      entry.cxxEnum.decl.store = store
+      store.addDecl(entry.cxxEnum.decl)
+
+    of cekForward:
+      entry.cxxForward.decl.typeImport = some lib
+      entry.cxxForward.decl.store = store
+      store.addForwardDecl(entry.cxxForward.decl)
+
+    of cekAlias:
+      entry.cxxAlias.decl.typeImport = some lib
+      entry.cxxAlias.decl.store = store
+      store.addDecl(entry.cxxAlias.decl)
+
+    of cekObject:
+      entry.cxxObject.decl.typeImport = some lib
+      entry.cxxObject.decl.store = store
+      store.addDecl(entry.cxxObject.decl)
+
+      for nest in mitems(entry.cxxObject.nested):
+        registerDeclarations(entry, store, lib)
+
+func postprocessTypeUses*(
     entry: var CxxEntry, store: var CxxTypeStore, lib: CxxLibImport) =
 
   func aux(use: var CxxTypeUse, store: CxxTypeStore)
@@ -1419,7 +1451,6 @@ func setTypeStoreRec*(
               of ctdkTypedef: ctfIsTypedefType
               of ctdkProc, ctdkNone: ctfNone
 
-
         else:
           use.flags.incl(ctfIsPodType)
 
@@ -1439,38 +1470,23 @@ func setTypeStoreRec*(
 
     of cekTypeGroup:
       for decl in mitems(entry.cxxTypes):
-        setTypeStoreRec(entry, store, lib)
+        postprocessTypeUses(entry, store, lib)
 
     of cekEnum:
-      entry.cxxEnum.decl.typeImport = some lib
-      entry.cxxEnum.decl.store = store
-      store.addDecl(entry.cxxEnum.decl)
+      discard
 
     of cekForward:
-      entry.cxxForward.decl.typeImport = some lib
-      entry.cxxForward.decl.store = store
-      store.addForwardDecl(entry.cxxForward.decl)
+      discard
 
     of cekAlias:
-      entry.cxxAlias.decl.typeImport = some lib
-      entry.cxxAlias.decl.store = store
-      store.addDecl(entry.cxxAlias.decl)
       aux(entry.cxxAlias.baseType, store)
 
     of cekObject:
-      entry.cxxObject.decl.typeImport = some lib
-      entry.cxxObject.decl.store = store
-      store.addDecl(entry.cxxObject.decl)
-
       for meth in mitems(entry.cxxObject.methods):
         aux(meth, store)
 
       for field in mitems(entry.cxxObject.mfields):
         aux(field.nimType, store)
-
-      for nest in mitems(entry.cxxObject.nested):
-        setTypeStoreRec(entry, store, lib)
-
 
 proc fixIdentsRec*(
     entry: var CxxEntry,
