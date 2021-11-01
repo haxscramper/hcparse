@@ -281,9 +281,13 @@ proc toNNode*[N](
     result.addPragma("constructor")
 
 
+  let ret = def.getReturn(onConstructor)
+  if "git_object_t" in $def.getReturn(onConstructor):
+    echov ret
+    echov ret.flags
+
   # nim's overload-resolution-in-generics magic
-  proc_decl.`returnType=`(
-    result, toNNode[N](def.getReturn(onConstructor), conf, anon))
+  proc_decl.`returnType=`(result, toNNode[N](ret, conf, anon))
 
   if def.methodOf.isSome():
     result.addArgument(
@@ -451,21 +455,21 @@ proc toNNode*[N](en: CxxEnum, conf: CodegenConf): seq[NimDecl[N]] =
         ## procs.
         cint(ord(`newPident(toCenum)`(arg)))
 
-      func `+`*(arg: `cenum`, offset: int): `cenum` = `cenum`(ord(arg) + offset)
-      func `+`*(offset: int, arg: `cenum`): `cenum` = `cenum`(ord(arg) + offset)
-      func `-`*(arg: `cenum`, offset: int): `cenum` = `cenum`(ord(arg) - offset)
-      func `-`*(offset: int, arg: `cenum`): `cenum` = `cenum`(ord(arg) - offset)
+      func `+`*(arg: `cenum`, offset: int): `cenum` = cast[`cenum`](ord(arg) + offset)
+      func `+`*(offset: int, arg: `cenum`): `cenum` = cast[`cenum`](ord(arg) + offset)
+      func `-`*(arg: `cenum`, offset: int): `cenum` = cast[`cenum`](ord(arg) - offset)
+      func `-`*(offset: int, arg: `cenum`): `cenum` = cast[`cenum`](ord(arg) - offset)
 
     if isFullPow:
       if isHoleyPow:
         var convCase = newCase(newNident[N]("value"))
         for (name, pow) in items(powMap):
           if pow == -1:
-            convCase.add newOf(name, pquote(result = result or (0 shl 0)))
+            convCase.add newOf(name, pquote(result = cint(result or (0 shl 0))))
 
           else:
             let val = newNLit[N, int](pow)
-            convCase.add newOf(name, pquote(result = result or (1 shl `val`)))
+            convCase.add newOf(name, pquote(result = cint(result or (1 shl `val`))))
 
 
         result.add pquote do:
@@ -626,16 +630,18 @@ proc toNNode*[N](file: CxxFile, conf: CodegenConf): N =
   for decl in toNNode[N](file.entries, conf):
     result.add toNNode[N](decl)
 
+const codegenFormatConf* = nformatConf(flags -= nffVerticalPackedOf)
+
 proc toString*(file: CxxFile, conf: CodegenConf): string =
   let node = toNNode[PNode](file, conf)
-  return toPString(node)
+  return toPString(node, conf = codegenFormatConf)
 
 proc toString*(entries: seq[CxxEntry], conf: CodegenConf): string =
   var gen = newPStmtList()
   gen.add genDyndecl[PNode](conf)
   gen.add toNNode[PNode](entries, conf).toNNode()
 
-  toPString(gen)
+  toPString(gen, conf = codegenFormatConf)
 
 proc toString*(files: seq[CxxFile], conf: CodegenConf): string =
   for file in files:

@@ -1,5 +1,5 @@
 import
-  hmisc/other/oswrap,
+  hmisc/other/[oswrap, jsony_converters],
   hmisc/core/[all, code_errors],
   hmisc/algo/[namegen, hstring_algo],
   std/[options, macros, json, strutils, strformat, parseutils,
@@ -434,6 +434,8 @@ type
         discard
 
   CxxFile* = object
+    original*: AbsFile
+
     imports*: HashSet[CxxLibImport]
     exports*: HashSet[CxxLibImport]
 
@@ -1271,8 +1273,8 @@ func cxxProc*(
 func cxxMacro*(name: CxxNamePair): CxxMacro =
   CxxMacro(name: name, haxdocIdent: newJNull())
 
-func cxxFile*(entries: seq[CxxEntry], path: CxxLibImport): CxxFile =
-  CxxFile(savePath: path, entries: entries)
+func cxxFile*(entries: seq[CxxEntry], path: CxxLibImport, original: AbsFile): CxxFile =
+  CxxFile(savePath: path, entries: entries, original: original)
 
 func add*(pr: var CxxProc, arg: CxxArg) =
   pr.arguments.add arg
@@ -1383,6 +1385,14 @@ func getCbindAs*(pr: CxxProc, onConstructor: CxxTypeKind): CxxBind =
 
 func newTypeStore*(): CxxTypeStore = CxxTypeStore()
 
+# func registerTypeDeclarations*()
+
+# func registerDeclarations*(
+#     entry: var CxxEntry, 
+#     store: var CxxTypeStore,
+#     lib: CxxLibImport
+#   )
+
 func setTypeStoreRec*(
     entry: var CxxEntry, store: var CxxTypeStore, lib: CxxLibImport) =
 
@@ -1398,6 +1408,7 @@ func setTypeStoreRec*(
         use.cxxType.typeLib = some lib.library
 
         let decl = use.getDecl()
+
         if decl.isSome():
           use.flags.incl():
             case decl.get().kind:
@@ -1644,26 +1655,6 @@ proc fragmentType*(entry: var CxxEntry):
 
 import pkg/jsony
 
-proc dumpHook*[I](s: var string, ins: set[I]) =
-  s.add "["
-  for idx, item in pairs(ins):
-    if idx > 0:
-      s.add ","
-
-    s.add $item
-  s.add "]"
-
-proc parseHook*[I](s: string, i: var int, res: var set[I]) =
-  s.eatChar(i, '[')
-  while s[i] != ']':
-    let start = i
-    let pos = skipUntil(s, ',', i)
-    res.incl parseEnum[I](s[start .. pos])
-    i = pos
-    s.eatChar(i, ',')
-    s.eatChar(i, ' ')
-
-  s.eatChar(i, ']')
 
 
 proc dumpFieldLines*[T](s: var string, obj: T)

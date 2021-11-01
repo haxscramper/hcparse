@@ -169,11 +169,40 @@ proc convertViaTs*(text: string): PNode =
   var cache: StringNameCache
   return parseCppString(addr text).conv(text, cache)
 
+
+proc postFixEntries*(
+    conf: CxxFixConf,
+    entries: var seq[CxxEntry],
+    cache: var StringNameCache,
+    lib: CxxLibImport,
+    file: Option[AbsFile] = none AbsFile
+  ) =
+
+  var store = conf.typeStore
+
+  # Fix all identifier names in entry lists
+  for item in mitems(entries):
+    fixIdentsRec(item, cache, conf)
+
+  # Set spelling location file for all entries in the list
+  if file.isSome():
+    for item in mitems(entries):
+      setFileRec(item, file.get())
+
+  # Register type declarations in the store, add missing flags to type uses
+  for item in mitems(entries):
+    setTypeStoreRec(item, store, lib)
+
+  # Set header for list of entries
+  for item in mitems(entries):
+    setHeaderRec(item, conf)
+
 proc wrapViaTs*(
     str: string,
     conf: CxxFixConf,
     lib: CxxLibImport,
-    file: Option[AbsFile] = none AbsFile
+    file: Option[AbsFile] = none AbsFile,
+    doPostFix: bool = true
   ): seq[CxxEntry] =
   assertRef conf.typeStore
   # "Copy input string to local mutable variable":
@@ -188,29 +217,31 @@ proc wrapViaTs*(
   # "Convert to CXX":
   result = toCxx(node, coms)
 
-  var cache: StringNameCache
-  var store: CxxTypeStore = conf.typeStore
-  for item in mitems(result):
-    if file.isSome():
-      setFileRec(item, file.get())
+  if doPostFix:
+    var cache: StringNameCache
+    conf.postFixEntries(result, cache, lib, file)
 
-    setHeaderRec(item, conf)
-    fixIdentsRec(item, cache, conf)
-    setTypeStoreRec(item, store, lib)
 
 proc wrapViaTs*(
     file: AbsFile,
-    libRoot: AbsDir,
-    conf: CxxFixConf
+    lib: CxxLibImport,
+    conf: CxxFixConf,
+    doPostFix: bool = true
   ): CxxFile =
   assertRef conf.typeStore
-  let relative = file.string.dropPrefix(libRoot.string)
-  let lib = cxxLibImport(conf.libName, relative.split("/").filterIt(it.len > 0))
-  wrapViaTs(file.readFile(), conf, lib, some file).cxxFile(lib)
+
+  wrapViaTs(
+    file.readFile(),
+    conf,
+    lib,
+    some file,
+    doPostFix = doPostFix
+  ).cxxFile(lib, file)
+
 
 proc wrapViaTsWave*(
     file: AbsFile,
-    libRoot: AbsDir,
+    lib: CxxLibImport,
     conf: CxxFixConf,
     waveCache: var WaveCache,
     userIncludes: seq[string] = @[],
@@ -220,23 +251,22 @@ proc wrapViaTsWave*(
   assertRef conf.typeStore
   # "Wrap via TS wave":
 
-  # "Get relative path of the file using library root and file path":
-  let relative = file.string.dropPrefix(libRoot.string)
+  # # "Get relative path of the file using library root and file path":
+  # let relative = file.string.dropPrefix(libRoot.string)
+  # let lib = cxxLibImport(libRoot.name(), relative.split("/"))
 
   # "Construct wave reader object":
   var reader = newWaveReader(
     file, waveCache, userIncludes, sysIncludes, subTargets)
 
-  let lib = cxxLibImport(libRoot.name(), relative.split("/"))
-
   # "Get sequence of elements for wrapping":
   var s = wrapViaTs(reader.getExpanded(), conf, lib)
 
   # "Wrap results in file":
-  result = s.cxxFile(lib)
+  result = s.cxxFile(lib, file)
 
 proc wrapViaClang*(conf: WrapConf, file: AbsFile): CxxFile =
-  var cache: WrapCache
+  var cache = WrapCache(importGraph: default(typeof WrapCache.importGraph))
   let parsed = parseFile(file, conf, cache)
   conf.unit = parsed.unit
   toCxxFile(parsed, conf, cache)
@@ -355,17 +385,27 @@ proc initCSharedLibFixConf*(
 
 proc wrapViaTs*(
     root: AbsDir,
-    fixConf: CxxFixConf,
+    conf: CxxFixConf,
     exts: seq[string] = @["h"]
   ): seq[CxxFile] =
 
   for file in walkDir(root, AbsFile, exts = exts):
+    let lib = conf.libImport(root, file)
     try:
-      result.add wrapViaTs(file, root, fixConf)
+      result.add wrapViaTs(file, lib, conf, doPostFix = false)
 
     except ImplementKindError as err:
       err.msg.add "\nException raised while processing file " & file.string
       raise err
+
+  var store = conf.typeStore
+  var cache: StringNameCache
+  for file in mitems(result):
+    conf.postFixEntries(
+      entries = file.entries,
+      cache   = cache,
+      file    = some file.original,
+      lib     = file.savePath)
 
 type
   GenFiles = object
@@ -391,7 +431,9 @@ proc writeFiles*(
 
   for fix in group:
     let res = outDir / fix.getFile().withExt("nim")
-    res.writeFile(toNNode[PNode](fix, codegenConf).toPString())
+    res.writeFile(toNNode[PNode](fix, codegenConf).toPString(
+      codegenFormatConf))
+
     result.genNim.add res
 
 
