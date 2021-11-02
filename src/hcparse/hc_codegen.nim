@@ -20,6 +20,8 @@ type
 
     nameStyle*: IdentStyle
 
+
+
 const
   cxxCodegenConf* = CodegenConf(
     isIcpp: true
@@ -102,6 +104,10 @@ proc toNNode*[N](
 
       else:
         result = newNType[N]("ptr", @[toNNode[N](t.wrapped, conf, anon)])
+
+    of ctkLVref:
+      # QUESTION how to map lvref properly?
+      result = toNNode[N](t.wrapped, conf, anon)
 
     of ctkProc:
       var pragma: Pragma[N]
@@ -260,7 +266,7 @@ proc toNNode*[N](
     def: CxxProc,
     conf: CodegenConf,
     anon: var seq[NimDecl[N]],
-    onConstructor: CxxTypeKind = ctkIdent
+    onConstructor: NimConstructorTarget = nctRegular
   ): ProcDecl[N] =
 
   result = newProcDecl[N](def.nimName)
@@ -270,28 +276,58 @@ proc toNNode*[N](
   if cpfExportc in def.flags:
     result.addPragma("exportc", newNLit[N, string](def.cxxName.cxxStr()))
 
+  if cpfVariadic in def.flags: result.addPragma("varargs")
+  if cpfSlot in def.flags: result.addPragma("qslot")
+  if cpfSignal in def.flags: result.addPragma("qsignal")
+
+  if def.isConstructor:
+    let name = conf.getSuffix(result.name)
+
+    var cbind = def.cbind
+    case onConstructor:
+      of nctRegular:
+        cbind.icpp.standaloneProc(def.getIcppName())
+        result.addPragma toNNode[N](cbind, conf, def.nimName)
+
+        result.addPragma("constructor")
+        result.name = "init" & name
+
+      of nctPtr:
+        cbind.icpp.standaloneProc("new " & def.getIcppName())
+        result.addPragma toNNode[N](cbind, conf, def.nimName)
+
+        result.name = "cnew" & name
+
+      of nctRef:
+        result.name = "new" & name
+
+  elif def.isMethod():
+    var ret = toNNode[N](def.methodOf.get(), conf, anon)
+    if not def.isConst():
+      ret = newNType[N]("var", @[ret])
+
+    result.addArgument("this", ret)
+    result.addPragma toNNode[N](def.getCbindAs(), conf, def.nimName)
+
   else:
-    result.addPragma toNNode[N](
-      def.getCbindAs(ctkIdent), conf, def.nimName)
-
-  if cpfVariadic in def.flags:
-    result.addPragma("varargs")
-
-  if def.isConstructor and onConstructor == ctkIdent:
-    result.addPragma("constructor")
+    result.addPragma toNNode[N](def.getCbindAs(), conf, def.nimName)
 
 
-  let ret = def.getReturn(onConstructor)
-  if "git_object_t" in $def.getReturn(onConstructor):
-    echov ret
-    echov ret.flags
+
+  let ret: NType[N] =
+    if def.isConstructor:
+      let base: NType[N] = toNNode[N](def.getConstructed(), conf, anon)
+      case onConstructor:
+        of nctRegular: base
+        of nctPtr: newNType[N]("ptr", @[base])
+        of nctRef: newNType[N]("ref", @[base])
+
+    else:
+      toNNode[N](def.returnType, conf, anon)
 
   # nim's overload-resolution-in-generics magic
-  proc_decl.`returnType=`(result, toNNode[N](ret, conf, anon))
+  proc_decl.`returnType=`(result, ret)
 
-  if def.methodOf.isSome():
-    result.addArgument(
-      "this", toNNode[N](def.methodOf.get(), conf, anon))
 
   for arg in def.arguments:
     result.addArgument toNNode[N](arg, conf, anon)
@@ -319,7 +355,7 @@ proc toNNode*[N](
   result.add toNimDecl(res)
 
   for meth in obj.methods:
-    result.add toNNode[N](meth, conf, anon, ctkPtr)
+    result.add toNNode[N](meth, conf, anon, nctPtr)
 
   for n in obj.nested:
     result.add toNNode[N](n, conf, anon)
@@ -500,8 +536,7 @@ proc toNNode*[N](
       result.add toNNode[N](entry.cxxEnum, conf)
 
     of cekProc:
-      result.add toNNode[N](
-        entry.cxxProc, conf, anon, ctkPtr).toNimDecl()
+      result.add toNNode[N](entry.cxxProc, conf, anon).toNimDecl()
 
     of cekForward:
       result.add toNNode[N](entry.cxxForward, conf)

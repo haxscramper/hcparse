@@ -25,6 +25,11 @@ type
     ctkAnonObject ## Anonymous object, struct or union declared in-place
     ctkAnonEnum ## Anonymous enum declared in-place
 
+  NimConstructorTarget* = enum
+    nctRegular
+    nctPtr
+    nctRef
+
 const
   ctkWrapKinds* = { ctkPtr, ctkLVRef, ctkRVRef, ctkDynamicArray }
   ctkArrayKinds* = { ctkFixedArray, ctkDependentArray }
@@ -296,6 +301,7 @@ type
     flags*: set[CxxProcFlag]
 
     constructorOf*: Option[CxxTypeUse]
+    destructorOf*: Option[CxxTypeUse]
     methodOf*: Option[CxxTypeUse]
 
   CxxExprKind = enum
@@ -361,6 +367,15 @@ type
     cokStruct
     cokClass
 
+  CxxAccessSpecifier* = enum
+    casPublic
+    casProtected
+    casPrivate
+
+  CxxQSignals* = enum
+    cqsNone
+    cqsSlot
+    cqsSignal
 
   CxxObject* = ref object of CxxBase
     decl*: CxxTypeDecl
@@ -881,6 +896,7 @@ func `&`*(p1, p2: CxxNamePair): CxxNamePair =
 
 func isConst*(pr: CxxProc): bool = cpfConst in pr.flags
 func isConstructor*(pr: CxxProc): bool = pr.constructorOf.isSome()
+func isDestructor*(pr: CxxProc): bool = pr.destructorOf.isSome()
 func isMethod*(pr: CxxProc): bool = pr.methodOf.isSome()
 
 func isEmpty*(name: CxxName): bool =
@@ -894,6 +910,7 @@ func add*(t: var CxxTypeUse, other: CxxTypeUse) =
   t.genParams.last().flags.incl ctfParam
 
 func getConstructed*(pr: CxxProc): CxxTypeUse =
+  assertOption(pr.constructorOf)
   pr.constructorOf.get()
 
 func getIcppName*(pr: CxxProc, asMethod: bool = false): string =
@@ -1159,16 +1176,6 @@ proc getUsedTypesRec*(
 
   return res
 
-func getReturn*(
-    pr: CxxProc, onConstructor: CxxTypeKind = ctkIdent): CxxTypeUse =
-
-  if pr.isConstructor:
-    result = pr.getConstructed().wrap(onConstructor)
-
-  else:
-    assertRef pr.returnType
-    result = pr.returnType
-
 func `icpp=`*(pr: var CxxProc, icpp: IcppPattern) = pr.cbind.icpp = icpp
 
 func getIcpp*(
@@ -1367,14 +1374,12 @@ func getBindImports*(file: CxxFile): HashSet[CxxLibImport] =
     aux(entry, result)
 
 
-func getCbindAs*(pr: CxxProc, onConstructor: CxxTypeKind): CxxBind =
+func getCbindAs*(pr: CxxProc): CxxBind =
   result = pr.cbind
   if result.icpp.len == 0:
     if pr.isConstructor:
-      case onConstructor:
-        of ctkIdent: result.icpp.standaloneProc(pr.getIcppName())
-        of ctkPtr: result.icpp.standaloneProc("new " & pr.getIcppName())
-        else: raise newUnexpectedKindError(onConstructor)
+      raise newArgumentError(
+        "Cannot get cbind for constructor proc")
 
     else:
       if pr.isMethod:
@@ -1497,7 +1502,13 @@ proc fixIdentsRec*(
   var context: CxxNameFixContext
   context[cancLibName] = some cxxPair(conf.libName, cxxName(conf.libName))
   template aux(name: var CxxNamePair): untyped =
+    # let l = "LIBSSH2_LISTENER" in $name
+    # if l:
+    #   pprintStackTrace()
+    #   echov "----"
+    #   echov name
     name.nim = conf.fixName(name, cache, context)
+    # if l: echov name
 
   proc aux(decl: var CxxTypeDecl, cache: var StringNameCache) =
     aux(decl.name)
@@ -1523,8 +1534,6 @@ proc fixIdentsRec*(
         of ctkAnonObject:
           aux(use.objParent)
           aux(use.objUser)
-          for field in mitems(use.objDef.mfields):
-            aux(field.nimType, cache)
 
         of ctkProc:
           for idx, arg in mpairs(use.arguments):

@@ -2,6 +2,12 @@
 	"folders": [
 		{
 			"path": "."
+		},
+		{
+			"path": "/mnt/workspace/github/hlibgit2"
+		},
+		{
+			"path": "/mnt/workspace/github/hlibssh2"
 		}
 	],
 	"settings": {}

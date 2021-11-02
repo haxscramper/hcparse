@@ -240,6 +240,11 @@ proc fixContextedName*(
 
   cache.newRename(name.nim, result)
 
+  let l = "LIBSSH2_CHANNEL" in $name
+  if l:
+    echov name, " -> ", result
+
+
 
 proc getBaseFile*(conf: WrapConf, wrapped: WrappedFile): AbsFile =
   ## Return base file for generated wrapped one. For generated grouped

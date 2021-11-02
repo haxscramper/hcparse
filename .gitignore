@@ -63,3 +63,4 @@ wrap-examples.rst
 # End of https://www.toptal.com/developers/gitignore/api/c++
 
 **/.gdb_history
+*.code-workspace

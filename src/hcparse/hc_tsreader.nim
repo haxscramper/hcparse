@@ -213,6 +213,10 @@ template initPointerWraps*(newName, Type: untyped): untyped =
          cppTypeQualifier #[ TODO convert for CxxType? ]#:
         pointerWraps(node[0], ftype)
 
+      of cppReferenceDeclarator:
+        ftype = ftype.wrap(ctkLVRef)
+        pointerWraps(node[0], ftype)
+
       of cppAbstractPointerDeclarator:
         ftype = ftype.wrap(ctkPtr)
         if node.len > 0:
@@ -254,7 +258,11 @@ proc getName*(node: CppNode): string =
         raise newImplementKindError(node, node.treeRepr())
 
 proc toCxxArg*(node: CppNode, idx: int): CxxArg =
-  assertKind(node, {cppParameterDeclaration})
+  assertKind(node, {
+    cppParameterDeclaration,
+    cppOptionalParameterDeclaration
+  })
+
   var
     name: CxxNamePair
     argt: CxxTypeUse
@@ -273,6 +281,9 @@ proc toCxxArg*(node: CppNode, idx: int): CxxArg =
     name = cxxPair("a" & $idx, cncArg)
     argt = toCxxType(node["type"], none CxxNamePair, some name)
 
+  if "default_value" in node:
+    echov "missing default value for argument"
+
   result = cxxArg(name, argt)
 
 
@@ -283,11 +294,12 @@ proc toCxxProc*(
   ): CxxProc =
 
   result = cxxProc(cxxPair(node["declarator"].getName()))
-  result.returnType = toCxxType(
-    node["type"],
-    some result.head.name,
-    some result.head.name
-  )
+  if "type" in node:
+    result.returnType = toCxxType(
+      node["type"],
+      some result.head.name,
+      some result.head.name
+    )
 
   if parent.isSome():
     result.methodOf = some parent.get().decl.cxxTypeUse()
@@ -350,40 +362,109 @@ proc toCxxObject*(node: CppNode, coms): CxxObject =
   result.add coms
   coms.clear()
 
+  var accs = casPublic
+
   case node.kind:
-    of cppStructSpecifier: result.kind = cokStruct
-    of cppUnionSpecifier: result.kind = cokUnion
-    of cppClassSpecifier: result.kind = cokClass
-    else: raise newUnexpectedKindError(node)
+    of cppStructSpecifier:
+      result.kind = cokStruct
+
+    of cppUnionSpecifier:
+      result.kind = cokUnion
+
+    of cppClassSpecifier:
+      accs = casPrivate
+      result.kind = cokClass
+
+    else:
+      raise newUnexpectedKindError(node)
+
+  var signal = cqsNone
 
   for field in node["body"]:
-    case field.kind:
-      of cppFieldDeclaration:
-        if field["declarator"] of cppFunctionDeclarator:
-          let name = field["declarator"]["declarator"]
-          if name of cppParenthesizedDeclarator:
+    if field of cppAccessSpecifier:
+      let ts = field.getTs()
+      case ts{0}.kind:
+        of cppPublicTok: accs = casPublic
+        of cppProtectedTok: accs = casProtected
+        of cppPrivateTok: accs = casPrivate
+        of cppSignalsTok: signal = cqsSignal
+        of cppSlotsTok: signal = cqsSlot
+        else: raise newUnexpectedKindError(ts{0})
+
+      case ts{1}.kind:
+        of cppColonTok:
+          if ts{0} of {cppSignalsTok, cppSlotsTok}:
+            # `signals:` or `slots:` - no visibility change here
+            discard
+
+          else:
+            # `private:`, `public:`, `protected:` - visibility changed
+            # already, but this closed signal/slot section
+            signal = cqsNone
+
+
+        of cppSlotsTok:
+          # `public/private/protected slots:`
+          signal = cqsSlot
+
+        of cppSignalsTok:
+          # `public/private/protected signals:`
+          signal = cqsSignal
+
+        else:
+          raise newUnexpectedKindError(ts{1})
+
+
+    elif accs == casPublic:
+      case field.kind:
+        of cppDeclaration:
+          var meth = toCxxProc(field, coms, some result).withIt do:
+            it.add coms
+            coms.clear()
+
+          if meth.cxxName().scopes.last() == result.cxxName().scopes.last():
+            meth.constructorOf = some result.decl.cxxTypeUse()
+
+          elif node["declarator"]["declarator"] of cppDestructorName:
+            meth.destructorOf = some result.decl.cxxTypeUse()
+
+          result.methods.add meth
+
+        of cppFieldDeclaration:
+          if field["declarator"] of cppFunctionDeclarator:
+            let name = field["declarator"]["declarator"]
+            if name of cppParenthesizedDeclarator:
+              result.mfields.add toCxxField(
+                  field, coms, result.decl.name).withIt do:
+                it.add coms
+                coms.clear()
+
+            else:
+              var meth = toCxxProc(field, coms, some result).withIt do:
+                it.add coms
+                coms.clear()
+
+              case signal:
+                of cqsNone: discard
+                of cqsSignal: meth.flags.incl cpfSignal
+                of cqsSlot: meth.flags.incl cpfSlot
+
+              result.methods.add meth
+
+          else:
             result.mfields.add toCxxField(
                 field, coms, result.decl.name).withIt do:
               it.add coms
               coms.clear()
 
-          else:
-            result.methods.add toCxxProc(
-                field, coms, some result).withIt do:
-              it.add coms
-              coms.clear()
+        of cppComment:
+          coms.add toCxxComment(field)
+
+        of cppQPropertyDeclaration:
+          echov "skipping qproperty"
 
         else:
-          result.mfields.add toCxxField(
-              field, coms, result.decl.name).withIt do:
-            it.add coms
-            coms.clear()
-
-      of cppComment:
-        coms.add toCxxComment(field)
-
-      else:
-        raise newImplementKindError(field, field.treeRepr())
+          raise newImplementKindError(field, field.treeRepr())
 
   if ?result.mfields:
     result.mfields.last().add coms

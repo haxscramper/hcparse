@@ -199,6 +199,17 @@ proc postFixEntries*(
   for item in mitems(entries):
     setHeaderRec(item, conf)
 
+
+proc postFixEntries*(
+    entries: sink seq[CxxEntry],
+    conf: CxxFixConf,
+    lib: CxxLibImport,
+    file: Option[AbsFile] = none AbsFile
+  ): seq[CxxEntry] =
+  result = entries
+  conf.postFixEntries(result, lib, file)
+
+
 iterator mentries*(files: var seq[CxxFile]): var CxxEntry =
   for file in mitems(files):
     for entry in mitems(file.entries):
@@ -206,11 +217,12 @@ iterator mentries*(files: var seq[CxxFile]): var CxxEntry =
 
 proc postFixEntries*(conf: CxxFixConf, files: var seq[CxxFile]) =
   var store = conf.typeStore
-  var cache: StringNameCache
 
   # Fix all identifier names in entry lists
-  for item in mentries(files):
-    fixIdentsRec(item, cache, conf)
+  for file in mitems(files):
+    var cache: StringNameCache
+    for item in mitems(file.entries):
+      fixIdentsRec(item, cache, conf)
 
   # Set spelling location file for all entries in the list
   for file in mitems(files):
@@ -229,6 +241,14 @@ proc postFixEntries*(conf: CxxFixConf, files: var seq[CxxFile]) =
   # Set header for list of entries
   for item in mentries(files):
     setHeaderRec(item, conf)
+
+
+proc postFixEntries*(
+  files: sink seq[CxxFile], conf: CxxFixConf): seq[CxxFile] =
+
+  result = files
+  conf.postFixEntries(result)
+
 
 proc wrapViaTs*(
     str: string,
@@ -487,7 +507,12 @@ proc wrapCSharedLibViaTsWave*(
 proc validateGenerated*(files: GenFiles) =
   for file in items(files.genNim):
     try:
-      execShell shellCmd(nim, check, errormax = 3, $file)
+      execShell shellCmd(
+        nim,
+        check,
+        errormax = 3,
+        spellSuggest = 0,
+        $file)
 
     except ShellError:
       echo "> ", file

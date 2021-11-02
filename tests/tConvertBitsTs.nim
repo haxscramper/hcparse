@@ -23,19 +23,28 @@ var fixConf = baseFixConf.withIt do:
 proc lib(path: varargs[string]): CxxLibImport =
   cxxLibImport("test", @path)
 
+
 proc convStr(str: string, conf: CodegenConf = cxxCodegenConf): string =
-  toString(wrapViaTs(str, fixConf, lib(@["z"])), conf)
+  let lib = lib(@["z"])
+  wrapViaTs(str, fixConf, lib).
+    postFixEntries(fixConf, lib).
+    toString(conf)
 
 proc convDecls(
     str: string, conf: CodegenConf = cxxCodegenConf): seq[NimDecl[PNode]] =
-  hc_codegen.toNNode[PNode](wrapViaTs(str, fixConf, lib(@["z"])), conf)
+  let lib = lib(@["z"])
+  hc_codegen.toNNode[PNode](
+    wrapViaTs(str, fixConf, lib).
+    postFixEntries(fixConf, lib), conf)
 
 proc convPPrint(str: string) =
-  pprint wrapViaTs(str, fixConf, lib(@["z"]))
+  let lib = lib(@["z"])
+  pprint wrapViaTs(str, fixConf, lib).
+    postFixEntries(fixConf, lib)
 
 suite "Convert type declarations":
   test "Regular struct":
-    check convDecls("class S {};")[0].getObject().getName() == "S"
+    check convDecls("struct S {};")[0].getObject().getName() == "S"
 
   test "Struct with fields":
     let
@@ -54,7 +63,7 @@ suite "Convert type declarations":
 
   test "Class with methods":
     let
-      decls = convDecls("class A { void get(); void set(int val); };")
+      decls = convDecls("struct A { void get(); void set(int val); };")
       declA = decls[0].getObject()
       declGet = decls[1].getProc()
       declSet = decls[2].getProc()
@@ -68,7 +77,7 @@ suite "Convert type declarations":
 
   test "Class with documentation":
     let
-      decls = convDecls("class A { int field; /* doc comment */ };")
+      decls = convDecls("struct A { int field; /* doc comment */ };")
       declA = decls[0].getObject()
 
     check:
@@ -91,8 +100,29 @@ suite "Procedures":
     check:
       pr.hasPragma("varargs")
 
-suite "Enum":
-  test "enum":
-    echov convStr("""
-enum fullpow { q = 0, a = 1 << 0, b = 1 << 1 };
-""")
+# suite "Enum":
+#   test "enum":
+#     echov convStr("""
+# enum fullpow { q = 0, a = 1 << 0, b = 1 << 1 };
+# """)
+
+suite "Qt elements":
+  test "":
+    echo convStr("""
+class QAbstractButton : public QWidget {
+    Q_PROPERTY(bool checkable READ isCheckable WRITE setCheckable)
+
+public:
+    explicit QAbstractButton(QWidget *parent = nullptr);
+    ~QAbstractButton();
+
+    void setCheckable(bool);
+
+public slots:
+    void setIconSize(const QSize &size);
+    void animateClick();
+
+signals:
+    void pressed();
+    void toggled(bool checked);
+};""")
