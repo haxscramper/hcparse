@@ -262,6 +262,27 @@ proc toNNode*[N](
         isDistinct = false
       ))
 
+func getCbindAs*(pr: CxxProc): CxxBind =
+  result = pr.cbind
+  if result.icpp.len == 0:
+    if pr.isConstructor:
+      raise newArgumentError(
+        "Cannot get cbind for constructor proc")
+
+    else:
+      if pr.isMethod():
+        if pr.isStatic():
+          result.icpp = staticMethod(
+            pr.getMethodOf().cxxStr(), pr.getIcppName())
+
+        else:
+          result.icpp.dotMethod(pr.getIcppName())
+
+      else:
+        result.icpp.standaloneProc(pr.getIcppName())
+
+
+
 proc toNNode*[N](
     def: CxxProc,
     conf: CodegenConf,
@@ -302,11 +323,19 @@ proc toNNode*[N](
         result.name = "new" & name
 
   elif def.isMethod():
-    var ret = toNNode[N](def.methodOf.get(), conf, anon)
-    if not def.isConst():
-      ret = newNType[N]("var", @[ret])
+    if cpfStatic notin def.flags:
+      var ret = toNNode[N](
+      #[ V FIXME - does not account for template type parameters in parent
+         classes ]#
+        def.methodOf.get().cxxTypeUse(),
+        conf,
+        anon)
 
-    result.addArgument("this", ret)
+      if not def.isConst():
+        ret = newNType[N]("var", @[ret])
+
+      result.addArgument("this", ret)
+
     result.addPragma toNNode[N](def.getCbindAs(), conf, def.nimName)
 
   else:
@@ -316,7 +345,8 @@ proc toNNode*[N](
 
   let ret: NType[N] =
     if def.isConstructor:
-      let base: NType[N] = toNNode[N](def.getConstructed(), conf, anon)
+      let base: NType[N] = toNNode[N](
+        def.getConstructed().cxxTypeUse(), conf, anon)
       case onConstructor:
         of nctRegular: base
         of nctPtr: newNType[N]("ptr", @[base])
@@ -359,6 +389,11 @@ proc toNNode*[N](
 
   for n in obj.nested:
     result.add toNNode[N](n, conf, anon)
+
+  echov "super of", obj
+  for super in obj.decl.store.getSuperTypes(obj.decl):
+    echov ">>", super
+
 
 proc toNNode*[N](obj: CxxForward, conf: CodegenConf): ObjectDecl[N] =
   result = newObjectDecl[N](obj.nimName)

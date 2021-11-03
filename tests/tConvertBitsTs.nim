@@ -109,20 +109,43 @@ suite "Procedures":
 suite "Qt elements":
   test "":
     echo convStr("""
+
+class QObject {
+    public:
+        static QMetaObject::Connection connect(
+            const QObject *sender,
+            const QMetaMethod &signal,
+            const QObject *receiver,
+            const QMetaMethod &method,
+            Qt::ConnectionType type = Qt::AutoConnection);
+};
+
+class QPaintDevice {
+    public:
+        int width() const { return metric(PdmWidth); }
+        int height() const { return metric(PdmHeight); }
+        int widthMM() const { return metric(PdmWidthMM); }
+};
+
+class QWidget : public QObject, public QPaintDevice {
+    // public slots:
+    //     void setEnabled(bool);
+
+    public:
+        QRect frameGeometry() const;
+
+};
+
 class QAbstractButton : public QWidget {
     Q_PROPERTY(bool checkable READ isCheckable WRITE setCheckable)
 
 public:
     explicit QAbstractButton(QWidget *parent = nullptr);
-    ~QAbstractButton();
 
-    void setCheckable(bool);
+// public slots:
+//     void animateClick();
+//
+// signals:
+//     void toggled(bool checked);
 
-public slots:
-    void setIconSize(const QSize &size);
-    void animateClick();
-
-signals:
-    void pressed();
-    void toggled(bool checked);
 };""")

@@ -51,11 +51,16 @@ proc mapOpName*(node: CppNode): string =
     else: node.strVal()
 
 proc mapTypeName*(node: CppNode): string =
-  if node.kind == cppTypeIdentifier:
-    node.strVal()
+  case node.kind:
+    of cppTypeIdentifier:
+      result = node.strVal()
 
-  else:
-    mapPrimitiveName(node.primitiveName())
+    of cppQualifiedIdentifier:
+      for item in items(node):
+        result.add item.strVal()
+
+    else:
+      result = mapPrimitiveName(node.primitiveName())
 
 
 proc toCxxComment*(comm: CppNode): CxxComment =
@@ -76,6 +81,13 @@ proc toCxxType*(node: CppNode, parent, user: Option[CxxNamePair]): CxxTypeUse =
       if node of {cppSizedTypeSpecifier, cppPrimitiveType}:
         result.podKind = node.primitiveName().mapPrimitivePod()
         result.flags.incl ctfIsPodType
+
+    of cppQualifiedIdentifier:
+      var names: seq[string]
+      for name in items(node):
+        names.add name.strVal()
+
+      result = cxxPair(mapTypeName(node), cxxName(names)).cxxTypeUse()
 
     of cppStructSpecifier, cppEnumSpecifier, cppUnionSpecifier:
       if node[0] of cppFieldDeclarationList:
@@ -302,10 +314,13 @@ proc toCxxProc*(
     )
 
   if parent.isSome():
-    result.methodOf = some parent.get().decl.cxxTypeUse()
+    result.methodOf = some parent.get().name()
 
-  if node[0].kind == cppTypeQualifier:
+  if node[0] of cppTypeQualifier:
     result.returnType.flags.incl ctfConst
+
+  if node[0] of cppStorageClassSpecifier:
+    result.flags.incl cpfStatic
 
   pointerWraps(node["declarator"], result.returnType)
 
@@ -380,6 +395,12 @@ proc toCxxObject*(node: CppNode, coms): CxxObject =
 
   var signal = cqsNone
 
+  for part in node:
+    if part of cppBaseClassClause:
+      for class in part:
+        result.super.add toCxxType(
+          class, none CxxNamePair, none CxxNamePair)
+
   for field in node["body"]:
     if field of cppAccessSpecifier:
       let ts = field.getTs()
@@ -423,14 +444,14 @@ proc toCxxObject*(node: CppNode, coms): CxxObject =
             coms.clear()
 
           if meth.cxxName().scopes.last() == result.cxxName().scopes.last():
-            meth.constructorOf = some result.decl.cxxTypeUse()
+            meth.constructorOf = some result.name()
 
           elif node["declarator"]["declarator"] of cppDestructorName:
-            meth.destructorOf = some result.decl.cxxTypeUse()
+            meth.destructorOf = some result.name()
 
           result.methods.add meth
 
-        of cppFieldDeclaration:
+        of cppFieldDeclaration, cppFunctionDefinition:
           if field["declarator"] of cppFunctionDeclarator:
             let name = field["declarator"]["declarator"]
             if name of cppParenthesizedDeclarator:

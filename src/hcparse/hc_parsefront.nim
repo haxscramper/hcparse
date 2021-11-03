@@ -191,6 +191,9 @@ proc postFixEntries*(
     for item in mitems(entries):
       setFileRec(item, file.get())
 
+  for item in mitems(entries):
+    registerDeclarations(item, store, lib)
+
   # Register type declarations in the store, add missing flags to type uses
   for item in mitems(entries):
     postprocessTypeUses(item, store, lib)

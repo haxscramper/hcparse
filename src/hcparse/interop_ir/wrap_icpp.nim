@@ -1,4 +1,4 @@
-import std/[parseutils, strutils]
+import std/[parseutils, strutils, with]
 import hmisc/core/all
 
 type
@@ -38,6 +38,16 @@ func icpp*(text: string): IcppPart = IcppPart(kind: ipkTextPart, text: text)
 func initIcpp*(parts: varargs[IcppPart, icpp]): IcppPattern =
   for part in parts:
     result.add part
+
+
+func staticMethod*(className, methodName: string): IcppPattern =
+  with result:
+    add icpp(className)
+    add icpp("::")
+    add icpp(methodName)
+    add icpp("(")
+    add icpp(ipkArgSplice)
+    add icpp(")")
 
 
 func dotMethod*(icpp: var IcppPattern, methodName: string) =

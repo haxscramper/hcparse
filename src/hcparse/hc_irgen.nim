@@ -362,10 +362,10 @@ proc toCxxProc*(
       # result.header = conf.makeHeader(pr.cursor, conf)
 
   if pr.cursor.kind in {ckConstructor}:
-    result.constructorOf = some parent.get().cxxTypeUse()
+    result.constructorOf = some parent.get().name
 
   elif parent.isSome():
-    result.methodOf = some parent.get().cxxTypeUse()
+    result.methodOf = some parent.get().name
 
   for argIdx, arg in pr.arguments:
     result.add toCxxArg(arg, conf, cache)

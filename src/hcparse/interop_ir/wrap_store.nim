@@ -280,6 +280,7 @@ type
 
   CxxProcFlag* = enum
     cpfConst
+    cpfStatic
     cpfOperator
     cpfOverride
     cpfExportc
@@ -300,9 +301,9 @@ type
 
     flags*: set[CxxProcFlag]
 
-    constructorOf*: Option[CxxTypeUse]
-    destructorOf*: Option[CxxTypeUse]
-    methodOf*: Option[CxxTypeUse]
+    constructorOf*: Option[CxxNamePair]
+    destructorOf*: Option[CxxNamePair]
+    methodOf*: Option[CxxNamePair]
 
   CxxExprKind = enum
     cekIntLit
@@ -524,6 +525,7 @@ func `$`*(cxx: CxxLibImport): string =
 func `$`*(file: CxxFile): string = $file.savePath
 
 func cxxStr*(name: CxxName): string = name.scopes.join("::")
+func cxxStr*(name: CxxNamePair): string = name.cxx.scopes.join("::")
 func `$`*(name: CxxName): string = name.cxxStr()
 func `$`*(name: CxxNamePair): string =
   let nim = $name.nim
@@ -642,6 +644,8 @@ func `$`*(p: CxxProc): string =
 
 func `$`*(alias: CxxAlias): string =
   $alias.decl & " = " & $alias.baseType
+
+func `$`*(obj: CxxObject): string = "object!" & $obj.decl
 
 func `$`*(e: CxxEntry): string =
   case e.kind:
@@ -813,9 +817,12 @@ func `nimName=`*(pr: var CxxProc, name: string) =
 func `name=`*(en: var CxxEnum, name: CxxNamePair) = en.decl.name = name
 func `name=`*(obj: var CxxObject, name: CxxNamePair) = obj.decl.name = name
 
-func `name`*(use: CxxTypeUse): CxxNamePair =
+func name*(use: CxxTypeUse): CxxNamePair =
   assertKind(use, {ctkIdent})
   result = use.cxxType.name
+
+func name*(pr: CxxProc): CxxNamePair = pr.head.name
+func name*(pr: CxxObject): CxxNamePair = pr.decl.name
 
 func `nimName=`*(obj: var CxxAlias, name: string) = obj.decl.name.nim = name
 
@@ -895,9 +902,12 @@ func `&`*(p1, p2: CxxNamePair): CxxNamePair =
     cxx: CxxName(scopes: p1.cxx.scopes & p2.cxx.scopes))
 
 func isConst*(pr: CxxProc): bool = cpfConst in pr.flags
+func isStatic*(pr: CxxProc): bool = cpfStatic in pr.flags
 func isConstructor*(pr: CxxProc): bool = pr.constructorOf.isSome()
 func isDestructor*(pr: CxxProc): bool = pr.destructorOf.isSome()
 func isMethod*(pr: CxxProc): bool = pr.methodOf.isSome()
+func getMethodOf*(pr: CxxProc): CxxNamePair =
+  pr.methodOf.get()
 
 func isEmpty*(name: CxxName): bool =
   name.scopes.len == 0 or
@@ -909,7 +919,7 @@ func add*(t: var CxxTypeUse, other: CxxTypeUse) =
   t.genParams.add other
   t.genParams.last().flags.incl ctfParam
 
-func getConstructed*(pr: CxxProc): CxxTypeUse =
+func getConstructed*(pr: CxxProc): CxxNamePair =
   assertOption(pr.constructorOf)
   pr.constructorOf.get()
 
@@ -1008,6 +1018,10 @@ func addDecl*(store: var CxxTypeStore, decl: CxxTypeDecl) =
   store.forwardDecls.del(decl.name.cxx)
   store.typeDecls.mgetOrPut(decl.name.cxx, @[]).add decl
 
+func addDecl*(store: var CxxTypeStore, decl: CxxObject) =
+  store.addDecl(decl.decl)
+  store.classDecls.mgetOrPut(decl.decl.name.cxx, @[]).add decl
+
 func addForwardDecl*(store: var CxxTypeStore, decl: CxxTypeDecl) =
   store.forwardDecls.mgetOrPut(decl.name.cxx, @[]).add decl
 
@@ -1037,6 +1051,23 @@ func getDecl*(
     result = some store.forwardDecls[name][0]
 
 
+func getObject*(
+    store: CxxTypeStore,
+    name: CxxName,
+    lib: Option[string]
+  ): Option[CxxObject] =
+
+  assertRef store
+  if name in store.classDecls:
+    for class in store.classDecls[name]:
+      # No library for import, or no library for the type declaration
+      if lib.isNone() or class.decl.typeImport.isNone():
+        return some class
+
+      else:
+        # Has library name for both type declaration and use
+        if class.decl.typeImport.get().library == lib.get():
+          return some class
 
 func getDecl*(use: CxxTypeUse): Option[CxxTypeDecl] =
   ## Get first type declaration with matching cxx name. In case of multiple
@@ -1374,23 +1405,29 @@ func getBindImports*(file: CxxFile): HashSet[CxxLibImport] =
     aux(entry, result)
 
 
-func getCbindAs*(pr: CxxProc): CxxBind =
-  result = pr.cbind
-  if result.icpp.len == 0:
-    if pr.isConstructor:
-      raise newArgumentError(
-        "Cannot get cbind for constructor proc")
-
-    else:
-      if pr.isMethod:
-        result.icpp.dotMethod(pr.getIcppName())
-
-      else:
-        result.icpp.standaloneProc(pr.getIcppName())
-
 func newTypeStore*(): CxxTypeStore = CxxTypeStore()
 
 # func registerTypeDeclarations*()
+
+func getSuperTypes*(store: CxxTypeStore, decl: CxxTypeDecl): seq[CxxObject] =
+  var outset: OrderedTable[CxxName, CxxObject]
+  var stack: seq[CxxName] = @[decl.cxxName()]
+
+  while len(stack) > 0:
+    let top = stack.pop()
+
+    let decl = store.getObject(top, none string)
+    if ?decl:
+      outset[top] = decl.get()
+      for super in decl.get().super:
+        stack.add super.cxxName()
+
+  outset.del decl.cxxName()
+
+  for key, val in outset:
+    result.add val
+
+
 
 func registerDeclarations*(
     entry: var CxxEntry,
@@ -1425,7 +1462,7 @@ func registerDeclarations*(
     of cekObject:
       entry.cxxObject.decl.typeImport = some lib
       entry.cxxObject.decl.store = store
-      store.addDecl(entry.cxxObject.decl)
+      store.addDecl(entry.cxxObject)
 
       for nest in mitems(entry.cxxObject.nested):
         registerDeclarations(entry, store, lib)
@@ -1550,10 +1587,10 @@ proc fixIdentsRec*(
 
   proc aux(decl: var CxxProc, cache: var StringNameCache) =
     if decl.isMethod():
-      aux(decl.methodOf.get(), cache)
+      aux(decl.methodOf.get())
 
     if decl.isConstructor():
-      aux(decl.constructorOf.get(), cache)
+      aux(decl.constructorOf.get())
 
     for idx, arg in mpairs(decl.arguments):
       if isEmpty(arg.cxxName()):
