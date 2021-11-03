@@ -365,7 +365,7 @@ proc toCxxProc*(
     result.constructorOf = some parent.get().name
 
   elif parent.isSome():
-    result.methodOf = some parent.get().name
+    result.flags.incl cpfMethod # = some parent.get().name
 
   for argIdx, arg in pr.arguments:
     result.add toCxxArg(arg, conf, cache)

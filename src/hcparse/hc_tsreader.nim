@@ -314,7 +314,7 @@ proc toCxxProc*(
     )
 
   if parent.isSome():
-    result.methodOf = some parent.get().name()
+    result.flags.incl cpfMethod
 
   if node[0] of cppTypeQualifier:
     result.returnType.flags.incl ctfConst

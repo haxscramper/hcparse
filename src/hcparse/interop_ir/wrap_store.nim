@@ -288,6 +288,7 @@ type
     cpfSignal
     cpfVirtual
     cpfVariadic
+    cpfMethod
 
   CxxProc* = object of CxxBase
     kind*: CxxProcKind
@@ -303,7 +304,6 @@ type
 
     constructorOf*: Option[CxxNamePair]
     destructorOf*: Option[CxxNamePair]
-    methodOf*: Option[CxxNamePair]
 
   CxxExprKind = enum
     cekIntLit
@@ -905,9 +905,8 @@ func isConst*(pr: CxxProc): bool = cpfConst in pr.flags
 func isStatic*(pr: CxxProc): bool = cpfStatic in pr.flags
 func isConstructor*(pr: CxxProc): bool = pr.constructorOf.isSome()
 func isDestructor*(pr: CxxProc): bool = pr.destructorOf.isSome()
-func isMethod*(pr: CxxProc): bool = pr.methodOf.isSome()
-func getMethodOf*(pr: CxxProc): CxxNamePair =
-  pr.methodOf.get()
+func isMethod*(pr: CxxProc): bool = cpfMethod in pr.flags
+
 
 func isEmpty*(name: CxxName): bool =
   name.scopes.len == 0 or
@@ -1586,9 +1585,6 @@ proc fixIdentsRec*(
     auxArg(use, cache)
 
   proc aux(decl: var CxxProc, cache: var StringNameCache) =
-    if decl.isMethod():
-      aux(decl.methodOf.get())
-
     if decl.isConstructor():
       aux(decl.constructorOf.get())
 

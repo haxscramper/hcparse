@@ -262,7 +262,7 @@ proc toNNode*[N](
         isDistinct = false
       ))
 
-func getCbindAs*(pr: CxxProc): CxxBind =
+func getCbindAs*(pr: CxxProc, parent: Option[CxxObject]): CxxBind =
   result = pr.cbind
   if result.icpp.len == 0:
     if pr.isConstructor:
@@ -273,7 +273,7 @@ func getCbindAs*(pr: CxxProc): CxxBind =
       if pr.isMethod():
         if pr.isStatic():
           result.icpp = staticMethod(
-            pr.getMethodOf().cxxStr(), pr.getIcppName())
+            parent.get().name().cxxStr(), pr.getIcppName())
 
         else:
           result.icpp.dotMethod(pr.getIcppName())
@@ -287,7 +287,8 @@ proc toNNode*[N](
     def: CxxProc,
     conf: CodegenConf,
     anon: var seq[NimDecl[N]],
-    onConstructor: NimConstructorTarget = nctRegular
+    onConstructor: NimConstructorTarget = nctRegular,
+    parent: Option[CxxObject] = none CxxObject
   ): ProcDecl[N] =
 
   result = newProcDecl[N](def.nimName)
@@ -327,7 +328,7 @@ proc toNNode*[N](
       var ret = toNNode[N](
       #[ V FIXME - does not account for template type parameters in parent
          classes ]#
-        def.methodOf.get().cxxTypeUse(),
+        parent.get().name().cxxTypeUse(),
         conf,
         anon)
 
@@ -336,10 +337,10 @@ proc toNNode*[N](
 
       result.addArgument("this", ret)
 
-    result.addPragma toNNode[N](def.getCbindAs(), conf, def.nimName)
+    result.addPragma toNNode[N](def.getCbindAs(parent), conf, def.nimName)
 
   else:
-    result.addPragma toNNode[N](def.getCbindAs(), conf, def.nimName)
+    result.addPragma toNNode[N](def.getCbindAs(parent), conf, def.nimName)
 
 
 
@@ -385,14 +386,22 @@ proc toNNode*[N](
   result.add toNimDecl(res)
 
   for meth in obj.methods:
-    result.add toNNode[N](meth, conf, anon, nctPtr)
+    result.add toNNode[N](meth, conf, anon, nctPtr, some obj)
 
   for n in obj.nested:
     result.add toNNode[N](n, conf, anon)
 
-  echov "super of", obj
+  # echov "super of", obj
   for super in obj.decl.store.getSuperTypes(obj.decl):
-    echov ">>", super
+    # echov ">>", super
+    var anon: seq[NimDecl[N]]
+    for meth in super.methods:
+      if not (
+        meth.isStatic() or
+        meth.isConstructor() or
+        meth.isDestructor()
+      ):
+        result.add toNNode[N](meth, conf, anon, nctPtr, some obj)
 
 
 proc toNNode*[N](obj: CxxForward, conf: CodegenConf): ObjectDecl[N] =
