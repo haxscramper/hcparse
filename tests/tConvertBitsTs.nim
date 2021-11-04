@@ -7,7 +7,7 @@ import
 
 import std/[strutils]
 
-import pkg/jsony
+import pkg/[jsony, frosty], pkg/frosty/streams
 
 func getFields[N](o: ObjectDecl[N]): seq[ObjectField[N]] = getFlatFields(o)
 
@@ -29,6 +29,10 @@ proc convStr(str: string, conf: CodegenConf = cxxCodegenConf): string =
   wrapViaTs(str, fixConf, lib).
     postFixEntries(fixConf, lib).
     toString(conf)
+
+proc convEntries(str: string, conf: CodegenConf = cxxCodegenConf): seq[CxxEntry] =
+  let lib = lib(@["z"])
+  wrapViaTs(str, fixConf, lib).postFixEntries(fixConf, lib)
 
 proc convDecls(
     str: string, conf: CodegenConf = cxxCodegenConf): seq[NimDecl[PNode]] =
@@ -113,39 +117,29 @@ suite "Qt elements":
 class QObject {
     public:
         static QMetaObject::Connection connect(
-            const QObject *sender,
-            const QMetaMethod &signal,
-            const QObject *receiver,
             const QMetaMethod &method,
             Qt::ConnectionType type = Qt::AutoConnection);
 };
 
 class QPaintDevice {
-    public:
-        int width() const { return metric(PdmWidth); }
-        int height() const { return metric(PdmHeight); }
-        int widthMM() const { return metric(PdmWidthMM); }
+    public: int width() const { return metric(PdmWidth); }
 };
 
 class QWidget : public QObject, public QPaintDevice {
-    // public slots:
-    //     void setEnabled(bool);
-
-    public:
-        QRect frameGeometry() const;
-
+    public: QRect frameGeometry() const;
 };
 
 class QAbstractButton : public QWidget {
-    Q_PROPERTY(bool checkable READ isCheckable WRITE setCheckable)
-
-public:
-    explicit QAbstractButton(QWidget *parent = nullptr);
-
-// public slots:
-//     void animateClick();
-//
-// signals:
-//     void toggled(bool checked);
-
+    public: explicit QAbstractButton(QWidget *parent = nullptr);
 };""")
+
+
+suite "Serialization":
+  test "Functions":
+    let entries = convEntries("int getIdx();")
+    let test = freeze entries
+    echo test
+
+    let unpacked = thaw[seq[CxxEntry]](test)
+
+    echo unpacked.toString(cxxCodegenConf)

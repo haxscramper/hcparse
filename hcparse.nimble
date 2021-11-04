@@ -11,4 +11,6 @@ srcDir        = "src"
 # Dependencies
 
 requires "nim >= 1.4.6"
-requires "hnimast", "hmisc >= 0.11.5"
+requires "hnimast"
+requires "https://github.com/disruptek/frosty.git >= 2.1.1"
+requires "hmisc >= 0.11.5"

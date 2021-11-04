@@ -217,10 +217,10 @@ type
       of ctkStaticParam:
         value*: CxxExpr
 
-      of ctkWrapKinds:
+      of ctkPtr, ctkLVRef, ctkRVRef, ctkDynamicArray:
         wrapped*: CxxTypeUse
 
-      of ctkArrayKinds:
+      of ctkFixedArray, ctkDependentArray:
         arraySize*: CxxTypeUse
         arrayElement*: CxxTypeUse
 
@@ -250,6 +250,8 @@ type
         enumDef*: CxxEnum
         enumParent*: CxxNamePair
         enumUser*: CxxNamePair
+
+
 
 
 

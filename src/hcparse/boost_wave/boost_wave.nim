@@ -5,8 +5,9 @@ export boost_wave_wrap
 
 export boost_wave_wrap
 import hmisc/core/all
-import hmisc/other/oswrap
+import hmisc/other/[oswrap, hlogger]
 import hmisc/wrappers/wraphelp
+
 
 from hmisc/core/colored import toLink
 
@@ -28,6 +29,8 @@ type
     ## 'get_system_includes', so in order to be able to produce adequate
     ## error messages we maintain copy of the include paths for the
     ## context.
+
+    # logger*: HLogger
 
   WaveError* = object of CatchableError
     diag*: WaveDiagnostics
@@ -150,6 +153,12 @@ iterator items*(l: ptr WaveTokenVectorHandle): ptr WaveTokenHandle =
   for i in 0 ..< len(l):
     yield l[i]
 
+proc `$`*(l: ptr WaveTokenVectorHandle): string =
+  var idx = 0
+  for item in items(l):
+    if idx > 0: result.add " "
+    result.add $item
+
 proc first*(l: ptr WaveTokenListHandle): ptr WaveTokenListIteratorHandle = tokenListBeginIterator(l)
 proc last*(l: ptr WaveTokenListHandle): ptr WaveTokenListIteratorHandle = tokenListEndIterator(l)
 proc `!=`*(iter1, iter2: ptr WaveTokenListIteratorHandle): bool = neqListIterator(iter1, iter2)
@@ -163,6 +172,12 @@ iterator items*(l: ptr WaveTokenListHandle): ptr WaveTokenHandle =
   while iter1 != iter2:
     yield deref(iter1)
     advance(iter1)
+
+# proc `$`*(l: ptr WaveTokenListHandle): string =
+#   var idx = 0
+#   for item in items(l):
+#     if idx > 0: result.add " "
+#     result.add $item
 
 
 proc firstMacro*(l: var WaveContext): ptr WaveMacroIteratorHandle = macroBeginIterator(l.handle)
@@ -378,40 +393,6 @@ template echov1*(variable: untyped): untyped =
     let pref = astToStr(variable) & vart
     var text = pref
     # debugecho(text)
-
-proc newWaveContext*(
-    str: string,
-    file: string = "<unknown>",
-    userIncludes: seq[string] = @[],
-    sysIncludes: seq[string] = @[],
-    languageMode: set[WaveLanguageModeImpl] = wlmDefault
-  ): WaveContext =
-  ## Construct new wave context object.
-  ## - NOTE if @arg{userIncludes} *or* @arg{sysIncludes} is a non-empty
-  ##   sequence then [[code:setIncludePath]] is called for one-time configuration,
-  ##   meaning subsequent configurations are not supported.
-  # new(
-  #   result,
-  #   # proc(ctx: WaveContext) =
-  #   #   destroyContext(ctx.handle)
-  #   #   deallocCStringArray(ctx.str)
-  # )
-
-  result.str = allocCStringArray([str])
-  result.handle = newWaveContext(result.str[0], file)
-  /// "Echo result handle":
-    /// "Cast to integer":
-      let c = cast[int](result.handle)
-
-    /// "Execute echov":
-      echov1 c
-
-  discard result.addIncludePath(".")
-  if ?userIncludes or ?sysIncludes:
-    result.setIncludePaths(userIncludes, sysIncludes)
-
-  result.setLanguageMode(languageMode)
-
 
 
 proc setFoundWarningDirective*(
@@ -1056,6 +1037,52 @@ proc addMacroDefinition*(
 
   if not ctx.addMacroDefinition(def, isPredefined):
     raiseErrors(ctx)
+
+proc newWaveContext*(
+    str: string,
+    file: string = "<unknown>",
+    userIncludes: seq[string] = @[],
+    sysIncludes: seq[string] = @[],
+    languageMode: set[WaveLanguageModeImpl] = wlmDefault
+  ): WaveContext =
+  ## Construct new wave context object.
+  ## - NOTE if @arg{userIncludes} *or* @arg{sysIncludes} is a non-empty
+  ##   sequence then [[code:setIncludePath]] is called for one-time configuration,
+  ##   meaning subsequent configurations are not supported.
+  # new(
+  #   result,
+  #   # proc(ctx: WaveContext) =
+  #   #   destroyContext(ctx.handle)
+  #   #   deallocCStringArray(ctx.str)
+  # )
+
+  result.str = allocCStringArray([str])
+  result.handle = newWaveContext(result.str[0], file)
+  /// "Echo result handle":
+    /// "Cast to integer":
+      let c = cast[int](result.handle)
+
+    /// "Execute echov":
+      echov1 c
+
+  discard result.addIncludePath(".")
+  if ?userIncludes or ?sysIncludes:
+    result.setIncludePaths(userIncludes, sysIncludes)
+
+  result.setLanguageMode(languageMode)
+
+  result.addMacroDefinition("__has_builtin", @["EXPR"], some("1"))
+
+  # result.onEvaluatedConditionalExpression():
+  #   echov directive, expression, "=", expressionValue
+
+  # result.onDefinedMacro():
+  #   if "HOSTED" in $name:
+  #     echov "---"
+  #     echov name
+  #     echov parameters
+  #     echov definition
+
 
 # proc addMacroDefinition*(
 #     ctx: var WaveContext,

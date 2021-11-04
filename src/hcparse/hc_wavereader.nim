@@ -3,6 +3,8 @@ import hmisc/other/oswrap
 import hmisc/core/[all, code_errors]
 import std/[strutils, options, tables]
 
+import ./hc_types
+
 export boost_wave
 
 type
@@ -16,41 +18,50 @@ type
 proc newWaveReader*(
     file: AbsFile,
     cache: WaveCache,
-    userIncludes: seq[string] = @[],
-    sysIncludes: seq[string] = @[],
-    subTargets: seq[string] = @[]
+    conf: ParseConf,
   ): WaveReader =
   var resCtx: WaveContext = newWaveContext(
-    readFile(file), file.string, userIncludes, sysIncludes)
+    readFile(file), file.string, conf.userIncludes, conf.sysIncludes)
+
+  for (name, args, impl) in conf.macroDefs:
+    resCtx.addMacroDefinition(name, args, impl)
 
   resCtx.onFoundIncludeDirective():
     try:
       let inclf = unescapeInclude(impl)
-      if inclf in subTargets or subTargets.len == 0:
-        let file = resCtx.findIncludeFile(inclf)
-        if file notin cache.defines:
-          cache.defines[file] = @[]
-          var subcontext = newWaveContext(
-            readFile($file), $file, userIncludes, sysIncludes)
-          var first: ptr WaveIteratorHandle = subcontext.first()
-          var last: ptr WaveIteratorHandle = subcontext.last()
-          subcontext.skipAll()
+      let file = resCtx.findIncludeFile(inclf)
+      if file notin cache.defines:
+        cache.defines[file] = @[]
+        var subcontext = newWaveContext(
+          readFile($file), $file, conf.userIncludes, conf.sysIncludes)
 
-          for def in macroNames(subcontext):
-            let mdef = subcontext.getMacroDefinition($def)
-            if not mdef.isPredefined:
-              var args, body: seq[string]
+        for (name, args, impl) in conf.macroDefs:
+          subcontext.addMacroDefinition(name, args, impl)
 
-              for arg in mdef.parameters: args.add $arg
-              for arg in mdef.definition: body.add $arg
+        var
+          first: ptr WaveIteratorHandle = subcontext.first()
+          last: ptr WaveIteratorHandle = subcontext.last()
 
-              cache.defines[file].add(($def, args, body))
+        subcontext.skipAll()
 
-        for (name, args, body) in cache.defines[file]:
-          # FIXME keep track of all defined macros to avoid illegal macro
-          # redefinition excepsions that might potentially be reaised
-          # here.?
-          resCtx.addMacroDefinition(name, args, some body.join(""))
+        for def in macroNames(subcontext):
+          let mdef = subcontext.getMacroDefinition($def)
+          if not mdef.isPredefined:
+            var args, body: seq[string]
+
+            for arg in mdef.parameters: args.add $arg
+            for arg in mdef.definition: body.add $arg
+
+            cache.defines[file].add(($def, args, body))
+
+      for (name, args, body) in cache.defines[file]:
+        # FIXME keep track of all defined macros to avoid illegal macro
+        # redefinition excepsions that might potentially be reaised
+        # here.?
+        # if "HOSTED" in name:
+        #   echov name, $args, $body
+
+        resCtx.addMacroDefinition(name, args, some body.join(""))
 
 
     except:

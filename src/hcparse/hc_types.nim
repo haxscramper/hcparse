@@ -302,6 +302,10 @@ type
     sysIncludes*: seq[string]
     userIncludes*: seq[string]
 
+    macroDefs*: seq[
+      tuple[name: string, args: seq[string], impl: Option[string]]
+    ]
+
   FileIndex* = object
     index*: Table[AbsFile, ParsedFile] ## Index of all parsed files
 
@@ -1950,5 +1954,9 @@ proc getFlags*(config: ParseConf, file: AbsFile): seq[string] =
   ## Get list of command-line flags for partigular `file`. This includes
   ## both global flags, and file-specific ones
   result.add config.includepaths.toIncludes()
+
+  for path in config.sysIncludes: result.add &"-I\"{path}\""
+  for path in config.userIncludes: result.add &"-I\"{path}\""
+
   result.add config.globalFlags
   result.add config.fileFlags.getOrDefault(file)

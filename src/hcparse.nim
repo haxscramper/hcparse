@@ -11,5 +11,5 @@ export
   hc_impls,
   hc_parsefront
 
-import hmisc/core/debug
-export debug
+import hmisc/core/all
+export all

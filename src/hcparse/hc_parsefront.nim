@@ -1,8 +1,12 @@
 import
-  std/[sequtils, strformat, bitops, strutils, tables]
+  std/[
+    sequtils, strformat, bitops, strutils,
+    tables, parseutils, strutils
+  ]
 
 import
-  pkg/[jsony]
+  pkg/[jsony],
+  pkg/[frosty]
 
 import
   ./cxtypes,
@@ -22,7 +26,7 @@ import
   hnimast/pprint
 
 import
-  hmisc/other/[oswrap, hshell, hpprint],
+  hmisc/other/[oswrap, hshell, hpprint, hlogger],
   hmisc/types/colorstring,
   hmisc/algo/[hstring_algo, namegen],
   hmisc/core/all
@@ -293,16 +297,12 @@ proc wrapViaTsWave*(
     lib: CxxLibImport,
     conf: CxxFixConf,
     waveCache: var WaveCache,
-    userIncludes: seq[string] = @[],
-    sysIncludes: seq[string] = @[],
-    subTargets: seq[string] = @[]
+    parseConf: ParseConf
   ): CxxFile =
   assertRef conf.typeStore
-  # "Wrap via TS wave":
 
   # "Construct wave reader object":
-  var reader = newWaveReader(
-    file, waveCache, userIncludes, sysIncludes, subTargets)
+  var reader = newWaveReader(file, waveCache, parseConf)
 
   # "Get sequence of elements for wrapping":
   var s = wrapViaTs(reader.getExpanded(), conf, lib)
@@ -330,34 +330,171 @@ proc expandViaCc*(file: AbsFile, parseConf: ParseConf): string =
 
   result = evalShellStdout(cmd)
 
+
+
+proc expandPartViaCc*(
+    file: AbsFile,
+    parseConf: ParseConf,
+    compiler: string = "clang"
+  ): string =
+  assertExists(file)
+  let flags = getFlags(parseConf, file)
+  var cmd = shellCmdGnu(compiler) # shellCmd(clang, -C, -E)
+  cmd.flag "C"
+  cmd.flag "E"
+
+  cmd.raw "-Wno-deprecated"
+
+  for flag in flags:
+    cmd.raw flag
+
+  cmd.arg file
+
+  # try:
+  let expanded = evalShellStdout(cmd)
+
+  # except ShellError as e:
+  #   echov "-----------------"
+  #   echov e.msg
+  #   echov "-----------------"
+
+  # echo expanded
+
+  # echov expanded
+
+  var active = false
+  for line in strutils.splitLines(expanded):
+    if len(line) > 0 and char(line[0]) == char('#'):
+      let split = line.split(" ")
+      var num: int
+      if parseInt(split[1], num) == len(split[1]):
+        echov "", split[2][1..^2]
+        echov "", file
+        if split[2][1 .. ^2] == file.string:
+          active = true
+
+        else:
+          active = false
+
+    elif active:
+      result.add line
+      result.add "\n"
+
+  echov result
+
+
+  raise newImplementError()
+
+template fileExpandLoop(logger, expandExpr: untyped): untyped =
+  mkDir outDir
+  for file {.inject.} in files:
+    let resFile = (outDir /. file.name()) &. "h"
+    result[resFile] = file
+
+    if not exists(resFile) or force:
+      resFile.writeFile(expandExpr)
+
+      if ?logger:
+        logger.info "Expanded", file, "to", resFile
+
+    else:
+      if ?logger:
+        logger.info "No need to expand", file
+
+type CxxExpandMap* = Table[AbsFile, AbsFile]
+
+proc expandViaCC*(
+    files: seq[AbsFile],
+    outDir: AbsDir,
+    conf: ParseConf,
+    compiler: string = "clang",
+    force: bool = false,
+    logger: HLogger = nil
+  ): CxxExpandMap =
+
+  fileExpandLoop(logger, expandPartViaCc(file, conf, compiler))
+
+
+
+proc getCompilerDefines*(compiler: string = "clang"):
+  seq[(string, seq[string], Option[string])] =
+
+  let file = getTempDir() /. "test.hpp"
+  writeFile(file, "")
+
+  var cmd = shellCmdGnu(compiler)
+  cmd.raw("-dM")
+  cmd.flag("E")
+  cmd.arg $file
+
+  let expanded = evalShellStdout(cmd)
+
+  for line in expanded.splitLines():
+    let def = line.split(" ")
+    assert def[0] == "#define"
+    if def[1] notin [
+      "__STDC__",
+      "__cplusplus",
+      "__LINE__",
+      "__FILE__",
+      "__BASE_FILE__",
+      "__DATE__",
+      "__TIME__",
+      "__INCLUDE_LEVEL__"
+    ]:
+      result.add((def[1], newSeq[string](), some def[2..^1].join(" ")))
+
 proc expandViaWave*(
     file: AbsFile,
     cache: var WaveCache,
-    conf: ParseConf
+    conf: ParseConf,
+    logger: HLogger = nil
   ): string =
 
-  var reader = newWaveReader(
-    file, cache, conf.userIncludes, conf.sysIncludes)
+  var reader = newWaveReader(file, cache, conf)
 
-  return reader.getExpanded()
 
-type CxxExpandMap* = Table[AbsFile, AbsFile]
+  try:
+    return reader.getExpanded()
+
+  except WaveError as err:
+    if ?logger:
+      logger.logLines(
+        AbsFile($err.diag.filename),
+        lang = "c",
+        center = err.diag.line,
+        column = err.diag.column
+      )
+
+    raise err
+
 
 proc expandViaWave*(
     files: seq[AbsFile],
     outDir: AbsDir,
     conf: ParseConf,
-    force: bool = false
+    force: bool = false,
+    logger: HLogger = nil
   ): CxxExpandMap =
 
-  mkDir outDir
   var cache = newWaveCache()
-  for file in files:
-    let resFile = (outDir /. file.name()) &. "h"
-    result[resFile] = file
+  fileExpandLoop(
+    logger, expandViaWave(file, cache, conf, logger))
 
-    if not exists(resFile) or force:
-      resFile.writeFile(expandViaWave(file, cache, conf))
+  # mkDir outDir
+  # for file in files:
+  #   let resFile = (outDir /. file.name()) &. "h"
+  #   result[resFile] = file
+
+  #   if not exists(resFile) or force:
+  #     resFile.writeFile()
+
+  #     if ?logger:
+  #       logger.info "Expanded", file, "to", resFile
+
+  #   else:
+  #     if ?logger:
+  #       logger.info "No need to expand", file
 
 
 const importMapFile* = "type_import.json"
