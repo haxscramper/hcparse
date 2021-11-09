@@ -179,6 +179,7 @@ type
     ctfComplex
     ctfParam
     ctfDefaultedParam
+    ctfUnexposed
 
     ctfIsPodType
     ctfIsEnumType
@@ -205,14 +206,20 @@ type
     cptI64
 
     cptVoid
+    cptNullptr
     cptChar
     cptUChar
+    cptWChar
+    cptChar16
+    cptChar32
+
 
     cptInt
     cptUInt
     cptBool
     cptFloat
     cptDouble
+    cptLongDouble
     cptSizeT
 
   CxxTypeUse* = ref object
@@ -297,6 +304,8 @@ type
     cpfVariadic
     cpfMethod
 
+    cpfConversionConstructor
+
   CxxProc* = ref object of CxxBase
     kind*: CxxProcKind
     head*: CxxTypeDecl ## Reuse type declaration for procedure - it has
@@ -312,12 +321,12 @@ type
     constructorOf*: Option[CxxNamePair]
     destructorOf*: Option[CxxNamePair]
 
-  CxxExprKind = enum
+  CxxExprKind* = enum
     cekIntLit
     cekStrLit
     cekCall
 
-  CxxExpr = object
+  CxxExpr* = object
     case kind*: CxxExprKind
       of cekIntLit:
         intVal*: int
@@ -385,7 +394,14 @@ type
     cqsSlot
     cqsSignal
 
+  CxxObjectFlag* = enum
+    cofExplicitConstructor
+    cofExplicitDestructor
+    cofCanAggregateInit
+
   CxxObject* = ref object of CxxBase
+    flags*: set[CxxObjectFlag]
+
     decl*: CxxTypeDecl
     kind*: CxxObjectKind
 
@@ -848,8 +864,9 @@ func nimName*(obj: CxxEnum): string      = obj.decl.name.nim
 func nimName*(obj: CxxAlias): string     = obj.decl.name.nim
 func nimName*(field: CxxField): string   = field.name.nim
 func nimName*(t: CxxTypeDecl): string    = t.name.nim
+func nimName*(pair: CxxNamePair): string = pair.nim
 
-
+func cxxName*(pair: CxxNamePair): CxxName   = pair.cxx
 func cxxName*(arg: CxxArg): CxxName         = arg.name.cxx
 func cxxName*(field: CxxField): CxxName     = field.name.cxx
 func cxxName*(t: CxxTypeUse): CxxName       = t.cxxType.name.cxx
@@ -1494,7 +1511,8 @@ func add*[
 
 func add*(
     s: var seq[CxxEntry],
-    other: CxxMacro | CxxAlias | CxxObject | CxxForward | CxxProc | CxxEnum
+    other: CxxMacro | CxxAlias | CxxObject | CxxForward | CxxProc | CxxEnum |
+           CxxObject
   ) =
 
   s.add box(other)

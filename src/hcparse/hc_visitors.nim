@@ -161,7 +161,7 @@ proc visitFunction*(
         #   { return std::end(__cont); }
         #```
         #
-        # HACK untilI figure out how to correctly translate
+        # HACK until I figure out how to correctly translate
         # `decltype(std::end(__const))` (call to templated method of the
         # class) to nim I'm going to mark this template as 'complex'.
         result.complexTemplate = true
@@ -673,9 +673,6 @@ proc visitCursor*(
 
 proc splitDeclarations*(
   tu: CXTranslationUnit, conf: WrapConf, cache: var WrapCache): CApiUnit =
-  ## Convert main file of translation unit into flattened sequence of
-  ## high-level declarations. All cursors for objects/structs are
-  ## retained. Public API elements are stored in `publicAPI` field
   assert not tu.isNil
   let tuCursor = tu.getTranslationUnitCursor()
   var res: CApiUnit
@@ -686,7 +683,6 @@ proc splitDeclarations*(
       if resolve == drkWrapDirectly:
         let (decls, rec, incls) = visitCursor(
           cursor, @[], conf, lastTypeDecl, cache)
-        res.includes.add incls
         if rec:
           return cvrRecurse
 

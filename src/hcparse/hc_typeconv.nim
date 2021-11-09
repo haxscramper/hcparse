@@ -564,7 +564,7 @@ func mapPrimitiveNameImpl*(name: string):
 
   case name:
     of "short": ("cshort", cptI16)
-    of "unsigned short": ("cushort", cptU32)
+    of "unsigned short": ("cushort", cptU16)
 
     of "int": ("cint", cptInt)
     of "unsigned", "unsigned int": ("cuint", cptUInt)

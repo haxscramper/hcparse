@@ -276,8 +276,6 @@ type
     # TODO infer 'derived' API that must also be acessible through
     # object - things like public fields and methods of parent class.
     decls*: seq[CDecl]
-    publicAPI*: seq[CXCursor]
-    includes*: seq[IncludeDep]
 
   ParsedFile* = object
     unit*: CXTranslationUnit ## Translation unit
@@ -731,6 +729,9 @@ type
     codegen*: seq[CxxCodegen]
     cache*: WrapCache
 
+
+proc newWrapCache*(): WrapCache =
+  WrapCache(importGraph: hgraph.default(typeof WrapCache.importGraph))
 
 WrapConf.loggerField(logger, doExport = true)
 const gpcNoPragma* = { gpcNoHeader, gpcNoImportcpp }
