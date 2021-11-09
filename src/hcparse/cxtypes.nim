@@ -5,15 +5,16 @@ import
 
 import
   packages/docutils/rstast
+
 import
   hmisc/other/[oswrap, hlogger],
-  hmisc/algo/[clformat],
-  hmisc/types/colorstring,
+  hmisc/algo/[clformat, clformat],
+  hmisc/types/[colorstring],
   hmisc/core/all
 
+export colorstring
 
-import
-  hpprint/hpprint_repr, hpprint, hnimast
+import hnimast
 
 export libclang_wrap
 
@@ -591,101 +592,107 @@ proc `[]`*(comment: CXComment, idx: int): CXComment =
   assert idx < comment.len
   getChild(comment, cuint(idx))
 
-proc objTreeRepr*(comment: CXComment): ObjTree =
-  ## Convert comment to `ObjTree` repr
-  case comment.cxKind:
-    of cokText:
-      pptConst $comment.textComment_getText()
-    of cokParamCommand:
-      pptObj(
-        $comment.cxKind,
-        [(
-          $paramCommandComment_getParamName(comment),
-          pptSeq(toSeq(comment.children).mapIt(it.objTreeRepr()))
-          # objTreeRepr(comment[0])
-        )]
-      )
-    of cokInlineCommand:
-      let args: seq[string] = collect(newSeq):
-        for i in 0 ..< inlineCommandComment_getNumArgs(comment):
-          $inlineCommandComment_getArgText(comment, cuint(i))
+# proc objTreeRepr*(comment: CXComment): ObjTree =
+#   ## Convert comment to `ObjTree` repr
+#   case comment.cxKind:
+#     of cokText:
+#       pptConst $comment.textComment_getText()
+#     of cokParamCommand:
+#       pptObj(
+#         $comment.cxKind,
+#         [(
+#           $paramCommandComment_getParamName(comment),
+#           pptSeq(toSeq(comment.children).mapIt(it.objTreeRepr()))
+#           # objTreeRepr(comment[0])
+#         )]
+#       )
+#     of cokInlineCommand:
+#       let args: seq[string] = collect(newSeq):
+#         for i in 0 ..< inlineCommandComment_getNumArgs(comment):
+#           $inlineCommandComment_getArgText(comment, cuint(i))
 
-      pptObj(
-        $comment.cxKind,
-        [(
-          $inlineCommandComment_getCommandName(comment),
-          pptSeq(
-            args.mapIt(it.pptConst) &
-            toSeq(comment.children).mapIt(it.objTreeRepr())
-          )
-        )]
-      )
-    of cokBlockCommand:
-      pptObj(
-        $comment.cxKind,
-        [(
-          $blockCommandComment_getCommandName(comment),
-          pptSeq(toSeq(comment.children).mapIt(it.objTreeRepr()))
-          # objTreeRepr(comment[0])
-        )]
-      )
-    else:
-      if comment.len == 0:
-        pptObj($comment.cxKind,
-               pptConst($comment.fullComment_getAsXML()))
-      else:
-        pptObj($comment.cxKind,
-               toSeq(comment.children).mapIt(it.objTreeRepr()))
+#       pptObj(
+#         $comment.cxKind,
+#         [(
+#           $inlineCommandComment_getCommandName(comment),
+#           pptSeq(
+#             args.mapIt(it.pptConst) &
+#             toSeq(comment.children).mapIt(it.objTreeRepr())
+#           )
+#         )]
+#       )
+#     of cokBlockCommand:
+#       pptObj(
+#         $comment.cxKind,
+#         [(
+#           $blockCommandComment_getCommandName(comment),
+#           pptSeq(toSeq(comment.children).mapIt(it.objTreeRepr()))
+#           # objTreeRepr(comment[0])
+#         )]
+#       )
+#     else:
+#       if comment.len == 0:
+#         pptObj($comment.cxKind,
+#                pptConst($comment.fullComment_getAsXML()))
+#       else:
+#         pptObj($comment.cxKind,
+#                toSeq(comment.children).mapIt(it.objTreeRepr()))
 
 
 #*************************************************************************#
 #***************************  Pretty-printing  ***************************#
 #*************************************************************************#
 
-func add*(tree: var ObjTree, other: ObjTree) =
-  tree.fldPairs.add ("", other)
+# func add*(tree: var ObjTree, other: ObjTree) =
+#   tree.fldPairs.add ("", other)
 
-func add*(tree: var ObjTree, arg: string, other: ObjTree) =
-  tree.fldPairs.add (arg, other)
+# func add*(tree: var ObjTree, arg: string, other: ObjTree) =
+#   tree.fldPairs.add (arg, other)
 
-proc objTreeRepr*(cxtype: CXType): ObjTree =
-  case cxtype.cxKind:
-    of tkPointer:
-      result = pptObj("ptr", cxtype[].objTreeRepr())
+proc hshow*(cxtype: CXType, opts: HDisplayOpts = defaultHDisplay): ColoredText =
+  coloredResult()
 
-    of tkLValueReference:
-      result = pptObj("lvref", cxtype[].objTreeRepr())
+  proc aux(cxtype: CXType) =
+    if cxType.kind notin tkPodKinds:
+      if isConstQualified(cxtype):
+        add "const"
 
-    of tkRValueReference:
-      result = pptObj("rvref", cxtype[].objTreeRepr())
+    case cxtype.cxKind:
+      of tkPointer, tkLValueReference, tkRValueReference:
+        case cxtype.cxKind:
+          of tkPointer: add "*["
+          of tkLValueReference: add "&["
+          of tkRValueReference: add "&&["
+          else: discard
 
-    of tkPodKinds:
-      result = pptConst("'" & $cxtype & "'")
+        cxtype[].aux()
+        add "]"
 
-    of tkFunctionProto:
-      result = pptObj($cxType.cxKind, { "func": pptConst($cxtype) })
-      result.add("result", objTreeRepr(cxType.getResultType()))
+      of tkPodKinds:
+        add "'"
+        add $cxtype
+        add "'"
 
-      for idx, arg in argTypes(cxType):
-        result.add($idx, objTreeRepr(arg))
+      of tkFunctionProto:
+        add $cxtype
+        # result = pptObj($cxType.cxKind, { "func": pptConst($cxtype) })
+        # result.add("result", objTreeRepr(cxType.getResultType()))
 
-    else:
-      result = pptObj(
-        $cxtype.cxkind, pptConst("'" & $cxtype & "'", fgRed + bgDefault))
+        # for idx, arg in argTypes(cxType):
+        #   result.add($idx, objTreeRepr(arg))
 
-  if cxType.kind notin tkPodKinds:
-    if isConstQualified(cxtype):
-      result.add pptConst("const", fgMagenta + bgDefault)
-
-  for param in cxType.templateParams():
-    result.add objTreeRepr(param)
+      else:
+        add $cxtype
+        # result = pptObj(
+        #   $cxtype.cxkind, pptConst("'" & $cxtype & "'", fgRed + bgDefault))
 
 
-proc lispRepr*(cxtype: CXType): string =
-  cxtype.objTreeRepr().lispRepr()
+    # for param in cxType.templateParams():
+    #   result.add objTreeRepr(param)
 
-proc treeRepr*(cxtype: CXType): string =
-  cxtype.objTreeRepr().treeRepr()
+  aux(cxtype)
+
+  endResult()
 
 proc neededTemplateArgs*(cxtype: CXType): int =
   ## Get number of necessary generic arguments for a type
@@ -694,120 +701,107 @@ proc neededTemplateArgs*(cxtype: CXType): int =
 proc dedentComment*(str: string): string =
   str.split('\n').mapIt(it.dedent()).join("\n")
 
-proc objTreeRepr*(
-    cursor: CXCursor, tu: CXTranslationUnit,
-    showtype: bool = true,
+proc treeRepr*(
+    cursor: CXCursor,
+    tu: Option[CXTranslationUnit] = none(CXTranslationUnit),
     showcomment: bool = true
-  ): ObjTree =
-  ## Generate ObjTree representation of cursor
-  const colorize = not defined(plainStdout)
-  var typeText = "type: " & $cursor.cxType & " " & $cursor.cxType().cxKind()
+  ): ColoredText =
+  coloredResult()
 
-  if cursor.cxKind() in {ckTemplateRef}:
-    let specialized = cursor.getSpecializedCursorTemplate()
-    typeText = "ref of: " & $specialized.cxKind()
+  proc aux(cursor: CxCursor, level: int) =
+    ## Generate ObjTree representation of cursor
+    const colorize = not defined(plainStdout)
 
-  let ctype = pptConst(
-    typeText,
-    initPrintStyling(fg = fgBlue, style = {styleItalic, styleDim})
-  )
+    addIndent(level)
+    add hshow(cursor.kind)
+    add "\n"
+    addIndent(level + 1)
+    add "type: "
+    add $cursor.cxType
+    add " "
+    add hshow(cursor.cxType().cxKind())
 
+    if cursor.cxKind() in {ckTemplateRef}:
+      add "\n"
+      addIndent(level + 1)
+      add "ref of: "
+      add cursor.getSpecializedCursorTemplate().cxKind().hshow()
 
-  var commentText = cursor.rawComment()
-  let showComment = showcomment and commentText.len > 0
-  let comment = pptConst(
-    commentText.dedentComment(), initStyle(styleItalic, fgCyan))
-
-  let locRange =
-    block:
-      let loc = getSpellingLocation(cursor)
-      if loc.isSome():
-        &" {loc.get().line}:{loc.get().column}"
-
-      else:
-        ""
-
-  if cursor.len == 0:
-    let val = pptconst(
-      cursor.tokens(tu).mapIt(
-        getTokenSpelling(tu, it)
-      ).join(" "), initprintstyling(fg = fggreen))
-
-    var flds: seq[ObjTree]
-    if showtype: flds.add ctype
-    if showComment: flds.add comment
-    flds.add val
-    # @[ctype, val] else: @[val]
-
-    if cursor.cxKind in {ckMacroExpansion}:
-      let cxRange =
-        $getCursorLocation(cursor).getExpansionLocation() & " " &
-          $getCursorExtent(cursor)
-
-      flds.add pptconst(
-        $cxRange, initprintstyling(fg = fgBlue))
-
-    pptObj(
-      "[_] " & $cursor.cxkind & locRange,
-      initPrintStyling(fg = fgYellow), flds)
-  else:
-    var children: seq[ObjTree]
-    for node in cursor.children:
-      if not (
-        cursor.cxKind() == ckTranslationUnit and
-        node.cxKind() in {ckMacroDefinition, ckMacroExpansion}
-      ):
-        children.add objTreeRepr(node, tu, showType)
-
-    var suffix: string
-
-    if cursor.cxKind() == ckEnumConstantDecl:
-      suffix &= " " & $toRed($cursor.getEnumConstantDeclValue())
-
-    pptObj(
-      &[$toMagenta("[*] " & $cursor.cxkind, colorize),
-        " ", $cursor, $suffix, locRange],
-      &[showtype.tern(@[ctype], @[]),
-        showcomment.tern(@[comment], @[]),
-        children])
+    # let ctype = pptConst(
+    #   typeText,
+    #   initPrintStyling(fg = fgBlue, style = {styleItalic, styleDim})
+    # )
 
 
-proc treeRepr*(cursor: CXCursor, tu: CXTranslationUnit,
-               showtype: bool = true): string =
-  ## Generate pretty-printed tree representation of cursor.
-  cursor.objTreeRepr(tu, showtype).treeRepr()
+    # var commentText = cursor.rawComment()
+    # let showComment = showcomment and commentText.len > 0
+    # let comment = pptConst(
+    #   commentText.dedentComment(), initStyle(styleItalic, fgCyan))
+
+    # let locRange =
+    #   block:
+    #     let loc = getSpellingLocation(cursor)
+    #     if loc.isSome():
+    #       &" {loc.get().line}:{loc.get().column}"
+
+    #     else:
+    #       ""
+
+    # if cursor.len == 0:
+    #   let val = pptconst(
+    #     cursor.tokens(tu).mapIt(
+    #       getTokenSpelling(tu, it)
+    #     ).join(" "), initprintstyling(fg = fggreen))
+
+    #   var flds: seq[ObjTree]
+    #   if showtype: flds.add ctype
+    #   if showComment: flds.add comment
+    #   flds.add val
+
+    #   if cursor.cxKind in {ckMacroExpansion}:
+    #     let cxRange =
+    #       $getCursorLocation(cursor).getExpansionLocation() & " " &
+    #         $getCursorExtent(cursor)
+
+    #     flds.add pptconst(
+    #       $cxRange, initprintstyling(fg = fgBlue))
+
+    #   pptObj(
+    #     "[_] " & $cursor.cxkind & locRange,
+    #     initPrintStyling(fg = fgYellow), flds)
+    # else:
+    #   var children: seq[ObjTree]
+    #   for node in cursor.children:
+    #     if not (
+    #       cursor.cxKind() == ckTranslationUnit and
+    #       node.cxKind() in {ckMacroDefinition, ckMacroExpansion}
+    #     ):
+    #       children.add objTreeRepr(node, tu, showType)
+
+    #   var suffix: string
+
+    #   if cursor.cxKind() == ckEnumConstantDecl:
+    #     suffix &= " " & $toRed($cursor.getEnumConstantDeclValue())
+
+    #   pptObj(
+    #     &[$toMagenta("[*] " & $cursor.cxkind, colorize),
+    #       " ", $cursor, $suffix, locRange],
+    #     &[showtype.tern(@[ctype], @[]),
+    #       showcomment.tern(@[comment], @[]),
+    #       children])
+
+  aux(cursor, 0)
+
+  endResult()
 
 
-proc lispRepr*(cursor: CXCursor, tu: CXTranslationUnit,
-               showtype: bool = true): string =
-  ## Generate pretty-printed tree representation of cursor.
-  cursor.objTreeRepr(tu, showtype).lispRepr()
+proc treeRepr*(
+    cursor: CXCursor,
+    tu: CXTranslationUnit,
+    showcomment: bool = true
+  ): ColoredText =
 
-proc objTreeRepr*(cursor: CXCursor, showtype: bool = true): ObjTree =
-  ## Generate ObjTree representation of cursor
-  const colorize = not defined(plainStdout)
-  let ctype = pptConst(
-    "type: " & $cursor.cxType,
-    initPrintStyling(fg = fgBlue,
-                     style = {styleItalic, styleDim}))
-
-  if cursor.len  == 0:
-    if showType:
-      pptObj($cursor.cxkind, initPrintStyling(fg = fgYellow),
-             ctype, pptConst($cursor))
-    else:
-      pptConst($cursor.cxKind)
-  else:
-    pptObj(
-      $toYellow("kind: " & $cursor.cxkind, colorize) & " " & $cursor,
-      showtype.tern(@[ctype], @[]) &
-        toSeq(cursor.children).mapIt(it.objTreeRepr(showtype)))
-
-
-proc treeRepr*(cursor: CXCursor, showtype: bool = true): string =
-  ## Generate pretty-printed tree representation of cursor.
-  cursor.objTreeRepr(showtype).treeRepr()
-
+  treeRepr(cursor, some tu, showcomment)
 
 proc getClassBaseCursors*(inCursor: CXCursor): seq[CXCursor] =
   var baseQue = Deque[CXCursor]()

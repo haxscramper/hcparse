@@ -784,7 +784,7 @@ proc toNimType*(
           if decl.cxKind() notin {ckNoDeclFound}:
             conf.warn "No decl found for type"
             conf.logger.indented:
-              conf.info cxtype.lispRepr()
+              conf.info cxtype.hshow()
               conf.debug decl.getSpellingLocation()
               conf.debug decl.cxKind()
               conf.debug decl.treeRepr()
