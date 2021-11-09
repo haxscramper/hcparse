@@ -19,6 +19,7 @@ import
   ./hc_irgen,
   ./hc_wavereader,
   ./hc_grouping,
+  ./hc_postprocess,
   ./interop_ir/wrap_store
 
 import
@@ -197,6 +198,7 @@ proc postFixEntries*(
       setFileRec(item, file.get())
 
   for item in mitems(entries):
+    item.setStoreRec(store)
     registerDeclarations(item, store, lib)
 
   # Register type declarations in the store, add missing flags to type uses
@@ -239,6 +241,7 @@ proc postFixEntries*(conf: CxxFixConf, files: var seq[CxxFile]) =
 
   for file in mitems(files):
     for item in mitems(file.entries):
+      item.setStoreRec(store)
       registerDeclarations(item, store, file.savePath)
 
   # Register type declarations in the store, add missing flags to type uses

@@ -1,6 +1,10 @@
 import
   hmisc/preludes/unittest,
-  hcparse/[hc_parsefront, hc_codegen],
+  hcparse/[
+    hc_parsefront,
+    hc_codegen,
+    hc_postprocess
+  ],
   hcparse/interop_ir/wrap_store,
   compiler/[ast, renderer],
   hnimast/[nim_decl, object_decl, obj_field_macros, hast_common, proc_decl]
@@ -141,3 +145,18 @@ suite "Serialization":
     let unpacked = thaw[seq[CxxEntry]](test)
 
     echo unpacked.toString(cxxCodegenConf)
+
+  test "Merger":
+    var entries1 = thaw[seq[Cxxentry]](
+      freeze convEntries("enum Test { a };"))
+
+    var entries2 = thaw[seq[Cxxentry]](
+      freeze convEntries("void setValue(Test arg);"))
+
+    var store = newTypeStore()
+    for entry in mitems(entries1): entry.reuseStore(store)
+    for entry in mitems(entries2): entry.reuseStore(store)
+
+    let entries = entries1 & entries2
+
+    echo toString(entries, cxxCodegenConf)

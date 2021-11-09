@@ -2,7 +2,8 @@ import
   std/[options, hashes, sets, algorithm, sequtils, strutils, tables]
 
 import
-  ./interop_ir/wrap_store
+  ./interop_ir/wrap_store,
+  ./hc_postprocess
 
 import
   hmisc/types/[hgraph, colorstring],

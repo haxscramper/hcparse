@@ -90,7 +90,8 @@ type
   CxxComment* = object
     text*: string
 
-  CxxBase* = object of RootObj
+  CxxBase* = ref object of RootObj
+    store*: CxxTypeStore
     iinfo*: LineInfo
     spellingLocation*: Option[CxxSpellingLocation]
     cbind*: CxxBind
@@ -296,7 +297,7 @@ type
     cpfVariadic
     cpfMethod
 
-  CxxProc* = object of CxxBase
+  CxxProc* = ref object of CxxBase
     kind*: CxxProcKind
     head*: CxxTypeDecl ## Reuse type declaration for procedure - it has
     ## very similar structure (nim/cxx name, generic parameters with
@@ -331,7 +332,7 @@ type
     cafOutParam
     cafInParam
 
-  CxxArg* = object of CxxBase
+  CxxArg* = ref object of CxxBase
     flags*: set[CxxArgFlag]
     name*: CxxNamePair
     nimType*: CxxTypeUse
@@ -344,13 +345,13 @@ type
     cffPrivate
     cffProtected
 
-  CxxField* = object of CxxBase
+  CxxField* = ref object of CxxBase
     name*: CxxNamePair
     nimType*: CxxTypeUse
     flags*: set[CxxFieldFlag]
 
 
-  CxxAlias* = object of CxxBase
+  CxxAlias* = ref object of CxxBase
     isDistinct*: bool
     decl*: CxxTypeDecl
     baseType*: CxxTypeUse
@@ -362,7 +363,7 @@ type
     valueTokens*: seq[string]
     docComment*: seq[CxxComment]
 
-  CxxEnum* = object of CxxBase
+  CxxEnum* = ref object of CxxBase
     isClassEnum*: bool
     decl*: CxxTypeDecl
     values*: seq[CxxEnumValue]
@@ -487,6 +488,11 @@ type
     getBindImpl*: proc(entry: CxxEntry, conf: CxxFixConf): CxxBind
     libName*: string
     isIcpp*: bool
+
+const
+  cekTypeStored* = {
+    cekProc, cekTypeGroup, cekEnum, cekForward, cekAlias, cekObject
+  }
 
 export IdentStyle
 
@@ -1351,6 +1357,34 @@ proc setHeaderRec*(entry: var CxxEntry, conf: CxxFixConf) =
       for nest in mitems(entry.cxxObject.nested):
         setHeaderRec(nest, conf)
 
+proc setStoreRec*(entry: var CxxEntry, store: CxxTypeStore) =
+  case entry.kind:
+    of cekPass, cekEmpty, cekImport, cekMacroGroup,
+       cekMacro, cekComment:
+      discard
+
+    of cekProc:
+      entry.cxxProc.head.store = store
+
+    of cekTypeGroup:
+      for decl in mitems(entry.cxxTypes):
+        setStoreRec(decl, store)
+
+    of cekEnum:
+      entry.cxxEnum.decl.store = store
+
+    of cekForward:
+      entry.cxxForward.decl.store = store
+
+    of cekAlias:
+      entry.cxxAlias.decl.store = store
+
+    of cekObject:
+      entry.cxxObject.decl.store = store
+
+      for nest in mitems(entry.cxxObject.nested):
+        setStoreRec(entry, store)
+
 template setFile(entry: typed, file: AbsFile): untyped =
   if entry.spellingLocation.isSome:
     entry.spellingLocation.get().file = file
@@ -1434,228 +1468,6 @@ func getSuperTypes*(store: CxxTypeStore, decl: CxxTypeDecl): seq[CxxObject] =
 
 
 
-func registerDeclarations*(
-    entry: var CxxEntry,
-    store: var CxxTypeStore,
-    lib: CxxLibImport
-  ) =
-
-  case entry.kind:
-    of cekPass, cekEmpty, cekImport, cekProc,
-       cekMacroGroup, cekMacro, cekComment:
-      discard
-
-    of cekTypeGroup:
-      for decl in mitems(entry.cxxTypes):
-        registerDeclarations(entry, store, lib)
-
-    of cekEnum:
-      entry.cxxEnum.decl.typeImport = some lib
-      entry.cxxEnum.decl.store = store
-      store.addDecl(entry.cxxEnum.decl)
-
-    of cekForward:
-      entry.cxxForward.decl.typeImport = some lib
-      entry.cxxForward.decl.store = store
-      store.addForwardDecl(entry.cxxForward.decl)
-
-    of cekAlias:
-      entry.cxxAlias.decl.typeImport = some lib
-      entry.cxxAlias.decl.store = store
-      store.addDecl(entry.cxxAlias.decl)
-
-    of cekObject:
-      entry.cxxObject.decl.typeImport = some lib
-      entry.cxxObject.decl.store = store
-      store.addDecl(entry.cxxObject)
-
-      for nest in mitems(entry.cxxObject.nested):
-        registerDeclarations(entry, store, lib)
-
-func postprocessTypeUses*(
-    entry: var CxxEntry, store: var CxxTypeStore, lib: CxxLibImport) =
-
-  func aux(use: var CxxTypeUse, store: CxxTypeStore)
-
-  func aux(use: var CxxArg, store: CxxTypeStore) =
-    aux(use.nimType, store)
-
-  func aux(use: var CxxTypeUse, store: CxxTypeStore) =
-    eachIdent(use) do (use: var CxxTypeUse):
-      if not use.cxxType.isParam:
-        use.cxxType.typeStore = store
-        use.cxxType.typeLib = some lib.library
-
-        let decl = use.getDecl()
-
-        if decl.isSome():
-          use.flags.incl():
-            case decl.get().kind:
-              of ctdkEnum: ctfIsEnumType
-              of ctdkStruct: ctfIsStructType
-              of ctdkClass: ctfIsClassType
-              of ctdkUnion: ctfIsUnionType
-              of ctdkTypedef: ctfIsTypedefType
-              of ctdkProc, ctdkNone: ctfNone
-
-        else:
-          use.flags.incl(ctfIsPodType)
-
-  func aux(decl: var CxxProc, store: var CxxTypeStore) =
-    for arg in mitems(decl.arguments):
-      aux(arg, store)
-
-    aux(decl.returnType, store)
-
-  case entry.kind:
-    of cekProc:
-      aux(entry.cxxProc, store)
-
-    of cekPass, cekEmpty, cekImport,
-       cekMacroGroup, cekMacro, cekComment:
-      discard
-
-    of cekTypeGroup:
-      for decl in mitems(entry.cxxTypes):
-        postprocessTypeUses(entry, store, lib)
-
-    of cekEnum:
-      discard
-
-    of cekForward:
-      discard
-
-    of cekAlias:
-      aux(entry.cxxAlias.baseType, store)
-
-    of cekObject:
-      for meth in mitems(entry.cxxObject.methods):
-        aux(meth, store)
-
-      for field in mitems(entry.cxxObject.mfields):
-        aux(field.nimType, store)
-
-proc fixIdentsRec*(
-    entry: var CxxEntry,
-    cache: var StringNameCache,
-    conf: CxxFixConf
-  ) =
-
-  var context: CxxNameFixContext
-  context[cancLibName] = some cxxPair(conf.libName, cxxName(conf.libName))
-  template aux(name: var CxxNamePair): untyped =
-    # let l = "LIBSSH2_LISTENER" in $name
-    # if l:
-    #   pprintStackTrace()
-    #   echov "----"
-    #   echov name
-    name.nim = conf.fixName(name, cache, context)
-    # if l: echov name
-
-  proc aux(decl: var CxxTypeDecl, cache: var StringNameCache) =
-    aux(decl.name)
-
-  proc aux(use: var CxxTypeUse, cache: var StringNameCache) =
-    var cache {.byaddr1.} = cache
-    eachIdent(use) do (use: var CxxTypeUse):
-      aux(use.cxxType.name)
-
-    proc auxArg(use: var CxxTypeUse, cache: var StringNameCache) =
-      case use.kind:
-        of ctkWrapKinds: auxArg(use.wrapped, cache)
-        of ctkStaticParam: discard
-        of ctkAnonEnum:
-          aux(use.enumParent)
-          aux(use.enumUser)
-
-        of ctkArrayKinds: auxArg(use.arrayElement, cache)
-        of ctkIdent:
-          for param in mitems(use.genParams):
-            auxArg(param, cache)
-
-        of ctkAnonObject:
-          aux(use.objParent)
-          aux(use.objUser)
-
-        of ctkProc:
-          for idx, arg in mpairs(use.arguments):
-            if isEmpty(arg.cxxName()):
-              arg.name = cxxPair("arg" & $idx)
-
-
-            aux(arg.name)
-            auxArg(arg.nimType, cache)
-
-          auxArg(use.returnType, cache)
-
-    auxArg(use, cache)
-
-  proc aux(decl: var CxxProc, cache: var StringNameCache) =
-    if decl.isConstructor():
-      aux(decl.constructorOf.get())
-
-    for idx, arg in mpairs(decl.arguments):
-      if isEmpty(arg.cxxName()):
-        arg.name = cxxPair("arg" & $idx)
-
-      aux(arg.name)
-      aux(arg.nimType, cache)
-
-    if ?decl.arguments:
-      context[cancFirstArgName] = some decl.arguments[0].name
-      if decl.arguments[0].nimType.kind == ctkIdent:
-        context[cancFirstArgName] = some decl.arguments[0].nimType.cxxType.name
-
-    aux(decl.head.name)
-    aux(decl.returnType, cache)
-
-    context[cancFirstArgName].clear()
-    context[cancFirstArgType].clear()
-
-  proc aux(
-      entry: var CxxEntry,
-      cache: var StringNameCache
-    ) =
-
-    case entry.kind:
-      of cekEnum:
-        aux(entry.cxxEnum.decl.name)
-        context[cancParentEnumName] = some entry.cxxEnum.decl.name
-        for value in mitems(entry.cxxEnum.values):
-          aux(value.name)
-
-        context[cancParentEnumName].clear()
-
-      of cekForward:
-        aux(entry.cxxForward.decl.name)
-
-      of cekObject:
-        aux(entry.cxxObject.decl.name)
-        context[cancParentObjectName] = some entry.cxxObject.decl.name
-        for field in mitems(entry.cxxObject.mfields):
-          aux(field.name)
-          aux(field.nimType, cache)
-
-        for mproc in mitems(entry.cxxObject.methods):
-          aux(mproc, cache)
-
-        for nestd in mitems(entry.cxxObject.nested):
-          aux(nestd, cache)
-
-        context[cancParentObjectName].clear()
-
-      of cekProc:
-        aux(entry.cxxProc, cache)
-
-      of cekAlias:
-        aux(entry.cxxAlias.baseType, cache)
-        aux(entry.cxxAlias.decl, cache)
-
-      else:
-        raise newImplementKindError(entry)
-
-
-  aux(entry, cache)
 
 func hasTypeDecl*(entry: CxxEntry): bool =
   entry.kind in {cekEnum, cekForward, cekObject, cekAlias}
@@ -1687,34 +1499,27 @@ func add*(
 
   s.add box(other)
 
-proc fragmentType*(entry: var CxxEntry):
-  tuple[newDecl: seq[CxxEntry], extras: seq[CxxEntry]] =
-
+proc getTypeStore*(entry: CxxEntry): CxxTypeStore =
   case entry.kind:
-    of cekAlias, cekEnum:
-      result.newDecl.add entry
-      entry = cxxEmpty()
-
-    of cekObject:
-      for e in entry.cxxObject.methods:
-        result.extras.add e
-
-      entry.cxxObject.methods = @[]
-
-      for nested in mitems(entry.cxxObject.nested):
-        if nested.kind in { cekEnum, cekObject, cekAlias }:
-          let (newDecls, extras) = fragmentType(nested)
-          result.newdecl.add newDecls
-          result.extras.add extras
-
-        else:
-          result.extras.add nested
-
-      entry.cxxObject.nested = @[]
-      result.newDecl.add entry
-      entry = cxxEmpty()
+    of cekEnum:    result = entry.cxxEnum.decl.store
+    of cekForward: result = entry.cxxForward.decl.store
+    of cekObject:  result = entry.cxxObject.decl.store
+    of cekProc:    result = entry.cxxProc.head.store
+    of cekAlias:   result = entry.cxxAlias.decl.store
+    of cekEmpty:
+      raise newUnexpectedKindError(entry)
 
     else:
-      discard
+      raise newImplementKindError(entry)
 
-import pkg/jsony
+  assertRef(result, kindToStr(entry))
+
+
+proc getTypeStore*(entries: seq[CxxEntry]): CxxTypeStore =
+  for entry in entries:
+    if entry of cekTypeStored:
+      return entry.getTypeStore()
+
+  raise newGetterError(
+    "Cannot get type store from the list of entries ",
+    "- no matching kinds found")
