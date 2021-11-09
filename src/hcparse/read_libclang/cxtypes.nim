@@ -2,13 +2,10 @@ import
   ./libclang_wrap, ./cxvisitors
 
 import
-  std/[strformat, strutils, options, sequtils, sugar, deques, hashes]
+  std/[strformat, strutils, options, sequtils, deques, hashes]
 
 import
-  packages/docutils/rstast
-
-import
-  hmisc/other/[oswrap, hlogger],
+  hmisc/other/[oswrap],
   hmisc/algo/[clformat, clformat, hstring_algo, htemplates],
   hmisc/types/[colorstring],
   hmisc/core/all

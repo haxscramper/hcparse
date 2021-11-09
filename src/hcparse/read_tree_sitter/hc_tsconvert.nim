@@ -2,17 +2,15 @@ import
   htsparse/cpp/cpp
 
 import
-  std/[json, strutils]
+  std/[strutils]
 
 import
-  ./hc_types,
   ./hc_tsreader,
-  ./interop_ir/wrap_store
+  ../processor/wrap_store
 
 import
   hmisc/core/all,
   hmisc/wrappers/[treesitter],
-  hmisc/other/oswrap,
   hmisc/types/colorstring,
   hmisc/algo/namegen,
   hnimast

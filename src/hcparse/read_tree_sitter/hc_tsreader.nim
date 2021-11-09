@@ -5,10 +5,18 @@ import
   std/[json, strutils, parseutils, tables]
 
 import
-  ./hc_types,
-  ./hc_typeconv,
-  ./cxcommon,
-  ./interop_ir/wrap_store
+  ../read_libclang/[
+    hc_types,
+    cxcommon
+  ],
+
+  ../processor/[
+    wrap_store
+  ]
+
+
+import
+  ../hc_typeconv
 
 import
   hmisc/core/all,

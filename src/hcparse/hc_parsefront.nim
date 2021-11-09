@@ -9,29 +9,55 @@ import
   pkg/[frosty]
 
 import
-  ./cxtypes,
-  ./hc_types,
+  ./read_libclang/[
+    cxtypes,
+    libclang_wrap,
+    hc_types,
+    hc_visitors
+  ],
+
+  ./read_tree_sitter/[
+    hc_tsreader,
+    hc_tsconvert
+  ],
+
+  ./read_boost_wave/[
+    hc_wavereader
+  ],
+
+  ./processor/[
+    hc_grouping,
+    hc_postprocess,
+    wrap_store
+  ],
+
+  ./codegen/[
+    hc_codegen
+  ],
+
   ./hc_impls,
-  ./hc_visitors,
-  ./hc_tsreader,
-  ./hc_tsconvert,
-  ./hc_codegen,
-  ./hc_irgen,
-  ./hc_wavereader,
-  ./hc_grouping,
-  ./hc_postprocess,
-  ./interop_ir/wrap_store,
-  ./libclang_wrap,
-  ./cxtypes
+  ./hc_irgen
+
 
 import
   hnimast,
   hnimast/pprint
 
 import
-  hmisc/other/[oswrap, hshell, hpprint, hlogger],
-  hmisc/types/[colorstring, hgraph],
-  hmisc/algo/[hstring_algo, namegen],
+  hmisc/other/[
+    oswrap,
+    hshell,
+    hpprint,
+    hlogger
+  ],
+  hmisc/types/[
+    colorstring,
+    hgraph
+  ],
+  hmisc/algo/[
+    hstring_algo,
+    namegen
+  ],
   hmisc/core/all
 
 export
@@ -41,7 +67,8 @@ export
   hc_codegen,
   oswrap,
   libclang_wrap,
-  cxtypes
+  cxtypes,
+  hc_types
 
 proc parseTranslationUnit*(
     trIndex: CXIndex,

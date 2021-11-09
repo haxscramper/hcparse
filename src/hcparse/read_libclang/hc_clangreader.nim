@@ -1,26 +1,22 @@
 import
   std/[
-    strutils, sequtils, strformat, tables,
-    lenientops, parseutils, bitops, with, sets,
-    hashes, json, algorithm
+    strutils,
+    sets
   ]
 
 import
   ./hc_types,
   ./cxtypes,
-  ./cxcommon,
-  ./hc_visitors,
   ./libclang_wrap,
-  ./hc_typeconv
+  ../hc_typeconv
 
 import
-  ./interop_ir/[wrap_store, wrap_icpp]
+  ../processor/[wrap_store]
 
 import
-  hmisc/macros/iflet,
-  hmisc/algo/[htemplates, hseq_distance, namegen, halgorithm],
+  hmisc/algo/[halgorithm],
   hmisc/core/all,
-  hmisc/other/[hlogger, oswrap],
+  hmisc/other/[hlogger],
   hmisc/types/colorstring
 
 func incl*[I](s1: var OrderedSet[I], other: OrderedSet[I]) =

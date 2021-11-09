@@ -1,19 +1,50 @@
 import ./cxtypes, ./cxcommon
-import std/[
-  tables, sets, strutils, sequtils, hashes, strformat, macros,
-  segfaults, parseutils, decls
-]
+import
+  std/[
+    tables,
+    sets,
+    strutils,
+    sequtils,
+    hashes,
+    strformat,
+    macros,
+    segfaults,
+    parseutils
+  ]
+
+import hpprint
 
 import
-  hpprint,
-  hmisc/core/all,
-  hmisc/other/[oswrap, hlogger, hjson, hshell],
-  hmisc/types/[hmap, hgraph],
-  hnimast,
-  hnimast/pprint,
-  ./interop_ir/[wrap_store, wrap_icpp],
+  hmisc/core/[
+    all
+  ],
+  hmisc/other/[
+    oswrap,
+    hlogger,
+    hjson,
+    hshell
+  ],
+  hmisc/types/[
+    hmap,
+    hgraph
+  ],
   hmisc/algo/[
-    hseq_mapping, hstring_algo, hseq_distance, namegen, halgorithm]
+    hseq_mapping,
+    hstring_algo,
+    namegen,
+    halgorithm
+  ]
+
+
+
+import
+  hnimast,
+  hnimast/pprint
+
+
+import
+  ../processor/[wrap_store, wrap_icpp]
+
 
 type
   DepResolutionKind* = enum

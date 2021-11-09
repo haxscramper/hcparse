@@ -1,4 +1,4 @@
-import std/[parseutils, strutils, with]
+import std/[strutils, with]
 import hmisc/core/all
 
 type

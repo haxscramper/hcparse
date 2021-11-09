@@ -1,4 +1,6 @@
-import ./hc_types, ./cxtypes, ./cxvisitors, ./hc_typeconv, ./cxcommon
+import ./hc_types, ./cxtypes, ./cxvisitors
+
+import ../hc_typeconv
 
 import hnimast
 
@@ -473,7 +475,8 @@ proc visitClass*(
       cursor, initArgs, conf, cache))
 
   {.cast(uncheckedAssign).}:
-    result.kind = kind
+    {.warning[CaseTransition]:off.}:
+      result.kind = kind
 
   if not conf.isImportCpp:
     result.icpp = "struct " & result.icpp

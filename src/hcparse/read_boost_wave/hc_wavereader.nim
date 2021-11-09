@@ -1,9 +1,9 @@
-import ./boost_wave/boost_wave
+import ./boost_wave
 import hmisc/other/oswrap
-import hmisc/core/[all, code_errors]
+import hmisc/core/[all]
 import std/[strutils, options, tables]
 
-import ./hc_types
+import ../read_libclang/hc_types
 
 export boost_wave
 

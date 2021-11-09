@@ -1,4 +1,4 @@
-import hmisc/core/all, std/[strutils, sequtils, parseutils]
+import std/[strutils, sequtils, parseutils]
 import hmisc/other/oswrap
 import hmisc/algo/hstring_algo
 

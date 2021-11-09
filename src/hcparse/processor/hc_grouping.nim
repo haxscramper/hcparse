@@ -2,13 +2,12 @@ import
   std/[options, hashes, sets, algorithm, sequtils, strutils, tables]
 
 import
-  ./interop_ir/wrap_store,
+  ./wrap_store,
   ./hc_postprocess
 
 import
   hmisc/types/[hgraph, colorstring],
   hmisc/hasts/graphviz_ast,
-  hmisc/other/[oswrap, hpprint],
   hmisc/algo/halgorithm,
   hmisc/core/all
 

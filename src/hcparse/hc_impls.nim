@@ -1,13 +1,18 @@
 ## Default implementation for user-definable callbacks
 import
-  ./hc_types,
-  ./cxcommon,
-  ./hnimast,
-  ./cxtypes,
-  ./hc_depresolve,
+  ./read_libclang/[
+    hc_types,
+    cxcommon,
+    cxtypes,
+    hc_depresolve
+  ],
+
   ./hc_typeconv,
-  ./interop_ir/wrap_store,
-  ./hc_postprocess
+
+  ./processor/[
+    wrap_store,
+    hc_postprocess
+  ]
 
 import
   std/[sequtils, strutils, strformat, tables, sets]
@@ -16,8 +21,7 @@ import
   hmisc/core/all,
   hmisc/algo/[namegen, hstring_algo],
   hmisc/types/colorstring,
-  hmisc/other/[oswrap, hlogger],
-  hmisc/macros/argpass
+  hmisc/other/[oswrap, hlogger]
 
 import
   hnimast

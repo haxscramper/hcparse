@@ -5,12 +5,11 @@ import
 
 
 
-import std/[with, sequtils, strutils, strformat, sets]
+import std/[with, strutils, strformat, sets]
 
 import
-  ./interop_ir/[wrap_store, wrap_icpp],
-  ./hc_types,
-  ./cxtypes,
+  ./processor/[wrap_store, wrap_icpp],
+  ./read_libclang/[hc_types, cxtypes],
   ./hc_typeconv
 
 proc cxxName*(conf: WrapConf, decl: CDecl): CxxName =

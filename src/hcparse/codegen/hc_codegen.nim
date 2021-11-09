@@ -1,12 +1,11 @@
 import
-  ./interop_ir/[wrap_store, wrap_icpp],
+  ../processor/[wrap_store, wrap_icpp],
   hnimast/[hast_common, pprint],
   hnimast,
   hnimast/[proc_decl, nim_decl]
 
 import
   hmisc/core/all,
-  hmisc/macros/argpass,
   hmisc/other/oswrap,
   std/[macros, sequtils, sets, strformat, algorithm, strutils, math]
 

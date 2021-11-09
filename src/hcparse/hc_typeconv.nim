@@ -1,19 +1,23 @@
 ## Conversion of C types to nim
 
-import ./cxtypes, ./hc_types
+import ./read_libclang/[cxtypes, hc_types, cxcommon]
 import hnimast
 
 import
   hmisc/other/[hlogger],
   hmisc/types/colorstring,
-  hmisc/algo/[hstring_algo, hseq_mapping, clformat],
-  hmisc/core/all,
-  hmisc/macros/iflet
+  hmisc/algo/[hstring_algo, clformat],
+  hmisc/core/all
 
-import std/[algorithm, strformat, sequtils, strutils,
-            parseutils, tables, decls]
+import std/[
+  strformat,
+  sequtils,
+  strutils,
+  parseutils,
+  tables
+]
 
-import ./cxcommon, ./interop_ir/wrap_store
+import ./processor/wrap_store
 
 
 func add*(

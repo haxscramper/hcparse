@@ -1,5 +1,5 @@
 import libclang_wrap
-import std/[macros, sugar, strutils, sequtils, decls]
+import std/[macros, sugar, sequtils, decls]
 import hmisc/core/[all, code_errors]
 import hnimast
 

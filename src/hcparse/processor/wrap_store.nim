@@ -1,12 +1,12 @@
 import
   hmisc/other/[oswrap],
-  hmisc/core/[all, code_errors],
-  hmisc/algo/[namegen, hstring_algo]
+  hmisc/core/[all],
+  hmisc/algo/[hstring_algo]
 
 import
   std/[
-    options, macros, json, strutils, strformat,
-    parseutils, tables, hashes, sets, sequtils
+    options, macros, json, strutils, 
+    tables, hashes, sets, sequtils
   ]
 
 import

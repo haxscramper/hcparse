@@ -1,7 +1,7 @@
-import std/[tables, sequtils, strutils, options]
+import std/[tables, sequtils,  options]
 import hmisc/core/all
 import hmisc/other/[oswrap]
-import cxtypes, cxcommon, hc_types
+import ./cxtypes, ./hc_types
 
 proc getDepFiles*(deps: seq[CXCursor], conf: WrapConf): seq[AbsFile]
 

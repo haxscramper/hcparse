@@ -1,8 +1,8 @@
 import
-  ./interop_ir/wrap_store
+  ./wrap_store
 
 import
-  std/[tables, sets, strutils, sequtils]
+  std/[tables, strutils, sequtils]
 
 import
   hmisc/core/[all],

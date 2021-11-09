@@ -5,7 +5,7 @@ export boost_wave_wrap
 
 export boost_wave_wrap
 import hmisc/core/all
-import hmisc/other/[oswrap, hlogger]
+import hmisc/other/[oswrap]
 import hmisc/wrappers/wraphelp
 
 

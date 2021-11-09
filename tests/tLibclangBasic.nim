@@ -1,13 +1,18 @@
 import hmisc/preludes/unittest
 import hmisc/other/hpprint
-import hcparse/[
-  hc_parsefront,
-  hc_types,
-  hc_visitors,
-  hc_clangreader,
-  hc_postprocess,
-  hc_impls
-]
+import
+  hcparse/[
+    hc_parsefront,
+    hc_impls
+  ],
+
+  hcparse/read_libclang/[
+      hc_types,
+      hc_visitors,
+      hc_clangreader,
+  ],
+
+  hcparse/processor/[hc_postprocess]
 
 suite "Parse basic file":
   let dir = getTestTempDir()
