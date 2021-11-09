@@ -20,7 +20,9 @@ import
   ./hc_wavereader,
   ./hc_grouping,
   ./hc_postprocess,
-  ./interop_ir/wrap_store
+  ./interop_ir/wrap_store,
+  ./libclang_wrap,
+  ./cxtypes
 
 import
   hnimast,
@@ -33,7 +35,13 @@ import
   hmisc/core/all
 
 export
-  hc_wavereader, hc_grouping, hc_impls, hc_codegen, oswrap
+  hc_wavereader,
+  hc_grouping,
+  hc_impls,
+  hc_codegen,
+  oswrap,
+  libclang_wrap,
+  cxtypes
 
 proc parseTranslationUnit*(
     trIndex: CXIndex,

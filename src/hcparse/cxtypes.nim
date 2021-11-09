@@ -1,5 +1,6 @@
 import
   ./libclang_wrap, ./cxvisitors
+
 import
   std/[strformat, strutils, options, sequtils, sugar, deques, hashes]
 
@@ -8,7 +9,7 @@ import
 
 import
   hmisc/other/[oswrap, hlogger],
-  hmisc/algo/[clformat, clformat],
+  hmisc/algo/[clformat, clformat, hstring_algo, htemplates],
   hmisc/types/[colorstring],
   hmisc/core/all
 
@@ -669,20 +670,28 @@ proc hshow*(cxtype: CXType, opts: HDisplayOpts = defaultHDisplay): ColoredText =
         add "]"
 
       of tkPodKinds:
-        add "'"
-        add $cxtype
-        add "'"
+        add $cxtype + fgRed
 
       of tkFunctionProto:
-        add $cxtype
+        # add $cxtype + fgRed
         # result = pptObj($cxType.cxKind, { "func": pptConst($cxtype) })
-        # result.add("result", objTreeRepr(cxType.getResultType()))
+        # result.add("result", objTreeRepr())
 
-        # for idx, arg in argTypes(cxType):
-        #   result.add($idx, objTreeRepr(arg))
+
+        add "{ ("
+        for idx, arg in argTypes(cxType):
+          if idx > 0: add ", "
+          add hshow(arg)
+
+        add ") -> "
+        aux(cxType.getResultType())
+        add " }"
 
       else:
+        add "??["
         add $cxtype
+        add hshow(cxtype.cxKind())
+        add "]"
         # result = pptObj(
         #   $cxtype.cxkind, pptConst("'" & $cxtype & "'", fgRed + bgDefault))
 
@@ -704,26 +713,46 @@ proc dedentComment*(str: string): string =
 proc treeRepr*(
     cursor: CXCursor,
     tu: Option[CXTranslationUnit] = none(CXTranslationUnit),
-    showcomment: bool = true
+    opts: HDisplayOpts = defaultHDisplay,
+    tokenKinds: bool = false
   ): ColoredText =
+  # TODO show comments in the code
+  # TODO show source code ranges, possibly in abbreviated form (shorten filenames)
+  #      - source code ranges should play nicely with `tokenKinds = true` and
+  #        other token configuration options.
   coloredResult()
 
-  proc aux(cursor: CxCursor, level: int) =
+  proc aux(
+      cursor: CxCursor, level: int, idx: seq[int],
+      inTranslationUnit: bool = false
+    ) =
     ## Generate ObjTree representation of cursor
     const colorize = not defined(plainStdout)
 
-    addIndent(level)
+    if inTranslationUnit:
+      addIndent(level, 3)
+
+    else:
+      add joinPrefix(level, idx, opts)
+    #   opts.pathIndexed() and not inTranslationUnit,
+    #   opts.positionIndexed() and not inTranslationUnit
+    # )
+
+    # addIndent(level)
+
+
     add hshow(cursor.kind)
-    add "\n"
-    addIndent(level + 1)
-    add "type: "
-    add $cursor.cxType
-    add " "
-    add hshow(cursor.cxType().cxKind())
+    if not(cursor.cxType() of tkInvalid):
+      add "\n"
+      addIndent(level + 1, 3)
+      add "type: "
+      add hshow(cursor.cxType().cxKind())
+      add " "
+      add hshow(cursor.cxType)
 
     if cursor.cxKind() in {ckTemplateRef}:
       add "\n"
-      addIndent(level + 1)
+      addIndent(level + 1, 3)
       add "ref of: "
       add cursor.getSpecializedCursorTemplate().cxKind().hshow()
 
@@ -747,36 +776,72 @@ proc treeRepr*(
     #     else:
     #       ""
 
-    # if cursor.len == 0:
-    #   let val = pptconst(
-    #     cursor.tokens(tu).mapIt(
-    #       getTokenSpelling(tu, it)
-    #     ).join(" "), initprintstyling(fg = fggreen))
+    if cursor.len() == 0:
+      discard
 
-    #   var flds: seq[ObjTree]
-    #   if showtype: flds.add ctype
-    #   if showComment: flds.add comment
-    #   flds.add val
+      # var flds: seq[ObjTree]
+      # if showtype: flds.add ctype
+      # if showComment: flds.add comment
+      # flds.add val
 
-    #   if cursor.cxKind in {ckMacroExpansion}:
-    #     let cxRange =
-    #       $getCursorLocation(cursor).getExpansionLocation() & " " &
-    #         $getCursorExtent(cursor)
+      if cursor.cxKind in {ckMacroExpansion}:
+        let cxRange =
+          $getCursorLocation(cursor).getExpansionLocation() & " " &
+            $getCursorExtent(cursor)
 
-    #     flds.add pptconst(
-    #       $cxRange, initprintstyling(fg = fgBlue))
+        add $cxrange + fgBlue
 
-    #   pptObj(
-    #     "[_] " & $cursor.cxkind & locRange,
-    #     initPrintStyling(fg = fgYellow), flds)
-    # else:
-    #   var children: seq[ObjTree]
-    #   for node in cursor.children:
-    #     if not (
-    #       cursor.cxKind() == ckTranslationUnit and
-    #       node.cxKind() in {ckMacroDefinition, ckMacroExpansion}
-    #     ):
-    #       children.add objTreeRepr(node, tu, showType)
+      if tu.isSome():
+        if tokenKinds:
+          let align = cursor.tokens(tu.get()).maxIt(
+            len($getTokenSpelling(tu.get(), it)))
+
+
+          for token in cursor.tokens(tu.get()):
+            add "\n"
+            addIndent(level + 1, 3)
+            add ($getTokenSpelling(tu.get(), token) |<< align) + fgYellow
+            add " "
+            add hshow(token.getTokenKind())
+
+        else:
+          add "\n"
+          addIndent(level + 1, 3)
+
+          var offset = level * 3
+          for token in cursor.tokens(tu.get()):
+            let tok = $getTokenSpelling(tu.get(), token)
+            offset += len(tok)
+            if opts.maxLen < offset:
+              add "\n"
+              addIndent(level + 1, 3)
+
+            add tok + fgYellow
+
+        # add .mapIt().join(" ") + fgGreen
+
+      # if       # let val = pptconst(
+      # #   ).join(" "), initprintstyling(fg = fggreen))
+
+
+        # flds.add pptconst(
+        #   $cxRange, initprintstyling(fg = fgBlue))
+
+      # pptObj(
+      #   "[_] " & $cursor.cxkind & locRange,
+      #   initPrintStyling(fg = fgYellow), flds)
+
+    else:
+      for subIdx, node in cursor.children:
+        if not (
+          cursor.cxKind() == ckTranslationUnit and
+          node.cxKind() in {ckMacroDefinition, ckMacroExpansion}
+        ):
+          add "\n"
+          aux(
+            node, level + 1, idx & subIdx,
+            inTranslationUnit = cursor of {ckTranslationUnit}
+          )
 
     #   var suffix: string
 
@@ -790,7 +855,7 @@ proc treeRepr*(
     #       showcomment.tern(@[comment], @[]),
     #       children])
 
-  aux(cursor, 0)
+  aux(cursor, 0, @[])
 
   endResult()
 
@@ -798,10 +863,10 @@ proc treeRepr*(
 proc treeRepr*(
     cursor: CXCursor,
     tu: CXTranslationUnit,
-    showcomment: bool = true
+    opts: HDisplayOpts = defaultHDisplay
   ): ColoredText =
 
-  treeRepr(cursor, some tu, showcomment)
+  treeRepr(cursor, some tu, opts)
 
 proc getClassBaseCursors*(inCursor: CXCursor): seq[CXCursor] =
   var baseQue = Deque[CXCursor]()
