@@ -339,13 +339,14 @@ proc cxKind*(cursor: CXCursor): CXCursorKind =
 proc expectKind*(cursor: CXCursor, kind: CXCursorKind) =
   ## Raise assertion if cursor kind does not match
   if cursor.cxKind != kind:
-    raiseAssert(&"Expected cursor kind {kind}, but got {cursor.cxKind()}")
+    raise newUnexpectedKindError(cursor, kind)
 
 
 proc expectKind*(cursor: CXCursor, kind: set[CXCursorKind]) =
   ## Raise assertion if cursor kind is not in set
   if cursor.cxKind notin kind:
-    raiseAssert(&"Cursor kind in set: {kind}, but got {cursor.cxKind()}")
+    {.warning[HoleEnumConv]:off.}:
+      raise newUnexpectedKindError(cursor, kind)
 
 
 proc cxType*(cursor: CXCursor): CXType =
@@ -403,8 +404,8 @@ proc `[]`*(cursor: CXCursor, idx: int): CXCursor =
         return cvrContinue
 
   if cnt < idx:
-    raise newException(IndexError,
-                       "Cursor {cursor} no child at index {idx}")
+    raise newGetterError(&"Cursor {cursor} no child at index {idx}")
+
   else:
     return res
 
@@ -636,93 +637,6 @@ proc objTreeRepr*(comment: CXComment): ObjTree =
         pptObj($comment.cxKind,
                toSeq(comment.children).mapIt(it.objTreeRepr()))
 
-#==========================  Conversion to rst  ==========================#
-
-proc newRstNode(
-  kind: RstNodeKind, subnodes: varargs[PRstNode]): PRstNode =
-  result = rstast.newRstNode(kind)
-  for node in subnodes:
-    result.add node
-
-proc `$`(n: PRstNode): string = renderRstToRst(n, result)
-
-proc toRstNode(comment: CXComment): PRstNode =
-  case comment.cxKind:
-    of cokText:
-      return rnLeaf.newRstNode(
-        $textComment_getText(comment))
-
-    of cokFullComment:
-      result = rnInner.newRstNode()
-      for subnode in comment.children():
-        result.add rnParagraph.newRstNode(subnode.toRstNode())
-
-    of cokParagraph:
-      result = rnInner.newRstNode()
-      for subnode in comment.children():
-        result.add rnParagraph.newRstNode(subnode.toRstNode())
-
-    of cokNull:
-      return rnLeaf.newRstNode("")
-
-    of cokInlineCommand:
-      return rnInner.newRstNode("")
-
-    of cokParamCommand:
-      let pn = $paramCommandComment_getParamName(comment)
-      # echo "param: ", pn
-      result = rnInner.newRstNode(
-        @[ rnStrongEmphasis.newRstNode(rnLeaf.newRstNode(pn)) ] &
-          toSeq(comment.children).mapIt(it.toRstNode())
-      )
-
-      # echo result
-
-    of cokBlockCommand:
-      return rnParagraph.newRstNode(
-        @[
-          rnEmphasis.newRstNode(
-            rnInner.newRstNode(
-              $blockCommandComment_getCommandName(comment)
-            )
-          )
-        ] & toSeq(comment.children).mapIt(it.toRstNode()))
-
-    of cokVerbatimBlockCommand:
-      return rnCodeBlock.newRstNode(
-        rnDirArg.newRstNode(""),
-        rnFieldList.newRstNode(
-          rnField.newRstNode(
-            rnFieldName.newRstNode(rnLeaf.newRstNode("default-language")),
-            rnFieldBody.newRstNode(rnLeaf.newRstNode("c++"))
-          )
-        ),
-        rnLiteralBlock.newRstNode(
-          rnLeaf.newRstNode(
-            $verbatimBlockLineComment_getText(comment))))
-    of cokVerbatimLine:
-      return rnInterpretedText.newRstNode(
-        $verbatimLineComment_getText(comment))
-    else:
-      echo "died".toRed()
-      echo comment.objTreeRepr().pstring()
-      raiseAssert("#[ IMPLEMENT ]#")
-
-func dropEmptyLines*(str: string): string =
-  ## Remove all empty lines from string
-  str.split("\n").filterIt(not it.allIt(it in Whitespace)).join("\n")
-
-
-func dropEmptyLines*(str: var string): void =
-  ## Remove all empty lines from string
-  str = str.split("\n").filterIt(
-    not it.allIt(it in Whitespace)).join("\n")
-
-proc toNimDoc*(comment: CXComment): string =
-  ## Convert Comment to rst string
-  # echo comment.objTreeRepr().pstring()
-  comment.toRstNode().renderRstToRst(result)
-  result.dropEmptyLines()
 
 #*************************************************************************#
 #***************************  Pretty-printing  ***************************#

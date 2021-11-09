@@ -27,7 +27,7 @@ import
 
 import
   hmisc/other/[oswrap, hshell, hpprint, hlogger],
-  hmisc/types/colorstring,
+  hmisc/types/[colorstring, hgraph],
   hmisc/algo/[hstring_algo, namegen],
   hmisc/core/all
 
@@ -55,8 +55,9 @@ proc parseTranslationUnit*(
   let cmdline = getBuiltinHeaders().mapIt(&"-I{it}") & cmdline
 
   var flags: int
-  for opt in trOptions:
-    flags = bitor(flags, int(opt))
+  {.warning[HoleEnumConv]:off}:
+    for opt in items(trOptions):
+      flags = bitor(flags, int(opt))
 
   block:
     let argc = cmdline.len
@@ -311,7 +312,9 @@ proc wrapViaTsWave*(
   result = s.cxxFile(lib, file)
 
 proc wrapViaClang*(conf: WrapConf, file: AbsFile): CxxFile =
-  var cache = WrapCache(importGraph: default(typeof WrapCache.importGraph))
+  var cache = WrapCache(
+    importGraph: hgraph.default(typeof WrapCache.importGraph))
+
   let parsed = parseFile(file, conf, cache)
   conf.unit = parsed.unit
   toCxxFile(parsed, conf, cache)

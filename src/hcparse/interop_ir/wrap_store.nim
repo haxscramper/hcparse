@@ -1,9 +1,13 @@
 import
-  hmisc/other/[oswrap, jsony_converters],
+  hmisc/other/[oswrap],
   hmisc/core/[all, code_errors],
-  hmisc/algo/[namegen, hstring_algo],
-  std/[options, macros, json, strutils, strformat, parseutils,
-       tables, hashes, sets, sequtils]
+  hmisc/algo/[namegen, hstring_algo]
+
+import
+  std/[
+    options, macros, json, strutils, strformat,
+    parseutils, tables, hashes, sets, sequtils
+  ]
 
 import
   ./wrap_icpp
@@ -1714,35 +1718,3 @@ proc fragmentType*(entry: var CxxEntry):
       discard
 
 import pkg/jsony
-
-
-
-proc dumpFieldLines*[T](s: var string, obj: T)
-proc dumpSeqLines*[T](s: var string, entries: seq[T])
-
-proc dumpHook*(s: var string, entries: seq[CxxEntry]) = dumpSeqLines(s, entries)
-proc dumpHook*(s: var string, procs: seq[CxxProc]) = dumpSeqLines(s, procs)
-proc dumpHook*(s: var string, obj: CxxObject) = dumpFieldLines(s, obj)
-
-
-proc dumpFieldLines*[T](s: var string, obj: T) =
-  s.add "{"
-  for name, value in fieldPairs((when T is object: obj else: obj[])):
-    s.add "\"", name, "\": "
-    dumpHook(s, value)
-    s.add ",\n"
-
-  s.add "}"
-
-proc dumpSeqLines*[T](s: var string, entries: seq[T]) =
-  s.add "["
-  for idx, item in pairs(entries):
-    if idx > 0:
-      s.add ",\n"
-
-    dumpHook(s, item)
-
-  s.add "]"
-
-proc toJson*(file: CxxFile): string =
-  dumpFieldLines(result, file)

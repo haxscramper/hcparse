@@ -138,8 +138,6 @@ suite "Serialization":
   test "Functions":
     let entries = convEntries("int getIdx();")
     let test = freeze entries
-    echo test
-
     let unpacked = thaw[seq[CxxEntry]](test)
 
     echo unpacked.toString(cxxCodegenConf)
