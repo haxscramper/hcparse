@@ -1485,10 +1485,6 @@ func libImport*(conf: WrapConf, file: RelFile): CxxLibImport =
     conf.wrapName,
     file.withoutExt().getStr().split("/"))
 
-func libImport*(conf: CxxFixConf, dir: AbsDir, file: AbsFile): CxxLibImport =
-  let relative = file.string.dropPrefix(dir.string)
-  result = cxxLibImport(
-    conf.libName, relative.split("/").filterIt(it.len > 0))
 
 
 

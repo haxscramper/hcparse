@@ -6,7 +6,8 @@ import
   ./cxtypes,
   ./hc_depresolve,
   ./hc_typeconv,
-  ./interop_ir/wrap_store
+  ./interop_ir/wrap_store,
+  ./hc_postprocess
 
 import
   std/[sequtils, strutils, strformat, tables, sets]
@@ -195,6 +196,9 @@ proc fixContextedName*(
     style: IdentStyle = idsCamel
   ): string =
 
+  let base = if len(base) > 0: base else: name.cxx.scopes.join("")
+  echov name
+
   const map = toMapArray({
     cncType:      toMapArray({
       idsCamel: ("",    "T"), idsSnake: ("",    "_t")}),
@@ -240,9 +244,6 @@ proc fixContextedName*(
 
   cache.newRename(name.nim, result)
 
-  let l = "LIBSSH2_CHANNEL" in $name
-  if l:
-    echov name, " -> ", result
 
 
 
@@ -517,7 +518,17 @@ let baseCWrapConf* = baseCPPWrapConf.withDeepIt do:
   it.isImportcpp = false
   it.wrapName = "base-c-wrap-conf"
 
-let baseFixConf* = CxxFixConf()
+let baseFixConf* = CxxFixConf(
+  fixNameImpl:
+    proc(
+        name: CxxNamePair,
+        cache: var StringNameCache,
+        context: CxxNameFixContext,
+        conf: CxxFixConf
+      ): string {.closure.} =
+
+      result = cache.fixContextedName(name),
+)
 
 import
   hmisc/types/hgraph,

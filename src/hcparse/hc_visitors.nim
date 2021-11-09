@@ -472,10 +472,12 @@ proc visitClass*(
     isAggregateInit: isAggregateInitable(
       cursor, initArgs, conf, cache))
 
+  {.cast(uncheckedAssign).}:
+    result.kind = kind
+
   if not conf.isImportCpp:
     result.icpp = "struct " & result.icpp
 
-  result.kind = kind
   if result.isAggregateInit:
     result.initArgs = initArgs
 

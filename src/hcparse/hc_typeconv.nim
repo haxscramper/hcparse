@@ -562,6 +562,9 @@ proc fromCxxTypeName*(name: string): string =
 func mapPrimitiveNameImpl*(name: string):
     tuple[nim: string, pod: CxxPodTypeKind] =
 
+  # REVIEW why is it necessary to return nim version of the name *and* pod
+  # type kind at the same time, considering `hc_codegen.toNNode` for
+  # `CxxTypeUse` does exactly the same?
   case name:
     of "short": ("cshort", cptI16)
     of "unsigned short": ("cushort", cptU16)

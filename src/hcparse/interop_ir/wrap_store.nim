@@ -483,68 +483,12 @@ type
     isGenerated*: bool
     savePath*: CxxLibImport
 
-  CxxAdjacentNameContext* = enum
-    cancFirstArgType
-    cancFirstArgName
-    cancParentEnumName
-    cancParentObjectName
-    cancLibName
-
-  CxxNameFixContext* = array[CxxAdjacentNameContext, Option[CxxNamePair]]
-  CxxFixConf* = object
-    typeStore*: CxxTypeStore
-    fixNameImpl*: proc(
-      name: CxxNamePair,
-      cache: var StringNameCache,
-      context: CxxNameFixContext,
-      conf: CxxFixConf
-    ): string
-
-    libNameStyle*: IdentStyle
-    getBindImpl*: proc(entry: CxxEntry, conf: CxxFixConf): CxxBind
-    libName*: string
-    isIcpp*: bool
-
 const
   cekTypeStored* = {
     cekProc, cekTypeGroup, cekEnum, cekForward, cekAlias, cekObject
   }
 
 export IdentStyle
-
-
-proc getBind*(conf: CxxFixConf, entry: CxxEntry): CxxBind =
-  assertRef conf.getBindImpl
-  return conf.getBindImpl(entry, conf)
-
-template onGetBind*(fixConf: var CxxFixConf, body: untyped): untyped =
-  ## Add 'get bind' callback to fix context configuration.
-  ## - @inject{entry: CxxEntry} :: Entry to get bind for
-  ## - @inject{conf: CxxFixConf} :: Current fix context configuration
-  ## - @ret{CxBind}
-  fixConf.getBindImpl = proc(
-    entry {.inject.}: CxxEntry,
-    conf {.inject.}: CxxFixConf
-  ): CxxBind =
-    body
-
-template onFixName*(fixConf: var CxxFixConf, body: untyped): untyped =
-  ## Add 'fix name' callback to fix context.
-  ## - @inject{name} :: Input name to fix
-  ## - @inject{cache} :: Global string name cache
-  ## - @inject{context} :: Current fix context
-  ## - @inject{conf} :: Current fix configuration
-  ## - @ret{string} :: Fixed name string. Body is wrapped in the callback
-  ##   procedure, `return`/`result=` can be used
-
-  fixConf.fixNameImpl = proc(
-      name {.inject.}: CxxNamePair,
-      cache {.inject.}: var StringNameCache,
-      context {.inject.}: CxxNameFixContext,
-      conf {.inject.}: CxxFixConf
-    ): string =
-
-    body
 
 
 func `$`*(cxx: CxxLibImport): string =
@@ -687,21 +631,6 @@ func `$`*(e: CxxEntry): string =
 
     else:
       raise newImplementKindError(e)
-
-proc fixName*(
-    conf: CxxFixConf,
-    name: CxxNamePair,
-    cache: var StringNameCache,
-    context: CxxNameFixContext
-  ): string =
-  result = conf.fixNameImpl(name, cache, context, conf)
-
-  if not cache.knownRename(name.nim):
-    raise newLogicError(
-      "'fix name' callback implementation did not register new rename: '",
-      name, "' is not in list of known renames. In order to register new ",
-      "rename call '<cache>.newRename(<name.nim>, <result>)' at the end of callback")
-
 
 
 func `[]`*(t: CxxTypeUse, idx: int): CxxTypeUse =
@@ -932,7 +861,10 @@ func `&`*(p1, p2: CxxNamePair): CxxNamePair =
 
 func isConst*(pr: CxxProc): bool = cpfConst in pr.flags
 func isStatic*(pr: CxxProc): bool = cpfStatic in pr.flags
-func isConstructor*(pr: CxxProc): bool = pr.constructorOf.isSome()
+func isConstructor*(pr: CxxProc): bool =
+  assertRef(pr)
+  result = pr.constructorOf.isSome()
+
 func isDestructor*(pr: CxxProc): bool = pr.destructorOf.isSome()
 func isMethod*(pr: CxxProc): bool = cpfMethod in pr.flags
 
@@ -1353,26 +1285,6 @@ func setCxxBind*(target: var CxxBind, source: CxxBind) =
 
 
 
-
-proc setHeaderRec*(entry: var CxxEntry, conf: CxxFixConf) =
-  case entry.kind:
-    of cekPass, cekImport, cekEmpty, cekComment:
-      discard
-
-    of cekTypeGroup, cekMacroGroup, cekMacro:
-      raise newImplementKindError(entry)
-
-    of cekForward: entry.cxxForward.cbind.setCxxBind(conf.getBind(entry))
-    of cekEnum: entry.cxxEnum.cbind.setCxxBind(conf.getBind(entry))
-    of cekProc: entry.cxxProc.cbind.setCxxBind(conf.getBind(entry))
-    of cekAlias: entry.cxxAlias.cbind.setCxxBind(conf.getBind(entry))
-    of cekObject:
-      entry.cxxObject.cbind.setCxxBind(conf.getBind(entry))
-      for meth in mitems(entry.cxxObject.methods):
-        meth.cbind.setCxxBind(conf.getBind(box(meth)))
-
-      for nest in mitems(entry.cxxObject.nested):
-        setHeaderRec(nest, conf)
 
 proc setStoreRec*(entry: var CxxEntry, store: CxxTypeStore) =
   case entry.kind:

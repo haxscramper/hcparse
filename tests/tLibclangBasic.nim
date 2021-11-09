@@ -4,7 +4,9 @@ import hcparse/[
   hc_parsefront,
   hc_types,
   hc_visitors,
-  hc_clangreader
+  hc_clangreader,
+  hc_postprocess,
+  hc_impls
 ]
 
 suite "Parse basic file":
@@ -25,8 +27,16 @@ int main() {}
 
     pprint api
 
-    let wrapped = api.wrapApiUnit(baseCppWrapConf, cache)
+    var fix = baseFixConf.withIt do:
+      it.typeStore = newTypeStore()
 
+    fix.onGetBind():
+      return cxxHeader("?")
+
+    let wrapped = api.wrapApiUnit(baseCppWrapConf, cache).
+      postFixEntries(fix, cxxLibImport("h", @["h"]))
+
+    echo "Generated wrapped"
     echo wrapped.toString(cxxCodegenConf)
 
     # pprint wrapped[0]

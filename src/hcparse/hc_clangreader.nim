@@ -39,8 +39,8 @@ proc cxxPair*(ident: CSCopedIdent): CxxNamePair =
     case part.isGenerated:
       of true: scopes.add $part.name
       of false: scopes.add $part.cursor
-  # echov ident
-  # raise newImplementError()
+
+  return cxxPair("", cxxName(scopes))
 
 
 
@@ -48,10 +48,6 @@ proc toCxxType*(cxtype: CXType, conf: WrapConf, cache: var WrapCache): CxxTypeUs
   if conf.isComplexType(cxtype, cache):
     return CxxTypeUse(kind: ctkIdent, flags: {ctfComplex})
     # return conf.newComplexType(cxType, cache)
-
-  var
-    mutable: bool = false
-    special: CTypeSpecialKind = ctskNone
 
   case cxtype.cxKind():
     of tkBool:
@@ -454,7 +450,7 @@ proc wrapProcedure*(
   ## - @arg{asNewConstructor} :: Of `pr` is a declaration for constructor
   ##   generate `new` or `init` procedure.
 
-  var it = cxxProc(pr.ident.cxxPair())
+  result = cxxProc(pr.ident.cxxPair())
   # var it = initGenProc(pr, currLInfo())
 
   # template endProc(it: GenProc): untyped =
@@ -545,26 +541,30 @@ proc wrapProcedure*(
     result.arguments.add toCxxArg(arg, conf, cache)
 
   if pr.cursor.isVariadic() == 1:
-    it.flags.incl cpfVariadic
-    # it.pragma.add newPIdent("varargs")
+    result.flags.incl cpfVariadic
+    # result.pragma.add newPIdent("varargs")
 
   # if pr.isOperator and pr.classifyOperator(conf) == cxoAsgnOp:
   #   # HACK Force override return type for assignment operators
-  #   it.returnType = newNimType("void")
-  #   endProc(it)
+  #   result.returnType = newNimType("void")
+  #   endProc(result)
 
   case pr.cursor.kind:
     of ckConstructor, ckConversionFunction:
-      it.constructorOf = some cxxPair(parentDecl.get().ident)
+      result.constructorOf = some cxxPair(parentDecl.get().ident)
 
       if pr.cursor of ckConversionFunction:
-        it.flags.incl cpfConversionConstructor
+        result.flags.incl cpfConversionConstructor
 
     of ckDestructor:
-      it.destructorOf = some cxxPair(parentDecl.get().ident)
+      result.destructorOf = some cxxPair(parentDecl.get().ident)
 
     else:
-      it.returnType = pr.cursor.retType().toCxxType(conf, cache)
+      echov pr.cursor.retType().hshow()
+      let returnType = pr.cursor.retType().toCxxType(conf, cache)
+      echov returnType
+      result.returnType = returnType
+      echov result.returnType
       # let re = pr.cursor.retType()
       # var returnType = toNimType(re, conf, cache)
 
@@ -577,14 +577,16 @@ proc wrapProcedure*(
            inheritsGenParamsOf(parentDecl.get().cursor):
 
           returnType.genParams = parent.get().genParams
+
+  echov result
         # WARNING(refactor)
 
-      # it.returnType = returnType
+      # result.returnType = returnType
 
       # if pr.cursor.cxkind == ckDestructor:
       #   # Explicitly calling destructor on object
-      #   it.arguments.add initCArg("self", newNimType("ptr", @[parent.get()]))
-      #   it.icpp = initIcpp &"~{it.name}()"
+      #   result.arguments.add initCArg("self", newNimType("ptr", @[parent.get()]))
+      #   result.icpp = initIcpp &"~{result.name}()"
       #   it.name = "destroy" & parent.get().nimName
       #   it.declareForward = true
 
@@ -637,6 +639,7 @@ proc wrapProcedure*(
   #     conf.warn "Discarding wrappers for conversion function"
   #     conf.dump pr.cursor
   #     conf.dump pr.cursor.getSpellingLocation()
+
 
 
 proc wrapMethods*(

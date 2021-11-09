@@ -2,11 +2,110 @@ import
   ./interop_ir/wrap_store
 
 import
-  std/[tables, sets]
+  std/[tables, sets, strutils, sequtils]
 
 import
   hmisc/core/[all],
-  hmisc/algo/[namegen]
+  hmisc/other/[oswrap],
+  hmisc/algo/[namegen, hstring_algo]
+
+type
+  CxxAdjacentNameContext* = enum
+    cancFirstArgType
+    cancFirstArgName
+    cancParentEnumName
+    cancParentObjectName
+    cancLibName
+
+  CxxNameFixContext* = array[CxxAdjacentNameContext, Option[CxxNamePair]]
+  CxxFixConf* = object
+    typeStore*: CxxTypeStore
+    fixNameImpl*: proc(
+      name: CxxNamePair,
+      cache: var StringNameCache,
+      context: CxxNameFixContext,
+      conf: CxxFixConf
+    ): string
+
+    libNameStyle*: IdentStyle
+    getBindImpl*: proc(entry: CxxEntry, conf: CxxFixConf): CxxBind
+    libName*: string
+    isIcpp*: bool
+
+proc getBind*(conf: CxxFixConf, entry: CxxEntry): CxxBind =
+  assertRef conf.getBindImpl
+  return conf.getBindImpl(entry, conf)
+
+template onGetBind*(fixConf: var CxxFixConf, body: untyped): untyped =
+  ## Add 'get bind' callback to fix context configuration.
+  ## - @inject{entry: CxxEntry} :: Entry to get bind for
+  ## - @inject{conf: CxxFixConf} :: Current fix context configuration
+  ## - @ret{CxBind}
+  fixConf.getBindImpl = proc(
+    entry {.inject.}: CxxEntry,
+    conf {.inject.}: CxxFixConf
+  ): CxxBind =
+    body
+
+template onFixName*(fixConf: var CxxFixConf, body: untyped): untyped =
+  ## Add 'fix name' callback to fix context.
+  ## - @inject{name} :: Input name to fix
+  ## - @inject{cache} :: Global string name cache
+  ## - @inject{context} :: Current fix context
+  ## - @inject{conf} :: Current fix configuration
+  ## - @ret{string} :: Fixed name string. Body is wrapped in the callback
+  ##   procedure, `return`/`result=` can be used
+
+  fixConf.fixNameImpl = proc(
+      name {.inject.}: CxxNamePair,
+      cache {.inject.}: var StringNameCache,
+      context {.inject.}: CxxNameFixContext,
+      conf {.inject.}: CxxFixConf
+    ): string =
+
+    body
+
+
+proc fixName*(
+    conf: CxxFixConf,
+    name: CxxNamePair,
+    cache: var StringNameCache,
+    context: CxxNameFixContext
+  ): string =
+  result = conf.fixNameImpl(name, cache, context, conf)
+
+  if not cache.knownRename(name.nim):
+    raise newLogicError(
+      "'fix name' callback implementation did not register new rename: '",
+      name, "' is not in list of known renames. In order to register new ",
+      "rename call '<cache>.newRename(<name.nim>, <result>)' at the end of callback")
+
+
+proc setHeaderRec*(entry: var CxxEntry, conf: CxxFixConf) =
+  case entry.kind:
+    of cekPass, cekImport, cekEmpty, cekComment:
+      discard
+
+    of cekTypeGroup, cekMacroGroup, cekMacro:
+      raise newImplementKindError(entry)
+
+    of cekForward: entry.cxxForward.cbind.setCxxBind(conf.getBind(entry))
+    of cekEnum: entry.cxxEnum.cbind.setCxxBind(conf.getBind(entry))
+    of cekProc: entry.cxxProc.cbind.setCxxBind(conf.getBind(entry))
+    of cekAlias: entry.cxxAlias.cbind.setCxxBind(conf.getBind(entry))
+    of cekObject:
+      entry.cxxObject.cbind.setCxxBind(conf.getBind(entry))
+      for meth in mitems(entry.cxxObject.methods):
+        meth.cbind.setCxxBind(conf.getBind(box(meth)))
+
+      for nest in mitems(entry.cxxObject.nested):
+        setHeaderRec(nest, conf)
+
+func libImport*(conf: CxxFixConf, dir: AbsDir, file: AbsFile): CxxLibImport =
+  let relative = file.string.dropPrefix(dir.string)
+  result = cxxLibImport(
+    conf.libName, relative.split("/").filterIt(it.len > 0))
+
 
 func registerDeclarations*(
     entry: var CxxEntry,
@@ -114,13 +213,7 @@ proc fixIdentsRec*(
   var context: CxxNameFixContext
   context[cancLibName] = some cxxPair(conf.libName, cxxName(conf.libName))
   template aux(name: var CxxNamePair): untyped =
-    # let l = "LIBSSH2_LISTENER" in $name
-    # if l:
-    #   pprintStackTrace()
-    #   echov "----"
-    #   echov name
     name.nim = conf.fixName(name, cache, context)
-    # if l: echov name
 
   proc aux(decl: var CxxTypeDecl, cache: var StringNameCache) =
     aux(decl.name)
@@ -259,6 +352,7 @@ proc fragmentType*(entry: var CxxEntry):
 
 
 proc add*(store: var CxxTypeStore, other: CxxTypeStore) =
+  assertRef(store)
   for name, types in other.forwardDecls:
     if name notin store.typeDecls:
       for dtype in types:
@@ -291,3 +385,91 @@ proc reuseStore*(
 
   store.add(other)
   entry.setStoreRec(store)
+
+
+
+proc postFixEntries*(
+    conf: CxxFixConf,
+    entries: var seq[CxxEntry],
+    lib: CxxLibImport,
+    file: Option[AbsFile] = none AbsFile
+  ) =
+  assertRefFields(conf)
+
+  var cache: StringNameCache
+
+  var store = conf.typeStore
+
+  # Fix all identifier names in entry lists
+  for item in mitems(entries):
+    fixIdentsRec(item, cache, conf)
+
+  # Set spelling location file for all entries in the list
+  if file.isSome():
+    for item in mitems(entries):
+      setFileRec(item, file.get())
+
+  for item in mitems(entries):
+    item.setStoreRec(store)
+    registerDeclarations(item, store, lib)
+
+  # Register type declarations in the store, add missing flags to type uses
+  for item in mitems(entries):
+    postprocessTypeUses(item, store, lib)
+
+
+  # Set header for list of entries
+  for item in mitems(entries):
+    setHeaderRec(item, conf)
+
+
+proc postFixEntries*(
+    entries: sink seq[CxxEntry],
+    conf: CxxFixConf,
+    lib: CxxLibImport,
+    file: Option[AbsFile] = none AbsFile
+  ): seq[CxxEntry] =
+  result = entries
+  conf.postFixEntries(result, lib, file)
+
+
+iterator mentries*(files: var seq[CxxFile]): var CxxEntry =
+  for file in mitems(files):
+    for entry in mitems(file.entries):
+      yield entry
+
+proc postFixEntries*(conf: CxxFixConf, files: var seq[CxxFile]) =
+  assertRefFields(conf)
+  var store = conf.typeStore
+
+  # Fix all identifier names in entry lists
+  for file in mitems(files):
+    var cache: StringNameCache
+    for item in mitems(file.entries):
+      fixIdentsRec(item, cache, conf)
+
+  # Set spelling location file for all entries in the list
+  for file in mitems(files):
+    for item in mitems(file.entries):
+      setFileRec(item, file.original)
+
+  for file in mitems(files):
+    for item in mitems(file.entries):
+      item.setStoreRec(store)
+      registerDeclarations(item, store, file.savePath)
+
+  # Register type declarations in the store, add missing flags to type uses
+  for file in mitems(files):
+    for item in mitems(file.entries):
+      postprocessTypeUses(item, store, file.savEpath)
+
+  # Set header for list of entries
+  for item in mentries(files):
+    setHeaderRec(item, conf)
+
+
+proc postFixEntries*(
+  files: sink seq[CxxFile], conf: CxxFixConf): seq[CxxFile] =
+
+  result = files
+  conf.postFixEntries(result)
