@@ -189,8 +189,9 @@ proc visitEnum*(
   # info "Found enum", result.name
 
 proc getDefaultAccess*(cursor: CXCursor): CXAccessSpecifier =
-  if cursor.cxKind in {ckStructDecl, ckUnionDecl}:
+  if cursor.cxKind in { ckStructDecl, ckUnionDecl }:
     asPublic
+
   else:
     asPrivate
 
@@ -510,7 +511,7 @@ proc visitClass*(
             subn, result.ident, currentAccs, conf, cache)
 
         of ckTemplateTypeParameter, ckTemplateTemplateParameter:
-          discard
+          params.add subn
 
         of ckFriendDecl, ckStaticAssert:
           discard
@@ -526,7 +527,6 @@ proc visitClass*(
 
           if alias.isSome():
             result.members.add alias.get()
-          # result.members.add visitAlias(subn, result.ident, conf)
 
         of ckStructDecl, ckClassDecl, ckUnionDecl, ckClassTemplate:
           if not isNil(lastTypeDecl): result.members.add lastTypeDecl

@@ -2,11 +2,13 @@ import
   std/[
     strutils,
     sets,
+    tables
   ]
 
 import
   ./hc_types,
   ./cxtypes,
+  ./cxcommon,
   ./libclang_wrap,
   ../hc_typeconv
 
@@ -30,15 +32,8 @@ func excl*[I](s1: var OrderedSet[I], other: OrderedSet[I]) =
 proc wrapEnum*(declEn: CDecl, conf: WrapConf, cache: var WrapCache): CxxEnum
 
 proc cxxPair*(ident: CSCopedIdent): CxxNamePair =
-  var scopes: seq[string]
-  for part in items(ident):
-    case part.isGenerated:
-      of true: scopes.add $part.name
-      of false: scopes.add $part.cursor
-
-  assert scopes.len > 0, "No scopes found for ident " & $ident
-
-  return cxxPair(scopes.join("_") , cxxName(scopes))
+  let name = cxxName(ident)
+  return cxxPair(name.scopes.join("_"), name)
 
 proc cxxPair*(cxtype: CxType, conf: WrapConf): CxxNamePair =
   var scopes: seq[string]
@@ -48,13 +43,21 @@ proc cxxPair*(cxtype: CxType, conf: WrapConf): CxxNamePair =
   assert scopes.len > 0, "No scopes found for type " & $cxtype
   return cxxPair(scopes.join("_"), cxxName(scopes))
 
-proc cxxPair*(cursor: CxCursor, conf: WrapConf): CxxNamePair =
-  var scopes: seq[string]
-  for space in conf.getSemanticNamespaces(cursor):
-    scopes.add $space
 
-  assert scopes.len > 0, "No scopes found for cursor " & $cursor
-  return cxxPair(scopes.join("_"), cxxName(scopes))
+
+proc cxxPair*(cursor: CxCursor, conf: WrapConf): CxxNamePair =
+  let name = cxxName(cursor, conf)
+  return cxxPair(name.scopes.join("_"), name)
+
+proc getPartialParams*(
+    name: CxxName,
+    partialMax: int,
+    conf: WrapConf,
+    cache: var WrapCache,
+  ): seq[NimType]
+
+
+proc toCxxType*(t: NimType, conf: WrapConf, cache: var WrapCache): CxxTypeUse
 
 
 proc toCxxType*(cxtype: CXType, conf: WrapConf, cache: var WrapCache): CxxTypeUse =
@@ -123,14 +126,14 @@ proc toCxxType*(cxtype: CXType, conf: WrapConf, cache: var WrapCache): CxxTypeUs
     of tkUnexposed:
       let decl = cxtype.getTypeDeclaration()
 
-      if decl of {ckStructDecl}:
+      if decl of {ckStructDecl, ckClassDecl}:
         result = cxxTypeUse(cxtype.cxxPair(conf))
 
-      else:
-        raise newImplementError()
+      elif decl of {ckNoDeclFound} and validCxxIdentifier($cxtype):
+        result = cxxTypeUse(cxxPair($cxtype))
 
-      for p in cxtype.templateParams():
-        result.genParams.add toCxxType(p, conf, cache)
+      else:
+        raise newImplementKindError(decl, $cxtype)
 
       when false:
         let
@@ -199,6 +202,17 @@ proc toCxxType*(cxtype: CXType, conf: WrapConf, cache: var WrapCache): CxxTypeUs
 
 #       newNimType("!!!", cxtype)
 
+  let params = cxtype.templateParams()
+  for p in params:
+    result.genParams.add toCxxType(p, conf, cache)
+
+  if result of ctkIdent:
+    let part = getPartialParams(
+      result.cxxName(), params.high, conf, cache)
+
+    for param in part:
+      result.genParams.add param.toCxxType(conf, cache)
+
 
   if startsWith($cxType, "const"):
     result.flags.incl ctfConst
@@ -207,6 +221,22 @@ proc toCxxType*(cxtype: CXType, conf: WrapConf, cache: var WrapCache): CxxTypeUs
     result.flags.incl ctfIsEnumType
 
 
+proc toCxxType*(
+    t: NimType, conf: WrapConf, cache: var WrapCache): CxxTypeUse =
+
+  case t.kind:
+    of ctkIdent:
+      if t.fromCxType:
+        result = toCxxType(t.cxType, conf, cache)
+
+      else:
+        raise newImplementError()
+
+    else:
+      raise newImplementError()
+
+proc cxxPair*(t: NimType, conf: WrapConf): CxxNamePair =
+  cxxPair($t.cxType)
 
 proc toCxxArg*(arg: CArg, conf: WrapConf, cache: var WrapCache): CxxArg =
   result = cxxArg(
@@ -256,151 +286,6 @@ proc toCxxArg*(arg: CArg, conf: WrapConf, cache: var WrapCache): CxxArg =
       it.arguments.add newArg
 
 
-# proc wrapOperator*(
-#     oper: CDecl,
-#     conf: WrapConf,
-#     cache: var WrapCache
-#   ): CxxProc =
-
-#   var it = cxxProc(oper.ident.cxxPair())
-
-  # it.name = oper.getNimName(conf)
-  # # it.genParams = genParams # FIXME: was it necessary to have generic
-  # # parameters conversion for operators?
-
-  # assert conf.isImportcpp
-  # let kind = oper.classifyOperator(conf)
-  # it.kind = pkOperator
-
-  # case oper.operatorKind:
-  #   of cxoCopyAsgnOp:
-  #     it.name = "setFrom"
-  #     it.icpp = initIcpp "(# = #)"
-  #     it.kind = pkRegular
-  #     it.iinfo = currLInfo()
-
-  #   of cxoNewOp, cxoDeleteOp:
-  #     discard
-
-  #   of cxoAsgnOp:
-  #     it.icpp = icppInfix(it.name)
-  #     it.iinfo = currLInfo()
-
-  #   of cxoArrayOp:
-  #     let rtype = oper.cursor.retType()
-  #     let nimReturn = rtype.toNimType(conf, cache)
-  #     if nimReturn.isMutable:
-  #       it.name = "[]="
-  #       # WARNING potential source of horrible c++ codegen errors
-  #       it.icpp = initIcpp"#[#]= #"
-
-  #     else:
-  #       it.icpp = initIcpp"#[#]"
-
-  #   of cxoInfixOp:
-  #     it.icpp = initIcpp &"({toCppNamespace(oper.ident)}(#, #))"
-  #     it.iinfo = currLInfo()
-
-  #     if oper.arguments.len < 2:
-  #       result.addThis = true
-
-  #   of cxoArrowOp:
-  #     # WARNING
-  #     it.icpp = initIcpp &"(#.operator->(@))"
-
-  #   of cxoCallOp:
-  #     # NOTE nim does have experimental support for call
-  #     # operator, but I think it is better to wrap this one as
-  #     # separate function `call()`
-  #     it.name = "call"
-  #     it.kind = pkRegular
-  #     it.icpp = initIcpp &"#(@)"
-  #     it.iinfo = currLInfo()
-
-  #   of cxoDerefOp:
-  #     it.name = "[]"
-  #     it.icpp = initIcpp &"(*#)"
-  #     it.iinfo = currLInfo()
-
-  #   of cxoPrefixOp:
-  #     it.icpp = initIcpp &"({it.name}#)" # FIXME use scoped ident
-  #     it.iinfo = currLInfo()
-  #     if oper.arguments.len == 0:
-  #       result.addThis = true
-
-  #   of cxoPostfixOp:
-  #     it.icpp = initIcpp &"(#{it.name})" # FIXME use scoped ident
-  #     it.iinfo = currLInfo()
-
-  #     if oper.arguments.len == 1:
-  #       result.addThis = true
-
-  #   of cxoCommaOp:
-  #     it.name = "commaOp"
-  #     it.icpp = initIcpp &"operator,(@)"
-  #     it.kind = pkRegular
-  #     it.iinfo = currLInfo()
-
-  #   of cxoConvertOp:
-  #     let restype = oper.cursor.retType().toNimType(conf, cache)
-
-  #     with it:
-  #       name = "to" & capitalizeAscii(restype.nimName)
-  #       icpp = initIcpp"@"
-  #       returnType = resType
-  #       declType = ptkConverter
-  #       kind = pkRegular
-
-
-  #     it.iinfo = currLInfo()
-
-  #   of cxoUserLitOp:
-  #     let restype = oper.cursor.retType().toNimType(conf, cache)
-
-  #     with it:
-  #       name = "to" & capitalizeAscii(restype.nimName)
-  #       icpp = initIcpp &"({oper.cursor}(@))"
-  #       returnType = restype
-  #       kind = pkRegular
-
-
-  #     it.iinfo = currLInfo()
-
-  # it.header = conf.makeHeader(oper.cursor, conf)
-  # result.decl = it
-  # result.addThis = result.addThis or
-  #   (kind in {
-  #     cxoAsgnOp, cxoArrayOp, cxoDerefOp, cxoArrowOp, cxoConvertOp
-  #   })
-
-
-
-# proc initDestroyCall(
-#     parent: NimType,
-#     args: seq[CArg],
-#     constructorCall: string,
-#     conf: WrapConf, cache: var WrapCache
-#   ): PNode =
-
-#   let
-#     className = parent.nimName
-#     argType = newNType("ref", [parent.toNType(conf, cache)]).toNNode()
-#     destroyCall = newPIdent(
-#       "destroy" & className.fixIdentName().capitalizeAscii())
-#     argMixin = args.mapIt("(`" & it.name & "`)").join(", ")
-#     emitStr = &"new ((void*)result) {constructorCall}({argMixin}); " &
-#       "/* Placement new */"
-
-
-#   return pquote do:
-#     newImportAux() # FIXME This procedure is a necessary hack that provides
-#                    # requries `<new>` header import. Maybe this could be
-#                    # fixed by somehow grenerating required `header:` pragma
-#                    # statements?
-#     new(result, proc(self: `argType`) = `destroyCall`(addr self[]))
-#     {.emit: `emitStr`.}
-
-
 
 proc declGenParams*(part: CName):
   seq[tuple[ptype: CxCursor, pdefault: Option[CxCursor]]] =
@@ -431,17 +316,35 @@ proc declGenParams*(part: CName):
       discard
 
 
+proc getPartialParams*(
+    name: CxxName,
+    partialMax: int,
+    conf: WrapConf,
+    cache: var WrapCache
+  ): seq[NimType] =
+
+  if name in cache.paramsForType:
+    let params = cache.paramsForType[name]
+    for idx, param in params:
+      if partialMax < idx:
+        result.add param
+        result[^1].isParam = true
+
 proc genParamsForIdent*(
     conf: WrapConf,
     scoped: CSCopedIdent,
     cache: var WrapCache
   ): CxxGenParams =
 
-  for part in scoped:
-    for param in part.declGenParams():
-      echov param
-      # let newt = newNimType($param, isParam = true)
-      # result.add newt
+  let name = scoped.cxxName()
+  for param in getPartialParams(name, -1, conf, cache):
+    let name = cxxPair(param, conf)
+    if param.defaultType.canGet(def):
+      result.add(name, some def.toCxxType(conf, cache))
+
+    else:
+      result.add(name, none CxxTypeUse)
+
 
 proc wrapProcedure*(
     pr: CDecl,
@@ -455,7 +358,6 @@ proc wrapProcedure*(
   if pr.isOperator:
     result.kind = classifyOperator(pr, conf)
     result.nimName = getNimName(pr, conf)
-    echov result.nimName
 
   result.head.genParams = conf.genParamsForIdent(pr.ident, cache)
 
@@ -670,13 +572,19 @@ proc wrapObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): CxxObject =
         of cdkStruct, cdkClass, cdkUnion:
           result.nested.add wrapObject(entry, conf, cache)
 
+        # of cdkAlias:
+        #   result.nested.add wrapAlias(entry, conf, cache)
+
         else:
           discard
 
     for entry in cd.members:
       case entry.kind:
         of cdkMethod:
-          result.methods.add wrapProcedure(entry, conf, cache, some cd)
+          var meth = wrapProcedure(entry, conf, cache, some cd)
+          meth.head.genParams = result.decl.genParams & meth.head.genParams
+
+          result.methods.add meth
 
           if entry.cursor.kind in { ckConstructor, ckConversionFunction }:
             result.flags.incl cofExplicitConstructor
@@ -700,9 +608,6 @@ proc wrapObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): CxxObject =
 
         else:
           discard
-
-    # wrapMethods(result, cd, conf, result.name, cache)
-
 
 proc wrapEnum*(
     declEn: CDecl, conf: WrapConf, cache: var WrapCache): CxxEnum =

@@ -982,12 +982,25 @@ func cxxTypeUse*(
   CxxTypeUse(
     kind: ctkIdent, cxxType: cxxTypeRef(head, store), genParams: @genParams)
 
+func cxxTypeParams*(decl: CxxTypeDecl): seq[CxxTypeUse] =
+  for (param, default) in decl.genParams:
+    if default.isSome():
+      result.add default.get()
+
+    else:
+      result.add cxxTypeUse(param)
+
+
 func cxxTypeUse*(
     objDef: CxxObject, parent, user: CxxNamePair
   ): CxxTypeUse =
   CxxTypeUse(
-    kind: ctkAnonObject, objDef: objDef,
-    objParent: parent, objUser: user)
+    kind: ctkAnonObject,
+    objDef: objDef,
+    objParent: parent,
+    objUser: user
+  )
+
 
 func cxxTypeUse*(
     enumDef: CxxEnum, parent, user: CxxNamePair
@@ -1233,7 +1246,12 @@ func cxxTypeUse*(
     kind: ctkProc, arguments: arguments, returnType: returnType)
 
 func cxxTypeUse*(decl: CxxTypeDecl, store: CxxTypeStore = nil): CxxTypeUse =
-  CxxTypeUse(kind: ctkIdent, cxxType: cxxTypeRef(decl.name, store))
+  CxxTypeUse(
+    kind: ctkIdent,
+    cxxType: cxxTypeRef(decl.name, store),
+    genParams: cxxTypeParams(decl)
+  )
+
 
 func cxxTypeUse*(name: string, args: seq[CxxTypeUse]): CxxTypeUse =
   cxxTypeUse(cxxPair(name), args)

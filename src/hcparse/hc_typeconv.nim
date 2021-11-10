@@ -228,13 +228,36 @@ proc defaultTypeParameter*(
   var idx = 0
   return some foldTypes(idx, cache)
 
+proc cxxName*(ident: CScopedIdent): CxxName =
+  var scopes: seq[string]
+  for part in items(ident):
+    case part.isGenerated:
+      of true: scopes.add $part.name
+      of false: scopes.add $part.cursor
+
+    assert '<' notin scopes.last(),
+      "Cxx name cannot contain template parameters " & scopes.last()
+
+
+  assert scopes.len > 0, "No scopes found for ident " & $ident
+  return cxxName(scopes)
+
+proc cxxName*(cursor: CxCursor, conf: WrapConf): CxxName =
+  var scopes: seq[string]
+  for space in conf.getSemanticNamespaces(cursor):
+    scopes.add $space
+
+  assert scopes.len > 0, "No scopes found for cursor " & $cursor
+  return cxxName(scopes)
+
+
 proc setParamsForType*(
     cache: var WrapCache, conf: WrapConf,
     ident: CScopedIdent, params: seq[NimType]
   ) =
 
   if params.len > 0:
-    cache.paramsForType[ident.mapIt(getName(it))] = params
+    cache.paramsForType[ident.cxxName()] = params
 
 proc setParamsForType*(
     cache: var WrapCache, conf: WrapConf,
@@ -262,33 +285,32 @@ proc setParamsForType*(
   # class basic_string;
   # ```
 
-  {.warning: "[FIXME] Implement default template type parameter handling for the new IR".}
-  when false:
-    if params.len > 0:
-      let key: seq[string] = ident.mapIt(getName(it))
-      if key notin cache.paramsForType:
-        cache.paramsForType[key] = @[]
+  if params.len > 0:
+    let name = cxxName(ident)
+    if name notin cache.paramsForType:
+      cache.paramsForType[name] = @[]
 
-      # Convenience helper to avoid writing `cache.paramsForType[key]`
-      # all over the place.
-      var list {.byaddr1.} = cache.paramsForType[key]
+    # Convenience helper to avoid writing `cache.paramsForType[name]`
+    # all over the place.
+    var list {.byaddr1.} = cache.paramsForType[name]
 
-      for idx, param in params:
-        var nimType = param.cxtype.toNimType(conf, cache)
+    for idx, param in params:
+      var nimType = newNimType($param, param.cxType())
+      # param.cxtype.toNimType(conf, cache)
 
-        if list.high < idx:
-          list.add NimType(kind: ctkIdent)
+      if list.high < idx:
+        list.add NimType(kind: ctkIdent)
 
-        if list[idx].defaultType.isNone():
-          # Only assign if default template type parameter is none - current type
-          # conversion is likely to have at least as much information (or more).
-          list[idx] = nimType
+      if list[idx].defaultType.isNone():
+        # Only assign if default template type parameter is none - current type
+        # conversion is likely to have at least as much information (or more).
+        list[idx] = nimType
 
-        if param.len() > 0:
-          var default = defaultTypeParameter(param, cache, conf)
+      if param.len() > 0:
+        var default = defaultTypeParameter(param, cache, conf)
 
-          if default.isSome():
-            list[idx].defaultType = default
+        if default.isSome():
+          list[idx].defaultType = default
 
 
 
@@ -312,12 +334,12 @@ proc replacePartials*(
 
   aux(nimType)
 
-proc getParamsForType*(cache: WrapCache, name: seq[string]): seq[NimType] =
+proc getParamsForType*(cache: WrapCache, name: CxxName): seq[NimType] =
   if name in cache.paramsForType:
     result = cache.paramsForType[name]
 
 proc getPartialParams*(
-    name: seq[string], partialMax: int,
+    name: CxxName, partialMax: int,
     conf: WrapConf, cache: var WrapCache,
     defaulted: bool = true
   ): seq[NimType] =
@@ -360,7 +382,7 @@ proc getPartialParams*(
   ## template type
 
   if partial.fromCxType or partial.fullIdent.isSome():
-    let name = conf.fullScopedIdent(partial).typeName()
+    let name = conf.fullScopedIdent(partial).cxxName()
     result = getPartialParams(
       name, partial.genParams.high, conf, cache, defaulted)
 

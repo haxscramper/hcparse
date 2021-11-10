@@ -2,7 +2,15 @@ import
   ./libclang_wrap, ./cxvisitors
 
 import
-  std/[strformat, strutils, options, sequtils, deques, hashes]
+  std/[
+    strformat,
+    strutils,
+    options,
+    sequtils,
+    deques,
+    hashes,
+    parseutils
+  ]
 
 import
   hmisc/other/[oswrap],
@@ -19,31 +27,17 @@ export libclang_wrap
 ## Convenience wrappers for libclang types - stringification, getting kind
 ## and so on.
 
-#*************************************************************************#
-#******************************  CXString  *******************************#
-#*************************************************************************#
 proc `$`*(cxstr: CXString): string =
   let str = getCString(cxstr)
   result = $str
   disposeString(cxstr)
 
-#*************************************************************************#
-#****************************  CXSourceRange  ****************************#
-#*************************************************************************#
 proc `$`*(cxRange: CXSourceRange): string =
   &"[{cxRange.beginIntData}, {cxRange.endIntData}]"
 
-
-#*************************************************************************#
-#*******************************  CXFile  ********************************#
-#*************************************************************************#
 proc `$`*(file: CXFile): string =
   $getFileName(file)
 
-
-#*************************************************************************#
-#**************************  CXSourceLocation  ***************************#
-#*************************************************************************#
 proc `$`*(loc: CXSourceLocation): string =
   var
     file: CXFile
@@ -647,6 +641,36 @@ proc `[]`*(comment: CXComment, idx: int): CXComment =
 # func add*(tree: var ObjTree, arg: string, other: ObjTree) =
 #   tree.fldPairs.add (arg, other)
 
+func dropTemplateArgs*(old: string): string =
+  result = old[
+    old.skip1(toStrPart(["const ", "enum ", "struct ", "union "])) ..<
+    old.skipUntil('<')]
+
+  var start = result.high
+  if start == old.high:
+    return
+
+  else:
+    inc start
+
+    let other = old[start .. ^1]
+    var
+      `<cnt` = 0
+      `>cnt` = 0
+
+    for ch in old:
+      if ch == '<': inc `<cnt`
+      if ch == '>': inc `>cnt`
+
+
+    if   `<cnt` - 2 == `>cnt`: result &= tern(other["<<="], "<<=", "<<")
+    elif `<cnt` - 1 == `>cnt`: result &= tern(other["<="],  "<=",  "<")
+    elif `<cnt`     == `>cnt`: result &= tern(other["<=>"], "<=>", "")
+    elif `<cnt` + 1 == `>cnt`: result &= tern(other[">="],  ">=",  ">")
+    elif `<cnt` + 2 == `>cnt`: result &= tern(other[">>="], ">>=", ">>")
+    else: assert false
+
+
 proc hshow*(cxtype: CXType, opts: HDisplayOpts = defaultHDisplay): ColoredText =
   coloredResult()
 
@@ -684,28 +708,29 @@ proc hshow*(cxtype: CXType, opts: HDisplayOpts = defaultHDisplay): ColoredText =
         aux(cxType.getResultType())
         add " }"
 
+      of tkRecord:
+        add $cxtype
+
+      of tkUnexposed:
+        add dropTemplateArgs($cxtype) + fgMagenta
+
       else:
         add "??["
         add $cxtype
         add hshow(cxtype.cxKind())
         add "]"
-        # result = pptObj(
-        #   $cxtype.cxkind, pptConst("'" & $cxtype & "'", fgRed + bgDefault))
 
+    let params = cxType.templateParams()
+    if ?params:
+      add "["
+      for param in params:
+        aux(param)
 
-    # for param in cxType.templateParams():
-    #   result.add objTreeRepr(param)
+      add "]"
 
   aux(cxtype)
 
   endResult()
-
-# proc neededTemplateArgs*(cxtype: CXType): int =
-#   ## Get number of necessary generic arguments for a type
-#   let cursor = cxtype.getTypeDeclaration()
-
-# proc dedentComment*(str: string): string =
-#   str.split('\n').mapIt(it.dedent()).join("\n")
 
 proc treeRepr*(
     cursor: CXCursor,
@@ -747,8 +772,6 @@ proc treeRepr*(
         add hshow(raises)
 
     if not(cursor.cxType() of tkInvalid):
-      # add "\n"
-      # addIndent(level, sep)
       add " "
       add hshow(cursor.cxType)
 
@@ -757,26 +780,6 @@ proc treeRepr*(
       addIndent(level, sep)
       add "  ref of: "
       add cursor.getSpecializedCursorTemplate().cxKind().hshow()
-
-    # let ctype = pptConst(
-    #   typeText,
-    #   initPrintStyling(fg = fgBlue, style = {styleItalic, styleDim})
-    # )
-
-
-    # var commentText = cursor.rawComment()
-    # let showComment = showcomment and commentText.len > 0
-    # let comment = pptConst(
-    #   commentText.dedentComment(), initStyle(styleItalic, fgCyan))
-
-    # let locRange =
-    #   block:
-    #     let loc = getSpellingLocation(cursor)
-    #     if loc.isSome():
-    #       &" {loc.get().line}:{loc.get().column}"
-
-    #     else:
-    #       ""
 
     if cursor.len() == 0:
       if cursor.cxKind in {ckMacroExpansion}:

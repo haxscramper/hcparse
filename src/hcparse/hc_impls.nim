@@ -3,8 +3,7 @@ import
   ./read_libclang/[
     hc_types,
     cxcommon,
-    cxtypes,
-    hc_depresolve
+    cxtypes
   ],
 
   ./hc_typeconv,
@@ -15,7 +14,7 @@ import
   ]
 
 import
-  std/[sequtils, strutils, strformat, tables, sets]
+  std/[strutils, strformat, tables]
 
 import
   hmisc/core/all,
@@ -88,45 +87,6 @@ proc asGlobalInclude*(cursor: CXCursor, conf: WrapConf): string =
       return asIncludeFromDir(cursor, conf, dir)
 
   return $loc.file
-
-proc updateForInternalImport*(
-    cursor: CXCursor | AbsFile,
-    conf: WrapConf,
-    dir: AbsDir, importSpec: var NimImportSpec) =
-
-  when cursor is CXCursor:
-    let file = cursor.getSpellingLocation().get().file
-
-  else:
-    let file = cursor
-
-  importSpec.relativeDepth = relativeUpCount(dir, file)
-
-
-
-proc asImportFromDir*(
-    cursor: CXCursor | AbsFile,
-    conf: WrapConf, dir: AbsDir,
-    isExternalImport: bool
-  ): NimImportSpec =
-  ## Generate import specification for file or cursor with spelling
-  ## location using given configuration.
-  ##
-  ## - @arg{cursor} :: Input entry (cursor or file) to get import for.
-  ##   Cursor must have a valid spelling location.
-  ## - @arg{dir} :: Base directory where input entry is originally located.
-  ##   Import path will be computed based on it.
-  ##
-  ##   # Even if path is relative, @ret{.relativeDepth} is not set to any
-  ##   # value.
-
-  result = NimImportSpec(isRelative: not isExternalImport)
-
-  for entry in asIncludeFromDir(cursor, conf, dir).split("/"):
-    result.importPath.add fixFileName(entry)
-
-  if not isExternalImport:
-    updateForInternalImport(cursor, conf, dir, result)
 
 proc isFromDir*(cursor: CXCursor, dir: AbsDir): bool =
   cursor.getSpellingLocation().get().file in dir

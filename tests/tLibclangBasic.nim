@@ -32,9 +32,10 @@ struct Struct {
 };
 
 template <typename T, class Z = int>
-struct Templated {
-  T get() const noexcept;
-  void set(Z value);
+class Templated {
+  public:
+    T get() const noexcept;
+    void set(Z value);
 };
 
 // enum class Enum {en1, en2};

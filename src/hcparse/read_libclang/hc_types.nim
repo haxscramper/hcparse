@@ -8,11 +8,8 @@ import
     hashes,
     strformat,
     macros,
-    segfaults,
-    parseutils
+    segfaults
   ]
-
-import hpprint
 
 import
   hmisc/core/[
@@ -343,21 +340,6 @@ type
       else:
         discard
 
-  NimImportSpec* = object
-    ## Configuration for import of the other files
-    importPath*: seq[string] ## Name of the imported file
-    case isRelative*: bool ## Import should be performed using relative paths
-      ## or absolute.
-      of true:
-        relativeDepth*: int ## `0` means relative to current file, `./`.
-        ## Any number greater than `0` is converted to equal number of
-        ## directory-up `..`
-
-      else:
-        discard
-
-
-
   DoxRefid* = object
     refid*: string
     name*: string
@@ -441,7 +423,7 @@ type
     ## and actual wrapped entries.
     nameCache*: StringNameCache ## Generated name cache
 
-    paramsForType*: Table[seq[string], seq[NimType]] ## Generic
+    paramsForType*: Table[CxxName, seq[NimType]] ## Generic
     ## parameters for each type. Type is uniquely represented using
     ## `fully::scoped::ident`.
     nimParamsForType*: Table[string, seq[NimType]]
@@ -459,34 +441,6 @@ proc newWrapCache*(): WrapCache = WrapCache()
 WrapConf.loggerField(logger, doExport = true)
 const gpcNoPragma* = { gpcNoHeader, gpcNoImportcpp }
 
-func dropTemplateArgs*(old: string): string =
-  result = old[
-    old.skip1(toStrPart(["const ", "enum ", "struct ", "union "])) ..<
-    old.skipUntil('<')]
-
-  var start = result.high
-  if start == old.high:
-    return
-
-  else:
-    inc start
-
-    let other = old[start .. ^1]
-    var
-      `<cnt` = 0
-      `>cnt` = 0
-
-    for ch in old:
-      if ch == '<': inc `<cnt`
-      if ch == '>': inc `>cnt`
-
-
-    if   `<cnt` - 2 == `>cnt`: result &= tern(other["<<="], "<<=", "<<")
-    elif `<cnt` - 1 == `>cnt`: result &= tern(other["<="],  "<=",  "<")
-    elif `<cnt`     == `>cnt`: result &= tern(other["<=>"], "<=>", "")
-    elif `<cnt` + 1 == `>cnt`: result &= tern(other[">="],  ">=",  ">")
-    elif `<cnt` + 2 == `>cnt`: result &= tern(other[">>="], ">>=", ">>")
-    else: assert false
 
 proc getName*(c: CxCursor): string = dropTemplateArgs($c)
 
@@ -824,16 +778,6 @@ proc addDoc*(cache: var WrapCache, id: CSCopedIdent, doc: seq[string]) =
   if doc.len > 0:
     cache.identComments.mgetOrPut(id, @[]).add(doc)
 
-proc importX*(conf: WrapConf): string =
-  if conf.isImportCpp:
-    "importcpp"
-
-  else:
-    "importc"
-
-proc rawSuffix*(conf: WrapConf): string =
-  "C"
-
 proc initHeaderSpec*(file: AbsFile): NimHeaderSpec =
   NimHeaderSpec(kind: cbkAbsolute, file: file)
 
@@ -873,24 +817,6 @@ func methods*(cd: CDecl, kinds: set[CXCursorKind]): seq[CDecl] =
     if (member.kind == cdkMethod) and (member.cursor.cxKind in kinds):
       result.add member
 
-func `==`*(s1, s2: NimImportSpec): bool =
-  s1.importPath == s2.importPath and
-  s1.isRelative == s2.isRelative and (
-    if s1.isRelative:
-      s1.relativeDepth == s2.relativeDepth
-
-    else:
-      true
-  )
-
-func initNimImportSpec*(isExternalImport: bool, importPath: seq[string]):
-  NimImportSpec =
-
-  return NimImportSpec(
-    isRelative: not isExternalImport, importPath: importPath)
-
-func isBuiltinGeneric*(str: string): bool =
-  str in ["ptr", "ref", "sink", "var"]
 
 {.warning[Deprecated]:on.}
 
@@ -1069,17 +995,6 @@ func addPathPrefix*(lib: var CxxLibImport, prefix: string) =
   lib.importPath.insert(prefix, 0)
 
 
-proc `$`*(spec: NimImportSpec): string =
-  if spec.isRelative:
-    if spec.relativeDepth == 0:
-      result = "./"
-
-    else:
-      result = "..".repeat(spec.relativeDepth)
-      result &= "/"
-
-  result &= join(spec.importPath, "/")
-
 proc `$`*(nimType: NimType): string =
   if isNil(nimType):
     result = "void"
@@ -1149,16 +1064,6 @@ func initCArg*(name: string, nimType: NimType): CArg =
 func initCArg*(name: string, cursor: CXCursor): CArg =
   ## Init raw C argument with `name`
   CArg(isRaw: true, name: name, cursor: cursor)
-
-func initImportSpec*(path: seq[string]): NimImportSpec =
-  ## Create nim import spec with absolute path
-  NimImportSpec(isRelative: false, importPath: path)
-
-func initImportSpec*(path: seq[string], depth: int): NimImportSpec =
-  ## Create nim import spec with absolute path
-  NimImportSpec(
-    isRelative: true, importPath: path,
-    relativeDepth: depth)
 
 #==========================  Helper utilities  ===========================#
 proc declHash*(cursor: CXCursor): Hash =

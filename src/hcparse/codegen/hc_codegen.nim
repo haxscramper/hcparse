@@ -110,6 +110,9 @@ proc toNNode*[N](
       else:
         result = newNNType[N](t.nimName, @[])
 
+      for param in t.genParams:
+        result.add toNNode[N](param, conf, anon)
+
     of ctkPtr:
       if t.wrapped of ctkIdent:
         case t.wrapped.nimName:
@@ -154,6 +157,10 @@ proc toNNode*[N](
 
     else:
       raise newImplementKindError(t)
+
+
+
+
 
 proc toNNode*[N](
     t: CxxTypeDecl, conf: CodegenConf,
@@ -310,6 +317,9 @@ proc toNNode*[N](
   result.exported = true
   result.docComment = def.docComment.toNimComment()
 
+  for param in def.head.genParams:
+    result.genParams.add newNNType[N](param.name.nim, @[])
+
   if cpfExportc in def.flags:
     result.addPragma("exportc", newNLit[N, string](def.cxxName.cxxStr()))
 
@@ -343,7 +353,7 @@ proc toNNode*[N](
       var ret = toNNode[N](
       #[ V FIXME - does not account for template type parameters in parent
          classes ]#
-        parent.get().name().cxxTypeUse(),
+        parent.get().decl.cxxTypeUse(),
         conf,
         anon)
 
@@ -388,12 +398,11 @@ proc toNNode*[N](
   res.addPragma("bycopy")
   if obj.kind == cokUnion:
     res.addPragma("union")
-  # res.addPragma("inheritable")
-  # res.addPragma("byref")
+
+  for param in obj.decl.genParams:
+    res.name.genParams.add newNNType[N](param.name.nim, @[])
 
   res.addPragma toNNode[N](obj.cbind, conf, obj.nimName)
-  # res.addPragma("header", toNNode[N](obj.header.get()))
-  # res.addPragma(conf.getImport(), newNLit[N, string](obj.getIcppStr()))
 
   for field in obj.mfields:
     res.add toNNode[N](field, conf, anon)
