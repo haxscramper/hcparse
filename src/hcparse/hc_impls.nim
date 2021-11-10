@@ -255,114 +255,6 @@ proc fixContextedName*(
 
 
 
-proc getBaseFile*(conf: WrapConf, wrapped: WrappedFile): AbsFile =
-  ## Return base file for generated wrapped one. For generated grouped
-  ## files first original one is returned.
-  if wrapped.isGenerated:
-    # Due to automatically inserted `export` we don't need to perform more
-    # concrete resolution
-    result = wrapped.original[0]
-
-  else:
-    result = wrapped.baseFile
-
-
-
-
-proc getSavePath*(conf: WrapConf, wrapped: WrappedFile): RelFile =
-  ## Get save path for generated file - either using @arg{conf.getSavePath}
-  ## (for real wrapped files), or @arg{wrapped.newFile} (for newly
-  ## generated files.). Generated save files reuse
-  ## [[code:WrappedFile.newFile]], non-generated (based on the existing
-  ## files) resolve correct relative path based on dependencies and
-  ## [[code:WrapConf.getSavePathImpl]])
-  if wrapped.isGenerated:
-    result = wrapped.newFile
-
-  else:
-    result = conf.getSavePath(wrapped.baseFile).toRelative()
-
-
-proc getLibSavePath*(conf: WrapConf, wrapped: WrappedFile): CxxLibImport =
-  if wrapped.isGenerated:
-    result = conf.initCxxLibImport(
-      wrapped.newFile.withoutExt().getstr().split("/"))
-
-  else:
-    result = conf.getSavePath(wrapped.baseFile)
-
-proc getImport*(
-    conf: WrapConf, dep, user: CxxLibImport,
-    isExternalImport: bool
-  ): NimImportSpec =
-
-  if isExternalImport:
-    result = initImportSpec(dep.library & dep.importPath)
-
-  else:
-    if dep.library == conf.wrapName or
-       dep.library.len == 0:
-      let (pDep, pUser) = (dep.asImport(), user.asImport())
-      let (depth, parts) = importSplit(
-        conf.nimOutDir / pUser,
-        conf.nimOutDir / pDep)
-
-      result = initImportSpec(parts, depth)
-
-    else:
-      result = initImportSpec(dep.library & dep.importPath)
-
-proc getImport*(
-  conf: WrapConf, dep, user: AbsFile, isExternalImport: bool): NimImportSpec =
-  ## Generate import statement for header file dependency.
-  ##
-  ## - @arg{isExternalImport} :: Import path is requested for internal use
-  ##   (inter-module project dependencies), or for external use
-  ## - @arg{dep} :: Location of the original file entry (in the Cxx library)
-  ## - @arg{user} :: File importer. In case of external import this
-  ##   can be left unspecified as result will be determined solely by
-  ##   @arg{conf.getSavePath} callback and @arg{conf.wrapName}
-  if isExternalImport:
-    result = conf.getImport(conf.getSavePath(dep), CxxLibImport(), true)
-
-  else:
-    if conf.isInLibrary(dep, conf):
-      result = conf.getImport(
-        conf.getSavePath(dep),
-        conf.getSavePath(user),
-        false)
-
-    else:
-      for config in conf.depsConf:
-        if config.isInLibrary(dep, config):
-          result = config.getImport(dep, user, true)
-          break
-
-proc getImportUsingDependencies*(
-    conf: WrapConf,
-    dependency, user: AbsFile,
-    wrapConfurations: seq[WrapConf],
-    isExternalImport: bool
-  ): NimImportSpec =
-
-  ## Get import specification for using wrapper configuration for a project
-  ## and dependencies.
-  ##
-  ## - @arg{wrapConfigurations} :: List of dependency configurations for
-  ##   library. Configurations will be sequentially queried for
-  ##   `isInLibrary` check. First matching one will return it's import.
-  ## - @arg{conf} :: Main project wrap configuration. @arg{isExternalImport}
-  ##   is passed directly to it, so this procedure can also correctly resolve
-  ##   in-project import paths.
-  ## - @arg{dependency} :: Absolute path to the dependency file
-
-  if conf.isInLibrary(dependency, conf):
-    return conf.getImport(dependency, user, isExternalImport)
-
-  for config in wrapConfurations:
-    if config.isInLibrary(dependency, config):
-      return config.getImport(dependency, user, true)
-
 proc getClangSemVersion*(): string =
   ($getClangVersion()).split(" ")[2] # WARNING
 
@@ -399,10 +291,6 @@ let baseCParseConf* = ParseConf(
 let baseCppWrapConf* = WrapConf(
   isImportcpp: true,
   parseConf: baseCppParseConf,
-  isInLibrary: (
-    proc(dep: AbsFile, conf: WrapConf): bool {.closure.} =
-      dep.startsWith(conf.baseDir)
-  ),
   makeHeader: (
     proc(cursor: CXCursor, conf: WrapConf): NimHeaderSpec {.closure.} =
       let file = cursor.asGlobalInclude(conf)
@@ -412,33 +300,12 @@ let baseCppWrapConf* = WrapConf(
       else:
         NimHeaderSpec(kind: cbkGlobal, global: file)
   ),
-  getSavePathImpl: (
-    proc(orig: AbsFile, conf: WrapConf): CxxLibImport =
-      let rel = relativePath(orig, conf.baseDir)
-      return initCxxLibImport(
-        conf.wrapName,
-          rel.
-          withoutExt().
-          string.
-          split("/").
-          mapIt(it.fixFileName()))
-  ),
-
-  # typeNameForScoped: (
-  #   proc(ident: CScopedIdent, conf: WrapConf): NimType {.closure} =
-  #     typeNameForScoped(ident, conf)
-  # ),
-  isDistinct: (
-    proc(ident: CSCopedIdent, conf: WrapConf, cache: var WrapCache):
-      bool {.closure.} =
-
-      false
-  ),
   fixTypeName: (
     proc(ntype: var NimType, conf: WrapConf, idx: int) {.closure.} =
       # Default implementation for type name fixes
       fixTypeName(ntype, conf, 0)
   ),
+
   ignoreCursor: (
     proc(cursor: CXCursor, conf: WrapConf): bool {.closure.} =
       if not ($cursor).startsWith("__cxx11") and
@@ -488,23 +355,6 @@ let baseCppWrapConf* = WrapConf(
           result = false
 
   ),
-  isInternal: (
-    proc(dep: AbsFile, conf: WrapConf,
-         index: hc_types.FileIndex): bool {.closure.} =
-      isInternalImpl(dep, conf, index)
-  ),
-  prefixForEnum: (
-    proc(
-      enumId: CScopedIdent, conf: WrapConf, cache: var WrapCache
-    ): string =
-      result = enumId[^1]
-        .getName()
-        .splitCamel()
-        .mapIt(it[0].toLowerAscii())
-        .join("")
-
-      cache.enumPrefs.incl result
-  ),
   depResolver: (
     proc(cursor, referencedBy: CXCursor): DepResolutionKind {.closure.} =
       if cursor.isFromMainFile():
@@ -512,14 +362,7 @@ let baseCppWrapConf* = WrapConf(
 
       else:
         result = drkImportUses
-        # let loc = cursor.getSpellingLocation()
-        # if loc.isSome():
-        #   let loc = loc.get()
-        #   let (dir, file, ext) = loc.file.splitFile()
-        #   if "string" in file:
-        #     result = drkWrapDirectly
-  ),
-  refidFile: RelFile("refid-map.json")
+  )
 )
 
 let baseCWrapConf* = baseCPPWrapConf.withDeepIt do:
@@ -537,21 +380,3 @@ let baseFixConf* = CxxFixConf(
 
       result = cache.fixContextedName(name)
 )
-
-import
-  hmisc/types/hgraph,
-  hmisc/hasts/graphviz_ast
-
-
-proc dotDepImports*(
-    cache: WrapCache, conf: WrapConf, outFile: AbsFile) =
-
-  var dot = cache.importGraph.dotRepr(
-    proc(node: CxxLibImport, _: HNode): DotNode = makeDotNode(0, $node),
-    clusters = mapIt(
-      cache.importGraph.findCycles(ignoreSelf = true).mergeCycleSets(),
-      (it, "")))
-
-
-  dot.rankdir = grdLeftRight
-  dot.toPng(outFile)

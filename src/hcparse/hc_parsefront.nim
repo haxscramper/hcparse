@@ -201,12 +201,6 @@ proc parseFile*(
   result.isExplicitlyAdded = true
 
 
-proc parseAll*(
-    files: seq[AbsFile], conf: WrapConf, cache: var WrapCache
-  ): hc_types.FileIndex =
-
-  for file in files:
-    result.index[file] = parseFile(file, conf, cache)
 
 proc convertViaTs*(text: string): PNode =
   var text = text
