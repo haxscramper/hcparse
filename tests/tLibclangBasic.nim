@@ -1,6 +1,10 @@
 import hmisc/preludes/unittest
-import hmisc/other/hpprint
 import
+  hmisc/other/[
+    hpprint,
+    hlogger
+  ],
+
   hcparse/[
     hc_parsefront,
     hc_impls
@@ -17,20 +21,34 @@ import
 suite "Parse basic file":
   let dir = getTestTempDir()
   mkDir dir
-  let file = dir /. "file.c"
+  let file = dir /. "file.hpp"
   test "Dump tree repr":
     writeFile(file, """
+struct Struct {
+  int field;
+
+  int get() const;
+  void set(int arg);
+};
+
+template <typename T, class Z = int>
+struct Templated {
+  T get() const noexcept;
+  void set(Z value);
+};
+
+
 int main() {}
 """)
 
     let unit = parseFile(file)
-    echo unit.getTranslationUnitCursor().treeRepr(unit)
+    echo unit.getTranslationUnitCursor().treeRepr()
 
   test "Visitors":
     var cache = newWrapCache()
     let api = parseFile(file).splitDeclarations(baseCppWrapConf, cache)
 
-    pprint api
+    # pprint api
 
     var fix = baseFixConf.withIt do:
       it.typeStore = newTypeStore()
@@ -38,7 +56,10 @@ int main() {}
     fix.onGetBind():
       return cxxHeader("?")
 
-    let wrapped = api.wrapApiUnit(baseCppWrapConf, cache).
+    var wrap = baseCppWrapConf.withDeepIt do:
+      it.logger = newTermLogger()
+
+    let wrapped = api.wrapApiUnit(wrap, cache).
       postFixEntries(fix, cxxLibImport("h", @["h"]))
 
     echo "Generated wrapped"

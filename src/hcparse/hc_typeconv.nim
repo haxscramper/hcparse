@@ -824,21 +824,6 @@ proc toNimType*(
   result.isMutable = mutable
   result.specialKind = special
 
-proc genParamsForIdent*(
-    conf: WrapConf,
-    scoped: CSCopedIdent,
-    cache: var WrapCache
-  ): seq[NimType] =
-
-  ## Return list of genric parameters for fully scoped identifier.
-  ## Procedure returns full list of generic parameters starting from the
-  ## start of the identifier. So for `std::basic_string<_CharT, ...>::stol`
-  ## it would return `_CharT`
-
-  for part in scoped:
-    for param in part.declGenParams():
-      let newt = newNimType($param, isParam = true)
-      result.add newt
 
 
 func fixTypeParams*(nt: var NimType, params: seq[NimType]) =
@@ -853,7 +838,7 @@ func fixTypeParams*(nt: var NimType, params: seq[NimType]) =
       of ctkArrayKinds:
         aux(nt.arrayElement, idx)
 
-      of ctkStaticParam:
+      of ctkStaticParam, ctkPod:
         discard
 
       of ctkIdent:
@@ -885,7 +870,7 @@ func hasSpecial*(nt: NimType, special: seq[string]): bool =
     of ctkArrayKinds:
       nt.arrayElement.hasSpecial(special)
 
-    of ctkStaticParam:
+    of ctkStaticParam, ctkPod:
       false
 
     of ctkIdent:

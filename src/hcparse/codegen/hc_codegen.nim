@@ -85,29 +85,27 @@ proc toNNode*[N](
   ): NType[N] =
 
   case t.kind:
+    of ctkPod:
+      let name = case t.podKind:
+        of cptBool: "cbool"
+        of cptInt: "cint"
+        of cptVoid: "void"
+        of cptUInt: "cuint"
+        of cptI64: "int64"
+        of cptI32: "int32"
+        of cptI16: "int16"
+        of cptI8: "int8"
+        of cptU64: "uint64"
+        of cptU32: "uint32"
+        of cptU16: "uint16"
+        of cptU8: "uint8"
+        else: raise newImplementKindError(t.podKind)
+
+      result = newNNType[N](name, @[])
+
     of ctkIdent:
       if ctfIsEnumType in t.flags:
-        result = newNNType[N](
-          conf.getPrefix("c") & t.nimName,
-          @[])
-
-      elif t.podKind != cptNone:
-        let name = case t.podKind:
-          of cptBool: "cbool"
-          of cptInt: "cint"
-          of cptVoid: "void"
-          of cptUInt: "cuint"
-          of cptI64: "int64"
-          of cptI32: "int32"
-          of cptI16: "int16"
-          of cptI8: "int8"
-          of cptU64: "uint64"
-          of cptU32: "uint32"
-          of cptU16: "uint16"
-          of cptU8: "uint8"
-          else: raise newImplementKindError(t.podKind)
-
-        result = newNNType[N](name, @[])
+        result = newNNType[N](conf.getPrefix("c") & t.nimName, @[])
 
       else:
         result = newNNType[N](t.nimName, @[])

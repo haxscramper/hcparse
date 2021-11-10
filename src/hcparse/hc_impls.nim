@@ -169,7 +169,7 @@ proc fixTypeName*(ntype: var NimType, conf: WrapConf, idx: int = 0) =
     of ctkArrayKinds:
       fixTypeName(ntype.arrayElement, conf, idx)
 
-    of ctkStaticParam:
+    of ctkStaticParam, ctkPod:
       discard
 
     of ctkIdent:
@@ -200,8 +200,11 @@ proc fixContextedName*(
     style: IdentStyle = idsCamel
   ): string =
 
-  let base = if len(base) > 0: base else: name.cxx.scopes.join("")
-  echov name
+  if name.cxx.scopes.len == 0:
+    raise newArgumentError(
+      "Invalid cxx name pair - empty scopes list")
+
+  assert base.len > 0
 
   const map = toMapArray({
     cncType:      toMapArray({
@@ -226,6 +229,7 @@ proc fixContextedName*(
   if name.context != cncType and isReservedNimType(result):
     result = prefix & result & suffix
 
+  assert result.len > 0
   if isReservedNimIdent(result):
     result = prefix & result & suffix
 
@@ -234,7 +238,7 @@ proc fixContextedName*(
     name: CxxNamePair,
     style: IdentStyle = idsSnake
   ): string =
-  if cache.knownRename(name.nim):
+  if name.nim.len > 0 and cache.knownRename(name.nim):
     return cache.getRename(name.nim)
 
   result = fixContextedName(name, name.nim, style)
@@ -531,7 +535,7 @@ let baseFixConf* = CxxFixConf(
         conf: CxxFixConf
       ): string {.closure.} =
 
-      result = cache.fixContextedName(name),
+      result = cache.fixContextedName(name)
 )
 
 import

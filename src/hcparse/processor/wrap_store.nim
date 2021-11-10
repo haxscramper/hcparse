@@ -5,7 +5,7 @@ import
 
 import
   std/[
-    options, macros, json, strutils, 
+    options, macros, json, strutils,
     tables, hashes, sets, sequtils
   ]
 
@@ -16,6 +16,7 @@ type
   CxxTypeKind* = enum
     ## Kind of the wrapped Cxx type
     ctkIdent ## Identifier with optional list of template parameters
+    ctkPod
     ctkProc ## Procedural (callback) type
     ctkPtr
     ctkLVref
@@ -236,8 +237,10 @@ type
         arraySize*: CxxTypeUse
         arrayElement*: CxxTypeUse
 
-      of ctkIdent:
+      of ctkPod:
         podKind*: CxxPodTypeKind
+
+      of ctkIdent:
         cxxType*: CxxTypeRef
         genParams*: seq[CxxTypeUse]
 
@@ -303,6 +306,7 @@ type
     cpfVirtual
     cpfVariadic
     cpfMethod
+    cpfNoexcept
 
     cpfConversionConstructor
 
@@ -314,6 +318,7 @@ type
 
     arguments*: seq[CxxArg]
     returnType*: CxxTypeUse
+    throws*: seq[CxxTypeUse]
 
 
     flags*: set[CxxProcFlag]
@@ -523,6 +528,7 @@ func `$`*(tref: CxxTypeRef): string =
 func `$`*(ct: CxxTypeUse): string
 
 func `$`*(arg: CxxArg): string =
+  assertRef(arg)
   result = $arg.name & ": " & $arg.nimType
   if arg.default.isSome():
     result &= " = "
@@ -534,6 +540,9 @@ func `$`*(ct: CxxTypeUse): string =
 
   else:
     case ct.kind:
+      of ctkPod:
+        result = $ct.podKind
+
       of ctkPtr:
         result = $ct.wrapped & "*"
 
@@ -673,6 +682,10 @@ func `[]`*(t: CxxTypeUse, idx: int): CxxTypeUse =
       raise newUnexpectedKindError(
         t, "Static param does not support generic parameter indexing")
 
+    of ctkPod:
+      raise newUnexpectedKindError(
+        t, "Pod types do not support generic parameter indexing")
+
     of ctkAnonObject, ctkAnonEnum:
       raise newUnexpectedKindError(
         t, "Anonymous enum/object does not support generic parameter indexing")
@@ -685,7 +698,7 @@ func len*(t: CxxTypeUse): int =
     of ctkArrayKinds: 2
     of ctkIdent: t.genParams.len
     of ctkProc: 1 + t.arguments.len
-    of ctkStaticParam, ctkAnonObject, ctkAnonEnum: 0
+    of ctkStaticParam, ctkAnonObject, ctkAnonEnum, ctkPod: 0
 
 func `[]`*(back: CxxTypeUse, idx: BackwardsIndex): CxxTypeUse =
   back[back.len - idx.int]
@@ -738,6 +751,9 @@ func hash*(arg: CxxArg): Hash = hash(arg.name) !& hash(arg.nimType)
 func hash*(use: CxxTypeUse): Hash =
   result = hash(use.kind) !& hash(use.flags)
   case use.kind:
+    of ctkPod:
+      result = hash(use.podKind)
+
     of ctkAnonEnum:
       result = hash(use.enumDef.values.len)
       for value in items(use.enumDef.values):
@@ -945,6 +961,9 @@ func cxxTypeDecl*(
   result = CxxTypeDecl(name: head, genParams: genParams, kind: kind)
   result.name.context = cncType
 
+func cxxTypeUse*(pod: CxxPodTypeKind): CxxTypeUse =
+  CxxTypeUse(kind: ctkPod, podKind: pod)
+
 func cxxTypeUse*(
     head: CxxNamePair,
     genParams: seq[CxxTypeUse] = @[],
@@ -1134,7 +1153,7 @@ template eachIdentAux(inUse, cb, iterateWith: untyped) =
         eachIdent(field.nimType, cb)
 
     of ctkWrapKinds: eachIdent(inUse.wrapped, cb)
-    of ctkStaticParam: discard
+    of ctkStaticParam, ctkPod: discard
     of ctkArrayKinds: eachIdent(inUse.arrayElement, cb)
     of ctkIdent:
       cb(inUse)

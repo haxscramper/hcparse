@@ -1,7 +1,8 @@
 import
   std/[
     strutils,
-    sets
+    sets,
+    tables
   ]
 
 import
@@ -36,83 +37,43 @@ proc cxxPair*(ident: CSCopedIdent): CxxNamePair =
       of true: scopes.add $part.name
       of false: scopes.add $part.cursor
 
-  return cxxPair("", cxxName(scopes))
+  assert scopes.len > 0, "No scopes found for ident " & $ident
+
+  return cxxPair(scopes.join("_") , cxxName(scopes))
 
 
 
 proc toCxxType*(cxtype: CXType, conf: WrapConf, cache: var WrapCache): CxxTypeUse =
   if conf.isComplexType(cxtype, cache):
     return CxxTypeUse(kind: ctkIdent, flags: {ctfComplex})
-    # return conf.newComplexType(cxType, cache)
 
   case cxtype.cxKind():
-    of tkBool:
-      result = CxxTypeUse(kind: ctkIdent, podKind: cptBool)
-
-    of tkInt:
-      result = CxxTypeUse(kind: ctkIdent, podKind: cptInt)
-
-    of tkVoid:
-      result = CxxTypeUse(kind: ctkIdent, podKind: cptVoid)
-
-    of tkUInt:
-      result = CxxTypeUse(kind: ctkIdent, podKind: cptUInt)
-
-    of tkLongLong:
-      result = CxxTypeUse(kind: ctkIdent, podKind: cptI64)
-
-    of tkULongLong:
-      result = CxxTypeUse(kind: ctkIdent, podKind: cptU64)
-
-    of tkDouble:
-      result = CxxTypeUse(kind: ctkIdent, podKind: cptDouble)
-
-    of tkULong:
-      result = CxxTypeUse(kind: ctkIdent, podKind: cptU32)
-
-    of tkUChar:
-      result = CxxTypeUse(kind: ctkIdent, podKind: cptUChar)
-
-    of tkChar16:
-      result = CxxTypeUse(kind: ctkIdent, podKind: cptChar16)
-
-    of tkChar32:
-      result = CxxTypeUse(kind: ctkIdent, podKind: cptChar32)
-
-    of tkWChar:
-      result = CxxTypeUse(kind: ctkIdent, podKind: cptWChar)
-
-    of tkChar_S:
-      result = CxxTypeUse(kind: ctkIdent, podKind: cptChar)
-
-    of tkLong:
-      result = CxxTypeUse(kind: ctkIdent, podKind: cptI32)
-
-    of tkUShort:
-      result = CxxTypeUse(kind: ctkIdent, podKind: cptU16)
-
-    of tkNullPtr:
-      result = CxxTypeUse(kind: ctkIdent, podKind: cptNullptr)
-
-    of tkFloat:
-      result = CxxTypeUse(kind: ctkIdent, podKind: cptFloat)
-
-    of tkLongDouble:
-      result = CxxTypeUse(kind: ctkIdent, podKind: cptLongDouble)
-
-    of tkShort:
-      result = CxxTypeUse(kind: ctkIdent, podKind: cptI16)
-
-    of tkSChar:
-      result = CxxTypeUse(kind: ctkIdent, podKind: cptChar)
+    of tkBool:       result = cxxTypeUse(cptBool)
+    of tkInt:        result = cxxTypeUse(cptInt)
+    of tkVoid:       result = cxxTypeUse(cptVoid)
+    of tkUInt:       result = cxxTypeUse(cptUInt)
+    of tkLongLong:   result = cxxTypeUse(cptI64)
+    of tkULongLong:  result = cxxTypeUse(cptU64)
+    of tkDouble:     result = cxxTypeUse(cptDouble)
+    of tkULong:      result = cxxTypeUse(cptU32)
+    of tkUChar:      result = cxxTypeUse(cptUChar)
+    of tkChar16:     result = cxxTypeUse(cptChar16)
+    of tkChar32:     result = cxxTypeUse(cptChar32)
+    of tkWChar:      result = cxxTypeUse(cptWChar)
+    of tkChar_S:     result = cxxTypeUse(cptChar)
+    of tkLong:       result = cxxTypeUse(cptI32)
+    of tkUShort:     result = cxxTypeUse(cptU16)
+    of tkNullPtr:    result = cxxTypeUse(cptNullptr)
+    of tkFloat:      result = cxxTypeUse(cptFloat)
+    of tkLongDouble: result = cxxTypeUse(cptLongDouble)
+    of tkShort:      result = cxxTypeUse(cptI16)
+    of tkSChar:      result = cxxTypeUse(cptChar)
 
     of tkTypedef:
       raise newImplementError()
-      # result = newNimType(($cxtype).dropPrefix("const "), cxtype) # XXXX typedef processing -
 
     of tkElaborated, tkRecord, tkEnum:
       raise newImplementError()
-      # result = fromElaboratedPType(cxtype, conf, cache)
 
     of tkPointer:
       result = cxtype[].toCxxType(conf, cache).wrap(ctkPtr)
@@ -124,21 +85,9 @@ proc toCxxType*(cxtype: CXType, conf: WrapConf, cache: var WrapCache): CxxTypeUs
           kind: cekIntLit, intVal: cxtype.getNumElements().int())),
         arrayElement: cxtype.getElementType().toCxxType(conf, cache)
       )
-      # newNimType(
-      #   "ptr", [
-      #     newNimType(
-      #       "array", @[
-      #         newNimType($cxtype.getNumElements(), cxtype.getElementType()),
-      #         toNimType(cxtype.getElementType(), conf, cache)
-      #       ], cxType)
-      #   ], cxType)
 
     of tkIncompleteArray:
-      # QUESTION maybe convert to `ptr UncheckedArray?` or add user-defined
-      # callback for switching between different behaviors.
       result = cxtype.getElementType().toCxxType(conf, cache).wrap(ctkDynamicArray)
-      # newNimType("ptr", [toNimType(
-      #   cxtype.getElementType(), conf, cache)], cxType)
 
     of tkFunctionProto:
       var args: seq[CxxArg]
@@ -147,20 +96,10 @@ proc toCxxType*(cxtype: CXType, conf: WrapConf, cache: var WrapCache): CxxTypeUs
 
       result = cxxTypeUse(args, cxtype.getResultType().toCxxType(conf, cache),)
 
-      # newNimType(
-
-      # )
-
     of tkLValueReference:
       result = cxType[].toCxxType(conf, cache)
-      # NOTE this implementation does not work as expected, becuase `const
-      # T&` is not a const-qulified type.
-      #
-      # mutable = not cxType.isConstQualified()
 
-    of tkRValueReference: # WARNING I'm not 100% sure this is correct
-                          # way to map rvalue references to nim type
-                          # system.
+    of tkRValueReference:
       result = cxType[].toCxxType(conf, cache).wrap(ctkRVRef)
 
     else:
@@ -240,10 +179,19 @@ proc toCxxType*(cxtype: CXType, conf: WrapConf, cache: var WrapCache): CxxTypeUs
   if startsWith($cxType, "const"):
     result.flags.incl ctfConst
 
+  if cxtype.isEnum():
+    result.flags.incl ctfIsEnumType
+
+
 
 proc toCxxArg*(arg: CArg, conf: WrapConf, cache: var WrapCache): CxxArg =
+  result = cxxArg(
+    cxxPair(arg.name),
+    arg.cursor.cxType().toCxxType(conf, cache)
+  )
+
   when false:
-    var argType = arg.cursor.cxType().toNimType(conf, cache)
+    var argType = a.toNimType(conf, cache)
     if arg.cursor.cxType().isEnum():
       argType.nimName &= conf.rawSuffix()
 
@@ -429,40 +377,58 @@ proc toCxxArg*(arg: CArg, conf: WrapConf, cache: var WrapCache): CxxArg =
 #     {.emit: `emitStr`.}
 
 
+
+proc declGenParams*(part: CName):
+  seq[tuple[ptype: CxCursor, pdefault: Option[CxCursor]]] =
+
+  case part.cursor.kind:
+    of ckFunctionDecl, ckFunctionTemplate,
+       ckDestructor, ckConstructor, ckMethod,
+       ckClassTemplate, ckStructDecl:
+
+      for param in part.cursor:
+        if param.kind in { ckTemplateTypeParameter }:
+          result.add (param, none CxCursor)
+
+        elif param.kind in {
+          ckTypedefDecl, ckTypeAliasDecl,
+          ckBaseSpecifier, ckAccessSpecifier,
+          ckMethod, ckFunctionTemplate,
+          ckConstructor, ckDestructor,
+          ckVarDecl, ckFieldDecl,
+          ckNamespaceRef
+        }:
+          discard
+
+        else:
+          discard
+
+    else:
+      discard
+
+
+proc genParamsForIdent*(
+    conf: WrapConf,
+    scoped: CSCopedIdent,
+    cache: var WrapCache
+  ): CxxGenParams =
+
+  for part in scoped:
+    for param in part.declGenParams():
+      echov param
+      # let newt = newNimType($param, isParam = true)
+      # result.add newt
+
 proc wrapProcedure*(
     pr: CDecl,
     conf: WrapConf,
     cache: var WrapCache,
     parentDecl: Option[CDecl]
-  ): CxxProc = # tuple[decl: seq[GenEntry], canAdd: bool] =
-  ## Generate wrapped entry for procedure, method, operator, or function
-  ## declaration
-  ##
-  ## - @arg{pr} :: Procedure declaration
-  ## - @arg{parent} :: Names of parent type declaration if present.
-  ##   Parent class for methods and operator overloads.
-  ## - @arg{parent} :: Nim name of the parent type
-  ## - @arg{parentDecl} :: Optional parent declaration
-  ## - @arg{asNewConstructor} :: Of `pr` is a declaration for constructor
-  ##   generate `new` or `init` procedure.
+  ): CxxProc =
 
   result = cxxProc(pr.ident.cxxPair())
-  # var it = initGenProc(pr, currLInfo())
 
-  # template endProc(it: GenProc): untyped =
-  #   let generated = newProcVisit(it, conf, cache)
-  #   result.decl.add it
-  #   result.decl.add GenPass(iinfo: currLInfo(), passEntries: generated)
-
-
-  var addThis = (
-    pr.kind == cdkMethod and
-    pr.cursor.cxKind notin {
-      ckConstructor, ckDestructor, ckConversionFunction })
-
-  when false:
-    raise newImplementError()
-    it.genParams = conf.genParamsForIdent(pr.ident, cache)
+  result.head.genParams = conf.genParamsForIdent(pr.ident, cache)
 
   # var opKind: CxOperatorKind
   # result.canAdd = true
@@ -556,25 +522,23 @@ proc wrapProcedure*(
       result.destructorOf = some cxxPair(parentDecl.get().ident)
 
     else:
-      echov pr.cursor.retType().hshow()
       let returnType = pr.cursor.retType().toCxxType(conf, cache)
-      echov returnType
       result.returnType = returnType
-      echov result.returnType
-      # let re = pr.cursor.retType()
-      # var returnType = toNimType(re, conf, cache)
 
-      when false:
-        if returnType.isComplex.not() and
-           parentDecl.isSome() and
-           parent.isSome() and
-           pr.cursor.retType().
-           getTypeDeclaration().
-           inheritsGenParamsOf(parentDecl.get().cursor):
+      if parentDecl.isSome():
+        result.flags.incl cpfMethod
 
-          returnType.genParams = parent.get().genParams
+      if pr.cursor.isConstMethod():
+        result.flags.incl cpfConst
 
-  echov result
+  case ExceptionSpecificationKind(pr.cursor.getCursorExceptionSpecificationType()):
+    of ceskBasicNoexcept:
+      result.flags.incl cpfNoexcept
+
+    else:
+      discard
+
+  # echov result
         # WARNING(refactor)
 
       # result.returnType = returnType
@@ -965,6 +929,7 @@ proc wrapObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): CxxObject =
     cdkClass, cdkStruct, cdkUnion, cdkForward}, $cd.kind
 
   result = cxxObject(cd.ident.cxxPair())
+  result.decl.genParams = conf.genParamsForIdent(cd.ident, cache)
 
   # result = GenObject(
   #   rawName: $cd.cursor,

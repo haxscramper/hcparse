@@ -226,7 +226,7 @@ proc fixIdentsRec*(
     proc auxArg(use: var CxxTypeUse, cache: var StringNameCache) =
       case use.kind:
         of ctkWrapKinds: auxArg(use.wrapped, cache)
-        of ctkStaticParam: discard
+        of ctkStaticParam, ctkPod: discard
         of ctkAnonEnum:
           aux(use.enumParent)
           aux(use.enumUser)

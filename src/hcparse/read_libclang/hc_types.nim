@@ -95,6 +95,9 @@ type
 
 
     case kind*: CxxTypeKind
+      of ctkPod:
+        podKind*: CxxPodTypeKind
+
       of ctkIdent:
         defaultType*: Option[NimType] ## Default type value. Used in
                                       ## template type parameters
@@ -1091,31 +1094,6 @@ proc toHaxdocJson*(conf: WrapConf, ns: CScopedIdent): JsonNode =
 
 
 
-proc declGenParams*(part: CName): seq[CxCursor] =
-  case part.cursor.kind:
-    of ckFunctionDecl, ckFunctionTemplate,
-       ckDestructor, ckConstructor, ckMethod,
-       ckClassTemplate, ckStructDecl:
-
-      for param in part.cursor:
-        if param.kind in { ckTemplateTypeParameter }:
-          result.add param
-
-        elif param.kind in {
-          ckTypedefDecl, ckTypeAliasDecl,
-          ckBaseSpecifier, ckAccessSpecifier,
-          ckMethod, ckFunctionTemplate,
-          ckConstructor, ckDestructor,
-          ckVarDecl, ckFieldDecl,
-          ckNamespaceRef
-        }:
-          discard
-
-        else:
-          discard
-
-    else:
-      discard
 
 
 
@@ -1433,6 +1411,9 @@ func initCxxLibImport*(conf: WrapConf, path: seq[string]): CxxLibImport =
 
 func hash*(nt: NimType): Hash =
   case nt.kind:
+    of ctkPod:
+      result = hash(nt.podKind)
+
     of ctkAnonEnum, ctkAnonObject:
       raise newImplementKindError(nt)
 
@@ -1467,6 +1448,9 @@ func hash*(nt: NimType): Hash =
 func `==`*(t1, t2: NimType): bool =
   if t1.kind == t2.kind:
     case t1.kind:
+      of ctkPod:
+        return t1.podKind == t2.podKind
+
       of ctkAnonObject, ctkAnonEnum:
         raise newImplementKindError(t1)
 
@@ -1558,6 +1542,9 @@ proc `$`*(nimType: NimType): string =
 
   else:
     case nimType.kind:
+      of ctkPod:
+        result = $nimType.podKind
+
       of ctkAnonEnum, ctkAnonObject:
         raise newImplementKindError(nimType)
 
@@ -1878,6 +1865,9 @@ proc allUsedTypes*(
 
 
   case nimType.kind:
+    of ctkPod:
+      discard
+
     of ctkAnonObject, ctkAnonEnum:
       raise newImplementKindError(nimType)
 
@@ -1918,7 +1908,7 @@ proc allGenericParams*(nimType: NimType): seq[NimType] =
     of ctkArrayKinds:
       result = allGenericParams(nimType.arrayElement)
 
-    of ctkStaticParam:
+    of ctkStaticParam, ctkPod:
       discard
 
     of ctkIdent:

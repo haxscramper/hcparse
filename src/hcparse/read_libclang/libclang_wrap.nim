@@ -163,7 +163,7 @@ type
     subminor*: cint
 
 type
-  CXCursor_ExceptionSpecificationKind* = enum ##  Describes the exception specification of a cursor.
+  ExceptionSpecificationKind* = enum ##  Describes the exception specification of a cursor.
                                            ##  A negative value indicates that the cursor is not a function declaration.
     ceskNone,                 ##  The cursor has no exception specification.
     ceskDynamicNone,          ##  The cursor has exception specification throw()

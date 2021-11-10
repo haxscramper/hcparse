@@ -491,7 +491,7 @@ proc argTypes*(cursor: CXCursor): seq[CXType] =
 proc isConstMethod*(cursor: CXCursor): bool =
   ## Return true if cursor is a class method with `const`
   ## qualification. No exception is raised on invalid method
-  (cursor.kind in {ckMethod}) and (methodIsConst(cursor) == 0)
+  (cursor.kind in {ckMethod}) and (methodIsConst(cursor) != 0)
 
 proc isFromMainFile*(cursor: CXCursor): bool =
   ## Return true if cursor posints to main file
@@ -719,6 +719,8 @@ proc treeRepr*(
   #        other token configuration options.
   coloredResult()
 
+  let sep = if opts.pathIndexed(): 3 else: 2
+
   proc aux(
       cursor: CxCursor, level: int, idx: seq[int],
       inTranslationUnit: bool = false
@@ -727,30 +729,35 @@ proc treeRepr*(
     const colorize = not defined(plainStdout)
 
     if inTranslationUnit:
-      addIndent(level, 3)
+      addIndent(level, sep)
 
     else:
       add joinPrefix(level, idx, opts)
-    #   opts.pathIndexed() and not inTranslationUnit,
-    #   opts.positionIndexed() and not inTranslationUnit
-    # )
-
-    # addIndent(level)
 
 
     add hshow(cursor.kind)
+
+    if tu.isNone():
+      add " "
+      add $cursor + fgYellow
+
+    if cursor.isConstMethod(): add " const" + fgCyan
+    if cursor of {ckMethod, ckFunctionDecl}:
+      let raises = ExceptionSpecificationKind(cursor.getCursorExceptionSpecificationType())
+      if raises != ceskNone:
+        add " "
+        add hshow(raises)
+
     if not(cursor.cxType() of tkInvalid):
-      add "\n"
-      addIndent(level + 1, 3)
-      add "type: "
-      add hshow(cursor.cxType().cxKind())
+      # add "\n"
+      # addIndent(level, sep)
       add " "
       add hshow(cursor.cxType)
 
     if cursor.cxKind() in {ckTemplateRef}:
       add "\n"
-      addIndent(level + 1, 3)
-      add "ref of: "
+      addIndent(level, sep)
+      add "  ref of: "
       add cursor.getSpecializedCursorTemplate().cxKind().hshow()
 
     # let ctype = pptConst(
@@ -796,24 +803,27 @@ proc treeRepr*(
 
           for token in cursor.tokens(tu.get()):
             add "\n"
-            addIndent(level + 1, 3)
+            addIndent(level + 1, sep)
             add ($getTokenSpelling(tu.get(), token) |<< align) + fgYellow
             add " "
             add hshow(token.getTokenKind())
 
         else:
           add "\n"
-          addIndent(level + 1, 3)
+          addIndent(level + 1, sep)
 
-          var offset = level * 3
+          var offset = level * sep
           for token in cursor.tokens(tu.get()):
             let tok = $getTokenSpelling(tu.get(), token)
             offset += len(tok)
             if opts.maxLen < offset:
               add "\n"
-              addIndent(level + 1, 3)
+              addIndent(level + 1, sep)
 
             add tok + fgYellow
+            add " "
+            offset += 1
+
 
         # add .mapIt().join(" ") + fgGreen
 
