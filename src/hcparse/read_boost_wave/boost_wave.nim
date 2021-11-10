@@ -1,17 +1,15 @@
-import hmisc/wrappers/wraphelp
-
 import ./boost_wave_wrap
 export boost_wave_wrap
 
 export boost_wave_wrap
 import hmisc/core/all
 import hmisc/other/[oswrap]
-import hmisc/wrappers/wraphelp
 
 
 from hmisc/core/colored import toLink
 
 import std/[os, strformat, options, strutils]
+export options
 
 {.passc:"-I" & currentSourcePath().splitFile().dir .}
 
@@ -368,33 +366,6 @@ proc setLanguageMode*(context: var WaveContext, mode: set[WaveLanguageModeImpl])
 
 
 
-func toLink1(link: string, desc: string = link): string =
-  &"\e]8;;{link}\e\\{desc}\e]8;;\e\\"
-
-func toLink1(
-    pos: (string, int, int),
-    desc: string = "file://" & pos[0] & ":" & $pos[1] & ":" & $pos[2]
-  ): string =
-
-  toLink1(&"file://{pos[0]}:{pos[1]}:{pos[2]}", desc)
-
-
-var keepInt: int
-template keep(value: untyped) =
-  keepInt += 1
-  {.emit: [keepInt, "+= (void*)&", value,";"].}
-  keepInt = keepInt and 0xFFFF
-
-template echov1*(variable: untyped): untyped =
-  block:
-    let iinfo = instantiationInfo(fullpaths = true)
-    var line = " [" & toLink(iinfo, strutils.align($iinfo.line, 4)) & "] "
-    var vart = $variable
-    let pref = astToStr(variable) & vart
-    var text = pref
-    # debugecho(text)
-
-
 proc setFoundWarningDirective*(
     ctx: var WaveContext,
     impl: FoundWarningDirectiveImplTypeNim
@@ -410,7 +381,7 @@ proc setFoundWarningDirective*(
 template onFoundWarningDirective*(inCtx: var WaveContext, body: untyped): untyped =
   inCtx.setFoundWarningDirective(
     proc(
-      ctx {.inject.}: ptr WaveContextImplHandle,
+      ctx     {.inject.}: ptr WaveContextImplHandle,
       message {.inject.}: ptr WaveTokenListHandle
     ): EntryHandling =
 
@@ -459,10 +430,11 @@ template onEvaluatedConditionalExpression*(
 
   inCtx.setEvaluatedConditionalExpression(
     proc (
-      ctx {.inject.}: ptr WaveContextImplHandle;
-      directive {.inject.}: ptr WaveTokenHandle;
-      expression {.inject.}: ptr WaveTokenListHandle;
-      expressionValue {.inject.}: bool): bool =
+      ctx             {.inject.}: ptr WaveContextImplHandle;
+      directive       {.inject.}: ptr WaveTokenHandle;
+      expression      {.inject.}: ptr WaveTokenListHandle;
+      expressionValue {.inject.}: bool
+    ): bool =
 
       body
   )
@@ -558,9 +530,10 @@ The function found_include_directive is called whenever whenever a
 template onFoundIncludeDirective*(ctx: var WaveContext, body: untyped): untyped =
   ctx.setFoundIncludeDirective(
     proc(
-      context {.inject.}: ptr WaveContextImplHandle;
-      impl {.inject.}: cstring;
-      includeNext {.inject.}: bool): EntryHandling =
+      context     {.inject.}: ptr WaveContextImplHandle;
+      impl        {.inject.}: cstring;
+      includeNext {.inject.}: bool
+    ): EntryHandling =
 
       body
   )
@@ -603,12 +576,12 @@ parameter was added for the Boost V1.35.0 release.
 template onDefinedMacro*(inCtx: var WaveContext, body: untyped): untyped =
   inCtx.setDefinedMacro(
     proc (
-      ctx {.inject.}: ptr WaveContextImplHandle;
-      name {.inject.}: ptr WaveTokenHandle;
+      ctx            {.inject.}: ptr WaveContextImplHandle;
+      name           {.inject.}: ptr WaveTokenHandle;
       isFunctionlike {.inject.}: bool;
-      parameters {.inject.}: ptr WaveTokenVectorHandle;
-      definition {.inject.}: ptr WaveTokenListHandle;
-      isPredefined {.inject.}: bool): void =
+      parameters     {.inject.}: ptr WaveTokenVectorHandle;
+      definition     {.inject.}: ptr WaveTokenListHandle;
+      isPredefined   {.inject.}: bool): void =
 
       body
 
@@ -654,10 +627,11 @@ macro is to be expanded, i.e. before the actual expansion starts.
 template onExpandingObjectLikeMacro*(inCtx: var WaveContext, body: untyped): untyped =
   inCtx.setExpandingObjectLikeMacro(
     proc(
-      ctx {.inject.}: ptr WaveContextImplHandle;
-      argmacro {.inject.}: ptr WaveTokenHandle;
+      ctx        {.inject.}: ptr WaveContextImplHandle;
+      argmacro   {.inject.}: ptr WaveTokenHandle;
       definition {.inject.}: ptr WaveTokenListHandle;
-      macrocall {.inject.}: ptr WaveTokenHandle): EntryHandling =
+      macrocall  {.inject.}: ptr WaveTokenHandle
+    ): EntryHandling =
 
       body
 
@@ -666,14 +640,14 @@ template onExpandingObjectLikeMacro*(inCtx: var WaveContext, body: untyped): unt
 template onExpandingFunctionLikeMacro*(inCtx: var WaveContext, body: untyped): untyped =
   inCtx.setExpandingFunctionLikeMacro(
     proc(
-      ctx {.inject.}: ptr WaveContextImplHandle;
-      macrodef {.inject.}: ptr WaveTokenHandle;
+      ctx        {.inject.}: ptr WaveContextImplHandle;
+      macrodef   {.inject.}: ptr WaveTokenHandle;
       formalArgs {.inject.}: ptr WaveTokenVectorHandle;
       definition {.inject.}: ptr WaveTokenListHandle;
-      macrocall {.inject.}: ptr WaveTokenHandle;
-      arguments {.inject.}: ptr WaveTokenVectorHandle;
-      seqstart {.inject.}: pointer;
-      seqend {.inject.}: pointer): bool =
+      macrocall  {.inject.}: ptr WaveTokenHandle;
+      arguments  {.inject.}: ptr WaveTokenVectorHandle;
+      seqstart   {.inject.}: pointer;
+      seqend     {.inject.}: pointer): bool =
 
       body
   )
@@ -824,7 +798,8 @@ template onSkippedToken*(inCtx: var WaveContext, body: untyped): untyped =
   inCtx.setSkippedToken(
     proc(
       context {.inject.}: ptr WaveContextImplHandle;
-      token {.inject.}: ptr WaveTokenHandle) =
+      token {.inject.}: ptr WaveTokenHandle
+    ) =
 
       body
   )
@@ -879,12 +854,13 @@ uniquely identify the referenced file.
 template onLocateIncludeFile*(inCtx: var WaveContext, body: untyped): untyped =
   inCtx.setLocateIncludeFile(
     proc (
-      ctx {.inject.}: ptr WaveContextImplHandle;
-      filePath {.inject}: cstring;
-      isSystem {.inject.}: bool;
+      ctx         {.inject.}: ptr WaveContextImplHandle;
+      filePath    {.inject.}: cstring;
+      isSystem    {.inject.}: bool;
       currentName {.inject.}: cstring;
-      dirPath {.inject.}: cstring;
-      nativename {.inject.}: cstring): EntryHandling =
+      dirPath     {.inject.}: cstring;
+      nativename  {.inject.}: cstring
+    ): EntryHandling =
 
       body
 
@@ -999,8 +975,6 @@ using `hasErrors`, and accessed using `popDiagnostics`
   result = ctx.handle.addMacroDefinition(str.cstring, isPredefined)
   # echov "ok"
 
-import std/options
-export options
 
 proc addMacroDefinition*(
     ctx: var WaveContext,
@@ -1045,26 +1019,14 @@ proc newWaveContext*(
     sysIncludes: seq[string] = @[],
     languageMode: set[WaveLanguageModeImpl] = wlmDefault
   ): WaveContext =
+
   ## Construct new wave context object.
   ## - NOTE if @arg{userIncludes} *or* @arg{sysIncludes} is a non-empty
   ##   sequence then [[code:setIncludePath]] is called for one-time configuration,
   ##   meaning subsequent configurations are not supported.
-  # new(
-  #   result,
-  #   # proc(ctx: WaveContext) =
-  #   #   destroyContext(ctx.handle)
-  #   #   deallocCStringArray(ctx.str)
-  # )
 
   result.str = allocCStringArray([str])
   result.handle = newWaveContext(result.str[0], file)
-  /// "Echo result handle":
-    /// "Cast to integer":
-      let c = cast[int](result.handle)
-
-    /// "Execute echov":
-      echov1 c
-
   discard result.addIncludePath(".")
   if ?userIncludes or ?sysIncludes:
     result.setIncludePaths(userIncludes, sysIncludes)
@@ -1073,54 +1035,6 @@ proc newWaveContext*(
 
   result.addMacroDefinition("__has_builtin", @["EXPR"], some("1"))
 
-  # result.onEvaluatedConditionalExpression():
-  #   echov directive, expression, "=", expressionValue
-
-  # result.onDefinedMacro():
-  #   if "HOSTED" in $name:
-  #     echov "---"
-  #     echov name
-  #     echov parameters
-  #     echov definition
-
-
-# proc addMacroDefinition*(
-#     ctx: var WaveContext,
-#     str: string,
-#     isPredefined: bool = false) =
-#   addMacroDefinition(ctx, str.cstring, isPredefined)
-
-# proc getMacroDefinition*(
-#     ctx: var WaveContext,
-#     name: cstring,
-#     isFunctionStyle: ptr bool,
-#     isPredefined: ptr bool,
-#     pos: ptr WavePosition,
-#     parameters: ptr ptr WaveTokenVectorHandle,
-#     definition: ptr ptr WaveTokenListHandle
-#   ): bool {.apiProc, importc: "wave_getMacroDefinition".}
-
-#   ##[
-
-# Allows to retrieve all information known with regard to a macro definition.
-# parameters
-
-# - @arg{name} :: specifies the name of the macro the information should
-#   be returned for.
-# - @arg{isFunctionStyle}, @arg{isPredefined} :: whether the
-#   macro has been defined as a function style macro or as a
-#   predefined macro resp.
-# - @arg{pos} :: will contain the position the
-#   macro was defined at.
-# - @arg{parameters} :: will contain the names of
-#   the parameters the macro was defined with and the parameter definition will
-#   contain the token sequence for the definition (macro body).
-
-# The function returns true is the macro was defined and the requested
-# information has been successfully retrieved, false otherwise.
-
-#   ]##
-
 type
   WaveMacroDefinition* = object
     isFunctionStyle: bool
@@ -1128,8 +1042,6 @@ type
     pos: WavePosition
     parameters: ptr WaveTokenVectorHandle
     definition: ptr WaveTokenListHandle
-
-# proc `=destroy`(def: var WaveMacroDefinition) =
 
 
 proc getMacroDefinition*(
@@ -1144,5 +1056,4 @@ proc getMacroDefinition*(
     addr result.definition
   )
 
-
-# type WaveProcessingHooksHandle {.apiPtr.} = object
+  assert ok

@@ -94,7 +94,7 @@ proc getDepFiles*(deps: seq[CXCursor], conf: WrapConf): seq[AbsFile] =
         # WARNING ignore invalid `#include`
         if decl[0].cxKind() notin {ckNoDeclFound}:
           if decl[0].isDependency(conf):
-            let (file, line, column, _) = decl[0].getSpellingLocation().get()
+            let (file, _, _, _) = decl[0].getSpellingLocation().get()
             assertExists(file)
             result.add file
 

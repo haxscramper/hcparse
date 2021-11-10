@@ -210,26 +210,29 @@ proc fixIdentsRec*(
     conf: CxxFixConf
   ) =
 
+  assertRefFields(conf)
   var context: CxxNameFixContext
   context[cancLibName] = some cxxPair(conf.libName, cxxName(conf.libName))
-  template aux(name: var CxxNamePair): untyped =
+  proc aux(name: var CxxNamePair, cache: var StringNameCache) =
+    # ploc()
     name.nim = conf.fixName(name, cache, context)
+    # ploc()
 
   proc aux(decl: var CxxTypeDecl, cache: var StringNameCache) =
-    aux(decl.name)
+    aux(decl.name, cache)
 
   proc aux(use: var CxxTypeUse, cache: var StringNameCache) =
     var cache {.byaddr1.} = cache
     eachIdent(use) do (use: var CxxTypeUse):
-      aux(use.cxxType.name)
+      aux(use.cxxType.name, cache)
 
     proc auxArg(use: var CxxTypeUse, cache: var StringNameCache) =
       case use.kind:
         of ctkWrapKinds: auxArg(use.wrapped, cache)
         of ctkStaticParam, ctkPod: discard
         of ctkAnonEnum:
-          aux(use.enumParent)
-          aux(use.enumUser)
+          aux(use.enumParent, cache)
+          aux(use.enumUser, cache)
 
         of ctkArrayKinds: auxArg(use.arrayElement, cache)
         of ctkIdent:
@@ -237,8 +240,8 @@ proc fixIdentsRec*(
             auxArg(param, cache)
 
         of ctkAnonObject:
-          aux(use.objParent)
-          aux(use.objUser)
+          aux(use.objParent, cache)
+          aux(use.objUser, cache)
 
         of ctkProc:
           for idx, arg in mpairs(use.arguments):
@@ -246,7 +249,7 @@ proc fixIdentsRec*(
               arg.name = cxxPair("arg" & $idx)
 
 
-            aux(arg.name)
+            aux(arg.name, cache)
             auxArg(arg.nimType, cache)
 
           auxArg(use.returnType, cache)
@@ -255,13 +258,13 @@ proc fixIdentsRec*(
 
   proc aux(decl: var CxxProc, cache: var StringNameCache) =
     if decl.isConstructor():
-      aux(decl.constructorOf.get())
+      aux(decl.constructorOf.get(), cache)
 
     for idx, arg in mpairs(decl.arguments):
       if isEmpty(arg.cxxName()):
         arg.name = cxxPair("arg" & $idx)
 
-      aux(arg.name)
+      aux(arg.name, cache)
       aux(arg.nimType, cache)
 
     if ?decl.arguments:
@@ -269,7 +272,13 @@ proc fixIdentsRec*(
       if decl.arguments[0].nimType.kind == ctkIdent:
         context[cancFirstArgName] = some decl.arguments[0].nimType.cxxType.name
 
-    aux(decl.head.name)
+    if decl of cpkOperatorKinds:
+      assert decl.head.name.nim.len > 0,
+               "Missing name for operator proc."
+
+    else:
+      aux(decl.head.name, cache)
+
     aux(decl.returnType, cache)
 
     context[cancFirstArgName].clear()
@@ -282,21 +291,23 @@ proc fixIdentsRec*(
 
     case entry.kind:
       of cekEnum:
-        aux(entry.cxxEnum.decl.name)
+        assertref entry.cxxEnum
+        aux(entry.cxxEnum.decl.name, cache)
         context[cancParentEnumName] = some entry.cxxEnum.decl.name
         for value in mitems(entry.cxxEnum.values):
-          aux(value.name)
+          aux(value.name, cache)
 
         context[cancParentEnumName].clear()
 
       of cekForward:
-        aux(entry.cxxForward.decl.name)
+        aux(entry.cxxForward.decl.name, cache)
 
       of cekObject:
-        aux(entry.cxxObject.decl.name)
+        assertRef entry.cxxObject
+        aux(entry.cxxObject.decl.name, cache)
         context[cancParentObjectName] = some entry.cxxObject.decl.name
         for field in mitems(entry.cxxObject.mfields):
-          aux(field.name)
+          aux(field.name, cache)
           aux(field.nimType, cache)
 
         for mproc in mitems(entry.cxxObject.methods):

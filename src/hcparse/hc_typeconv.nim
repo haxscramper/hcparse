@@ -1,6 +1,6 @@
 ## Conversion of C types to nim
 
-import ./read_libclang/[cxtypes, hc_types, cxcommon]
+import ./read_libclang/[cxtypes, hc_types]
 import hnimast
 
 import
@@ -9,13 +9,7 @@ import
   hmisc/algo/[hstring_algo, clformat],
   hmisc/core/all
 
-import std/[
-  strformat,
-  sequtils,
-  strutils,
-  parseutils,
-  tables
-]
+import std/[strformat, sequtils, tables, strutils]
 
 import ./processor/wrap_store
 
@@ -31,59 +25,6 @@ func add*(
 
 
 proc getTypeName*(cxtype: CXType, conf: WrapConf): string
-
-proc toNimType*(
-    cxtype: CXType, conf: WrapConf, cache: var WrapCache): NimType
-
-
-proc fromElaboratedPType*(
-    cxtype: CXType, conf: WrapConf, cache: var WrapCache): NimType =
-
-  let decl = cxtype.getTypeDeclaration()
-  if cxtype.getNumTemplateArguments() > 0:
-    case decl.cxKind:
-      of ckTypedefDecl, ckTypeAliasDecl, ckTypeAliasTemplateDecl:
-        # WARNING `template <J, Q> using` is not handled
-        result = newNimType(cxtype.getTypeName(conf), cxtype)
-
-      of ckTypeDeclKinds:
-        let params = cxtype.templateParams()
-        result = newNimType(cxtype.getTypeName(conf), cxtype)
-        for idx, parm in params:
-          if parm.cxKind != tkInvalid:
-            result.add parm.toNimType(conf, cache)
-
-      else:
-        conf.warn "Conversion from elaborated type: ", decl
-        conf.debug "  ", decl.cxKind(), " in ", decl.getSpellingLocation()
-
-  else:
-    result = newNimType(getTypeName(cxtype, conf), cxtype)
-
-proc dropPOD*(
-    cxtype: CXType, conf: WrapConf, cache: var WrapCache): string =
-  case cxtype.cxKind:
-    of tkElaborated:
-      cxtype.fromElaboratedPType(conf, cache).nimName
-
-    of tkPointer:
-      cxtype[].dropPOD(conf, cache)
-
-    of tkTypedef:
-      ($cxtype).dropPrefix("const ")
-
-    else:
-      ""
-
-proc toCArg*(cursor: CXCursor, conf: WrapConf, cache: var WrapCache): CArg =
-  var varname = $cursor
-  if varname.len == 0:
-    varname = "arg" & $cursor.cxType().dropPOD(conf, cache)
-
-  let argType = cursor.cxType().toNimType(conf, cache)
-  return initCArg(varname, argType)
-
-
 
 proc toCName*(cursor: CXCursor): CName
 proc toScopedIdent*(cursor: CXCursor): CScopedIdent =
@@ -266,7 +207,8 @@ proc defaultTypeParameter*(
     let param = params[idx]
     case param.kind:
       of ckTypeRef:
-        result = toNimType(param.cxType(), conf, cache)
+        {.warning: "XXX".}
+        # result = toNimType(param.cxType(), conf, cache)
         inc idx
 
       of ckTemplateRef:
@@ -320,31 +262,33 @@ proc setParamsForType*(
   # class basic_string;
   # ```
 
-  if params.len > 0:
-    let key: seq[string] = ident.mapIt(getName(it))
-    if key notin cache.paramsForType:
-      cache.paramsForType[key] = @[]
+  {.warning: "[FIXME] Implement default template type parameter handling for the new IR".}
+  when false:
+    if params.len > 0:
+      let key: seq[string] = ident.mapIt(getName(it))
+      if key notin cache.paramsForType:
+        cache.paramsForType[key] = @[]
 
-    # Convenience helper to avoid writing `cache.paramsForType[key]`
-    # all over the place.
-    var list {.byaddr1.} = cache.paramsForType[key]
+      # Convenience helper to avoid writing `cache.paramsForType[key]`
+      # all over the place.
+      var list {.byaddr1.} = cache.paramsForType[key]
 
-    for idx, param in params:
-      var nimType = param.cxtype.toNimType(conf, cache)
+      for idx, param in params:
+        var nimType = param.cxtype.toNimType(conf, cache)
 
-      if list.high < idx:
-        list.add NimType(kind: ctkIdent)
+        if list.high < idx:
+          list.add NimType(kind: ctkIdent)
 
-      if list[idx].defaultType.isNone():
-        # Only assign if default template type parameter is none - current type
-        # conversion is likely to have at least as much information (or more).
-        list[idx] = nimType
+        if list[idx].defaultType.isNone():
+          # Only assign if default template type parameter is none - current type
+          # conversion is likely to have at least as much information (or more).
+          list[idx] = nimType
 
-      if param.len() > 0:
-        var default = defaultTypeParameter(param, cache, conf)
+        if param.len() > 0:
+          var default = defaultTypeParameter(param, cache, conf)
 
-        if default.isSome():
-          list[idx].defaultType = default
+          if default.isSome():
+            list[idx].defaultType = default
 
 
 
@@ -634,198 +578,6 @@ func mapPrimitiveName*(name: string): string =
 func mapPrimitivePod*(name: string): CxxPodTypeKind =
   mapPrimitiveNameImpl(name).pod
 
-proc toNimType*(
-    cxtype: CXType, conf: WrapConf, cache: var WrapCache): NimType =
-  ## Convert CXType to nim type. Due to differences in how mutability
-  ## handled in nim and C it is not entirely possible to map `CXType` to
-  ## `NimType` without losing this information. Instead `isMutable` is set
-  ## in resulting type, indicating whether or not the type was mutable.
-  ## Conversion is performed as follows
-  ##
-  ## - `T&` is considered mutable and mapped to `var T`
-  ## - Any kind of pointer is mapped to immutable since it is not possible
-  ##   infer this information from C type anyway.
-  ## - Function prototype is mapped to `{.cdecl.}` proc type
-  ## - 'special' types are mapped
-  ##   - `char*` -> `cstring`
-  ##   - `char**` -> `cstringArray`
-  ##   - `void*` -> `pointer`
-  ## - For C types with elaborated specifier (e.g. `enum E` instead of
-  ##   simply `E`) specifiers are simply dropped.
-  ##
-  ## - TODO :: `const&&` parameters /could/ be mapped to `sink` annotations
-
-  if conf.isComplexType(cxtype, cache):
-    return conf.newComplexType(cxType, cache)
-
-  var
-    mutable: bool = false
-    special: CTypeSpecialKind = ctskNone
-
-  result = case cxtype.cxKind():
-    of tkBool:       newNimType("bool",        cxtype)
-    of tkInt:        newNimType("cint",        cxtype)
-    of tkVoid:       newNimType("void",        cxtype)
-    of tkUInt:       newNimType("cuint",       cxtype)
-    of tkLongLong:   newNimType("clonglong",   cxtype)
-    of tkULongLong:  newNimType("culonglong",  cxtype)
-    of tkDouble:     newNimType("cdouble",     cxtype)
-    of tkULong:      newNimType("culong",      cxtype)
-    of tkUChar:      newNimType("cuchar",      cxtype)
-    of tkChar16:     newNimType("cchar16",     cxtype)
-    of tkChar32:     newNimType("cchar32",     cxtype)
-    of tkWChar:      newNimType("cwchar",      cxtype)
-    of tkChar_S:     newNimType("cchar",       cxtype)
-    of tkLong:       newNimType("clong",       cxtype)
-    of tkUShort:     newNimType("cushort",     cxtype)
-    of tkNullPtr:    newNimType("pointer",     cxtype) # WARNING C++ type is `nullptr_t`
-    of tkFloat:      newNimType("cfloat",      cxtype)
-    of tkLongDouble: newNimType("clongdouble", cxtype)
-    of tkShort:      newNimType("cshort",      cxtype)
-    of tkSChar:      newNimType("cschar",      cxtype)
-    of tkTypedef:
-      mutable = cxType.isMutableRef()
-      newNimType(($cxtype).dropPrefix("const "), cxtype) # XXXX typedef processing -
-
-    of tkElaborated, tkRecord, tkEnum:
-      # debug "From elaborated type"
-      fromElaboratedPType(cxtype, conf, cache)
-
-    of tkPointer:
-      case cxtype[].cxkind:
-        of tkChar_S:
-          newNimType("cstring", cxtype)
-
-        of tkPointer:
-          if cxtype[][].cxKind() == tkChar_S:
-            newNimType("cstringArray", cxtype)
-
-          else:
-            newNimType("ptr", [toNimType(cxtype[], conf, cache)], cxtype)
-
-        of tkVoid:
-          newNimType("pointer", cxtype)
-
-        of tkFunctionProto:
-          toNimType(cxtype[], conf, cache)
-
-        else:
-          newNimType("ptr", [toNimType(cxtype[], conf, cache)], cxtype)
-
-    of tkConstantArray:
-      newNimType(
-        "ptr", [
-          newNimType(
-            "array", @[
-              newNimType($cxtype.getNumElements(), cxtype.getElementType()),
-              toNimType(cxtype.getElementType(), conf, cache)
-            ], cxType)
-        ], cxType)
-
-    of tkIncompleteArray:
-      # QUESTION maybe convert to `ptr UncheckedArray?` or add user-defined
-      # callback for switching between different behaviors.
-      newNimType("ptr", [toNimType(
-        cxtype.getElementType(), conf, cache)], cxType)
-
-    of tkFunctionProto:
-      newNimType(
-        cxtype.argTypes.mapIt(initCArg("", toNimType(it, conf, cache))),
-        cxtype.getResultType().toNimType(conf, cache)
-      )
-
-    of tkLValueReference:
-      # NOTE this implementation does not work as expected, becuase `const
-      # T&` is not a const-qulified type.
-      #
-      # mutable = not cxType.isConstQualified()
-      mutable = not startsWith($cxType, "const")
-      special = ctskLValueRef
-
-      toNimType(cxType[], conf, cache)
-
-    of tkRValueReference: # WARNING I'm not 100% sure this is correct
-                          # way to map rvalue references to nim type
-                          # system.
-      mutable = cxType.isMutableRef()
-      special = ctskRValueRef
-      toNimType(cxType[], conf, cache)
-
-    of tkUnexposed:
-      let strval = ($cxType).dropPrefix("const ") # WARNING
-      let db = "string" in strval
-
-      if strval.validCxxIdentifier():
-        newNimType(strval, cxtype)
-
-      else:
-        let
-          decl = cxtype.getTypeDeclaration()
-          name = cxType.namespacedName(conf)
-          typenameParts = toStrPart(@[
-            "type-parameter", "typename type-parameter",
-            "typename rebind<type-parameter",
-            "typename"
-          ])
-
-
-        var res = newNimType(name, cxType)
-        if decl.cxKind in ckTypeDeclKinds:
-          # HACK list of necessary kinds is determined by trial and error,
-          # I'm still not really sure what `tkUnexposed` actually
-          # represents.
-          for arg in cxType.templateParams():
-            res.add toNimType(arg, conf, cache)
-            res.genParams[^1].isParam = true
-
-        elif startsWith($cxType, typenameParts):
-          let unprefix = dropPrefix($cxType, typenameParts)
-          if allIt(unprefix, it in {'0' .. '9', '-'}):
-            res = newNimType("TYPE_PARAM " & unprefix, cxtype, true)
-
-          else:
-            res = newTemplateUndefined(cxType)
-
-        else:
-          res = newNimType("UNEXPOSED", cxtype, true)
-          if decl.cxKind() notin {ckNoDeclFound}:
-            conf.warn "No decl found for type"
-            conf.logger.indented:
-              conf.info cxtype.hshow()
-              conf.debug decl.getSpellingLocation()
-              conf.debug decl.cxKind()
-              conf.debug decl.treeRepr()
-
-
-        res
-
-    of tkDependent:
-      newNimType("DEPENDENT", cxType, true)
-
-    of tkMemberPointer:
-      # WARNING Member pointer
-      newNimType("!!!", cxType, false)
-
-    of tkDependentSizedArray:
-      let cx = $cxtype
-      let name = cx[cx.skipUntil('[') + 1 .. ^2].strip()
-      newNimType("array", @[
-        newNimType(name),
-        toNimType(cxtype.getElementType(), conf, cache)
-      ], cxType)
-
-    else:
-      conf.err "CANT CONVERT: ".toRed({styleItalic}),
-        cxtype.kind, " ", ($cxtype).toGreen(), " ",
-        cxtype[]
-
-      newNimType("!!!", cxtype)
-
-  result.isMutable = mutable
-  result.specialKind = special
-
-
-
 func fixTypeParams*(nt: var NimType, params: seq[NimType]) =
   func aux(nt: var NimType, idx: var int) =
     case nt.kind:
@@ -985,14 +737,16 @@ proc toInitCall*(
 
         case cursor.cxKind():
           of ckIntegerLiteral:
-            let i = newPLit(parseInt(tokens[0]))
-            if expected.isSome():
-              var expected = expected.get().toNimType(conf, cache)
-              conf.fixTypeName(expected, conf, 0)
-              result = newPCall(expected.nimName, i)
+            {.warning: "[FIXME]".}
+            when false:
+              let i = newPLit(parseInt(tokens[0]))
+              if expected.isSome():
+                var expected = expected.get().toNimType(conf, cache)
+                conf.fixTypeName(expected, conf, 0)
+                result = newPCall(expected.nimName, i)
 
-            else:
-              result = newPCall("cint", i)
+              else:
+                result = newPCall("cint", i)
 
           of ckStringLiteral:
             result = newPCall("cstring", newPLit(tokens[0]))
@@ -1015,10 +769,12 @@ proc toInitCall*(
         discard
 
       of ckCStyleCastExpr:
-        result = nnkCast.newPTree(
-          cursor[0].cxType().toNimType(conf, cache).toNType(
-            conf, cache).toNNode(),
-          aux(cursor[1], ilist, cache))
+        {.warning: "[FIXME]".}
+        when false:
+          result = nnkCast.newPTree(
+            cursor[0].cxType().toNimType(conf, cache).toNType(
+              conf, cache).toNNode(),
+            aux(cursor[1], ilist, cache))
 
       else:
         conf.err "Implement for kind", cursor.cxKind()
@@ -1026,17 +782,3 @@ proc toInitCall*(
         conf.debug cursor.tokenStrings(conf.unit)
 
   return aux(cursor, false, cache)
-
-
-proc setDefaultForArg*(
-    arg: var CArg, cursor: CXCursor, conf: WrapConf, cache: var WrapCache) =
-  ## Update default value for argument.
-  ## - @arg{arg} :: Non-raw argument to update default for
-  ## - @arg{cursor} :: original cursor for argument declaration
-  ## - @arg{conf} :: Default wrap configuration
-
-  if cursor.len == 2 and
-     cursor[1].cxKind() in {ckUnexposedExpr, ckInitListExpr}:
-    let default = toInitCall(cursor[1], conf, cache)
-    if not isNil(default):
-      arg.default = some(default)

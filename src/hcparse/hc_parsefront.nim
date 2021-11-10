@@ -1,7 +1,11 @@
 import
   std/[
-    sequtils, strformat, bitops, strutils,
-    tables, parseutils, strutils
+    sequtils,
+    strformat,
+    bitops,
+    strutils,
+    tables,
+    parseutils
   ]
 
 import
@@ -35,8 +39,7 @@ import
     hc_codegen
   ],
 
-  ./hc_impls,
-  ./hc_irgen
+  ./hc_impls
 
 
 import
@@ -266,14 +269,6 @@ proc wrapViaTsWave*(
   # "Wrap results in file":
   result = s.cxxFile(lib, file)
 
-proc wrapViaClang*(conf: WrapConf, file: AbsFile): CxxFile =
-  var cache = WrapCache(
-    importGraph: hgraph.default(typeof WrapCache.importGraph))
-
-  let parsed = parseFile(file, conf, cache)
-  conf.unit = parsed.unit
-  toCxxFile(parsed, conf, cache)
-
 proc expandViaCc*(file: AbsFile, parseConf: ParseConf): string =
   ## Return expanded content of the @arg{file} using @sh{clang}. Uses
   ## include paths and other flags from @arg{parseConf}. Expanded form does
@@ -308,17 +303,7 @@ proc expandPartViaCc*(
 
   cmd.arg file
 
-  # try:
   let expanded = evalShellStdout(cmd)
-
-  # except ShellError as e:
-  #   echov "-----------------"
-  #   echov e.msg
-  #   echov "-----------------"
-
-  # echo expanded
-
-  # echov expanded
 
   var active = false
   for line in strutils.splitLines(expanded):
@@ -505,7 +490,7 @@ proc initCSharedLibFixConf*(
 
       of cekObject, cekForward:
         let base = expandMap[entry.getLocation.file].string
-        let path = base.string.dropPrefix(libRoot.string)
+        let path = base.dropPrefix(libRoot.string)
         result = cxxHeader("<" & libIncludePrefix & path & ">")
 
       else:

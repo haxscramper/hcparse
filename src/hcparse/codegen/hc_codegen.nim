@@ -463,7 +463,6 @@ proc toNNode*[N](en: CxxEnum, conf: CodegenConf): seq[NimDecl[N]] =
     nenum = newEnumDecl[N](en.nimName)
     values = en.values.sortedByIt(it.value)
     visited: HashSet[BiggestInt]
-    generated: seq[tuple[c, n: EnumField[N]]]
 
 
   let arg = newNIdent[N]("arg")
@@ -741,8 +740,6 @@ proc toString*(entries: seq[CxxEntry], conf: CodegenConf): string =
 proc toString*(files: seq[CxxFile], conf: CodegenConf): string =
   for file in files:
     result.add &">>> {file.savePath}\n{file.toString(conf)}\n"
-
-import std/[strutils, strformat]
 
 proc printNumerated*(str: string, numRange: Slice[int]): string =
   var num = 1

@@ -273,9 +273,11 @@ type
   CxxProcKind* = enum
     ## Procedure kind
     cpkRegular ## Regular proc: `hello()`
+
     cpkConstructor
     cpkDestructor
 
+    # cxx operator range start
     cpkPrefixOp ## Prefix operator `@a`
     cpkPostfixOp ## Postfix operator `a@`
     cpkInfixOP ## Infix operator `a @ b`
@@ -290,6 +292,8 @@ type
     cpkUserLitOp ## User-defined literal operators
     cpkNewOp ## `new` operator
     cpkDeleteOp ## `delete` operator
+    # cxx operator range end
+
     # cpk
 
     # cpkHook ## Destructor/sink (etc.) hook: `=destroy`
@@ -308,8 +312,6 @@ type
     cpfMethod
     cpfNoexcept
 
-    cpfConversionConstructor
-
   CxxProc* = ref object of CxxBase
     kind*: CxxProcKind
     head*: CxxTypeDecl ## Reuse type declaration for procedure - it has
@@ -319,6 +321,8 @@ type
     arguments*: seq[CxxArg]
     returnType*: CxxTypeUse
     throws*: seq[CxxTypeUse]
+
+    # operatorKind*: Cxx
 
 
     flags*: set[CxxProcFlag]
@@ -374,7 +378,6 @@ type
   CxxEnumValue* = object
     name*: CxxNamePair
     value*: BiggestInt
-    valueTokens*: seq[string]
     docComment*: seq[CxxComment]
 
   CxxEnum* = ref object of CxxBase
@@ -491,6 +494,10 @@ type
 const
   cekTypeStored* = {
     cekProc, cekTypeGroup, cekEnum, cekForward, cekAlias, cekObject
+  }
+
+  cpkOperatorKinds* = {
+    cpkPrefixOp .. cpkDeleteOp
   }
 
 export IdentStyle

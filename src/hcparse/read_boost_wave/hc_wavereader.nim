@@ -38,10 +38,6 @@ proc newWaveReader*(
         for (name, args, impl) in conf.macroDefs:
           subcontext.addMacroDefinition(name, args, impl)
 
-        var
-          first: ptr WaveIteratorHandle = subcontext.first()
-          last: ptr WaveIteratorHandle = subcontext.last()
-
         subcontext.skipAll()
 
         for def in macroNames(subcontext):

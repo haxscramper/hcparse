@@ -51,8 +51,8 @@ func makeVisitorImpl*(
         var `capture` {.`byaddrid`.} = data[].`capture`[]
 
   let
-    cursorId = ident "cursor"
-    parentId = ident "parent"
+    # cursorId = ident "cursor"
+    # parentId = ident "parent"
     dataId = genSym(nskType, "Data")
 
 

@@ -147,7 +147,7 @@ type
         default*: Option[PNode] ## Optional default value for an argument
 
 
-  IncludeDep* = object
+  IncludeDep* {.deprecated.} = object
     # TODO use it as edge value
     includedAs*: string
     includedPath*: AbsFile

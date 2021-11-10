@@ -37,6 +37,11 @@ struct Templated {
   void set(Z value);
 };
 
+// enum class Enum {en1, en2};
+// Enum getEnum(Enum in);
+
+Templated<int> operator%(int arg1, Struct arg2);
+
 
 int main() {}
 """)

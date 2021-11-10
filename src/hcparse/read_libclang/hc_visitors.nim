@@ -2,10 +2,8 @@ import ./hc_types, ./cxtypes, ./cxvisitors
 
 import ../hc_typeconv
 
-import hnimast
-
 import std/[sequtils, strutils]
-import hmisc/other/[hlogger, oswrap]
+import hmisc/other/[hlogger]
 import hmisc/algo/hstring_algo
 import hmisc/core/all
 import hmisc/types/colorstring
@@ -73,7 +71,7 @@ proc visitCursor*(
     cursor: CXCursor, parent: CScopedIdent,
     conf: WrapConf, lastTypeDecl: var CDecl,
     cache: var WrapCache
-  ): tuple[decls: seq[CDecl], recurse: bool, includes: seq[IncludeDep]]
+  ): tuple[decls: seq[CDecl], recurse: bool]
 
 
 proc visitClass*(
@@ -116,7 +114,7 @@ proc visitField*(
 
   if cursor.len > 0:
     var decl: CDecl
-    let visit = visitCursor(cursor[0], parent, conf, decl, cache)
+    discard visitCursor(cursor[0], parent, conf, decl, cache)
     if not isNil(decl):
       result.fieldTypeDecl = some decl
 
@@ -206,119 +204,121 @@ proc isAggregateInitable*(
   ## @arg{initArgs}. NOTE: fields will be added unconditionally, so first
   ## check return value.
 
-  if cd.cxKind() in {
-    ckUnionDecl, ckEnumDecl,
+  when false:
 
-    # NOTE I think in some cases it /might/ be possible to use aggregate
-    # initalization for template types, but at this point it is easier to
-    # just fail check on this kind immediately.
-    ckClassTemplatePartialSpecialization
-  }:
-    return false
+    if cd.cxKind() in {
+      ckUnionDecl, ckEnumDecl,
 
-  elif cd.cxKind() notin ckTypeDeclKinds:
-    raise newLogicError(
-      "Invalid cursor kind of aggregate initalization check.",
-      "Expected type declaration (union/enum/struct/class),",
-      "but found {toRed($cd.cxKind())} at {cd.getSpellingLocation()}\n",
-      "{cd.treeRepr()}")
+      # NOTE I think in some cases it /might/ be possible to use aggregate
+      # initalization for template types, but at this point it is easier to
+      # just fail check on this kind immediately.
+      ckClassTemplatePartialSpecialization
+    }:
+      return false
 
-  # List of entries that immediately mean aggregate initalization is not
-  # supported.
-  const failKinds = {
-    ckConstructor,
-    ckConversionFunction
-  }
+    elif cd.cxKind() notin ckTypeDeclKinds:
+      raise newLogicError(
+        "Invalid cursor kind of aggregate initalization check.",
+        "Expected type declaration (union/enum/struct/class),",
+        "but found {toRed($cd.cxKind())} at {cd.getSpellingLocation()}\n",
+        "{cd.treeRepr()}")
 
-  const ignoreKinds = {
-    ckTemplateTypeParameter,
-    ckTypedefDecl,
-    ckStructDecl,
-    ckEnumDecl,
-    ckUnionDecl,
-    ckMethod,
-    ckFunctionTemplate,
-    ckDestructor,
-    ckAlignedAttr,
-    ckTypeAliasDecl,
-    ckNonTypeTemplateParameter,
-    ckFriendDecl,
-    ckFinalAttr,
-    ckWarnUnusedAttr,
-    ckWarnUnusedResultAttr,
-    ckClassDecl,
-    ckEnumDecl,
-    ckNamespaceRef,
-    ckStaticAssert,
-    ckClassTemplate,
-    # ckBaseClassSpecifier
-  }
+    # List of entries that immediately mean aggregate initalization is not
+    # supported.
+    const failKinds = {
+      ckConstructor,
+      ckConversionFunction
+    }
 
-  proc aux(cursor: CXCursor): bool =
-    ## Recursively determine if cursor points to type that is subject to
-    ## aggregate initalization.
-    # debug cursor.treeRepr(conf.unit)
-    case cursor.cxType().cxKind():
-      of tkPodKinds, tkPointer:
-        return true
+    const ignoreKinds = {
+      ckTemplateTypeParameter,
+      ckTypedefDecl,
+      ckStructDecl,
+      ckEnumDecl,
+      ckUnionDecl,
+      ckMethod,
+      ckFunctionTemplate,
+      ckDestructor,
+      ckAlignedAttr,
+      ckTypeAliasDecl,
+      ckNonTypeTemplateParameter,
+      ckFriendDecl,
+      ckFinalAttr,
+      ckWarnUnusedAttr,
+      ckWarnUnusedResultAttr,
+      ckClassDecl,
+      ckEnumDecl,
+      ckNamespaceRef,
+      ckStaticAssert,
+      ckClassTemplate,
+      # ckBaseClassSpecifier
+    }
 
-      of tkTypeRef, tkElaborated:
-        for entry in cursor.cxType().getTypeDeclaration():
-          if entry.cxKind() in failKinds or
-             (entry.cxKind() notin ignoreKinds) and
-             (not aux(entry)):
+    proc aux(cursor: CXCursor): bool =
+      ## Recursively determine if cursor points to type that is subject to
+      ## aggregate initalization.
+      # debug cursor.treeRepr(conf.unit)
+      case cursor.cxType().cxKind():
+        of tkPodKinds, tkPointer:
+          return true
+
+        of tkTypeRef, tkElaborated:
+          for entry in cursor.cxType().getTypeDeclaration():
+            if entry.cxKind() in failKinds or
+               (entry.cxKind() notin ignoreKinds) and
+               (not aux(entry)):
+              return false
+
+          return true
+
+        of tkTypedef:
+          return aux(cursor.cxType().getCanonicalType().getTypeDeclaration())
+
+        of tkInvalid, tkUnexposed, tkEnum,
+           tkLValueReference
+             :
+          return false
+
+        of tkConstantArray:
+          return aux(cursor[0])
+
+        else:
+          conf.debug cast[int](cursor.cxType().cxKind())
+          conf.debug cursor.getSpellingLocation()
+          conf.debug cursor.treeRepr(conf.unit)
+          conf.err cursor.cxType().cxKind()
+          conf.err cursor.cxType()
+          raiseAssert("#[ IMPLEMENT ]#")
+
+    result = true
+    var access = cd.getDefaultAccess()
+    for entry in cd:
+      case entry.cxKind():
+        of ckFieldDecl:
+          if aux(entry):
+            var arg = initCArg(
+              $entry, entry.cxType().toNimType(conf, cache), nvdLet)
+
+            setDefaultForArg(arg, entry, conf, cache)
+            initArgs.add arg
+
+        of failKinds: return false
+        of ignoreKinds: discard
+        of ckVarDecl: discard
+        of ckTypeRef, ckTemplateRef: discard
+
+        of ckAccessSpecifier:
+          access = entry.getAccessSpecifier()
+
+        of ckBaseSpecifier:
+          if aux(entry[0]):
+            discard
+
+          else:
             return false
-
-        return true
-
-      of tkTypedef:
-        return aux(cursor.cxType().getCanonicalType().getTypeDeclaration())
-
-      of tkInvalid, tkUnexposed, tkEnum,
-         tkLValueReference
-           :
-        return false
-
-      of tkConstantArray:
-        return aux(cursor[0])
-
-      else:
-        conf.debug cast[int](cursor.cxType().cxKind())
-        conf.debug cursor.getSpellingLocation()
-        conf.debug cursor.treeRepr(conf.unit)
-        conf.err cursor.cxType().cxKind()
-        conf.err cursor.cxType()
-        raiseAssert("#[ IMPLEMENT ]#")
-
-  result = true
-  var access = cd.getDefaultAccess()
-  for entry in cd:
-    case entry.cxKind():
-      of ckFieldDecl:
-        if aux(entry):
-          var arg = initCArg(
-            $entry, entry.cxType().toNimType(conf, cache), nvdLet)
-
-          setDefaultForArg(arg, entry, conf, cache)
-          initArgs.add arg
-
-      of failKinds: return false
-      of ignoreKinds: discard
-      of ckVarDecl: discard
-      of ckTypeRef, ckTemplateRef: discard
-
-      of ckAccessSpecifier:
-        access = entry.getAccessSpecifier()
-
-      of ckBaseSpecifier:
-        if aux(entry[0]):
-          discard
 
         else:
           return false
-
-      else:
-        return false
 
 
 proc updateParentFields*(
@@ -421,13 +421,6 @@ proc visitClass*(
     conf: WrapConf, typedef: Option[CXCursor],
     cache: var WrapCache
   ): CDecl =
-
-  ## Convert class under cursor to `CDecl`
-  let name =
-    if cursor.cxKind == ckStructDecl and len($cursor) == 0:
-      $cursor.cxType()
-    else:
-      $cursor
 
   var kind =
     case cursor.cxKind():
@@ -606,9 +599,7 @@ proc visitCursor*(
     cursor: CXCursor, parent: CScopedIdent,
     conf: WrapConf, lastTypeDecl: var CDecl,
     cache: var WrapCache
-  ): tuple[decls: seq[CDecl],
-           recurse: bool,
-           includes: seq[IncludeDep]] =
+  ): tuple[decls: seq[CDecl], recurse: bool] =
 
   const classDeclKinds = {
     ckClassDecl, ckClassTemplate, ckUnionDecl,
@@ -660,15 +651,7 @@ proc visitCursor*(
         lastTypeDecl = visitEnum(cursor, parent, conf)
 
       of ckInclusionDirective:
-        let loc = cursor.getSpellingLocation().get()
-        result.includes.add IncludeDep(
-          includedAs: $cursor,
-          includedFrom: loc.file,
-          fromLine: loc.line,
-          fromColumn: loc.column,
-          fromOffset: loc.offset,
-          includedPath: AbsFile($cursor.getIncludedFile()).realpath
-        )
+        result.recurse = false
 
       of ckMacroDefinition:
         result.decls.add visitMacrodef(cursor, parent, conf)
@@ -686,8 +669,8 @@ proc splitDeclarations*(
     makeVisitor [tu, res, conf, tuCursor, lastTypeDecl, cache]:
       let resolve = conf.depResolver(cursor, tuCursor)
       if resolve == drkWrapDirectly:
-        let (decls, rec, incls) = visitCursor(
-          cursor, @[], conf, lastTypeDecl, cache)
+        let (decls, rec) = visitCursor(cursor, @[], conf, lastTypeDecl, cache)
+
         if rec:
           return cvrRecurse
 

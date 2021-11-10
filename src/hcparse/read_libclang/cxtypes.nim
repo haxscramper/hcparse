@@ -6,7 +6,7 @@ import
 
 import
   hmisc/other/[oswrap],
-  hmisc/algo/[clformat, clformat, hstring_algo, htemplates],
+  hmisc/algo/[clformat, hstring_algo, htemplates],
   hmisc/types/[colorstring],
   hmisc/core/all
 
@@ -700,12 +700,12 @@ proc hshow*(cxtype: CXType, opts: HDisplayOpts = defaultHDisplay): ColoredText =
 
   endResult()
 
-proc neededTemplateArgs*(cxtype: CXType): int =
-  ## Get number of necessary generic arguments for a type
-  let cursor = cxtype.getTypeDeclaration()
+# proc neededTemplateArgs*(cxtype: CXType): int =
+#   ## Get number of necessary generic arguments for a type
+#   let cursor = cxtype.getTypeDeclaration()
 
-proc dedentComment*(str: string): string =
-  str.split('\n').mapIt(it.dedent()).join("\n")
+# proc dedentComment*(str: string): string =
+#   str.split('\n').mapIt(it.dedent()).join("\n")
 
 proc treeRepr*(
     cursor: CXCursor,
@@ -725,8 +725,6 @@ proc treeRepr*(
       cursor: CxCursor, level: int, idx: seq[int],
       inTranslationUnit: bool = false
     ) =
-    ## Generate ObjTree representation of cursor
-    const colorize = not defined(plainStdout)
 
     if inTranslationUnit:
       addIndent(level, sep)
@@ -781,13 +779,6 @@ proc treeRepr*(
     #       ""
 
     if cursor.len() == 0:
-      discard
-
-      # var flds: seq[ObjTree]
-      # if showtype: flds.add ctype
-      # if showComment: flds.add comment
-      # flds.add val
-
       if cursor.cxKind in {ckMacroExpansion}:
         let cxRange =
           $getCursorLocation(cursor).getExpansionLocation() & " " &
@@ -824,20 +815,6 @@ proc treeRepr*(
             add " "
             offset += 1
 
-
-        # add .mapIt().join(" ") + fgGreen
-
-      # if       # let val = pptconst(
-      # #   ).join(" "), initprintstyling(fg = fggreen))
-
-
-        # flds.add pptconst(
-        #   $cxRange, initprintstyling(fg = fgBlue))
-
-      # pptObj(
-      #   "[_] " & $cursor.cxkind & locRange,
-      #   initPrintStyling(fg = fgYellow), flds)
-
     else:
       for subIdx, node in cursor.children:
         if not (
@@ -849,18 +826,6 @@ proc treeRepr*(
             node, level + 1, idx & subIdx,
             inTranslationUnit = cursor of {ckTranslationUnit}
           )
-
-    #   var suffix: string
-
-    #   if cursor.cxKind() == ckEnumConstantDecl:
-    #     suffix &= " " & $toRed($cursor.getEnumConstantDeclValue())
-
-    #   pptObj(
-    #     &[$toMagenta("[*] " & $cursor.cxkind, colorize),
-    #       " ", $cursor, $suffix, locRange],
-    #     &[showtype.tern(@[ctype], @[]),
-    #       showcomment.tern(@[comment], @[]),
-    #       children])
 
   aux(cursor, 0, @[])
 
