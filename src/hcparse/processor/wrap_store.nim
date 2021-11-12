@@ -1,6 +1,6 @@
 import
   hmisc/other/[oswrap],
-  hmisc/core/[all],
+  hmisc/core/[all, code_errors],
   hmisc/algo/[hstring_algo]
 
 import
@@ -157,7 +157,7 @@ type
 
     typeDecls*: Table[CxxName, seq[CxxTypeDecl]]
     forwardDecls*: Table[CxxName, seq[CxxTypeDecl]]
-    classDecls*: Table[CxxName, seq[CxxObject]]
+    classDecls*: Table[CxxName, seq[CxxEntry]]
 
     importDecls*: Table[CxxName, CxxLibImport]
 
@@ -1009,6 +1009,15 @@ func cxxTypeUse*(
     kind: ctkAnonEnum, enumDef: enumDef,
     enumParent: parent, enumUser: user)
 
+func box*(en: CxxEnum): CxxEntry = CxxEntry(kind: cekEnum, cxxEnum: en)
+func box*(en: CxxForward): CxxEntry =
+  CxxEntry(kind: cekForward, cxxForward: en)
+func box*(ob: CxxObject): CxxEntry = CxxEntry(kind: cekObject, cxxObject: ob)
+func box*(en: CxxProc): CxxEntry = CxxEntry(kind: cekProc, cxxProc: en)
+func box*(en: CxxAlias): CxxEntry = CxxEntry(kind: cekAlias, cxxAlias: en)
+func box*(en: CxxMacro): CxxEntry = CxxEntry(kind: cekMacro, cxxMacro: en)
+
+
 func toDecl*(use: CxxTypeUse, kind: CxxTypeDeclKind): CxxTypeDecl =
   assertKind(use, {ctkIdent})
   return cxxTypeDecl(use.cxxType.name, kind)
@@ -1019,17 +1028,19 @@ func addDecl*(store: var CxxTypeStore, decl: CxxTypeDecl) =
 
 func addDecl*(store: var CxxTypeStore, decl: CxxObject) =
   store.addDecl(decl.decl)
-  store.classDecls.mgetOrPut(decl.decl.name.cxx, @[]).add decl
+  store.classDecls.mgetOrPut(decl.decl.name.cxx, @[]).add box(decl)
 
 func addForwardDecl*(store: var CxxTypeStore, decl: CxxTypeDecl) =
   store.forwardDecls.mgetOrPut(decl.name.cxx, @[]).add decl
+
+func hasFullDecl*(store: CxxTypestore, decl: CxxTypeDecl): bool =
+  decl.cxxName() in store.typeDecls
 
 func getDecl*(
     store: CxxTypeStore,
     name: CxxName,
     lib: Option[string]
   ): Option[CxxTypeDecl] =
-
 
   assertRef store
   if name in store.typeDecls:
@@ -1049,6 +1060,28 @@ func getDecl*(
   elif name in store.forwardDecls:
     result = some store.forwardDecls[name][0]
 
+func getTypeImpls*(
+    store: CxxTypeStore,
+    name: CxxName,
+    lib: Option[string]  = none(string),
+    kinds: set[CxxEntryKind] = { low(CxxEntryKind) .. high(CxxEntryKind) }
+  ): seq[CxxEntry] =
+  ## Get all type definitions matching type
+
+  assertRef store
+  if name in store.classDecls:
+    for class in store.classDecls[name]:
+      {.warning: "Check for type's library".}
+      result.add class
+      # # No library for import, or no library for the type declaration
+      # if lib.isNone() or class.decl.typeImport.isNone():
+      #   return some class
+
+      # else:
+      #   # Has library name for both type declaration and use
+      #   if class.decl.typeImport.get().library == lib.get():
+      #     return some class
+
 
 func getObject*(
     store: CxxTypeStore,
@@ -1059,14 +1092,16 @@ func getObject*(
   assertRef store
   if name in store.classDecls:
     for class in store.classDecls[name]:
-      # No library for import, or no library for the type declaration
-      if lib.isNone() or class.decl.typeImport.isNone():
-        return some class
-
-      else:
-        # Has library name for both type declaration and use
-        if class.decl.typeImport.get().library == lib.get():
+      if class of cekObject:
+        let class = class.cxxObject
+        # No library for import, or no library for the type declaration
+        if lib.isNone() or class.decl.typeImport.isNone():
           return some class
+
+        else:
+          # Has library name for both type declaration and use
+          if class.decl.typeImport.get().library == lib.get():
+            return some class
 
 func getDecl*(use: CxxTypeUse): Option[CxxTypeDecl] =
   ## Get first type declaration with matching cxx name. In case of multiple
@@ -1148,6 +1183,9 @@ func getFilename*(file: CxxFile): string = file.savePath.getFilename()
 
 func getType*(arg: CxxArg): CxxTypeUse = arg.nimType
 func getType*(field: CxxField): CxxTypeUse = field.nimType
+
+func add*(file: var CxxFile, entry: CxxEntry) =
+  file.entries.add entry
 
 func addImport*(file: var CxxFile, cimport: CxxLibImport) =
   file.imports.incl cimport
@@ -1232,13 +1270,6 @@ func initIcpp*(
     pr: var CxxProc, onConstructor: CxxTypeKind = ctkIdent) =
   pr.cbind.icpp = getIcpp(pr, onConstructor)
 
-func box*(en: CxxEnum): CxxEntry = CxxEntry(kind: cekEnum, cxxEnum: en)
-func box*(en: CxxForward): CxxEntry =
-  CxxEntry(kind: cekForward, cxxForward: en)
-func box*(ob: CxxObject): CxxEntry = CxxEntry(kind: cekObject, cxxObject: ob)
-func box*(en: CxxProc): CxxEntry = CxxEntry(kind: cekProc, cxxProc: en)
-func box*(en: CxxAlias): CxxEntry = CxxEntry(kind: cekAlias, cxxAlias: en)
-func box*(en: CxxMacro): CxxEntry = CxxEntry(kind: cekMacro, cxxMacro: en)
 
 func cxxTypeUse*(
     arguments: seq[CxxArg], returnType: CxxTypeUse): CxxTypeUse =
@@ -1315,7 +1346,8 @@ func cxxProc*(
 func cxxMacro*(name: CxxNamePair): CxxMacro =
   CxxMacro(name: name, haxdocIdent: newJNull())
 
-func cxxFile*(entries: seq[CxxEntry], path: CxxLibImport, original: AbsFile): CxxFile =
+func cxxFile*(
+    entries: seq[CxxEntry], path: CxxLibImport, original: AbsFile): CxxFile =
   CxxFile(savePath: path, entries: entries, original: original)
 
 func add*(pr: var CxxProc, arg: CxxArg) =
@@ -1331,6 +1363,10 @@ func setCxxBind*(target: var CxxBind, source: CxxBind) =
 
 
 proc setStoreRec*(entry: var CxxEntry, store: CxxTypeStore) =
+  proc aux(use: var CxxTypeUse) =
+    eachIdent(use) do (use: var CxxTypeUse):
+      use.cxxType.typeStore = store
+
   case entry.kind:
     of cekPass, cekEmpty, cekImport, cekMacroGroup,
        cekMacro, cekComment:
@@ -1338,6 +1374,10 @@ proc setStoreRec*(entry: var CxxEntry, store: CxxTypeStore) =
 
     of cekProc:
       entry.cxxProc.head.store = store
+      for arg in mitems(entry.cxxProc.arguments):
+        aux(arg.nimType)
+
+      aux(entry.cxxProc.returnType)
 
     of cekTypeGroup:
       for decl in mitems(entry.cxxTypes):
@@ -1351,12 +1391,22 @@ proc setStoreRec*(entry: var CxxEntry, store: CxxTypeStore) =
 
     of cekAlias:
       entry.cxxAlias.decl.store = store
+      aux(entry.cxxAlias.baseType)
 
     of cekObject:
       entry.cxxObject.decl.store = store
 
       for nest in mitems(entry.cxxObject.nested):
         setStoreRec(entry, store)
+
+      for meth in mitems(entry.cxxObject.methods):
+        for arg in mitems(meth.arguments):
+          aux(arg.nimType)
+
+        aux(meth.returnType)
+
+      for field in mitems(entry.cxxObject.mfields):
+        aux(field.nimType)
 
 template setFile(entry: typed, file: AbsFile): untyped =
   if entry.spellingLocation.isSome:

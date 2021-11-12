@@ -68,6 +68,8 @@ export
   hc_grouping,
   hc_impls,
   hc_codegen,
+  hc_postprocess,
+  wrap_store,
   oswrap,
   libclang_wrap,
   cxtypes,

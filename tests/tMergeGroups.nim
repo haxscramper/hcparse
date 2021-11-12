@@ -7,8 +7,9 @@ import hmisc/hasts/graphviz_ast
 
 
 import
-  hcparse/[hc_parsefront, hc_codegen, hc_grouping, hc_impls],
-  hcparse/interop_ir/wrap_store
+  hcparse/[hc_parsefront, hc_impls],
+  hcparse/codegen/hc_codegen,
+  hcparse/processor/[hc_grouping, wrap_store]
 
 import std/[strutils, sets, sequtils]
 import compiler/[ast]
@@ -17,11 +18,15 @@ import compiler/[ast]
 proc lib(path: varargs[string]): CxxLibImport =
   cxxLibImport("test", @path)
 
+let root = AbsDir("/tmp")
+
 template convFile(str, name: string): CxxFile =
   conf.onGetBind():
     return cxxHeader(name)
 
-  wrapViaTs(str, conf, lib(name)).cxxFile(lib(name))
+  wrapViaTs(str, conf, lib(name)).
+    postFixEntries(conf, lib(name)).
+    cxxFile(lib(name), root /. name)
 
 configureDefaultTestContext(
   skipAfterException = true
@@ -30,19 +35,19 @@ configureDefaultTestContext(
 proc findFile(files: seq[CxxFile], name: string): CxxFile =
   files[files.findIt(it.getFilename().startsWith(name))]
 
-func getTypes(decl: seq[NimDecl[PNode]]): seq[NimTypeDecl[PNode]] =
+proc getTypes(decl: seq[NimDecl[PNode]]): seq[NimTypeDecl[PNode]] =
   decl.findItFirst(it of nekMultitype).typedecls
 
-func genEntries(file: CxxFile): seq[NimDecl[PNode]] =
+proc genEntries(file: CxxFile): seq[NimDecl[PNode]] =
   toNNode[PNode](file.entries, cxxCodegenConf)
 
 suite "Forward-declare in files":
   var conf = baseFixConf.withIt do:
     it.typeStore = newTypeStore()
 
-  conf.onFixName():
-    result = name.nim
-    cache.newRename(name.nim, result)
+    it.onFixName():
+      result = name.nim
+      cache.newRename(name.nim, result)
 
   test "Single file with forward declarattion":
     conf.typeStore = newTypeStore()
@@ -155,6 +160,7 @@ suite "Forward-declare in files":
       convFile("struct Forward1;", "forward1.hpp"),
       convFile("struct Forward2;", "forward2.hpp"),
       convFile(lit3"""
+        struct User2;
         struct User1 {
           Forward1* forward1;
           Forward2* forward2;
@@ -165,6 +171,7 @@ suite "Forward-declare in files":
         Forward2* procForward1_2();
         """, "user1.hpp"),
       convFile(lit3"""
+        struct User1;
         struct User2 {
           Forward1* forward1;
           Forward2* forward2;
@@ -177,8 +184,23 @@ suite "Forward-declare in files":
     ]
 
 
+    let g = buildTypeGraph(files)
+
+    check:
+      ## User 2 links forward2 and forward1 because it contains forward declaration
+      (g[lib("user2.hpp")], g[lib("forward2.hpp")]) in g
+      (g[lib("user2.hpp")], g[lib("forward1.hpp")]) in g
+
+      ## User 1 links also uses forward-declared types
+      (g[lib("user1.hpp")], g[lib("forward2.hpp")]) in g
+      (g[lib("user1.hpp")], g[lib("forward1.hpp")]) in g
+
+      ## user1 and user2 form cyclic dependenncy due to usage of
+      ## forward-declared pointers.
+      (g[lib("user1.hpp")], g[lib("user2.hpp")]) in g
+      (g[lib("user2.hpp")], g[lib("user1.hpp")]) in g
+
     let group = regroupFiles(files)
-    echo group.toString(cxxCodegenConf)
 
     let
       merged = "user1_user2"
@@ -201,6 +223,54 @@ suite "Forward-declare in files":
       lib("forward1.hpp") in m.imports
       lib("forward2.hpp") in m.imports
 
-    let path = getTestTempFile("png")
-    let g = files.buildTypeGraph()
-    g.dotRepr().toPng(path)
+    g.dotRepr().toPng(getTestTempFile("png"))
+
+suite "Multipass merger":
+  test "Ultimate":
+    const
+      # Base implementation of iterator (supposed to be generic, but this
+      # does not matter here)
+      implIterator = """
+struct Iterator {};
+"""
+
+      # Implementation of the vector, relies on the base iterator
+      # (concatenation emulates direct `#include`)
+      implVector = implIterator & """
+struct Vector {
+    Iterator get();
+}
+"""
+
+      # String implementation also needs an iterator (concatenation
+      # emulates direct `#include`)
+      implString = implIterator & """
+struct String {
+    Iterator get();
+}
+"""
+
+    var conf = baseFixConf.withIt do:
+      it.onFixName():
+        result = name.nim
+        cache.newRename(name.nim, result)
+
+    conf.typeStore = newTypeStore()
+    let fileIterator = convFile(implIterator, "iterator.hpp")
+
+    conf.typeStore = newTypeStore()
+    let fileVector = convFile(implVector, "vector.hpp")
+
+    conf.typeStore = newTypeStore()
+    let fileString = convFile(implString, "string.hpp")
+
+    let finalized = clearRepeated(@[
+      fileIterator,
+      fileVector,
+      fileString
+    ])
+
+    let group = regroupFiles(finalized)
+    let g = buildTypeGraph(finalized)
+    echov g
+    echov group.toString(cxxCodegenConf)

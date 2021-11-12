@@ -391,6 +391,7 @@ proc reuseStore*(
     store: var CxxTypeStore,
     other: CxxTypeStore = nil
   ) =
+  # TODO DOC
 
   let other = if isNil(other): entry.getTypeStore() else: other
 

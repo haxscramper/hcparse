@@ -81,14 +81,13 @@ proc toCxxObject*(node: CppNode, coms): CxxObject
 
 proc toCxxType*(node: CppNode, parent, user: Option[CxxNamePair]): CxxTypeUse =
   case node.kind:
-    of cppTypeIdentifier, cppSizedTypeSpecifier, cppPrimitiveType:
+    of cppTypeIdentifier:
       result = cxxTypeUse(cxxPair(
         mapTypeName(node),
         cxxName(@[node.strVal()])))
 
-      if node of {cppSizedTypeSpecifier, cppPrimitiveType}:
-        result.podKind = node.primitiveName().mapPrimitivePod()
-        result.flags.incl ctfIsPodType
+    of cppSizedTypeSpecifier, cppPrimitiveType:
+      result = cxxTypeUse(node.primitiveName().mapPrimitivePod())
 
     of cppQualifiedIdentifier:
       var names: seq[string]

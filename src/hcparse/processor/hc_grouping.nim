@@ -335,11 +335,63 @@ proc regroupFiles*(wrapped: seq[CxxFile]): seq[CxxFile] =
 
       result.add merged
 
-  # cache.importGraph = importGraph
 
-  # for file in mitems(result):
-  #   file.addImport initNimImportSpec(true, @["std", "bitops"])
-  #   file.addImport initNimImportSpec(true, @[
-  #     "hmisc", "wrappers", "wraphelp"])
+type
+  CxxMismatchKind* = enum
+    cmkNewField
+    cmkDeletedField
+    cmkDifferentFieldType
 
-  #   file.exports.incl "wraphelp"
+  CxxMismatch* = object
+    case kind*: CxxMismatchKind
+      of cmkNewField, cmkDeletedField, cmkDifferentFieldType:
+        fieldOld*, fieldNew*: Option[CxxField]
+
+proc findMismatches*(f1, f2: CxxField): seq[CxxMismatch] =
+  if f1.nimType != f2.nimType:
+    result.add CxxMismatch(
+      kind: cmkDifferentFieldType,
+      fieldOld: some f1,
+      fieldNew: some f2
+    )
+
+proc findMismatches*(obj1, obj2: CxxObject): seq[CxxMismatch] =
+  if obj1.mfields.len == obj2.mfields.len:
+    for (f1, f2) in zip(obj1.mfields, obj2.mfields):
+      result.add findMismatches(f1, f2)
+
+  {.warning: "[IMPLEMENT] - compare other nested entries".}
+
+
+
+proc clearRepeated*(files: sink seq[CxxFile]): seq[CxxFile] =
+  ## Remove repeatedly defined entries from the list of files. Definitions
+  ## that are encoutered earlier will take precedence.
+  var store = newTypeStore()
+
+  for file in mitems(files):
+    var refiled = cxxFile(@[], file.savePath, file.original)
+
+    for entry in mitems(file.entries):
+      case entry.kind:
+        of cekObject:
+          let objects = store.getTypeImpls(
+            entry.cxxName(), kinds = {cekObject})
+
+          if objects.len == 0:
+            entry.setStoreRec(store)
+            store.addDecl(entry.cxxObject)
+            refiled.add entry
+
+          else:
+            for obj in objects:
+              let diff = findMismatches(obj.cxxObject, entry.cxxObject)
+              if diff.len == 0:
+                echov "new type has no differences, discarding"
+
+        else:
+          entry.setStoreRec(store)
+          refiled.add entry
+
+    result.add refiled
+    let fileStore = refiled.entries.getTypestore()
