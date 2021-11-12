@@ -355,7 +355,6 @@ type
     logger*: HLogger
     header*: AbsFile ## Current main translation file (header)
 
-    unit*: CXTranslationUnit
     refidMap*: RefidMap
 
     # REFACTOR return CxxHeader spec directly
@@ -450,6 +449,7 @@ proc getName*(cn: CName): string =
 
   else:
     getName(cn.cursor)
+
 
 
 proc getSemanticNamespaces*(

@@ -195,8 +195,6 @@ proc parseFile*(
     result.index, file, flags, {
       tufSkipFunctionBodies, tufDetailedPreprocessingRecord})
 
-  conf.unit = result.unit
-
   result.api = result.unit.splitDeclarations(conf, cache)
   result.isExplicitlyAdded = true
 

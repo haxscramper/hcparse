@@ -28,7 +28,12 @@ struct Struct {
   int field;
 
   int get() const;
-  void set(int arg);
+
+  public __attribute__((annotate("qt_signal"))):
+
+    void set1(int arg);
+    void set2(int arg);
+
 };
 
 template <typename T, class Z = int>

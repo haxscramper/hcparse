@@ -483,7 +483,7 @@ proc getTypeName*(cxtype: CXType, conf: WrapConf): string =
 
     else:
       conf.err $curs
-      conf.err "Type name for ", curs.treeRepr(conf.unit)
+      conf.err "Type name for ", curs.treeRepr()
       raiseAssert(
         &"Cannot convert cursor of kind {curs.cxKind} to type")
 
@@ -703,7 +703,7 @@ proc toInitCall*(
 
           else:
             conf.err cursor[0].cxKind()
-            conf.debug "\n" & cursor.treeRepr(conf.unit)
+            conf.debug "\n" & cursor.treeRepr()
             conf.debug cursor.getSpellingLocation()
 
         if isNil(result):
@@ -755,7 +755,7 @@ proc toInitCall*(
 
       of ckIntegerLiteral, ckCharacterLiteral, ckFloatingLiteral,
          ckStringLiteral:
-        let tokens = cursor.tokenStrings(conf.unit)
+        let tokens = cursor.tokenStrings()
 
         case cursor.cxKind():
           of ckIntegerLiteral:
@@ -801,6 +801,6 @@ proc toInitCall*(
       else:
         conf.err "Implement for kind", cursor.cxKind()
         conf.debug cursor.getSpellingLocation()
-        conf.debug cursor.tokenStrings(conf.unit)
+        conf.debug cursor.tokenStrings()
 
   return aux(cursor, false, cache)

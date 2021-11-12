@@ -370,6 +370,14 @@ proc wrapProcedure*(
   if pr.cursor.isStatic():
     result.flags.incl cpfStatic
 
+  let tu = pr.cursor.getParentTranslationUnit()
+
+  if pr.cursor.isAnnotatedWith(tu, "qt_signal"):
+    result.flags.incl cpfSignal
+
+  if pr.cursor.isAnnotatedWith(tu, "qt_slot"):
+    result.flags.incl cpfSlot
+
   case pr.cursor.kind:
     of ckConstructor:
       result.constructorOf = some cxxPair(parentDecl.get().ident)

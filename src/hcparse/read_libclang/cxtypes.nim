@@ -156,69 +156,6 @@ proc templateParams*(cxType: CxType): seq[CxType] =
 
 
 #*************************************************************************#
-#*******************************  CXToken  *******************************#
-#*************************************************************************#
-proc isNil*(tu: CXTranslationUnit): bool =
-  cast[ptr[CXTranslationUnitImpl]](tu) == nil
-
-
-proc tokens*(cursor: CXCursor, tu: CXTranslationUnit): seq[CXToken] =
-  ## Get sequence of tokens that make up cursor.
-  let range: CXSourceRange   = getCursorExtent(cursor);
-  var tokens: ptr[CXToken]
-  var nTokens: cuint = 0
-  assert not tu.isNil
-  tokenize(tu, range, addr tokens, addr nTokens)
-
-  for i in 0 ..< nTokens:
-    result.add (cast[ptr UncheckedArray[CXToken]](tokens))[i]
-
-proc tokenStrings*(cursor: CXCursor, tu: CXTranslationUnit): seq[string] =
-  for tok in cursor.tokens(tu):
-    result.add $getTokenSpelling(tu, tok)
-
-proc tokenKinds*(cursor: CXCursor, tu: CXTranslationUnit):
-  seq[(string, CXTokenKind)] =
-
-  for tok in cursor.tokens(tu):
-    result.add ($getTokenSpelling(tu, tok), tok.getTokenKind())
-
-proc annotateTokens*(cursor: CXCursor, tu: CXTranslationUnit):
-  seq[tuple[tok: CXToken, cursor: CXCursor]] =
-  var tokens = cursor.tokens(tu)
-  var cursors = newSeq[CXCursor](tokens.len)
-
-  annotateTokens(tu, addr tokens[0], tokens.len.cuint, addr cursors[0])
-
-  result = zip(tokens, cursors)
-
-proc str*(tok: CXToken, tu: CXTranslationUnit): string =
-  $getTokenSpelling(tu, tok)
-
-proc cxKind*(cxTok: CXToken): CXTokenKind =
-  cxtok.getTokenKind()
-
-proc fromTokens*(toks: seq[CXToken], unit: CXTranslationUnit): string =
-  ## Perform crude conversion of the tokens back to string
-  var prevLine = -1
-  var prevCol = -1
-  for tok in toks:
-    let str = $getTokenSpelling(unit, tok)
-    let loc = getTokenLocation(unit, tok).getExpansionLocation().get()
-    if prevLine < loc.line:
-      prevLine = loc.line
-      result.add "\n"
-      prevCol = -1
-
-    if prevCol < loc.column:
-      result.add " "
-
-    result.add str
-    prevCol = loc.column + str.len
-
-
-
-#*************************************************************************#
 #***************  Translation unit construction wrappers  ****************#
 #*************************************************************************#
 
@@ -271,6 +208,8 @@ proc absFile*(command: CXCompileCommand): AbsFile =
   AbsFile $command.getFilename()
 
 #==========================  Translation unit  ===========================#
+proc isNil*(tu: CXTranslationUnit): bool =
+  cast[ptr[CXTranslationUnitImpl]](tu) == nil
 
 proc getFile*(tu: CXTranslationUnit): AbsFile =
   AbsFile($tu.getTranslationUnitSpelling())
@@ -279,29 +218,87 @@ proc getTuFile*(cx: CXCursor): AbsFile =
   assert cx.kind == ckTranslationUnit
   AbsFile($getCursorSpelling(cx))
 
+proc getParentTranslationUnit*(cursor: CxCursor): CxTranslationUnit =
+  var parent = cursor
+  while not(parent of {ckTranslationUnit}):
+    parent = parent.getCursorSemanticParent()
+
+  if parent of ckTranslationUnit:
+    result = parent.getTranslationUnit()
+    assert notNil(result)
+
+  else:
+    raise newGetterError(
+      "Could not get translation unit from cursor")
+
+
+#*************************************************************************#
+#*******************************  CXToken  *******************************#
+#*************************************************************************#
+
+
+proc tokens*(cursor: CXCursor, tu: CXTranslationUnit): seq[CXToken] =
+  ## Get sequence of tokens that make up cursor.
+  let range: CXSourceRange   = getCursorExtent(cursor);
+  var tokens: ptr[CXToken]
+  var nTokens: cuint = 0
+  assert not tu.isNil
+  tokenize(tu, range, addr tokens, addr nTokens)
+
+  for i in 0 ..< nTokens:
+    result.add (cast[ptr UncheckedArray[CXToken]](tokens))[i]
+
+proc tokenStrings*(cursor: CXCursor): seq[string] =
+  let tu = getParentTranslationUnit(cursor)
+  for tok in cursor.tokens(tu):
+    result.add $getTokenSpelling(tu, tok)
+
+proc tokenKinds*(cursor: CXCursor, tu: CXTranslationUnit):
+  seq[(string, CXTokenKind)] =
+
+  for tok in cursor.tokens(tu):
+    result.add ($getTokenSpelling(tu, tok), tok.getTokenKind())
+
+proc annotateTokens*(cursor: CXCursor, tu: CXTranslationUnit):
+  seq[tuple[tok: CXToken, cursor: CXCursor]] =
+  var tokens = cursor.tokens(tu)
+  var cursors = newSeq[CXCursor](tokens.len)
+
+  annotateTokens(tu, addr tokens[0], tokens.len.cuint, addr cursors[0])
+
+  result = zip(tokens, cursors)
+
+proc str*(tok: CXToken, tu: CXTranslationUnit): string =
+  $getTokenSpelling(tu, tok)
+
+proc cxKind*(cxTok: CXToken): CXTokenKind =
+  cxtok.getTokenKind()
+
+proc fromTokens*(toks: seq[CXToken], unit: CXTranslationUnit): string =
+  ## Perform crude conversion of the tokens back to string
+  var prevLine = -1
+  var prevCol = -1
+  for tok in toks:
+    let str = $getTokenSpelling(unit, tok)
+    let loc = getTokenLocation(unit, tok).getExpansionLocation().get()
+    if prevLine < loc.line:
+      prevLine = loc.line
+      result.add "\n"
+      prevCol = -1
+
+    if prevCol < loc.column:
+      result.add " "
+
+    result.add str
+    prevCol = loc.column + str.len
+
+
+
+
+
 #*************************************************************************#
 #******************************  CXCursor  *******************************#
 #*************************************************************************#
-proc `$`*(cxkind: CXCursorKind): string =
-  case cxkind:
-    of ckBaseSpecifier:        "ckBaseSpecifier"
-    of ckAlignedAttr:          "ckAlignedAttr"
-    of ckMacroDefinition:      "ckMacroDefinition"
-    of ckMacroExpansion:       "ckMacroExpansion"
-    of ckFinalAttr:            "ckFinalAttr"
-    of ckAccessSpecifier:      "ckAccessSpecifier"
-    of ckNullPtrLiteralExpr:   "ckNullPtrLiteralExpr"
-    of ckWarnUnusedAttr:       "ckWarnUnusedAttr"
-    of ckWarnUnusedResultAttr: "ckWarnUnusedResultAttr"
-    of ckConversionFunction:   "ckConversionFunction"
-    of ckMethod:               "ckMethod"
-    of ckConstructor:          "ckContructor"
-    of ckDestructor:           "ckDestructor"
-    of ckClassTemplate:        "ckClassTemplate"
-    of ckOverloadCandidate:    "ckOverloadCandidate"
-
-    else:
-      $getCursorKindSpelling(cxkind)
 
 proc `$`*(cursor: CXCursor): string =
   case cursor.kind:
@@ -760,6 +757,15 @@ proc treeRepr*(
 
     add hshow(cursor.kind)
 
+    if isAttribute(cursor.kind) != 0: add " attr" + fgBlue
+    elif isExpression(cursor.kind) != 0: add " expr" + fgBlue
+    elif isDeclaration(cursor.kind) != 0: discard # add " decl" + fgBlue
+    elif isReference(cursor.kind) != 0: add " tref" + fgBlue
+    elif isStatement(cursor.kind) != 0: add " stmt" + fgBlue
+    elif isPreprocessing(cursor.kind) != 0: add " prep" + fgBlue
+    elif isUnexposed(cursor.kind) != 0: add " unex" + fgBlue
+
+
     if tu.isNone():
       add " "
       add $cursor + fgYellow
@@ -770,6 +776,7 @@ proc treeRepr*(
       if raises != ceskNone:
         add " "
         add hshow(raises)
+
 
     if not(cursor.cxType() of tkInvalid):
       add " "
@@ -854,3 +861,11 @@ proc getClassBaseCursors*(inCursor: CXCursor): seq[CXCursor] =
         let base = node[0].getCursorReferenced()
         baseQue.addLast base
         result.add base
+
+proc isAnnotatedWith*(
+    cursor: CxCursor, tu: CxTranslationUnit, attr: string): bool =
+
+  for subnode in items(cursor):
+    if subnode of ckAnnotateAttr:
+      if $subnode == attr:
+        return true
