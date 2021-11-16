@@ -368,7 +368,7 @@ proc visitAlias*(
     # echov cursor[0].treeRepr()
     assertRef(lastTypeDecl)
     if lastTypeDecl.cursor == cursor[0]:
-      lastTypeDecl = CDecl(
+      result = some CDecl(
         ident: lastTypeDecl.ident,
         cursor: cursor,
         kind: cdkAlias,

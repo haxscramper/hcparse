@@ -129,10 +129,31 @@ suite "Convert edge cases":
   test "Rename mapped to the same nim ident":
     let file = getTestTempFile("c")
     let s = file.convStr("""
-typedef struct _Impl {} Impl;
+typedef struct _LIBSSH2_USERAUTH_KBDINT_PROMPT
+{
+    char *text;
+    unsigned int length;
+    unsigned char echo;
+} LIBSSH2_USERAUTH_KBDINT_PROMPT;
 
-Impl get1();
-_Impl get2();
+typedef struct _LIBSSH2_USERAUTH_KBDINT_RESPONSE
+{
+    char *text;
+    unsigned int length;
+} LIBSSH2_USERAUTH_KBDINT_RESPONSE;
+
+/* 'keyboard-interactive' authentication callback */
+#define LIBSSH2_USERAUTH_KBDINT_RESPONSE_FUNC(name_) \
+ void name_(const char *name, int name_len, const char *instruction, \
+            int instruction_len, int num_prompts, \
+            const LIBSSH2_USERAUTH_KBDINT_PROMPT *prompts,              \
+            LIBSSH2_USERAUTH_KBDINT_RESPONSE *responses, void **abstract)
+
+int libssh2_userauth_keyboard_interactive_ex(
+  const char *username,
+  unsigned int username_len,
+  LIBSSH2_USERAUTH_KBDINT_RESPONSE_FUNC((*response_callback)));
+
 """, true)
 
     echo s
