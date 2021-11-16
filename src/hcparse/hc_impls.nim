@@ -340,3 +340,10 @@ let baseFixConf* = CxxFixConf(
 
       result = cache.fixContextedName(name)
 )
+
+template onIgnoreCursor*(inConf: var WrapConf, body: untyped): untyped =
+  inConf.ignoreCursor = proc(
+    cursor {.inject.}: CXCursor,
+    conf {.inject.}: WrapConf
+  ): bool =
+    body

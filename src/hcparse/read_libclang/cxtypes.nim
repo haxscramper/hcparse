@@ -248,8 +248,13 @@ proc tokens*(cursor: CXCursor, tu: CXTranslationUnit): seq[CXToken] =
   for i in 0 ..< nTokens:
     result.add (cast[ptr UncheckedArray[CXToken]](tokens))[i]
 
-proc tokenStrings*(cursor: CXCursor): seq[string] =
-  let tu = getParentTranslationUnit(cursor)
+proc tokenStrings*(
+    cursor: CXCursor,
+    tu: Option[CxTranslationUnit] = none(CxTranslationUnit)
+  ): seq[string] =
+
+  let tu = if tu.isSome(): tu.get() else: getParentTranslationUnit(cursor)
+
   for tok in cursor.tokens(tu):
     result.add $getTokenSpelling(tu, tok)
 
@@ -710,6 +715,10 @@ proc hshow*(cxtype: CXType, opts: HDisplayOpts = defaultHDisplay): ColoredText =
 
       of tkUnexposed:
         add dropTemplateArgs($cxtype) + fgMagenta
+
+      of tkTypedef:
+        add "TD " + fgBlue
+        add $cxtype
 
       else:
         add "??["

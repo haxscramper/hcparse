@@ -1,11 +1,8 @@
 import
   hmisc/preludes/unittest,
-  hcparse/[
-    hc_parsefront,
-    hc_codegen,
-    hc_postprocess
-  ],
-  hcparse/interop_ir/wrap_store,
+  hcparse/[hc_parsefront],
+  hcparse/codegen/[hc_codegen],
+  hcparse/processor/[wrap_store, hc_postprocess],
   compiler/[ast, renderer],
   hnimast/[nim_decl, object_decl, obj_field_macros, hast_common, proc_decl]
 
@@ -160,3 +157,14 @@ suite "Serialization":
     let entries = entries1 & entries2
 
     echo toString(entries, cxxCodegenConf)
+
+suite "Convert edge cases":
+  test "Rename mapped to the same nim ident":
+    let s = convStr("""
+typedef struct _Impl {} Impl;
+
+Impl get1();
+_Impl get2();
+""")
+
+    echo s

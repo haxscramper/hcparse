@@ -31,9 +31,13 @@ func excl*[I](s1: var OrderedSet[I], other: OrderedSet[I]) =
 
 proc wrapEnum*(declEn: CDecl, conf: WrapConf, cache: var WrapCache): CxxEnum
 
-proc cxxPair*(ident: CSCopedIdent): CxxNamePair =
+proc cxxPair*(ident: CSCopedIdent, last: bool = false): CxxNamePair =
   let name = cxxName(ident)
-  return cxxPair(name.scopes.join("_"), name)
+  if last:
+    return cxxPair(name.scopes[^1], name)
+
+  else:
+    return cxxPair(name.scopes.join("_"), name)
 
 proc cxxPair*(cxtype: CxType, conf: WrapConf): CxxNamePair =
   var scopes: seq[string]
@@ -59,10 +63,34 @@ proc getPartialParams*(
 
 proc toCxxType*(t: NimType, conf: WrapConf, cache: var WrapCache): CxxTypeUse
 
+proc toCxxType*(
+    anon: CxxEntry,
+    parent: CxxNamePair,
+    user: CxxNamePair
+  ): CxxTypeUse =
 
-proc toCxxType*(cxtype: CXType, conf: WrapConf, cache: var WrapCache): CxxTypeUse =
+  case anon.kind:
+    of cekEnum:
+      result = cxxTypeUse(anon.cxxEnum, parent, user)
+
+    of cekObject:
+      result = cxxTypeUse(anon.cxxObject, parent, user)
+
+    else:
+      raise newUnexpectedKindError(anon)
+
+
+proc toCxxType*(
+    cxtype: CXType,
+    conf: WrapConf,
+    cache: var WrapCache
+  ): CxxTypeUse =
+
   if conf.isComplexType(cxtype, cache):
     return CxxTypeUse(kind: ctkIdent, flags: {ctfComplex})
+
+  # if "size_t" in $cxtype:
+  #   echov cxtype.kind, cxtype.hshow()
 
   case cxtype.cxKind():
     of tkBool:       result = cxxTypeUse(cptBool)
@@ -87,7 +115,12 @@ proc toCxxType*(cxtype: CXType, conf: WrapConf, cache: var WrapCache): CxxTypeUs
     of tkSChar:      result = cxxTypeUse(cptChar)
 
     of tkTypedef:
-      raise newImplementError()
+      case $cxtype:
+        of "size_t": result = cxxTypeUse(cptSizeT)
+        of "ssize_t": result = cxxTypeUse(cptSSizeT)
+        else:
+          result = cxxTypeUse(cxxPair(cxtype, conf), @[])
+          {.warning: "[IMPLEMENT] Get generic type parameters from the type instance".}
 
     of tkElaborated, tkRecord, tkEnum:
       result = cxxTypeUse(cxxPair(cxtype, conf), @[])
@@ -407,20 +440,50 @@ proc wrapProcedure*(
 
     else:
       discard
-proc wrapField*(cd: CDecl, conf: WrapConf, cache: var WrapCache): CxxField =
-  cxxField(
-    cd.ident.cxxPair(),
-    cd.cursor.cxType().toCxxType(conf, cache)
-  )
 
 proc wrapFunction*(cd: CDecl, conf: WrapConf, cache: var WrapCache): CxxProc =
   wrapProcedure(cd, conf, cache, none CDecl)
 
 proc wrapObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): CxxObject
 
+proc wrapTypeDecl*(
+  decl: CDecl, conf: WrapConf, cache: var WrapCache): Option[CxxEntry] =
+
+  case decl.kind:
+    of cdkClass, cdkStruct, cdkUnion:
+      let spec = decl.cursor.getSpecializedCursorTemplate()
+      if spec.cxKind() != ckFirstInvalid:
+        discard
+
+      else:
+        result = some decl.wrapObject(conf, cache).box()
+
+    of cdkEnum:
+      result = some decl.wrapEnum(conf, cache).box()
+
+    else:
+      raise newUnexpectedKindError(decl)
+
+proc wrapField*(
+    cd: CDecl,
+    conf: WrapConf,
+    cache: var WrapCache,
+    parent: CxxNamePair
+  ): CxxField =
+
+  let name = cd.ident.cxxPair(last = true)
+
+  if cd.fieldTypeDecl.canGet(decl):
+    let entry = wrapTypeDecl(cd.fieldTypeDecl.get(), conf, cache).get()
+    result = cxxField(name, toCxxType(entry, parent, name))
+
+  else:
+    result = cxxField(name, cd.cursor.cxType().toCxxType(conf, cache))
+
+
 proc wrapAlias*(
     al: CDecl, parent: CScopedIdent, conf: WrapConf, cache: var WrapCache
-  ): seq[CxxEntry] =
+  ): CxxAlias =
   # NOTE returning multiple values because of
   # `typedef struct A {} A, *APtr` shit that can result in multple
   # declarations, nested types (that might recursively contain who-knows-what)
@@ -429,20 +492,15 @@ proc wrapAlias*(
     var baseType: CxxTypeUse
     if al.aliasNewType.kind in {cdkClass, cdkStruct, cdkUnion}:
       let wrapBase = al.aliasNewType.wrapObject(conf, cache)
-      result.add wrapBase
       baseType = wrapBase.decl.cxxTypeUse()
 
     else:
       let wrapBase = al.aliasNewType.wrapEnum(conf, cache)
-      result.add wrapBase
       baseType = wrapBase.decl.cxxTypeUse()
 
-    for newName in al.newTypes:
-      var newType = newName.cxxPair(conf).cxxTypeDecl(ctdkTypedef)
-      # newType.genParams = baseType.genParams # FIXME port generic parameters from
-      if newType.cxxName() != baseType.cxxName():
-        # Alias names might be the same for `typedef struct St {} St;`
-        result.add cxxAlias(newType, baseType)
+    var newType = al.newType.cxxPair(conf).cxxTypeDecl(ctdkTypedef)
+    # newType.genParams = baseType.genParams # FIXME port generic parameters from
+    result = cxxAlias(newType, baseType)
 
   else:
     # Get underlying type for alias
@@ -478,7 +536,7 @@ proc wrapAlias*(
 
     # fixTypeParams(baseType, newAlias.genParams)
 
-    result.add cxxALias(newAlias, baseType)
+    result = cxxALias(newAlias, baseType)
 
 
 
@@ -601,7 +659,7 @@ proc wrapObject*(cd: CDecl, conf: WrapConf, cache: var WrapCache): CxxObject =
             result.flags.incl cofExplicitDestructor
 
         of cdkField:
-          var field = wrapField(entry, conf, cache)
+          var field = wrapField(entry, conf, cache, result.name())
 
           case entry.access:
             of asPublic: field.flags.incl cffPublic
@@ -645,10 +703,35 @@ func capitalAscii*(strs: seq[string]): seq[string] =
     result.add toLowerAscii(str).capitalizeAscii()
 
 proc wrapForward*(mdecl: CDecl, conf: WrapConf, cache: var WrapCache): CxxForward =
-  raise newImplementError()
+  result = cxxForward(
+    mdecl.ident.cxxPair(),
+    case mdecl.cursor.kind:
+      of ckStructDecl: ctdkStruct
+      of ckClassDecl: ctdkClass
+      else: raise newImplementKindError(mdecl.cursor)
+  )
 
-proc wrapMacro*(mdecl: CDecl, conf: WrapConf, cache: var WrapCache): CxxMacro =
-  raise newImplementError()
+proc wrapToken*(val: string, tok: CxTokenKind): CxxMacroToken =
+  result.strVal = val
+
+  result.kind = case tok:
+    of tokLiteral: cmtkIntLit
+    of tokIdentifier: cmtkIdent
+    of tokPunctuation: cmtkPunctuation
+    of tokKeyword: cmtkKeyword
+    else: raise newUnexpectedKindError(tok)
+
+proc wrapMacro*(
+    mdecl: CDecl,
+    conf: WrapConf,
+    cache: var WrapCache,
+    tu: CxTranslationUnit
+  ): CxxMacro =
+
+  result.name = cxxPair($mdecl.cursor)
+  let toks = tokenKinds(mdecl.cursor, tu)
+  for (val, tok) in toks:
+    result.tokens.add wrapToken(val, tok)
 
 proc wrapApiUnit*(
     api: CApiUnit, conf: WrapConf,
@@ -663,29 +746,19 @@ proc wrapApiUnit*(
       continue
 
     case decl.kind:
-      of cdkClass, cdkStruct, cdkUnion:
-        conf.logger.thisScope("Class wrapping")
-
-        let spec = decl.cursor.getSpecializedCursorTemplate()
-
-        if spec.cxKind() != ckFirstInvalid:
-          discard
-
-        else:
-          result.add decl.wrapObject(conf, cache)
+      of cdkClass, cdkStruct, cdkUnion, cdkEnum:
+        let entry = wrapTypeDecl(decl, conf, cache)
+        if entry.canGet(decl):
+          result.add decl
 
       of cdkAlias:
-        conf.logger.indented:
-          result.add decl.wrapAlias(decl.ident, conf, cache)
-
-      of cdkEnum:
-        result.add decl.wrapEnum(conf, cache)
+        result.add decl.wrapAlias(decl.ident, conf, cache)
 
       of cdkFunction:
         result.add decl.wrapFunction(conf, cache):
 
       of cdkMacro:
-        result.add decl.wrapMacro(conf, cache)
+        result.add decl.wrapMacro(conf, cache, api.unit)
 
       of cdkMethod, cdkField:
         discard

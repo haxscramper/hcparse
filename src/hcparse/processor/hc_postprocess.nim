@@ -86,13 +86,18 @@ proc setHeaderRec*(entry: var CxxEntry, conf: CxxFixConf) =
     of cekPass, cekImport, cekEmpty, cekComment:
       discard
 
-    of cekTypeGroup, cekMacroGroup, cekMacro:
+    of cekTypeGroup:
       raise newImplementKindError(entry)
 
+    of cekMacroGroup:
+      for it in mitems(entry.cxxMacroGroup.macros):
+        setHeaderRec(it, conf)
+
+    of cekMacro:   entry.cxxMacro.cbind.setCxxBind(conf.getBind(entry))
     of cekForward: entry.cxxForward.cbind.setCxxBind(conf.getBind(entry))
-    of cekEnum: entry.cxxEnum.cbind.setCxxBind(conf.getBind(entry))
-    of cekProc: entry.cxxProc.cbind.setCxxBind(conf.getBind(entry))
-    of cekAlias: entry.cxxAlias.cbind.setCxxBind(conf.getBind(entry))
+    of cekEnum:    entry.cxxEnum.cbind.setCxxBind(conf.getBind(entry))
+    of cekProc:    entry.cxxProc.cbind.setCxxBind(conf.getBind(entry))
+    of cekAlias:   entry.cxxAlias.cbind.setCxxBind(conf.getBind(entry))
     of cekObject:
       entry.cxxObject.cbind.setCxxBind(conf.getBind(entry))
       for meth in mitems(entry.cxxObject.methods):
@@ -150,7 +155,7 @@ func postprocessTypeUses*(
     aux(use.nimType, store)
 
   func aux(use: var CxxTypeUse, store: CxxTypeStore) =
-    eachIdent(use) do (use: var CxxTypeUse):
+    eachKind(use, {ctkIdent}) do (use: var CxxTypeUse):
       if not use.cxxType.isParam:
         use.cxxType.typeStore = store
         use.cxxType.typeLib = some lib.library
@@ -223,7 +228,7 @@ proc fixIdentsRec*(
 
   proc aux(use: var CxxTypeUse, cache: var StringNameCache) =
     var cache {.byaddr1.} = cache
-    eachIdent(use) do (use: var CxxTypeUse):
+    eachKind(use, {ctkIdent}) do (use: var CxxTypeUse):
       aux(use.cxxType.name, cache)
 
     proc auxArg(use: var CxxTypeUse, cache: var StringNameCache) =
@@ -324,6 +329,9 @@ proc fixIdentsRec*(
       of cekAlias:
         aux(entry.cxxAlias.baseType, cache)
         aux(entry.cxxAlias.decl, cache)
+
+      of cekMacro:
+        aux(entry.cxxMacro.name, cache)
 
       else:
         raise newImplementKindError(entry)

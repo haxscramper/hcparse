@@ -101,10 +101,12 @@ proc toCxxType*(node: CppNode, parent, user: Option[CxxNamePair]): CxxTypeUse =
         var coms: seq[CxxComment]
         case node.kind:
           of cppEnumSpecifier:
-            result = cxxTypeUse(toCxxEnum(node, coms), parent.get(), user.get())
+            result = cxxTypeUse(
+              toCxxEnum(node, coms), parent.get(), user.get())
 
           of cppUnionSpecifier, cppStructSpecifier:
-            result = cxxTypeUse(toCxxObject(node, coms), parent.get(), user.get())
+            result = cxxTypeUse(
+              toCxxObject(node, coms), parent.get(), user.get())
 
           else:
             raise newUnexpectedKindError(node)

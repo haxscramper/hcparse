@@ -84,10 +84,10 @@ proc sameNoGeneric*(ident1, ident2: CScopedIdent): bool =
 proc typeName*(ident: CScopedIdent): seq[string] =
   ident.mapIt($it.cursor)
 
-proc namespacedName*(name: seq[CxCursor], conf: WrapConf): string =
+proc namespacedName*(name: seq[CxCursor], conf: WrapConf): string {.deprecated.} =
   name.mapIt(getName(it)).join("::")
 
-proc namespacedName*(decl: CxCursor, conf: WrapConf): string =
+proc namespacedName*(decl: CxCursor, conf: WrapConf): string {.deprecated.} =
   ## Create /raw/ identifier from fully namespaces Cxx declaration entry.
   ##
   ## - EXAMPLE :: Given `namespace nsp { struct Str{}; }` and cursor that
@@ -95,7 +95,7 @@ proc namespacedName*(decl: CxCursor, conf: WrapConf): string =
   assertKind(decl, ckTypeDeclKinds)
   conf.getSemanticNamespaces(decl).namespacedName(conf)
 
-proc namespacedName*(cxtype: CxType, conf: WrapConf): string =
+proc namespacedName*(cxtype: CxType, conf: WrapConf): string {.deprecated.} =
   ## Return fully qualified namespaced name for a type based on the type
   ## instance.
   conf.getTypeNamespaces(cxtype).namespacedName(conf)

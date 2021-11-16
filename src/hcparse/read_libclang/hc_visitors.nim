@@ -5,7 +5,7 @@ import ../hc_typeconv
 import std/[sequtils, strutils]
 import hmisc/other/[hlogger]
 import hmisc/algo/hstring_algo
-import hmisc/core/all
+import hmisc/core/[all, code_errors]
 import hmisc/types/colorstring
 
 
@@ -105,7 +105,8 @@ proc visitField*(
   ): CDecl =
 
   result = CDecl(
-    kind: cdkField, cursor: cursor,
+    kind: cdkField,
+    cursor: cursor,
     ident: parent & toCName(cursor),
     isConst: isConstQualified(cursor.cxType())
   )
@@ -351,51 +352,41 @@ proc updateParentFields*(
             discard
 
 proc visitAlias*(
-    lastTypeDecl: var CDecl, parent: CSCopedIdent,
-    cursor: CXCursor, conf: WrapConf, cache: var WrapCache
+    lastTypeDecl: var CDecl,
+    parent: CSCopedIdent,
+    cursor: CXCursor,
+    conf: WrapConf,
+    cache: var WrapCache
   ): Option[CDecl] =
-
-
 
   if cursor[0].cxKind() in ckTypeDeclKinds:
     # libclang represents grouped typedefs using *multiple* nodes, so
     # `typedef struct S1 {} S2, *S3` will appear *three times* in the clang
     # IR. It is not really convenient to work with, as it requires additional
     # layer of bookeeping to avoud duplication of identifiers.
+    # echov lastTypeDecl.cursor.treeRepr()
+    # echov cursor[0].treeRepr()
+    assertRef(lastTypeDecl)
     if lastTypeDecl.cursor == cursor[0]:
-      # Second encounter of the typedefed struct
-      if lastTypeDecl.isAnonymous:
-        # FIXME use list of all type declaration kinds
-        if cursor[0].cxKind() in {ckStructDecl}:
-          # Type declaration itself is anonymous, but a part of larger
-          # `typedef` statement that declares name that is used in other
-          # code (to avoid `struct` namespacing in C I guess).
-
-          # warn "First declaration was considered anonymous, second visitation"
-          # logIndented:
-            lastTypedecl = visitClass(cursor[0], parent, conf, some(cursor), cache)
-            lastTypeDecl.isCTypedef = true
-
-
-      conf.debug "Found typedef struct", cursor
       lastTypeDecl = CDecl(
         ident: lastTypeDecl.ident,
         cursor: cursor,
         kind: cdkAlias,
-        newTypes: @[cursor],
+        newType: cursor,
         isNewType: true,
         aliasNewType: lastTypeDecl
       )
 
-    elif lastTypeDecl.kind == cdkAlias and
-         lastTypeDecl.isNewType and
-         lastTypeDecl.aliasNewType.cursor == cursor[0]:
-      # More trailing typedefs for existing declaration
-      lastTypeDecl.newTypes.add cursor
-
     else:
-      raiseImplementError(
-        "New typedef without previously visited declaration")
+      raise newLogicError(
+        "New typedef without previously visited declaration - typedef ",
+        mq1(cursor), " was found, but it does not correspond to any previously ",
+        "seen type declarations. This might be a result of hcparse bug or ",
+        "misconfigured ", mcode"ignoreType()",
+        " callback in wrap configuration that ",
+        "mistakenly prevented wrapping of the ",
+        mcode"typedef struct _Impl {} RealName"
+      )
 
   elif cursor[0].cxKind() in {ckTemplateRef}:
     result = some CDecl(
@@ -411,10 +402,17 @@ proc visitAlias*(
       ident: parent & toCName(cursor),
       cursor: cursor,
       kind: cdkAlias,
-      newTypes: @[cursor],
+      newType: cursor,
       isNewType: false,
       aliasBaseType: cursor
     )
+
+    if cursor.len == 0 or
+       #[ :c:`typedef off_t libssh2_struct_stat_size;` ]#
+       cursor[0] of ckTypeRef
+       #[ :c:`typedef struct stat libssh2_struct_stat;` ]#:
+      result = some lastTypeDecl
+
 
 
 proc visitClass*(
@@ -422,6 +420,8 @@ proc visitClass*(
     conf: WrapConf, typedef: Option[CXCursor],
     cache: var WrapCache
   ): CDecl =
+
+
 
   var kind =
     case cursor.cxKind():
@@ -553,7 +553,6 @@ proc visitClass*(
           discard
 
         else:
-          # inc undefCnt
           if undefCnt > 20:
             conf.debug subn.getSpellingLocation()
             raiseAssert("Reached unknown class element limit")
@@ -561,10 +560,8 @@ proc visitClass*(
           else:
             discard
             conf.warn "IMPLEMENT class element:", ($subn.cxKind).toRed(), subn
-            # debug subn.treeRepr()
 
   cache.setParamsForType(conf, ident, params)
-
 
 proc visitNamespace*(
     cursor: CXCursor, parent: CScopedIdent, conf: WrapConf,
@@ -628,8 +625,9 @@ proc visitCursor*(
         result.decls.add visitNamespace(cursor, parent, conf, cache)
 
       of classDeclKinds:
-        if not isNil(lastTypeDecl): result.decls.add lastTypeDecl
+        # if not isNil(lastTypeDecl): result.decls.add lastTypeDecl
         lastTypeDecl = visitClass(cursor, parent, conf, none(CXCursor), cache)
+        result.decls.add lastTypeDecl
 
       of ckFunctionDecl, ckFunctionTemplate:
         result.decls.add visitFunction(cursor, parent, conf)
@@ -646,7 +644,7 @@ proc visitCursor*(
           result.decls.add alias.get()
 
       of ckEnumDecl:
-        if not isNil(lastTypeDecl): result.decls.add lastTypeDecl
+        # if not isNil(lastTypeDecl): result.decls.add lastTypeDecl
 
         lastTypeDecl = visitEnum(cursor, parent, conf)
 
@@ -660,10 +658,14 @@ proc visitCursor*(
         result.recurse = true
 
 proc splitDeclarations*(
-  tu: CXTranslationUnit, conf: WrapConf, cache: var WrapCache): CApiUnit =
+    tu: CXTranslationUnit,
+    conf: WrapConf,
+    cache: var WrapCache
+  ): CApiUnit =
+
   assert not tu.isNil
   let tuCursor = tu.getTranslationUnitCursor()
-  var res: CApiUnit
+  var res = CApiUnit(unit: tu)
   var lastTypeDecl: CDecl
   tuCursor.visitChildren do:
     makeVisitor [tu, res, conf, tuCursor, lastTypeDecl, cache]:

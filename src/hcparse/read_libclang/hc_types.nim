@@ -250,8 +250,7 @@ type
         ## `typedef ## struct T {} Name2, *Ptr` it is necessary to:
         ## - Have multiple `newType` values  - `Name2`
 
-        newTypes*: seq[CXCursor] ## List of new type names introduced by
-                                 ## typedef.
+        newType*: CXCursor
         case isNewType*: bool
           of true:
             ## Typedef contained new type declaration
@@ -297,9 +296,9 @@ type
     # TODO infer 'derived' API that must also be acessible through
     # object - things like public fields and methods of parent class.
     decls*: seq[CDecl]
+    unit*: CxTranslationUnit
 
   ParsedFile* = object
-    unit*: CXTranslationUnit ## Translation unit
     filename*: AbsFile ## Name of the original file
     api*: CApiUnit ## File's API
     index*: CXIndex ## Liblcang index object

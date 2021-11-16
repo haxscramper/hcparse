@@ -87,19 +87,30 @@ proc toNNode*[N](
   case t.kind:
     of ctkPod:
       let name = case t.podKind:
-        of cptBool: "cbool"
-        of cptInt: "cint"
-        of cptVoid: "void"
-        of cptUInt: "cuint"
-        of cptI64: "int64"
-        of cptI32: "int32"
-        of cptI16: "int16"
-        of cptI8: "int8"
-        of cptU64: "uint64"
-        of cptU32: "uint32"
-        of cptU16: "uint16"
-        of cptU8: "uint8"
-        else: raise newImplementKindError(t.podKind)
+        of cptNone: raise newUnexpectedKindError(t.podKind)
+        of cptBool:       "cbool"
+        of cptInt:        "cint"
+        of cptVoid:       "void"
+        of cptUInt:       "cuint"
+        of cptI64:        "int64"
+        of cptI32:        "int32"
+        of cptI16:        "int16"
+        of cptI8:         "int8"
+        of cptU64:        "uint64"
+        of cptU32:        "uint32"
+        of cptU16:        "uint16"
+        of cptU8:         "uint8"
+        of cptChar:       "char"
+        of cptNullptr:    "nullptr_t"
+        of cptUChar:      "uint8"
+        of cptWChar:      "wchar"
+        of cptChar16:     "char16"
+        of cptChar32:     "char32"
+        of cptFloat:      "cdfloat"
+        of cptDouble:     "cdouble"
+        of cptLongDouble: "clongdouble"
+        of cptSizeT:      "csize_t"
+        of cptSsizeT:     "csize_t"
 
       result = newNNType[N](name, @[])
 
@@ -114,10 +125,10 @@ proc toNNode*[N](
         result.add toNNode[N](param, conf, anon)
 
     of ctkPtr:
-      if t.wrapped of ctkIdent:
-        case t.wrapped.nimName:
-          of "char": result = newNNType[N]("cstring", @[])
-          of "void": result = newNNType[N]("pointer", @[])
+      if t.wrapped of ctkPod:
+        case t.wrapped.podKind:
+          of cptChar: result = newNNType[N]("cstring", @[])
+          of cptVoid: result = newNNType[N]("pointer", @[])
           else: result = newNType[N]("ptr", @[toNNode[N](t.wrapped, conf, anon)])
 
       else:
@@ -198,10 +209,10 @@ proc toNNode*[N](
     docComment: field.docComment.toNimComment(),
     fldType: toNNode[N](field.getType(), conf, anon))
 
-  let cxx = field.cxxName.cxxStr()
+  let cxx = field.cxxName.scopes[^1]
   if cxx != field.nimName():
     result.addPragma(
-      conf.getImport(), newNLit[N, string](field.cxxName.cxxStr()))
+      conf.getImport(), newNLit[N, string](field.cxxName.scopes[^1]))
 
 
 proc toNNode*[N](header: CxxBind, conf: CodegenConf, name: string): seq[N] =
@@ -295,10 +306,10 @@ func getCbindAs*(pr: CxxProc, parent: Option[CxxObject]): CxxBind =
       if pr.isMethod():
         if pr.isStatic():
           result.icpp = staticMethod(
-            parent.get().name().cxxStr(), pr.getIcppName())
+            parent.get().name().cxxStr(), pr.getIcppName(true))
 
         else:
-          result.icpp.dotMethod(pr.getIcppName())
+          result.icpp.dotMethod(pr.getIcppName(true))
 
       else:
         result.icpp.standaloneProc(pr.getIcppName())
@@ -415,10 +426,8 @@ proc toNNode*[N](
   for n in obj.nested:
     result.add toNNode[N](n, conf, anon)
 
-  # echov "super of", obj
   assertRef(obj.decl.store)
   for super in obj.decl.store.getSuperTypes(obj.decl):
-    # echov ">>", super
     var anon: seq[NimDecl[N]]
     for meth in super.methods:
       if not (
@@ -611,6 +620,9 @@ proc toNNode*[N](
 
     of cekEmpty:
       discard
+
+    of cekMacro:
+      {.warning: "[IMPLEMENT] Implement conversion for macros".}
 
     of cekAlias:
       let a = entry.cxxAlias

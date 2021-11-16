@@ -41,7 +41,7 @@ proc registerUse*(ctype: CxxTypeUse, used: var UsedSet) =
   if isNil(ctype): return
   var used = used
 
-  eachIdent(ctype) do (use: CxxTypeUse):
+  eachKind(ctype, {ctkIdent}) do (use: CxxTypeUse):
     let decl = use.getDecl()
     if decl.isSome():
       used.cursors.mgetOrDefault(decl.get()).incl use

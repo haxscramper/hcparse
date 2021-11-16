@@ -9,7 +9,7 @@ import
   ]
 
 import
-  pkg/[jsony],
+  # pkg/[jsony],
   pkg/[frosty]
 
 import
@@ -17,7 +17,8 @@ import
     cxtypes,
     libclang_wrap,
     hc_types,
-    hc_visitors
+    hc_visitors,
+    hc_clangreader
   ],
 
   ./read_tree_sitter/[
@@ -60,6 +61,9 @@ import
   hmisc/algo/[
     hstring_algo,
     namegen
+  ],
+  hmisc/hasts/[
+    xml_serde
   ],
   hmisc/core/all
 
@@ -172,7 +176,7 @@ proc parseTranslationUnit*(
   )
 
 
-proc parseFile*(
+proc parseFileViaClang*(
     file: AbsFile,
     config: ParseConf = baseCppParseConf,
     opts: set[CXTranslationUnitFlags] = {
@@ -182,7 +186,7 @@ proc parseFile*(
   var index = createIndex()
   result = parseTranslationUnit(index, file, flags, opts)
 
-proc parseFile*(
+proc parseFileViaClang*(
     file: AbsFile, conf: WrapConf, cache: var WrapCache): ParsedFile =
 
 
@@ -193,14 +197,43 @@ proc parseFile*(
   result.index = createIndex()
 
   var conf = conf
-  result.unit = parseTranslationUnit(
+  let unit = parseTranslationUnit(
     result.index, file, flags, {
       tufSkipFunctionBodies, tufDetailedPreprocessingRecord})
 
-  result.api = result.unit.splitDeclarations(conf, cache)
+  result.api = unit.splitDeclarations(conf, cache)
   result.isExplicitlyAdded = true
 
+proc wrapViaClang*(
+    file: ParsedFile,
+    wrapConf: WrapConf,
+    fixConf: CxxFixConf,
+    cache: var WrapCache,
+    dir: AbsDir
+  ): CxxFile =
 
+  var fixConf = fixConf
+  fixConf.onGetBind():
+    return cxxHeader(file.filename)
+
+  let lib = fixConf.libImport(dir, file.filename)
+
+  let wrapped: seq[CxxEntry] = file.api.wrapApiUnit(wrapConf, cache).
+    postFixEntries(fixConf, lib)
+
+  return cxxFile(wrapped, lib, file.filename)
+
+proc wrapViaClang*(
+    files: seq[AbsFile],
+    wrapConf: WrapConf,
+    fixConf: CxxFixConf,
+    cache: var WrapCache,
+    dir: AbsDir
+  ): seq[CxxFile] =
+
+  for file in files:
+    let file = parseFileViaClang(file, wrapConf, cache)
+    result.add wrapViaClang(file, wrapConf, fixConf, cache, dir)
 
 proc convertViaTs*(text: string): PNode =
   var text = text
@@ -434,26 +467,24 @@ proc expandViaWave*(
   #       logger.info "No need to expand", file
 
 
-const importMapFile* = "type_import.json"
+const importMapFile* = "type_import.xml"
 
 proc getImportMap*(files: seq[CxxFile]): CxxTypeImportMap =
   for file in files:
     for entry in file.entries:
       if entry of {cekObject, cekAlias, cekEnum}:
-        result[CxxNameString(entry.cxxName.scopes.join("::"))] = file.savePath
-
-func `$`*(s: CxxNameString): string = s.string
+        result[entry.cxxName()] = file.savePath
 
 proc readImportMap*(store: var CxxTypeStore, file: AbsFile) =
   assertExists(file)
   let j = readFile(file)
-  let map = j.fromJson(Table[string, CxxLibImport])
+  let map = j.fromXml(Table[CxxName, CxxLibImport], "type-map")
   for key, val in map:
-    store.importDecls[cxxName(key.split("::"))] = val
+    store.importDecls[key] = val
 
 proc readImportMap*(store: var CxxTypeStore, dirs: seq[AbsDir]) =
   for dir in dirs:
-    for file in walkDir(dir, AbsFile, exts = @["json"]):
+    for file in walkDir(dir, AbsFile, exts = @["xml"]):
       if file.name() == "type_import":
         readImportMap(store, file)
         break
@@ -461,16 +492,16 @@ proc readImportMap*(store: var CxxTypeStore, dirs: seq[AbsDir]) =
 
 
 proc initCSharedLibFixConf*(
-    lib: string,
-    packageName: string,
-    isIcpp: bool,
-    libRoot: AbsDir,
-    expandMap: CxxExpandMap,
-    configFiles: seq[string] = @["lib" & lib & "_config"],
-    base: CxxFixConf         = baseFixConf,
-    libIncludePrefix: string = lib,
-    nameStyle: IdentStyle    = idsSnake,
-    depDirs: seq[AbsDir] = @[]
+    lib:              string,
+    packageName:      string,
+    isIcpp:           bool,
+    libRoot:          AbsDir,
+    expandMap:        CxxExpandMap = default(CxxExpandMap),
+    configFiles:      seq[string]  = @["lib" & lib & "_config"],
+    base:             CxxFixConf   = baseFixConf,
+    libIncludePrefix: string       = lib,
+    nameStyle:        IdentStyle   = idsSnake,
+    depDirs:          seq[AbsDir]  = @[]
   ): CxxFixConf =
 
   var fixConf = base
@@ -483,7 +514,14 @@ proc initCSharedLibFixConf*(
         result = cxxMacroBind(lib & "Proc")
 
       of cekObject, cekForward:
-        let base = expandMap[entry.getLocation.file].string
+        let file = entry.getLocation.file
+        let base =
+          if file in expandMap:
+            expandMap[file].string
+
+          else:
+            file.string
+
         let path = base.dropPrefix(libRoot.string)
         result = cxxHeader("<" & libIncludePrefix & path & ">")
 
@@ -533,9 +571,9 @@ proc writeFiles*(
   result.genTypeMap = some mapFile
   var map = getImportMap(files)
   for (ctype, cimport) in extraTypes:
-    map[CxxNameString(ctype.scopes.join("::"))] = cimport
+    map[ctype] = cimport
 
-  writeFile(mapFile, toJson(map))
+  writeFile(mapFile, toXml(map, "type-map"))
 
   let group = regroupFiles(files)
 

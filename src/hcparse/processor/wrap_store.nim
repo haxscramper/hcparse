@@ -103,8 +103,7 @@ type
     isAnonymous*: bool
     isPromotedForward*: bool
 
-  CxxNameString* = distinct string
-  CxxTypeImportMap* = OrderedTable[CxxNameString, CxxLibImport]
+  CxxTypeImportMap* = OrderedTable[CxxName, CxxLibImport]
   CxxName* = object
     scopes*: seq[string]
 
@@ -222,6 +221,7 @@ type
     cptDouble
     cptLongDouble
     cptSizeT
+    cptSSizeT
 
   CxxTypeUse* = ref object
     ## Instantiated type
@@ -424,12 +424,23 @@ type
   CxxForward* = object of CxxBase
     decl*: CxxTypeDecl
 
+  CxxMacroTokenKind* = enum
+    cmtkIntLit
+    cmtkIdent
+    cmtkPunctuation
+    cmtkKeyword
+
+  CxxMacroToken* = object
+    strVal*: string
+    kind*: CxxMacroTokenKind
+
   CxxMacro* = object of CxxBase
     name*: CxxNamePair
     arguments*: seq[string]
+    tokens*: seq[CxxMacroToken]
 
   CxxMacroGroup* = object
-    macros*: seq[CxxMacro]
+    macros*: seq[CxxEntry]
 
   CxxEntryKind* = enum
     cekEnum ## Enum wrapper
@@ -715,7 +726,6 @@ iterator items*(use: CxxTypeUse): CxxTypeUse =
     yield use[i]
 
 
-func `==`*(s1, s2: CxxNameString): bool = s1.string == s2.string
 func `==`*(n1, n2: CxxName): bool = n1.scopes == n2.scopes
 func `==`*(l1, l2: CxxLibImport): bool =
   l1.library == l2.library and l1.importPath == l2.importPath
@@ -733,7 +743,6 @@ func `<`*(l1, l2: CxxLibImport): bool =
   else:
     return l1.library < l2.library
 
-func hash*(s: CxxNameString): Hash = hash(s.string)
 func hash*(name: CxxName): Hash = hash(name.scopes)
 
 func hash*[T](opt: Option[T]): Hash =
@@ -838,6 +847,7 @@ func name*(e: CxxEntry): CxxNamePair =
     of cekObject: result = e.cxxObject.decl.name
     of cekProc: result = e.cxxProc.head.name
     of cekAlias: result = e.cxxAlias.decl.name
+    of cekMacro: result = e.cxxMacro.name
     of cekEmpty:
       raise newUnexpectedKindError(e)
 
@@ -1200,37 +1210,48 @@ func addReExport*(file: var CxxFile, cimport: CxxLibImport) =
 # proc eachIdent*(use: var CxxTypeUse, cb: proc(ident: var CxxTypeUse))
 # proc eachIdent*(use: CxxTypeUse, cb: proc(ident: CxxTypeUse))
 
-template eachIdentAux(inUse, cb, iterateWith: untyped) =
-  # bind eachIdent
+template eachKindAux(inUse, cb, iterateWith: untyped, target: set[CxxTypeKind]) =
+  if inUse.kind in target:
+    cb(inUse)
+
   case inUse.kind:
     of ctkAnonEnum:
       discard
 
     of ctkAnonObject:
       for field in iterateWith(inUse.objDef.mfields):
-        eachIdent(field.nimType, cb)
+        eachKind(field.nimType, target, cb)
 
-    of ctkWrapKinds: eachIdent(inUse.wrapped, cb)
+    of ctkWrapKinds: eachKind(inUse.wrapped, target, cb)
     of ctkStaticParam, ctkPod: discard
-    of ctkArrayKinds: eachIdent(inUse.arrayElement, cb)
+    of ctkArrayKinds: eachKind(inUse.arrayElement, target, cb)
     of ctkIdent:
-      cb(inUse)
       for param in iterateWith(inUse.genParams):
-        eachIdent(param, cb)
+        eachKind(param, target, cb)
 
     of ctkProc:
       for arg in iterateWith(inUse.arguments):
-        eachIdent(arg.nimType, cb)
+        eachKind(arg.nimType, target, cb)
 
-      eachIdent(inUse.returnType, cb)
+      eachKind(inUse.returnType, target, cb)
 
-proc eachIdent*(use: var CxxTypeUse, cb: proc(ident: var CxxTypeUse)) =
+proc eachKind*(
+    use: var CxxTypeUse,
+    target: set[CxxTypeKind],
+    cb: proc(ident: var CxxTypeUse)
+  ) =
+
   if isNil(use): return
-  eachIdentAux(use, cb, mitems)
+  eachKindAux(use, cb, mitems, target)
 
-proc eachIdent*(use: CxxTypeUse, cb: proc(ident: CxxTypeUse)) =
+proc eachKind*(
+    use: CxxTypeUse,
+    target: set[CxxTypeKind],
+    cb: proc(ident: CxxTypeUse)
+  ) =
+
   if isNil(use): return
-  eachIdentAux(use, cb, items)
+  eachKindAux(use, cb, items, target)
 
 proc getUsedTypesRec*(
     t: CxxTypeUse, ignoreHead: bool = false): seq[CxxTypeUse] =
@@ -1238,7 +1259,7 @@ proc getUsedTypesRec*(
   if not ignoreHead:
     res.add t
 
-  eachIdent(t) do(t: CxxTypeUse):
+  eachKind(t, {ctkIdent}) do(t: CxxTypeUse):
     if notNil(t): res.add t
     res.add getUsedTypesRec(t, ignoreHead = false)
 
@@ -1363,9 +1384,35 @@ func setCxxBind*(target: var CxxBind, source: CxxBind) =
 
 
 proc setStoreRec*(entry: var CxxEntry, store: CxxTypeStore) =
+  proc aux(use: var CxxTypeUse)
+
+  proc aux(def: var CxxObject) =
+    def.decl.store = store
+
+    for nest in mitems(def.nested):
+      setStoreRec(nest, store)
+
+    for meth in mitems(def.methods):
+      for arg in mitems(meth.arguments):
+        aux(arg.nimType)
+
+      aux(meth.returnType)
+
+    for field in mitems(def.mfields):
+      aux(field.nimType)
+
+  proc aux(def: var CxxEnum) =
+    def.decl.store = store
+
   proc aux(use: var CxxTypeUse) =
-    eachIdent(use) do (use: var CxxTypeUse):
-      use.cxxType.typeStore = store
+    eachKind(use, {
+      ctkIdent, ctkAnonObject, ctkAnonEnum
+    }) do (use: var CxxTypeUse):
+      case use.kind:
+        of ctkIdent: use.cxxType.typeStore = store
+        of ctkAnonObject: aux(use.objDef)
+        of ctkAnonEnum: aux(use.enumDef)
+        else: discard
 
   case entry.kind:
     of cekPass, cekEmpty, cekImport, cekMacroGroup,
@@ -1384,7 +1431,7 @@ proc setStoreRec*(entry: var CxxEntry, store: CxxTypeStore) =
         setStoreRec(decl, store)
 
     of cekEnum:
-      entry.cxxEnum.decl.store = store
+      aux(entry.cxxEnum)
 
     of cekForward:
       entry.cxxForward.decl.store = store
@@ -1394,19 +1441,7 @@ proc setStoreRec*(entry: var CxxEntry, store: CxxTypeStore) =
       aux(entry.cxxAlias.baseType)
 
     of cekObject:
-      entry.cxxObject.decl.store = store
-
-      for nest in mitems(entry.cxxObject.nested):
-        setStoreRec(entry, store)
-
-      for meth in mitems(entry.cxxObject.methods):
-        for arg in mitems(meth.arguments):
-          aux(arg.nimType)
-
-        aux(meth.returnType)
-
-      for field in mitems(entry.cxxObject.mfields):
-        aux(field.nimType)
+      aux(entry.cxxObject)
 
 template setFile(entry: typed, file: AbsFile): untyped =
   if entry.spellingLocation.isSome:
@@ -1417,10 +1452,14 @@ template setFile(entry: typed, file: AbsFile): untyped =
 
 proc setFileRec*(entry: var CxxEntry, file: AbsFile) =
   case entry.kind:
-    of cekPass, cekImport, cekEmpty, cekComment:
+    of cekPass, cekImport, cekEmpty, cekComment, cekMacro:
       discard
 
-    of cekTypeGroup, cekMacroGroup, cekMacro:
+    of cekMacroGroup:
+      for it in mitems(entry.cxxMacroGroup.macros):
+        setFileRec(it, file)
+
+    of cekTypeGroup:
       raise newImplementKindError(entry)
 
     of cekForward: entry.cxxForward.setFile(file)
@@ -1445,10 +1484,11 @@ func getBindImports*(file: CxxFile): HashSet[CxxLibImport] =
 
   func aux(entry: CxxEntry, res: var HashSet[CxxLibImport]) =
     case entry.kind:
-      of cekPass, cekImport, cekEmpty, cekComment:
+      of cekPass, cekImport, cekEmpty,
+         cekComment, cekMacroGroup, cekMacro:
         discard
 
-      of cekTypeGroup, cekMacroGroup, cekMacro:
+      of cekTypeGroup:
         raise newImplementKindError(entry)
 
       of cekForward: res.incl entry.cxxForward.cbind.imports

@@ -18,6 +18,34 @@ import
 
   hcparse/processor/[hc_postprocess]
 
+proc convStr(file: AbsFile, s: string, print: bool = false): string =
+  file.writeFile(s)
+  var cache = newWrapCache()
+  if print:
+    let unit = parseFileViaClang(file)
+    echo unit.getTranslationUnitCursor().treeRepr()
+
+  var wrap = baseCppWrapConf.withDeepIt do:
+    it.logger = newTermLogger()
+    it.onIgnoreCursor():
+      return false
+
+
+  let fix = baseFixConf.withIt do:
+    it.typeStore = newTypeStore()
+    it.onGetBind():
+      return cxxHeader("?")
+
+
+  let api = parseFileViaClang(file).
+    splitDeclarations(wrap, cache)
+
+  let wrapped = api.wrapApiUnit(wrap, cache).
+    postFixEntries(fix, cxxLibImport("h", @["h"]))
+
+  return wrapped.toString(cxxCodegenConf)
+
+
 suite "Parse basic file":
   let dir = getTestTempDir()
   mkDir dir
@@ -41,6 +69,7 @@ class Templated {
   public:
     T get() const noexcept;
     void set(Z value);
+    static void getQ();
 };
 
 // enum class Enum {en1, en2};
@@ -48,18 +77,38 @@ class Templated {
 
 Templated<int> operator%(int arg1, Struct arg2);
 
-
 int main() {}
+
+typedef struct LIBSSH2_USERAUTH_KBDINT_PROMPT
+{
+    char *text;
+    unsigned int length;
+    unsigned char echo;
+} LIBSSH2_USERAUTH_KBDINT_PROMPT;
+
+typedef struct Q_LIBSSH2_POLLFD {
+    unsigned char type;
+    union {
+        int socket_1;
+        int socket_2;
+    } fd;
+    unsigned long events;
+} LIBSSH2_POLLFD;
+
+typedef unsigned long long libssh2_uint64_t;
+typedef long long libssh2_int64_t;
+typedef struct stat libssh2_struct_stat;
+typedef int libssh2_struct_stat_size;
+
 """)
 
-    let unit = parseFile(file)
+    let unit = parseFileViaClang(file)
     echo unit.getTranslationUnitCursor().treeRepr()
 
   test "Visitors":
     var cache = newWrapCache()
-    let api = parseFile(file).splitDeclarations(baseCppWrapConf, cache)
-
-    # pprint api
+    let api = parseFileViaClang(file).
+      splitDeclarations(baseCppWrapConf, cache)
 
     var fix = baseFixConf.withIt do:
       it.typeStore = newTypeStore()
@@ -76,4 +125,14 @@ int main() {}
     echo "Generated wrapped"
     echo wrapped.toString(cxxCodegenConf)
 
-    # pprint wrapped[0]
+suite "Convert edge cases":
+  test "Rename mapped to the same nim ident":
+    let file = getTestTempFile("c")
+    let s = file.convStr("""
+typedef struct _Impl {} Impl;
+
+Impl get1();
+_Impl get2();
+""", true)
+
+    echo s
