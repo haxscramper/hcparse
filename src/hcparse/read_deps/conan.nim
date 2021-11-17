@@ -26,10 +26,11 @@ type
   ConanBuildInfo* = object
     dependencies*: seq[ConanDep]
 
-proc findRootPath*(info: ConanBuildInfo, lib: string): AbsDir =
+proc findIncludePath*(info: ConanBuildInfo, lib: string): seq[AbsDir] =
   for dep in info.dependencies:
     if dep.name == lib:
-      return AbsDir(dep.rootpath)
+      for path in dep.includePaths:
+        result.add AbsDir(path)
 
 proc getBuildInfo*(
     name: string,
