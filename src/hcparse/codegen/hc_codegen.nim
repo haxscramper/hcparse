@@ -106,7 +106,7 @@ proc toNNode*[N](
         of cptWChar:      "wchar"
         of cptChar16:     "char16"
         of cptChar32:     "char32"
-        of cptFloat:      "cdfloat"
+        of cptFloat:      "cfloat"
         of cptDouble:     "cdouble"
         of cptLongDouble: "clongdouble"
         of cptSizeT:      "csize_t"

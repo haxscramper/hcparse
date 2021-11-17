@@ -13,6 +13,36 @@ proc initConanPackage*(
   echov dir
 
   mkWithDirStructure dir:
+    file ".gitignore":
+      """
+*
+!*.*
+!**/*.*
+!/**/
+!.*
+!/*
+
+nimcache/
+**/*.bin
+**/*.png
+**/*.dot
+**/*.tmp.*
+**/*.tmp
+**/*.html
+**/*.css
+
+**/*tmp-*
+.nojekyll
+nimdoc.cfg
+/scripts/.circuit
+/scripts/.latex
+callgrind.out.*
+
+*.code-workspace
+
+nim.cfg
+"""
+
     file "conanfile.txt":
       fmt"""
 [requires]

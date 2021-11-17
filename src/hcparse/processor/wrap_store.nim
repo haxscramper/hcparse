@@ -103,7 +103,6 @@ type
     isAnonymous*: bool
     isPromotedForward*: bool
 
-  CxxTypeImportMap* = OrderedTable[CxxName, CxxLibImport]
   CxxName* = object
     scopes*: seq[string]
 

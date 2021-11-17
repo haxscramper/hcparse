@@ -8,4 +8,4 @@ suite "Setup project using conan":
     echov dir
 
     withDir dir:
-      hcparseCli(@["init", "conan", "libgit2", "1.3.0"])
+      hcparseCli(@["init", "conan", "zlib", "1.2.11"])

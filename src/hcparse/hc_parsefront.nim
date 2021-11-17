@@ -451,44 +451,31 @@ proc expandViaWave*(
   fileExpandLoop(
     logger, expandViaWave(file, cache, conf, logger))
 
-  # mkDir outDir
-  # for file in files:
-  #   let resFile = (outDir /. file.name()) &. "h"
-  #   result[resFile] = file
+const importMapFile* = "hcparseTypeImport.xml"
 
-  #   if not exists(resFile) or force:
-  #     resFile.writeFile()
+type
+  CxxImportMap = object
+    table*: OrderedTable[CxxName, CxxLibImport]
 
-  #     if ?logger:
-  #       logger.info "Expanded", file, "to", resFile
-
-  #   else:
-  #     if ?logger:
-  #       logger.info "No need to expand", file
-
-
-const importMapFile* = "type_import.xml"
-
-proc getImportMap*(files: seq[CxxFile]): CxxTypeImportMap =
+proc getImportMap*(files: seq[CxxFile]): CxxImportMap =
   for file in files:
     for entry in file.entries:
       if entry of {cekObject, cekAlias, cekEnum}:
-        result[entry.cxxName()] = file.savePath
+        result.table[entry.cxxName()] = file.savePath
 
 proc readImportMap*(store: var CxxTypeStore, file: AbsFile) =
   assertExists(file)
   let j = readFile(file)
-  let map = j.fromXml(Table[CxxName, CxxLibImport], "type-map")
-  for key, val in map:
+  let map = j.fromXml(CxxImportMap, "type-map")
+  for key, val in map.table:
     store.importDecls[key] = val
 
-proc readImportMap*(store: var CxxTypeStore, dirs: seq[AbsDir]) =
-  for dir in dirs:
-    for file in walkDir(dir, AbsFile, exts = @["xml"]):
-      if file.name() == "type_import":
-        readImportMap(store, file)
-        break
-
+proc findImportMaps*(paths: seq[AbsDir], cwd: AbsDir): seq[AbsFile] =
+  for path in paths:
+    if (path notin cwd) and (cwd notin path):
+      for dir in parentDirs(path):
+        if exists(dir /. importMapFile):
+          result.add dir /. importMapFile
 
 
 proc initCSharedLibFixConf*(
@@ -501,8 +488,9 @@ proc initCSharedLibFixConf*(
     base:             CxxFixConf   = baseFixConf,
     libIncludePrefix: string       = lib,
     nameStyle:        IdentStyle   = idsSnake,
-    depDirs:          seq[AbsDir]  = @[]
+    typeMaps: seq[AbsFile] = @[]
   ): CxxFixConf =
+
 
   var fixConf = base
   fixConf.isIcpp = isIcpp
@@ -536,7 +524,8 @@ proc initCSharedLibFixConf*(
     cache.fixContextedName(name, fixConf.libNameStyle)
 
   fixConf.typeStore = newTypeStore()
-  fixConf.typeStore.readImportMap(depDirs)
+  for file in typeMaps:
+    fixConf.typeStore.readImportMap(file)
 
   return fixConf
 
@@ -564,14 +553,15 @@ proc writeFiles*(
     outDir: AbsDir,
     files: seq[CxxFile],
     codegenConf: CodegenConf,
-    extraTypes: seq[(CxxName, CxxLibImport)] = @[]
+    extraTypes: seq[(CxxName, CxxLibImport)] = @[],
+    outMapDir: AbsDir = outDir.dir()
   ): GenFiles =
 
-  let mapFile = outDir /. importMapFile
+  let mapFile = outMapDir /. importMapFile
   result.genTypeMap = some mapFile
   var map = getImportMap(files)
   for (ctype, cimport) in extraTypes:
-    map[ctype] = cimport
+    map.table[ctype] = cimport
 
   writeFile(mapFile, toXml(map, "type-map"))
 
@@ -590,10 +580,12 @@ proc wrapCSharedLibViaTsWave*(
     libName, packageName: string,
     ignoreIn: seq[string]                    = @[],
     persistentOut: seq[string]               = @[
-      "hcparse_generate", "lib" & libName & "_config"],
-    depDirs: seq[AbsDir]                     = @[],
+      "hcparse_generate_lib" & libName,
+      "lib" & libName & "_config"
+    ],
+    typeMaps: seq[AbsFile]                   = @[],
     extraTypes: seq[(CxxName, CxxLibImport)] = @[],
-    codegen: CodegenConf = cCodegenConf
+    codegen: CodegenConf                     = cCodegenConf
   ): GenFiles =
   var expandMap = expandViaWave(
     listFiles(inDir, ignoreNames = ignoreIn),
@@ -606,7 +598,7 @@ proc wrapCSharedLibViaTsWave*(
 
   let
     fixConf = initCSharedLibFixConf(
-      libName, packageName, false, inDir, expandMap, depDirs = depDirs)
+      libName, packageName, false, inDir, expandMap, typeMaps = typeMaps)
 
   codegen.nameStyle = fixConf.libNameStyle
 
