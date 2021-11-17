@@ -1,4 +1,6 @@
-note: work in progress
+note: work in progress - features and descriptions are largely accurate,
+but large chunks of intended functionality is yet to be implemented. To see
+the current state of development process please see [[https://github.com/haxscramper/hcparse/projects/2][alpha verion project]]
 
 This project provides two types of wrapper generators -
 
