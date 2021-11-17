@@ -88,11 +88,10 @@ Why is it necessary to have multiple different approaches to code wrapping?
 Having single entry point would make it much easier for new users,
 simplifty documentation and explanation and so on.
 
-Main reason for providing two (three if you count
-[][hnimast/wrap/wrap_decl] as well) solutions is very simple - each has
-it's own downsides (for end user), and it is not possible to create a tool
-where both techniques are used, as they have large number of mutually
-exclusive requirements.
+Main reason for providing two solutions is very simple - each has it's own
+downsides (for end user), and it is not possible to create a tool where
+both techniques are used, as they have large number of mutually exclusive
+requirements.
 
 - tree-sitter & boost wave ::
   - advantages ::
@@ -198,8 +197,17 @@ from existing tools?"
     like hcparse), but invokes C compiler to do the macro expansion, which
     merges all headers into a single file, and completely ignores any
     ~#include~ declarations. Boost wave, on the other hand [[https://www.boost.org/doc/libs/1_76_0/libs/wave/doc/class_reference_ctxpolicy.html#opened_include_file][allows]] to
-    intercept include directives.
-
+    intercept include directives, which makes it possible to provide a more
+    compact wrappers that don't touch included parts from the external
+    libraries.
+- [[https://github.com/pmunch/futhark][futhark]]
+  - I haven't tried futhark yet, but at least it seems notably simpler
+    compared to nimterop, and it might be more than enough for someone
+    else.
+  - Uses the same approach for wrapper generation - everything is wrapped
+    when compiled. This is a major drawback (this appies to nimterop as
+    well) that does not allow to properly peform project-wide analysis when
+    needed.
 
 NOTE: the project is still considered work-in-progress, but all the
 features mentioned above have already been implemeneted at least in

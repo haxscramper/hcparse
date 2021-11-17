@@ -26,11 +26,18 @@ type
   ConanBuildInfo* = object
     dependencies*: seq[ConanDep]
 
+proc findRootPath*(info: ConanBuildInfo, lib: string): AbsDir =
+  for dep in info.dependencies:
+    if dep.name == lib:
+      return AbsDir(dep.rootpath)
+
 proc getBuildInfo*(
     name: string,
     version: tuple[major, minor, patch: int],
     tempDir: AbsDir
   ): ConanBuildInfo =
+
+  assertExists(tempDir)
 
   writeFile(tempDir /. "conanfile.txt", &"""
 [requires]
@@ -41,9 +48,8 @@ json
 """)
 
   withDir tempDir:
-    echov cwd()
     let cmd = shellCmd(conan, install, ".", "build" = "missing")
-    execShell cmd
+    let res = evalShell cmd
 
     result = readFile("conanbuildinfo.json").fromJson(ConanBuildInfo)
 

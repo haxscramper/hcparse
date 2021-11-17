@@ -65,6 +65,9 @@ import
   hmisc/hasts/[
     xml_serde
   ],
+  hmisc/scripts/[
+    nim_test
+  ],
   hmisc/core/all
 
 export
@@ -585,14 +588,20 @@ proc wrapCSharedLibViaTsWave*(
     ],
     typeMaps: seq[AbsFile]                   = @[],
     extraTypes: seq[(CxxName, CxxLibImport)] = @[],
-    codegen: CodegenConf                     = cCodegenConf
+    codegen: CodegenConf                     = cCodegenConf,
+    targetExts: seq[string]                 = @[
+      "h", "hpp", "hxx", "cxx", "c", "cpp"]
   ): GenFiles =
   var expandMap = expandViaWave(
-    listFiles(inDir, ignoreNames = ignoreIn),
+    listFiles(inDir, ignoreNames = ignoreIn, exts = targetExts),
     tmpDir, baseCParseConf
   )
 
-  rmFiles(outDir, @["nim"], persistentOut)
+  if exists(outDir):
+    rmFiles(outDir, @["nim"], persistentOut)
+
+  else:
+    mkDir outDir
 
   var codegen = codegen
 
@@ -611,7 +620,14 @@ proc wrapCSharedLibViaTsWave*(
 
   return resultGrouped
 
-proc validateGenerated*(files: GenFiles) =
+proc validateGenerated*(
+    files: GenFiles,
+    testDir: Option[AbsDir] = none AbsDir,
+    nimState: Option[NimState] = none NimState,
+    logger: HLogger = newTermLogger()
+  ) =
+
+  logger.info "Running test validation"
   for file in items(files.genNim):
     try:
       execShell shellCmd(
@@ -621,9 +637,13 @@ proc validateGenerated*(files: GenFiles) =
         spellSuggest = 0,
         $file)
 
+      logger.success file
+
     except ShellError:
-      echo "> ", file
-      echo "file fail"
+      logger.fail file
+
+  if testDir.canGet(test):
+    runTestDir(test, nimState.get(), l = logger)
 
 
 # proc registerTypes*(files: var seq[CxxFile]) =

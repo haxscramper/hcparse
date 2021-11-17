@@ -231,9 +231,12 @@ proc regroupFiles*(wrapped: seq[CxxFile]): seq[CxxFile] =
   ## Construct new group of wrapped files based on the input. Group
   ## mutually recursive types in new temporary files and add needed imports
   ## and exports.
-  let store = getTypeStore(wrapped)
-  let importGraph = buildTypeGraph(wrapped)
-  let groups = importGraph.getGroups()
+  assert wrapped.len > 0
+  let
+    store       = getTypeStore(wrapped)
+    importGraph = buildTypeGraph(wrapped)
+    groups      = importGraph.getGroups()
+
   if groups.len == 0:
     # There is no mutually recursive type cycles in the passed files,
     # returning whole list unmodified.
