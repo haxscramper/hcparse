@@ -2,25 +2,25 @@ import hmisc/preludes/unittest
 
 import
   compiler/[ast, renderer],
-  hcparse/[hc_parsefront, hc_codegen, hc_impls],
+  hcparse,
   hmisc/other/hpprint,
-  hcparse/interop_ir/wrap_store,
   hmisc/algo/[namegen, hstring_algo],
   hmisc/other/[oswrap, hshell],
   hmisc/core/all
 
 import std/[options, sets]
 
-let dir = AbsDir(relToSource"../src/hcparse/boost_wave")
+let dir = AbsDir(relToSource"../src/hcparse/read_boost_wave")
 
 var fixConf = baseFixConf
 fixConf.libName = "wave"
+fixConf.typeStore = newTypeStore()
 
-starthax()
+startHax()
 
-suite "Generate":
+suite "Generate wave file":
   test "Boost wave C API":
-    fixConf.onFixName():  
+    fixConf.onFixName():
       if cache.knownRename(name.nim):
         return cache.getRename(name.nim)
 
@@ -43,17 +43,16 @@ suite "Generate":
         cxxHeader("wave_c_api.h")
 
 
-    let res = dir /. "boost_wave_wrap.nim"
+    let res = dir /. "boost_wave_wrap_tmp.nim"
 
     var codegen = cCodegenConf
 
-    # codegen.declBinds = some (dynProcs, @{
-    #   "linux": cxxDynlib("libboost_cwave.so")
-    # })
+    let lib = cxxLibImport("wave", @["wave_c_api.h"])
 
     let ir = expandViaCc(dir /. "wave_c_api.h", baseCParseConf).
-        # printNumerated(330 .. 340).
-        wrapViaTs(fixConf)
+      wrapViaTs(fixConf, lib).
+      postFixEntries(fixConf, lib)
+
 
     writeFile(
       res,
@@ -64,6 +63,8 @@ suite "Generate":
 
         """ & ir.toString(codegen))
 
-suite "Run":
+    execShell shellCmd(nim, check, $res)
+
+suite "Run generated wave file":
   test "Compile and execute":
     execShell shellCmd(nim, r, $relToSource("tBoostWaveExecute.nim"))

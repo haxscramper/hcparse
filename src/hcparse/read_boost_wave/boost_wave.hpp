@@ -367,13 +367,22 @@ struct WaveHooksImpl
 using WaveIterator          = WaveContextImpl::iterator_type;
 using WaveMacroNameIterator = WaveContextImpl::name_iterator;
 
+struct CxxWaveIterator {
+    WaveIterator d;
+    WaveContext* ctx;
+
+    inline CxxWaveIterator(WaveIterator _d, WaveContext* _ctx)
+        : d(_d), ctx(_ctx) {}
+};
+
+
 struct WaveContext {
     WaveContextImpl*            context;
     std::string                 text;
-    util::file_position_type    current_position;
     void*                       contextData = nullptr;
     int                         errorCount  = 0;
     std::queue<WaveDiagnostics> diagnostics;
+    CxxWaveIterator*            lastBegin;
 
     WaveContext(std::string _text, const char* filename);
     void processAll();
@@ -387,14 +396,6 @@ struct WaveContext {
 // DECL_STRUCT(CWaveIterator);
 // DECL_STRUCT(CWaveToken);
 // DECL_STRUCT(CWaveContextImpl);
-
-struct CxxWaveIterator {
-    WaveIterator d;
-    WaveContext* ctx;
-
-    inline CxxWaveIterator(WaveIterator _d, WaveContext* _ctx)
-        : d(_d), ctx(_ctx) {}
-};
 
 
 inline WaveMacroNameIterator* toCxx(WaveMacroIteratorHandle* i) {

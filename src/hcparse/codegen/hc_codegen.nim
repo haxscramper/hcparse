@@ -88,7 +88,7 @@ proc toNNode*[N](
     of ctkPod:
       let name = case t.podKind:
         of cptNone: raise newUnexpectedKindError(t.podKind)
-        of cptBool:       "cbool"
+        of cptBool:       "bool"
         of cptInt:        "cint"
         of cptVoid:       "void"
         of cptUInt:       "cuint"
@@ -282,7 +282,7 @@ proc toNNode*[N](
     let base = def.baseType
     if
       base[^1] of ctkPtr and
-      base[^1][0] of ctkIdent and
+      base[^1][0] of ctkPod and
       base[^1][0].podKind == cptVoid:
       var newDef = def
       newDef.nimName = newDef.nimName & "Nim"

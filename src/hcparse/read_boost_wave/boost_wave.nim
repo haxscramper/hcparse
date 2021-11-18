@@ -39,7 +39,9 @@ proc getTok*(iter: ptr WaveIteratorHandle): ptr WaveTokenHandle = iter.iterGetTo
 proc advance*(iter: ptr WaveIteratorHandle) =
   iter.advanceIterator()
 
-proc `!=`*(iter1, iter2: ptr WaveIteratorHandle): bool = neqIterator(iter1, iter2)
+proc `!=`*(iter1, iter2: ptr WaveIteratorHandle): bool =
+  result = neqIterator(iter1, iter2)
+
 proc `==`*(iter1, iter2: ptr WaveIteratorHandle): bool {.error.}
 proc getValue*(tok: ptr WaveTokenHandle): cstring = tok.tokGetValue()
 proc unescapeInclude*(tok: cstring): string =

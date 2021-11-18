@@ -1,7 +1,7 @@
 import ./boost_wave
 import hmisc/other/oswrap
 import hmisc/core/[all]
-import std/[strutils, options, tables]
+import std/[strutils, options, tables, sets]
 
 import ../read_libclang/hc_types
 
@@ -15,18 +15,27 @@ type
     defines*: Table[AbsFile, seq[
       tuple[name: string, args, body: seq[string]]]]
 
+
+
 proc newWaveReader*(
     file: AbsFile,
     cache: WaveCache,
     conf: ParseConf,
+    code: Option[string] = none string
   ): WaveReader =
   var resCtx: WaveContext = newWaveContext(
-    readFile(file), file.string, conf.userIncludes, conf.sysIncludes)
+    if code.isSome(): code.get() else: readFile(file),
+    file.string,
+    conf.userIncludes,
+    conf.sysIncludes
+  )
 
   for (name, args, impl) in conf.macroDefs:
     resCtx.addMacroDefinition(name, args, impl)
 
   resCtx.onFoundIncludeDirective():
+    var visited: HashSet[string]
+
     try:
       let inclf = unescapeInclude(impl)
       let file = resCtx.findIncludeFile(inclf)
@@ -34,6 +43,22 @@ proc newWaveReader*(
         cache.defines[file] = @[]
         var subcontext = newWaveContext(
           readFile($file), $file, conf.userIncludes, conf.sysIncludes)
+
+        subcontext.onFoundIncludeDirective():
+          let file = subcontext.findIncludeFile(unescapeInclude(impl)).string
+          if file in visited:
+            raise newEnvironmentAssertionError(
+              "Subcontext included file ", file,
+              " more than once per run. Endless include loop was terminated. ",
+              "This issue might've been caused my a malformed include header found (",
+              mcode("#include <current-file>"), " without guargs) or incorrect ",
+              "starting define configuration that lead to an ifinite loop (guar)."
+            )
+
+          else:
+            visited.incl file
+
+          return EntryHandlingProcess
 
         for (name, args, impl) in conf.macroDefs:
           subcontext.addMacroDefinition(name, args, impl)
@@ -58,7 +83,6 @@ proc newWaveReader*(
         #   echov name, $args, $body
 
         resCtx.addMacroDefinition(name, args, some body.join(""))
-
 
     except:
       raise

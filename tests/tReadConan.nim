@@ -26,8 +26,6 @@ suite "conan 1":
       packageName = "libssh2"
     )
 
-    echov "ssh wrapper ok"
-
     let gitDir = getTestTempDir(true) / "git"
     mkDir gitDir
 

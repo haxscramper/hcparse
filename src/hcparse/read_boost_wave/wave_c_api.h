@@ -765,6 +765,10 @@ BOOST_WAVE_EXPORT WaveTokId   wave_tokGetId(WaveTokenHandle* tok);
 BOOST_WAVE_EXPORT const char* wave_tokGetValue(WaveTokenHandle* tok);
 BOOST_WAVE_EXPORT const char* wave_unescapeIncludeToken(const char* s);
 
+BOOST_WAVE_EXPORT const char* wave_currentFile(WaveContextHandle* ctx);
+BOOST_WAVE_EXPORT int         wave_currentLine(WaveContextHandle* ctx);
+BOOST_WAVE_EXPORT int         wave_currentColumn(WaveContextHandle* ctx);
+
 #ifdef __cplusplus
 }
 #endif

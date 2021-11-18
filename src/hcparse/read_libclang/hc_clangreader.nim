@@ -17,9 +17,7 @@ import
 
 import
   hmisc/algo/[halgorithm],
-  hmisc/core/all,
-  hmisc/other/[hlogger],
-  hmisc/types/colorstring
+  hmisc/core/all
 
 func incl*[I](s1: var OrderedSet[I], other: OrderedSet[I]) =
   for item in other:

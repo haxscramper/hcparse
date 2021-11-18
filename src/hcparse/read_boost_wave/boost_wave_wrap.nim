@@ -127,29 +127,29 @@ type
   EntryHandling* = enum
     EntryHandlingSkip = 0, EntryHandlingProcess = 1, EntryHandlingRaise = 2
   WaveProcessingHooksHandle* {.bycopy, incompleteStruct, header: "wave_c_api.h".} = object
-  
+
   WaveContextHandle* {.bycopy, incompleteStruct, header: "wave_c_api.h".} = object
-  
+
   WaveIteratorHandle* {.bycopy, incompleteStruct, header: "wave_c_api.h".} = object
-  
+
   WaveTokenHandle* {.bycopy, incompleteStruct, header: "wave_c_api.h".} = object
-  
+
   WaveContextImplHandle* {.bycopy, incompleteStruct, header: "wave_c_api.h".} = object
-  
+
   WaveTokenListHandle* {.bycopy, incompleteStruct, header: "wave_c_api.h".} = object
-  
+
   WaveTokenVectorHandle* {.bycopy, incompleteStruct, header: "wave_c_api.h".} = object
-  
+
   WaveMacroIteratorHandle* {.bycopy, incompleteStruct, header: "wave_c_api.h".} = object
-  
+
   WaveTokenListIteratorHandle* {.bycopy, incompleteStruct,
                                  header: "wave_c_api.h".} = object
-  
+
   WavePosition* {.bycopy, header: "wave_c_api.h", importc: "WavePosition".} = object
     ## TYPE struct WaveTokenHandle {
                                                                                      ## char fake
                                                                                      ## } TYPE_NAME(WaveTokenHandle);
-  
+
   FoundWarningDirectiveImplType* = proc (ctx: ptr WaveContextImplHandle;
       message: ptr WaveTokenListHandle; env: pointer): EntryHandling {.cdecl.}
   FoundWarningDirectiveImplTypeNim* = proc (ctx: ptr WaveContextImplHandle;

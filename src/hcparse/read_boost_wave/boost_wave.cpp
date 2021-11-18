@@ -1140,7 +1140,10 @@ bool wave_neqIterator(
     const CxxWaveIterator* it2 = toCxx(iter2);
 
     try {
-        return it1->d != it2->d;
+        //        std::cout << "Comparing iterators ... " << std::flush;
+        bool res = it1->d != it2->d;
+        //        std::cout << "done\n" << std::flush;
+        return res;
     } catch (boost::wave::cpplexer::lexing_exception& e) {
         GOT_ERR;
         it1->ctx->context->get_hooks().throw_exception(
@@ -1182,7 +1185,6 @@ void WaveContext::processAll() {
         auto last  = context->end();
 
         while (first != last) {
-            current_position = (*first).get_position();
             std::cout << (*first).get_value();
             ++first;
         }
@@ -1192,11 +1194,11 @@ void WaveContext::processAll() {
 
 WaveIteratorHandle* wave_beginIterator(WaveContextHandle* context) {
     try {
-        auto cxx = toCxx(context);
-        auto res = new CxxWaveIterator(
+        auto cxx       = toCxx(context);
+        cxx->lastBegin = new CxxWaveIterator(
             cxx->context->begin(cxx->text.begin(), cxx->text.end()), cxx);
 
-        return (WaveIteratorHandle*)(res);
+        return (WaveIteratorHandle*)(cxx->lastBegin);
     }
     DO_CATCH;
 }
@@ -1665,4 +1667,17 @@ const char* wave_unescapeIncludeToken(const char* s) {
         return copyalloc(tmp.c_str());
     }
     DO_CATCH;
+}
+
+
+const char* wave_currentFile(WaveContextHandle* ctx) {
+    return toCxx(ctx)->lastBegin->d->get_position().get_file().c_str();
+}
+
+int wave_currentLine(WaveContextHandle* ctx) {
+    return toCxx(ctx)->lastBegin->d->get_position().get_line();
+}
+
+int wave_currentColumn(WaveContextHandle* ctx) {
+    return toCxx(ctx)->lastBegin->d->get_position().get_column();
 }
