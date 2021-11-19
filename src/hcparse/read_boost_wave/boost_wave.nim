@@ -1,5 +1,5 @@
-import ./boost_wave_wrap_tmp
-export boost_wave_wrap_tmp
+import ./boost_wave_wrap
+export boost_wave_wrap
 
 import hmisc/core/all
 import hmisc/other/[oswrap]
@@ -274,6 +274,12 @@ proc setSysincludeDelimiter*(ctx: var WaveContext) =
 proc setCurrentFilename*(ctx: var WaveContext, name: string) =
   ctx.handle.setCurrentFilename(name.cstring)
 
+proc currentFile*(ctx: WaveContext): string =
+  $ctx.handle.currentFile()
+
+proc currentLine*(ctx: WaveContext): int =
+  ctx.handle.currentLine()
+
 proc findIncludeFile*(
     ctx: WaveContext,
     file: string,
@@ -390,7 +396,7 @@ template onFoundWarningDirective*(inCtx: var WaveContext, body: untyped): untype
     proc(
       ctx     {.inject.}: ptr WaveContextImplHandle,
       message {.inject.}: ptr WaveTokenListHandle
-    ): EntryHandling =
+    ): CEntryHandling =
 
       body
   )
@@ -638,7 +644,7 @@ template onExpandingObjectLikeMacro*(inCtx: var WaveContext, body: untyped): unt
       argmacro   {.inject.}: ptr WaveTokenHandle;
       definition {.inject.}: ptr WaveTokenListHandle;
       macrocall  {.inject.}: ptr WaveTokenHandle
-    ): EntryHandling =
+    ): CEntryHandling =
 
       body
 
@@ -867,7 +873,7 @@ template onLocateIncludeFile*(inCtx: var WaveContext, body: untyped): untyped =
       currentName {.inject.}: cstring;
       dirPath     {.inject.}: cstring;
       nativename  {.inject.}: cstring
-    ): EntryHandling =
+    ): CEntryHandling =
 
       body
 

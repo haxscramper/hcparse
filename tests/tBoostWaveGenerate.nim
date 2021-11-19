@@ -41,7 +41,7 @@ suite "Generate wave file":
           cxxHeader("wave_c_api.h")
 
 
-    let res = dir /. "boost_wave_wrap_tmp.nim"
+    let res = dir /. "boost_wave_wrap.nim"
 
     var codegen = cCodegenConf.withIt do:
       it.nameStyle = idsCamel

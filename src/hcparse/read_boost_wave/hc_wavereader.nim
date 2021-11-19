@@ -23,6 +23,8 @@ proc newWaveReader*(
     conf: ParseConf,
     code: Option[string] = none string
   ): WaveReader =
+  let topFile = file
+
   var resCtx: WaveContext = newWaveContext(
     if code.isSome(): code.get() else: readFile(file),
     file.string,
@@ -51,8 +53,14 @@ proc newWaveReader*(
               "Subcontext included file ", file,
               " more than once per run. Endless include loop was terminated. ",
               "This issue might've been caused my a malformed include header found (",
-              mcode("#include <current-file>"), " without guargs) or incorrect ",
-              "starting define configuration that lead to an ifinite loop (guar)."
+              mcode("#include <current-file>"),
+              " without guargs) or incorrect ",
+              "starting define configuration that lead to an ifinite loop (guard). ",
+              "Include found at ",
+              subcontext.currentFile(), ":",
+              subcontext.currentLine(),
+              " while processing toplevel file ",
+              mq(topFile)
             )
 
           else:
