@@ -12,40 +12,39 @@ import std/[options, sets]
 
 let dir = AbsDir(relToSource"../src/hcparse/read_boost_wave")
 
-var fixConf = baseFixConf
-fixConf.libName = "wave"
-fixConf.typeStore = newTypeStore()
-
 startHax()
 
 suite "Generate wave file":
   test "Boost wave C API":
-    fixConf.onFixName():
-      if cache.knownRename(name.nim):
-        return cache.getRename(name.nim)
+    let fixConf = baseFixConf.withIt do:
+      it.libName = "wave"
+      it.typeStore = newTypeStore()
 
-      if ?context[cancLibName] and name.context == cncProc:
-        result = name.nim.dropNormPrefix(context[cancLibName].get().nim)
+      it.onFixName():
+        if cache.knownRename(name.nim):
+          return cache.getRename(name.nim)
 
-      else:
-        result = name.nim
+        if ?context[cancLibName] and name.context == cncProc:
+          result = name.nim.dropNormPrefix(context[cancLibName].get().nim)
 
-      result = fixContextedName(name, result)
-      cache.newRename(name.nim, result)
+        else:
+          result = name.nim
 
-    let dynProcs = cxxDynlibVar("cwaveDl")
+        result = fixContextedName(name, result)
+        cache.newRename(name.nim, result)
 
-    fixConf.onGetBind():
-      if entry of cekProc:
-        dynProcs
+      it.onGetBind():
+        if entry of cekProc:
+          cxxDynlibVar("cwaveDl")
 
-      else:
-        cxxHeader("wave_c_api.h")
+        else:
+          cxxHeader("wave_c_api.h")
 
 
     let res = dir /. "boost_wave_wrap_tmp.nim"
 
-    var codegen = cCodegenConf
+    var codegen = cCodegenConf.withIt do:
+      it.nameStyle = idsCamel
 
     let lib = cxxLibImport("wave", @["wave_c_api.h"])
 

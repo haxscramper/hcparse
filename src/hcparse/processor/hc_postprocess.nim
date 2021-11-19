@@ -27,7 +27,6 @@ type
       conf: CxxFixConf
     ): string
 
-    libNameStyle*: IdentStyle
     getBindImpl*: proc(entry: CxxEntry, conf: CxxFixConf): CxxBind
     libName*: string
     isIcpp*: bool

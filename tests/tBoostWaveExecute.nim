@@ -68,14 +68,14 @@ suite "Test expansion hooks":
     ctx.onExpandedMacro():
       echo " " |<< indent,
         "expanded macro to",
-        clformat.joinc(mapIt(result, $it), " ")
+        clformat.joinc(mapIt(result, clt($it)), " ")
 
       dec indent, 2
 
     ctx.onRescannedMacro():
       echo " " |<< indent,
         "rescanned macro to",
-        clformat.joinc(mapIt(result, $it), " ")
+        clformat.joinc(mapIt(result, clt($it)), " ")
 
       dec indent, 2
 

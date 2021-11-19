@@ -521,10 +521,8 @@ proc initCSharedLibFixConf*(
 
     result.imports.add cxxLibImport(fixConf.libName, configFiles)
 
-  fixConf.libNameStyle = nameStyle
-
   fixConf.onFixName():
-    cache.fixContextedName(name, fixConf.libNameStyle)
+    cache.fixContextedName(name, nameStyle)
 
   fixConf.typeStore = newTypeStore()
   for file in typeMaps:
@@ -589,8 +587,8 @@ proc wrapCSharedLibViaTsWave*(
     typeMaps: seq[AbsFile]                   = @[],
     extraTypes: seq[(CxxName, CxxLibImport)] = @[],
     codegen: CodegenConf                     = cCodegenConf,
-    targetExts: seq[string]                 = @[
-      "h", "hpp", "hxx", "cxx", "c", "cpp"]
+    targetExts: seq[string]                  = @["h", "hpp", "hxx", "cxx", "c", "cpp"],
+    nameStyle: IdentStyle                    = idsSnake,
   ): GenFiles =
   var expandMap = expandViaWave(
     listFiles(inDir, ignoreNames = ignoreIn, exts = targetExts),
@@ -607,9 +605,16 @@ proc wrapCSharedLibViaTsWave*(
 
   let
     fixConf = initCSharedLibFixConf(
-      libName, packageName, false, inDir, expandMap, typeMaps = typeMaps)
+      libName,
+      packageName,
+      false,
+      inDir,
+      expandMap,
+      typeMaps = typeMaps,
+      nameStyle = nameStyle
+    )
 
-  codegen.nameStyle = fixConf.libNameStyle
+  codegen.nameStyle = nameStyle
 
   var resultWrapped = tmpDir.wrapViaTs(fixConf)
 

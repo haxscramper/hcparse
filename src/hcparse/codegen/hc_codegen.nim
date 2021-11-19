@@ -30,13 +30,30 @@ const
     it.isIcpp = false
 
 
-func getPrefix*(conf: CodegenConf, name: string): string =
-  case conf.nameStyle:
-    of idsSnake: name & "_"
-    of idsCamel: capitalizeAscii(name)
+func getPrefix*(
+    conf: CodegenConf,
+    name: string,
+    ctx: CxxNameContext
+  ): string =
 
-func getSuffix*(conf: CodegenConf, name: string): string =
   case conf.nameStyle:
+    of idsNone: raise newUnexpectedKindError(conf.nameStyle)
+    of idsSnake: name & "_"
+    of idsCamel:
+      if ctx in {cncType}:
+        capitalizeAscii(name)
+
+      else:
+        name
+
+func getSuffix*(
+    conf: CodegenConf,
+    name: string,
+    ctx: CxxNameContext
+  ): string =
+
+  case conf.nameStyle:
+    of idsNone: raise newUnexpectedKindError(conf.nameStyle)
     of idsSnake: "_" & name
     of idsCamel: capitalizeAscii(name)
 
@@ -116,7 +133,8 @@ proc toNNode*[N](
 
     of ctkIdent:
       if ctfIsEnumType in t.flags:
-        result = newNNType[N](conf.getPrefix("c") & t.nimName, @[])
+        result = newNNType[N](
+          conf.getPrefix("c", cncType) & t.nimName, @[])
 
       else:
         result = newNNType[N](t.nimName, @[])
@@ -339,7 +357,7 @@ proc toNNode*[N](
   if cpfSignal in def.flags: result.addPragma("qsignal")
 
   if def.isConstructor:
-    let name = conf.getSuffix(result.name)
+    let name = conf.getSuffix(result.name, cncProc)
 
     var cbind = def.cbind
     case onConstructor:
@@ -468,7 +486,8 @@ proc toNNode*[N](
   else:
     value = newNLit[N, BiggestInt](field.value)
 
-  result.c = makeEnumField(conf.getPrefix("c") & field.nimName, some value)
+  result.c = makeEnumField(
+    conf.getPrefix("c", cncEnumField) & field.nimName, some value)
 
   result.c.docComment = toNimComment(field.docComment)
 
@@ -477,7 +496,9 @@ proc toNNode*[N](
 
 proc toNNode*[N](en: CxxEnum, conf: CodegenConf): seq[NimDecl[N]] =
   var
-    cenum = newEnumDecl[N](conf.getPrefix("c") & en.nimName)
+    cenum = newEnumDecl[N](
+      conf.getPrefix("c", cncType) & en.nimName)
+
     nenum = newEnumDecl[N](en.nimName)
     values = en.values.sortedByIt(it.value)
     visited: HashSet[BiggestInt]
@@ -538,16 +559,17 @@ proc toNNode*[N](en: CxxEnum, conf: CodegenConf): seq[NimDecl[N]] =
   result.add cenum
   result.add nenum
 
-  let toCenum = conf.getPrefix("to") & cenum.name
+  let toCenum = conf.getPrefix("to", cncProc) & cenum.name
   result.add newPProcDecl(
     name       = toCenum,
     args       = @{"arg": newNNtype[N](nenum.name)},
     returnType = some newNNtype[N](cenum.name),
-    impl       = backwardConv
+    impl       = backwardConv,
+    declType   = ptkConverter
   )
 
   result.add newPProcDecl(
-    name       = conf.getPrefix("to") & nenum.name,
+    name       = conf.getPrefix("to", cncProc) & nenum.name,
     args       = @{"arg": newNNtype[N](cenum.name)},
     returnType = some newNNtype[N](nenum.name),
     declType   = ptkConverter,

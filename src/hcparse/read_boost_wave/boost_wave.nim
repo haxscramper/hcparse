@@ -1,7 +1,6 @@
-import ./boost_wave_wrap
-export boost_wave_wrap
+import ./boost_wave_wrap_tmp
+export boost_wave_wrap_tmp
 
-export boost_wave_wrap
 import hmisc/core/all
 import hmisc/other/[oswrap]
 
@@ -33,9 +32,15 @@ type
   WaveError* = object of CatchableError
     diag*: WaveDiagnostics
 
-proc first*(ctx: WaveContext): ptr WaveIteratorHandle = ctx.handle.beginIterator()
-proc last*(ctx: WaveContext): ptr WaveIteratorHandle = ctx.handle.endIterator()
-proc getTok*(iter: ptr WaveIteratorHandle): ptr WaveTokenHandle = iter.iterGetTok()
+proc first*(ctx: WaveContext): ptr WaveIteratorHandle =
+  ctx.handle.beginIterator()
+
+proc last*(ctx: WaveContext): ptr WaveIteratorHandle =
+  ctx.handle.endIterator()
+
+proc getTok*(iter: ptr WaveIteratorHandle): ptr WaveTokenHandle =
+  iter.iterGetTok()
+
 proc advance*(iter: ptr WaveIteratorHandle) =
   iter.advanceIterator()
 
@@ -87,7 +92,7 @@ proc raiseErrors*(ctx: var WaveContext) =
     if diag.level in {wslError, wslFatal}:
       var extra: string
 
-      case diag.code:
+      case diag.code.toWaveErrorCode():
         of wekBadIncludeFile:
           extra.add ". Include file configuration was\n" & formatIncludes(ctx)
 
@@ -535,7 +540,7 @@ template onFoundIncludeDirective*(ctx: var WaveContext, body: untyped): untyped 
       context     {.inject.}: ptr WaveContextImplHandle;
       impl        {.inject.}: cstring;
       includeNext {.inject.}: bool
-    ): EntryHandling =
+    ): CEntryHandling =
 
       body
   )
