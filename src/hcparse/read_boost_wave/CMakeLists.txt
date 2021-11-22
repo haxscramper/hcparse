@@ -20,11 +20,6 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/conanbuildinfo.cmake)
 conan_basic_setup(TARGETS)
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/conan_paths.cmake)
-
-# target_link_libraries(boost_cwave PRIVATE ${CONAN_LIBS})
-# target_include_directories(boost_cwave PRIVATE ${CONAN_INCLUDE_DIRS})
-
-# Set(Boost_INSTALL_DIR ${CONAN_BOOST_ROOT})
 find_package(Boost COMPONENTS system filesystem thread wave REQUIRED)
 
 target_link_libraries(
@@ -34,26 +29,6 @@ target_link_libraries(
   Boost::wave
   Boost::thread
 )
-
-# target_include_directories(
-#   boost_cwave
-#   Boost::system
-#   Boost::filesystem
-#   Boost::wave
-#   Boost::thread
-# )
-
-# get_target_property(LIBS boost_cwave LINK_LIBRARIES)
-# message(STATUS "Link libraries")
-# foreach(DIR ${LIBS})
-#   message(STATUS "-- " ${DIR})
-# endforeach()
-
-# message(STATUS "Include directories")
-# get_target_property(DIRS boost_cwave INCLUDE_DIRECTORIES)
-# foreach(DIR ${DIRS})
-#   message(STATUS "-- " ${DIR})
-# endforeach()
 
 target_compile_definitions(boost_cwave PRIVATE BOOST_WAVE_LIBRARY)
 

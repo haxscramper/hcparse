@@ -1,6 +1,9 @@
 import hmisc/preludes/unittest
 import hmisc/other/oswrap
-import hcparse/[hc_parsefront, hc_codegen, hc_impls, hc_wavereader, hc_grouping]
+import hcparse/[hc_parsefront, hc_impls]
+import hcparse/processor/[hc_grouping]
+import hcparse/codegen/[hc_codegen]
+import hcparse/read_boost_wave/[hc_wavereader]
 import hnimast/hast_common
 import hmisc/algo/hstring_algo
 import hmisc/algo/hparse_pegs
