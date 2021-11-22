@@ -41,26 +41,9 @@ target_link_libraries(boost_wave_test
 
 file(GLOB NIM_IN_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.nim")
 
-#add_custom_target(
-#    boost_wave_nim ALL
-#    COMMAND
-#        nim c
-#            --nimcache:"${CMAKE_BINARY_DIR}/nim_source_dir"
-#            --out:"${CMAKE_CURRENT_SOURCE_DIR}/boost_wave_nim"
-#            "boost_wave_test.nim"
-
-#    SOURCES ${NIM_IN_SOURCES}
-#    COMMENT "Build nim test file"
-#    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-#)
-
-
-
 target_compile_definitions(boost_cwave PRIVATE BOOST_WAVE_LIBRARY)
 
 set_target_properties(boost_cwave
     PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../../lib"
 )
-
-#add_dependencies(boost_wave_nim boost_cwave)

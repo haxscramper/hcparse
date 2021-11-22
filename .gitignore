@@ -64,3 +64,6 @@ wrap-examples.rst
 
 **/.gdb_history
 *.code-workspace
+
+
+**/.xmake/*

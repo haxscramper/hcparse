@@ -1,0 +1,36 @@
+name: test
+on: [push]
+jobs:
+  compile:
+    if: |
+      !contains(github.event.head_commit.message, 'SKIP')
+    runs-on: ubuntu-latest
+    container: ubuntu:latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - run: |
+          cd src/hcparse/read_boost_wave
+          mkdir build
+          cd build
+          cmake ..
+          make -j8
+          cd ..
+
+      - uses: alaviss/setup-nim@master
+        with:
+          path: '../nim'
+          version: 'version-1-4'
+
+      - run: sudo apt-get install libclang-dev
+
+      - run: |
+          wget "https://github.com/tree-sitter/tree-sitter/archive/refs/tags/v${TS_VERSION}.tar.gz" && \
+          tar -xvf "v${TS_VERSION}.tar.gz" && \
+          cd "tree-sitter-${TS_VERSION}" && \
+          sudo make install PREFIX=/usr
+        env:
+          TS_VERSION: "0.20.0"
+
+      - run: "nimble -y develop"
+
