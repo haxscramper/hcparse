@@ -8,6 +8,7 @@ jobs:
     container: ubuntu:latest
     steps:
       - uses: actions/checkout@v2
+      - run: sudo apt-get install cmake
 
       - run: |
           cd src/hcparse/read_boost_wave
@@ -33,4 +34,3 @@ jobs:
           TS_VERSION: "0.20.0"
 
       - run: "nimble -y develop"
-
