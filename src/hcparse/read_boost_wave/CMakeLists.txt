@@ -7,8 +7,6 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-include(${CMAKE_CURRENT_SOURCE_DIR}/conanbuildinfo.cmake)
-conan_basic_setup(TARGETS)
 
 add_library(boost_cwave SHARED
   boost_wave_global.hpp
@@ -17,12 +15,14 @@ add_library(boost_cwave SHARED
   wave_c_api.h
 )
 
-target_link_libraries(boost_cwave PRIVATE
-  boost_wave
-  boost_system
-  boost_thread
-  boost_filesystem
-)
+
+include(${CMAKE_CURRENT_SOURCE_DIR}/conanbuildinfo.cmake)
+conan_basic_setup(TARGETS)
+
+
+target_link_libraries(boost_cwave PRIVATE ${CONAN_LINK_LIBRARIES})
+target_include_directories(boost_cwave PRIVATE ${CONAN_LIBS})
+message(STATUS ${CONAN_LIBS})
 
 target_compile_definitions(boost_cwave PRIVATE BOOST_WAVE_LIBRARY)
 

@@ -63,6 +63,7 @@ const char* to_string(EntryHandling handling) {
         case EntryHandlingSkip: return "skip";
         case EntryHandlingProcess: return "skip";
         case EntryHandlingRaise: return "skip";
+        default: return "unknown-entry";
     }
 }
 

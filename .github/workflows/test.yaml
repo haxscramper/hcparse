@@ -8,8 +8,11 @@ jobs:
     container: ubuntu:latest
     steps:
       - uses: actions/checkout@v2
-      - run: apt-get update
-      - run: apt-get -y install cmake git g++ gcc make sudo tar wget curl xz-utils pip
+      - run: apt-get -qq update
+      - run: apt-get -qq -y install cmake git g++ gcc make sudo tar wget curl xz-utils pip
+        env:
+          DEBIAN_FRONTEND: noninteractive
+
       - run: pip install conan
       - run: |
           cd src/hcparse/read_boost_wave
