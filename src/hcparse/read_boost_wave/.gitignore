@@ -73,3 +73,16 @@ Thumbs.db
 
 CMakeLists.txt.user
 build*
+
+
+# Created by https://www.toptal.com/developers/gitignore/api/conan
+# Edit at https://www.toptal.com/developers/gitignore?templates=conan
+
+### Conan ###
+# Conan build information
+conan.lock
+conanbuildinfo.*
+conaninfo.txt
+graph_info.json
+
+# End of https://www.toptal.com/developers/gitignore/api/conan
