@@ -8,7 +8,7 @@ jobs:
     container: ubuntu:latest
     steps:
       - uses: actions/checkout@v2
-      - run: sudo apt-get install cmake
+      - run: apt-get install cmake
 
       - run: |
           cd src/hcparse/read_boost_wave
@@ -23,7 +23,7 @@ jobs:
           path: '../nim'
           version: 'version-1-4'
 
-      - run: sudo apt-get install libclang-dev
+      - run: apt-get install libclang-dev
 
       - run: |
           wget "https://github.com/tree-sitter/tree-sitter/archive/refs/tags/v${TS_VERSION}.tar.gz" && \
