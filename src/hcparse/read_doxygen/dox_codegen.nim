@@ -1,10 +1,10 @@
-import 
-  nimtraits/xml_to_types,
+import
+  hnimast/codegen/xsd_to_nim,
   hmisc/other/[oswrap, hshell],
   hnimast,
-  hmisc/hdebug_misc
+  hmisc/core/all
 
-const dir = currentSourceDir()
+const dir = oswrap.currentSourceDir()
 
 proc doxygenXmlGenerate() =
   let compound = cwd() /. "dox_compound.nim"

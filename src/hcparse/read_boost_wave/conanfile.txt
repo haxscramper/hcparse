@@ -1,7 +1,12 @@
 [requires]
-boost/1.76.0
+boost/1.77.0
+
+[options]
+boost:shared=True
 
 [generators]
 cmake_find_package
 cmake_paths
 cmake
+virtualrunenv
+json

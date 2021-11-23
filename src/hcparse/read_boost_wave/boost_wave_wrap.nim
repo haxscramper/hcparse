@@ -2098,6 +2098,3 @@ proc currentLine*(
 proc currentColumn*(
     ctx: ptr WaveContextHandle
   ): cint {.dynlib: cwaveDl, importc: "wave_currentColumn".}
-
-
-

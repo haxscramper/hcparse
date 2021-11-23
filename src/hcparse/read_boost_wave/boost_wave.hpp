@@ -32,11 +32,6 @@ Out nuclear_cast(In in) {
         (*resPtr)[i] = (*inPtr)[i];
     }
 
-    //    std::memcpy(&result, &in, sizeof(Out));
-
-    //    In* tmp = (In*)(&result);
-
-
     return result;
 }
 

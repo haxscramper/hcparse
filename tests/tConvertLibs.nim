@@ -1,13 +1,17 @@
+import
+  hcparse/[hc_parsefront, hc_impls],
+  hcparse/processor/[hc_grouping],
+  hcparse/codegen/[hc_codegen],
+  hcparse/read_boost_wave/[hc_wavereader]
+
+
+import hnimast/hast_common
+import hmisc/algo/[ hparse_pegs, hstring_algo ]
 import hmisc/preludes/unittest
 import hmisc/other/oswrap
-import hcparse/[hc_parsefront, hc_impls]
-import hcparse/processor/[hc_grouping]
-import hcparse/codegen/[hc_codegen]
-import hcparse/read_boost_wave/[hc_wavereader]
-import hnimast/hast_common
-import hmisc/algo/hstring_algo
-import hmisc/algo/hparse_pegs
+
 import compiler/ast
+
 import std/[strutils, sequtils]
 
 proc fixGit*(name: string, isType: bool): string =
@@ -37,7 +41,7 @@ suite "Bug hunting for git":
 
   test "Subcontext with failed include":
     var cache = newWaveCache()
-    var reader = newWaveReader(file, cache)
+    var reader = newWaveReader(file, cache, baseCParseConf)
     expect WaveError as we:
       discard reader.getExpanded()
 
@@ -49,7 +53,7 @@ suite "Bug hunting for git":
 
   test "Subcontext with correct include":
     var cache = newWaveCache()
-    var reader = newWaveReader(file, cache, sysIncludes = @[$sys])
+    var reader = newWaveReader(file, cache, baseCParseConf)
     check:
       reader.getExpanded().strip() == "expanded"
 
@@ -112,21 +116,18 @@ suite "libgit":
         let resFile = (outDir /. file.name()) &. "h"
 
         if not exists(resFile):
-          var reader = newWaveReader(file, cache, @[],
-            @["/usr/include/sys", "/usr/include", "/usr/include/linux"])
-
-
+          var reader = newWaveReader(file, cache, baseCParseConf)
           resFile.writeFile(reader.getExpanded())
 
 
-  test "libgit types":
-    var resultWrapped: seq[CxxFile]
-    block:
-      for file in walkDir(outDir, AbsFile, exts = @["h"]):
-        resultWrapped.add wrapViaTs(file, outDir, fixConf)
+  # test "libgit types":
+  #   var resultWrapped: seq[CxxFile]
+  #   block:
+  #     for file in walkDir(outDir, AbsFile, exts = @["h"]):
+  #       resultWrapped.add wrapViaTs(file, outDir, fixConf)
 
-    echo "Collected files"
+  #   echo "Collected files"
 
-    for fix in regroupFiles(resultWrapped):
-      let res = outDir / fix.getFile().withExt("nim")
-      res.writeFile($toNNode[PNode](fix, cCodegenConf))
+  #   for fix in regroupFiles(resultWrapped):
+  #     let res = outDir / fix.getFile().withExt("nim")
+  #     res.writeFile($toNNode[PNode](fix, cCodegenConf))

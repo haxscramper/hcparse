@@ -1108,6 +1108,8 @@ WaveTokId wave_tokGetId(WaveTokenHandle* tok) {
         case T_EXTPARAMETERBASE: return tokId_EXTPARAMETERBASE;
         case T_OPTPARAMETERBASE: return tokId_OPTPARAMETERBASE;
     }
+
+    return tokId_OPTPARAMETERBASE;
 }
 
 

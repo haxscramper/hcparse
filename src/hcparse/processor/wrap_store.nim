@@ -58,6 +58,7 @@ type
     cbkDynamicExpr
     cbkDynamicCall
     cbkMacroBind
+    cbkLink ## Bind via OS dynamic linker
 
   CxxLibImport* = object
     library*: string
@@ -69,7 +70,7 @@ type
                                 ## object binding
 
     case kind*: CxxBindKind
-      of cbkNone:
+      of cbkNone, cbkLink:
         discard
 
       of cbkGlobal:
@@ -939,6 +940,8 @@ func cxxHeader*(global: string): CxxBind =
 
 func cxxHeader*(file: AbsFile): CxxBind =
   CxxBind(kind: cbkAbsolute, file: file)
+
+func cxxLinkBind*(): CxxBind = CxxBind(kind: cbkLink)
 
 func cxxNoBind*(): CxxBind = CxxBind(kind: cbkNone)
 

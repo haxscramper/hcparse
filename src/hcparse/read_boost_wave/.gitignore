@@ -89,3 +89,9 @@ graph_info.json
 
 **/Find*.cmake
 conan_paths.*
+activate_run.ps1
+activate_run.sh
+deactivate_run.ps1
+deactivate_run.sh
+environment_run.ps1.env
+environment_run.sh.env

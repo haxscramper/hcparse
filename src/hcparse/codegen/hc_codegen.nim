@@ -247,6 +247,9 @@ proc toNNode*[N](header: CxxBind, conf: CodegenConf, name: string): seq[N] =
       result.add newIdentColonExpr(
         "header", newNLit[N, string](header.other))
 
+    of cbkLink:
+      result.add(newNIdent[N]("nodecl"))
+
     of cbkNone:
       discard
 

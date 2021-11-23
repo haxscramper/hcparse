@@ -13,10 +13,12 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
 
-      - run: pip install conan
+      - run: libboost-filesystem-dev libboost-wave-dev libboost-thread-dev libboost-system-dev
+
+      # - run: pip install conan
       - run: |
           cd src/hcparse/read_boost_wave
-          conan install . --build=missing
+          #conan install . --build=missing
           mkdir build
           cd build
           cmake ..
