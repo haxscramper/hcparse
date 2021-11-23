@@ -51,9 +51,13 @@ jobs:
           nimble -y develop
 
       # - run: |
+      #     export PATH=$HOME/.nimble/bin:$PATH
+      #     echo $PATH
       #     nim r tests/runall.nim test $(pwd)/hcparse.nimble
 
       - run: |
+          export PATH=$HOME/.nimble/bin:$PATH
+          echo $PATH
           nim r tests/runall.nim doc $(pwd)/hcparse.nimble --ignore="**/dox*.nim"
 
       - uses: crazy-max/ghaction-github-pages@v1

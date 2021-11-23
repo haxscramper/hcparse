@@ -12,37 +12,57 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(boost_cwave SHARED
-  boost_wave_global.hpp
-  boost_wave.cpp
-  boost_wave.hpp
-  wave_c_api.h
+    boost_wave_global.hpp
+    boost_wave.cpp
+    boost_wave.hpp
+    wave_c_api.h
 )
 
 add_executable(boost_wave_test
-  boost_wave_test.cpp
-  boost_wave.cpp
-  boost_wave.hpp
-  scratch.cpp
+    boost_wave_test.cpp
+    boost_wave.cpp
+    boost_wave.hpp
+    scratch.cpp
 )
 
-#include(${CMAKE_CURRENT_SOURCE_DIR}/conanbuildinfo.cmake)
-#conan_basic_setup(TARGETS)
-#include(${CMAKE_CURRENT_SOURCE_DIR}/conan_paths.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/conanbuildinfo.cmake)
+conan_basic_setup(TARGETS)
+include(${CMAKE_CURRENT_SOURCE_DIR}/conan_paths.cmake)
 
 find_package(Boost COMPONENTS system filesystem thread wave REQUIRED)
 
 target_link_libraries(boost_cwave
-  Boost::system
-  Boost::filesystem
-  Boost::wave
-  Boost::thread
+    Boost::system
+    Boost::filesystem
+    Boost::wave
+    Boost::thread
+)
+
+target_compile_definitions(boost_cwave PUBLIC
+    BOOST_ALL_NO_LIB
+    BOOST_CHRONO_DYN_LINK
+    BOOST_FILESYSTEM_DYN_LINK
+    BOOST_SYSTEM_DYN_LINK
+    BOOST_THREAD_DYN_LINK
+    BOOST_WAVE_DYN_LINK
+    BOOST_WAVE_LIBRARY
 )
 
 target_link_libraries(boost_wave_test
-  Boost::system
-  Boost::filesystem
-  Boost::wave
-  Boost::thread
+    Boost::system
+    Boost::filesystem
+    Boost::wave
+    Boost::thread
+)
+
+target_compile_definitions(boost_wave_test PUBLIC
+    BOOST_ALL_NO_LIB
+    BOOST_CHRONO_DYN_LINK
+    BOOST_FILESYSTEM_DYN_LINK
+    BOOST_SYSTEM_DYN_LINK
+    BOOST_THREAD_DYN_LINK
+    BOOST_WAVE_DYN_LINK
+    BOOST_WAVE_LIBRARY
 )
 
 target_compile_definitions(boost_cwave PRIVATE BOOST_WAVE_LIBRARY)
