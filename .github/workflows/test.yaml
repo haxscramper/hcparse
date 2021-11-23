@@ -20,38 +20,38 @@ jobs:
             libboost-thread-dev \
             libboost-system-dev
 
-      # - run: pip install conan
-      - run: |
-          cd src/hcparse/read_boost_wave
-          #conan install . --build=missing
-          mkdir build
-          cd build
-          cmake ..
-          make -j8
-          cd ..
+      # # - run: pip install conan
+      # - run: |
+      #     cd src/hcparse/read_boost_wave
+      #     #conan install . --build=missing
+      #     mkdir build
+      #     cd build
+      #     cmake ..
+      #     make -j8
+      #     cd ..
 
       - run: |
           wget https://nim-lang.org/choosenim/init.sh
           chmod +x init.sh
           sh init.sh -y
 
-      - run: apt-get -y install libclang-dev
+      # - run: apt-get -y install libclang-dev
 
-      - run: |
-          wget "https://github.com/tree-sitter/tree-sitter/archive/refs/tags/v${TS_VERSION}.tar.gz" && \
-          tar -xvf "v${TS_VERSION}.tar.gz" && \
-          cd "tree-sitter-${TS_VERSION}" && \
-          sudo make install PREFIX=/usr
-        env:
-          TS_VERSION: "0.20.0"
+      # - run: |
+      #     wget "https://github.com/tree-sitter/tree-sitter/archive/refs/tags/v${TS_VERSION}.tar.gz" && \
+      #     tar -xvf "v${TS_VERSION}.tar.gz" && \
+      #     cd "tree-sitter-${TS_VERSION}" && \
+      #     sudo make install PREFIX=/usr
+      #   env:
+      #     TS_VERSION: "0.20.0"
 
       - run: |
           export PATH=$HOME/.nimble/bin:$PATH
           echo $PATH
           nimble -y develop
 
-      - run: |
-          nim r tests/runall.nim test $(pwd)/hcparse.nimble
+      # - run: |
+      #     nim r tests/runall.nim test $(pwd)/hcparse.nimble
 
       - run: |
           nim r tests/runall.nim doc $(pwd)/hcparse.nimble --ignore="**/dox*.nim"
