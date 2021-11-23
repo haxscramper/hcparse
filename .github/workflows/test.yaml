@@ -13,7 +13,12 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
 
-      - run: libboost-filesystem-dev libboost-wave-dev libboost-thread-dev libboost-system-dev
+      - run: |
+          apt-get -qq -y install \
+            libboost-filesystem-dev \
+            libboost-wave-dev \
+            libboost-thread-dev \
+            libboost-system-dev
 
       # - run: pip install conan
       - run: |
@@ -44,3 +49,15 @@ jobs:
           export PATH=$HOME/.nimble/bin:$PATH
           echo $PATH
           nimble -y develop
+
+      - run: |
+          nim r tests/runall.nim test $(pwd)/hcparse.nimble
+
+      - run: |
+          nim r tests/runall.nim doc $(pwd)/hcparse.nimble --ignore="**/dox*.nim"
+
+      - uses: crazy-max/ghaction-github-pages@v1
+        with:
+          build_dir: htmldocs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
