@@ -43,11 +43,13 @@ jobs:
           echo $PATH
           nimble -y develop
 
-      - run: |
+      - shell: bash
+        run: |
           export PATH=$HOME/.nimble/bin:$PATH
           echo $PATH
 
           export LD_LIBRARY_PATH=$(pwd)/lib
+          cat src/hcparse/read_boost_wave/activate_run.sh
           source src/hcparse/read_boost_wave/activate_run.sh
           # export LIBRARY_PATH=$(pwd)/lib
 
