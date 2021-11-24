@@ -51,7 +51,9 @@ jobs:
           export LD_LIBRARY_PATH=$(pwd)/lib
           cat src/hcparse/read_boost_wave/activate_run.sh
           source src/hcparse/read_boost_wave/activate_run.sh
-          # export LIBRARY_PATH=$(pwd)/lib
+
+          echo '--path="$nim"' > nim.cfg
+          cat nim.cfg
 
           nim r tests/runall.nim test $(pwd)/hcparse.nimble
           nim r tests/runall.nim doc $(pwd)/hcparse.nimble --ignore="**/dox*.nim"
