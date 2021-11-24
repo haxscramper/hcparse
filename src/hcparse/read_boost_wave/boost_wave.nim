@@ -304,8 +304,12 @@ proc findIncludeFile*(
     result = AbsFile($sRes[0])
 
   else:
-    raise newEnvironmentAssertionError(
-      "Could not find include file '" & file &
+    raise (ref WaveError)(
+      diag: WaveDiagnostics(
+        line: ctx.currentLine().cint - 1,
+        code: wekBadIncludeFile,
+      ),
+      msg: "Could not find include file '" & file &
         "'. Current file is '" & $curr & "'" &
         tern(isSystem, " (is system file)", "") & ". " &
         "Include file configuration was\n" & formatIncludes(ctx))
@@ -550,6 +554,77 @@ template onFoundIncludeDirective*(ctx: var WaveContext, body: untyped): untyped 
 
       body
   )
+
+proc setOpenedIncludeFIle*(
+    ctx: var WaveContext,
+    impl: OpenedIncludeFileImplTypeNim
+  ) =
+
+  ##[
+
+
+The function opened_include_file is called whenever a file referred by an
+#include directive was successfully located and opened.
+
+- The ctx parameter provides a reference to the context_type used during
+  instantiation of the preprocessing iterators by the user.
+
+- The parameter `rel_filename` contains the (normalised) probably relative
+  file system path of the opened file. The concrete format of this file
+  name depends on the format of the include search path given to the
+  library beforehand.
+
+- The parameter `abs_filename` contains the (normalised) full file system
+  path of the opened file.
+
+- The is_system_include parameter denotes, if the given file was found as a
+  result of a `#include <...>` directive.
+
+  ]##
+
+  ctx.handle.setOpenedIncludeFile(
+    cast[OpenedIncludeFileImplType](rawProc(impl)),
+    rawEnv(impl))
+
+
+template onOpenedIncludeFile*(inCtx: var WaveContext, body: untyped): untyped =
+  inCtx.setOpenedIncludeFile(
+    proc(ctx:                        ptr WaveContextImplHandle,
+         relFilename {.inject.}:     cstring,
+         absFilename {.inject.}:     cstring,
+         isSystemInclude {.inject.}: bool
+    ): void  =
+
+      body
+
+    )
+
+proc setReturningFromIncludeFile*(
+    ctx: var WaveContext,
+    impl: ReturningFromIncludeFileImplTypeNim
+  ) =
+
+  ##[
+
+The function returning_from_include_file is called whenever an included
+file is about to be closed after it's processing is complete.
+
+- The ctx parameter provides a reference to the context_type used during
+  instantiation of the preprocessing iterators by the user.
+
+  ]##
+
+  ctx.handle.setReturningFromIncludeFile(
+    cast[ReturningFromIncludeFileImplType](rawProc(impl)),
+    rawEnv(impl))
+
+
+template onReturningFromIncludeFile*(inCtx: var WaveContext, body: untyped): untyped =
+  inCtx.setReturningFromIncludeFile(
+    proc(ctx: ptr WaveContextImplHandle): void  =
+      body
+
+    )
 
 proc setDefinedMacro*(
     ctx: var WaveContext,

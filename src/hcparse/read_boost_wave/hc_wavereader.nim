@@ -36,7 +36,7 @@ proc newWaveReader*(
     resCtx.addMacroDefinition(name, args, impl)
 
   resCtx.onFoundIncludeDirective():
-    var visited: HashSet[string]
+    var lastVisited: string
 
     try:
       let inclf = unescapeInclude(impl)
@@ -46,25 +46,38 @@ proc newWaveReader*(
         var subcontext = newWaveContext(
           readFile($file), $file, conf.userIncludes, conf.sysIncludes)
 
+        var level = 0
+
+        var stack: seq[string]
+
+        subcontext.onOpenedIncludeFile():
+          stack.add $absFilename
+
+        subcontext.onReturningFromIncludeFile():
+          discard stack.pop()
+
         subcontext.onFoundIncludeDirective():
           let file = subcontext.findIncludeFile(unescapeInclude(impl)).string
-          if file in visited:
+          if ?stack and file == stack.last():
+            let now = subcontext.currentFile()
+            let line: int = subcontext.currentLine()
+
             raise newEnvironmentAssertionError(
               "Subcontext included file ", file,
-              " more than once per run. Endless include loop was terminated. ",
+              " repeatedly included the same starting point (line ", line,
+              "). Endless include loop was terminated. ",
               "This issue might've been caused my a malformed include header found (",
               mcode("#include <current-file>"),
               " without guargs) or incorrect ",
               "starting define configuration that lead to an ifinite loop (guard). ",
               "Include found at ",
-              subcontext.currentFile(), ":",
-              subcontext.currentLine(),
+              now, ":", line,
               " while processing toplevel file ",
               mq(topFile)
             )
 
           else:
-            visited.incl file
+            lastVisited = file
 
           return EntryHandlingProcess
 

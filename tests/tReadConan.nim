@@ -1,3 +1,7 @@
+discard """
+joinable: false
+"""
+
 import
   hmisc/preludes/unittest
 

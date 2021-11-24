@@ -1,5 +1,5 @@
 [requires]
-boost/1.77.0
+boost/1.76.0
 
 [options]
 boost:shared=True

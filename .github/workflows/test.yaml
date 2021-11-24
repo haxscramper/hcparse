@@ -13,51 +13,45 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
 
+      - run: pip install conan
       - run: |
-          apt-get -qq -y install \
-            libboost-filesystem-dev \
-            libboost-wave-dev \
-            libboost-thread-dev \
-            libboost-system-dev
-
-      # # - run: pip install conan
-      # - run: |
-      #     cd src/hcparse/read_boost_wave
-      #     #conan install . --build=missing
-      #     mkdir build
-      #     cd build
-      #     cmake ..
-      #     make -j8
-      #     cd ..
+          cd src/hcparse/read_boost_wave
+          conan install . --build=missing --settings compiler.libcxx="libstdc++11"
+          mkdir build
+          cd build
+          cmake ..
+          make -j8
+          cd ..
 
       - run: |
           wget https://nim-lang.org/choosenim/init.sh
           chmod +x init.sh
           sh init.sh -y
 
-      # - run: apt-get -y install libclang-dev
+      - run: apt-get -y install libclang-dev
 
-      # - run: |
-      #     wget "https://github.com/tree-sitter/tree-sitter/archive/refs/tags/v${TS_VERSION}.tar.gz" && \
-      #     tar -xvf "v${TS_VERSION}.tar.gz" && \
-      #     cd "tree-sitter-${TS_VERSION}" && \
-      #     sudo make install PREFIX=/usr
-      #   env:
-      #     TS_VERSION: "0.20.0"
+      - run: |
+          wget "https://github.com/tree-sitter/tree-sitter/archive/refs/tags/v${TS_VERSION}.tar.gz" && \
+          tar -xvf "v${TS_VERSION}.tar.gz" && \
+          cd "tree-sitter-${TS_VERSION}" && \
+          sudo make install PREFIX=/usr
+        env:
+          TS_VERSION: "0.20.0"
 
       - run: |
           export PATH=$HOME/.nimble/bin:$PATH
           echo $PATH
           nimble -y develop
 
-      # - run: |
-      #     export PATH=$HOME/.nimble/bin:$PATH
-      #     echo $PATH
-      #     nim r tests/runall.nim test $(pwd)/hcparse.nimble
-
       - run: |
           export PATH=$HOME/.nimble/bin:$PATH
           echo $PATH
+
+          export LD_LIBRARY_PATH=$(pwd)/lib
+          source src/hcparse/read_boost_wave/activate_run.sh
+          # export LIBRARY_PATH=$(pwd)/lib
+
+          nim r tests/runall.nim test $(pwd)/hcparse.nimble
           nim r tests/runall.nim doc $(pwd)/hcparse.nimble --ignore="**/dox*.nim"
 
       - uses: crazy-max/ghaction-github-pages@v1

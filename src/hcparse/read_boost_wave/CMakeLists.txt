@@ -38,15 +38,15 @@ target_link_libraries(boost_cwave
     Boost::thread
 )
 
-target_compile_definitions(boost_cwave PUBLIC
-    BOOST_ALL_NO_LIB
-    BOOST_CHRONO_DYN_LINK
-    BOOST_FILESYSTEM_DYN_LINK
-    BOOST_SYSTEM_DYN_LINK
-    BOOST_THREAD_DYN_LINK
-    BOOST_WAVE_DYN_LINK
-    BOOST_WAVE_LIBRARY
-)
+#target_compile_definitions(boost_cwave PUBLIC
+#    BOOST_ALL_NO_LIB
+#    BOOST_CHRONO_DYN_LINK
+#    BOOST_FILESYSTEM_DYN_LINK
+#    BOOST_SYSTEM_DYN_LINK
+#    BOOST_THREAD_DYN_LINK
+#    BOOST_WAVE_DYN_LINK
+#    BOOST_WAVE_LIBRARY
+#)
 
 target_link_libraries(boost_wave_test
     Boost::system
@@ -55,15 +55,15 @@ target_link_libraries(boost_wave_test
     Boost::thread
 )
 
-target_compile_definitions(boost_wave_test PUBLIC
-    BOOST_ALL_NO_LIB
-    BOOST_CHRONO_DYN_LINK
-    BOOST_FILESYSTEM_DYN_LINK
-    BOOST_SYSTEM_DYN_LINK
-    BOOST_THREAD_DYN_LINK
-    BOOST_WAVE_DYN_LINK
-    BOOST_WAVE_LIBRARY
-)
+#target_compile_definitions(boost_wave_test PUBLIC
+#    BOOST_ALL_NO_LIB
+#    BOOST_CHRONO_DYN_LINK
+#    BOOST_FILESYSTEM_DYN_LINK
+#    BOOST_SYSTEM_DYN_LINK
+#    BOOST_THREAD_DYN_LINK
+#    BOOST_WAVE_DYN_LINK
+#    BOOST_WAVE_LIBRARY
+#)
 
 target_compile_definitions(boost_cwave PRIVATE BOOST_WAVE_LIBRARY)
 

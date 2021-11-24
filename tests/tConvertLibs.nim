@@ -48,12 +48,13 @@ suite "Bug hunting for git":
     check:
       we.diag.code == wekBadIncludeFile
       we.diag.line == 1
-      we.diag.column == 1
-      "could not find include file" in we.msg
+      "Could not find include file" in we.msg
 
   test "Subcontext with correct include":
     var cache = newWaveCache()
-    var reader = newWaveReader(file, cache, baseCParseConf)
+    var conf = baseCParseConf
+    conf.sysIncludes.add sys.string
+    var reader = newWaveReader(file, cache, conf)
     check:
       reader.getExpanded().strip() == "expanded"
 

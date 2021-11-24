@@ -24,19 +24,21 @@ var fixConf = baseFixConf.withIt do:
 proc lib(path: varargs[string]): CxxLibImport =
   cxxLibImport("test", @path)
 
+var baseConf = cxxCodegenConf.withIt do:
+  it.nameStyle = idsCamel
 
-proc convStr(str: string, conf: CodegenConf = cxxCodegenConf): string =
+proc convStr(str: string, conf: CodegenConf = baseConf): string =
   let lib = lib(@["z"])
   wrapViaTs(str, fixConf, lib).
     postFixEntries(fixConf, lib).
     toString(conf)
 
-proc convEntries(str: string, conf: CodegenConf = cxxCodegenConf): seq[CxxEntry] =
+proc convEntries(str: string, conf: CodegenConf = baseConf): seq[CxxEntry] =
   let lib = lib(@["z"])
   wrapViaTs(str, fixConf, lib).postFixEntries(fixConf, lib)
 
 proc convDecls(
-    str: string, conf: CodegenConf = cxxCodegenConf): seq[NimDecl[PNode]] =
+    str: string, conf: CodegenConf = baseConf): seq[NimDecl[PNode]] =
   let lib = lib(@["z"])
   hc_codegen.toNNode[PNode](
     wrapViaTs(str, fixConf, lib).
@@ -156,7 +158,7 @@ suite "Serialization":
 
     let entries = entries1 & entries2
 
-    echo toString(entries, cxxCodegenConf)
+    echo toString(entries, baseConf)
 
 suite "Convert edge cases":
   test "Rename mapped to the same nim ident":
