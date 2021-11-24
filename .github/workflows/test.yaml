@@ -28,6 +28,7 @@ jobs:
           wget https://nim-lang.org/choosenim/init.sh
           chmod +x init.sh
           sh init.sh -y
+          cp /usr/lib/llvm-13/lib/libclang-13.so.1 /usr/lib/libclang.so
 
       - run: |
           wget https://apt.llvm.org/llvm.sh
