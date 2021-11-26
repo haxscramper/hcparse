@@ -1,30 +1,15 @@
-
-{.deadCodeElim: on.}
-{.push, callconv: cdecl.}
-when defined(windows):
-  const
-    libclang = "libclang.dll"
-elif defined(macosx):
-  const
-    libclang = "libclang.dylib"
-else:
-  const
-    libclang = "libclang.so"
-
-# import libclang_extensions
-# export libclang_extensions
-
 type
   CXVirtualFileOverlayImpl* = object
   CXModuleMapDescriptorImpl* = object
   time_t* = clong
 
+{.passl: "-lclang".}
 
-proc install_aborting_llvm_fatal_error_handler*(): void {.cdecl, dynlib: libclang,
+proc install_aborting_llvm_fatal_error_handler*(): void {.cdecl,
     importc: "clang_install_aborting_llvm_fatal_error_handler".}
   ##  Installs error handler that prints error message to stderr and calls abort().
   ##  Replaces currently installed error handler (if any).
-proc uninstall_llvm_fatal_error_handler*(): void {.cdecl, dynlib: libclang,
+proc uninstall_llvm_fatal_error_handler*(): void {.cdecl,
     importc: "clang_uninstall_llvm_fatal_error_handler".}
   ##  Removes currently installed error handler (if any).
   ##  If no error handler is intalled, the default strategy is to print error
@@ -52,13 +37,13 @@ type
     strings*: ptr[CXString]
     count*: cuint
 
-proc getCString*(cxstring: CXString): cstring {.cdecl, dynlib: libclang,
+proc getCString*(cxstring: CXString): cstring {.cdecl,
     importc: "clang_getCString".}
   ##  Retrieve the character data associated with the given string.
-proc disposeString*(cxstring: CXString): void {.cdecl, dynlib: libclang,
+proc disposeString*(cxstring: CXString): void {.cdecl,
     importc: "clang_disposeString".}
   ##  Free the given string.
-proc disposeStringSet*(cxset: ptr[CXStringSet]): void {.cdecl, dynlib: libclang,
+proc disposeStringSet*(cxset: ptr[CXStringSet]): void {.cdecl,
     importc: "clang_disposeStringSet".}
   ##  Free the given string set.
 type
@@ -71,57 +56,57 @@ type
   CXCompilationDatabase_Error* = enum ##  Error codes for Compilation Database
     cdeNoError = 0, cdeCanNotLoadDatabase = 1
 proc compilationDatabase_fromDirectory*(buildDir: cstring; errorCode: ptr[
-    CXCompilationDatabase_Error]): CXCompilationDatabase {.cdecl, dynlib: libclang,
+    CXCompilationDatabase_Error]): CXCompilationDatabase {.cdecl,
     importc: "clang_CompilationDatabase_fromDirectory".}
   ##  Creates a compilation database from the database found in directory
   ##  buildDir. For example, CMake can output a compile_commands.json which can
   ##  be used to build the database.
   ##  It must be freed by
 proc dispose*(argCXCompilationDatabase: CXCompilationDatabase): void {.cdecl,
-    dynlib: libclang, importc: "clang_CompilationDatabase_dispose".}
+    importc: "clang_CompilationDatabase_dispose".}
   ##  Free the given compilation database
 proc getCompileCommands*(argCXCompilationDatabase: CXCompilationDatabase;
                         completeFileName: cstring): CXCompileCommands {.cdecl,
-    dynlib: libclang, importc: "clang_CompilationDatabase_getCompileCommands".}
+    importc: "clang_CompilationDatabase_getCompileCommands".}
   ##  Find the compile commands used for a file. The compile commands
   ##  must be freed by
 proc getAllCompileCommands*(argCXCompilationDatabase: CXCompilationDatabase): CXCompileCommands {.
-    cdecl, dynlib: libclang,
+    cdecl,
     importc: "clang_CompilationDatabase_getAllCompileCommands".}
   ##  Get all the compile commands in the given compilation database.
 proc dispose*(argCXCompileCommands: CXCompileCommands): void {.cdecl,
-    dynlib: libclang, importc: "clang_CompileCommands_dispose".}
+    importc: "clang_CompileCommands_dispose".}
   ##  Free the given CompileCommands
 proc getSize*(argCXCompileCommands: CXCompileCommands): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_CompileCommands_getSize".}
+    importc: "clang_CompileCommands_getSize".}
   ##  Get the number of CompileCommand we have for a file
 proc getCommand*(argCXCompileCommands: CXCompileCommands; i: cuint): CXCompileCommand {.
-    cdecl, dynlib: libclang, importc: "clang_CompileCommands_getCommand".}
+    cdecl, importc: "clang_CompileCommands_getCommand".}
   ##  Get the I'th CompileCommand for a file
   ##  Note : 0
   ##  clang_CompileCommands_getSize(CXCompileCommands)
 proc getDirectory*(argCXCompileCommand: CXCompileCommand): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_CompileCommand_getDirectory".}
+    importc: "clang_CompileCommand_getDirectory".}
   ##  Get the working directory where the CompileCommand was executed from
 proc getFilename*(argCXCompileCommand: CXCompileCommand): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_CompileCommand_getFilename".}
+    importc: "clang_CompileCommand_getFilename".}
   ##  Get the filename associated with the CompileCommand.
 proc getNumArgs*(argCXCompileCommand: CXCompileCommand): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_CompileCommand_getNumArgs".}
+    importc: "clang_CompileCommand_getNumArgs".}
   ##  Get the number of arguments in the compiler invocation.
 proc getArg*(argCXCompileCommand: CXCompileCommand; i: cuint): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_CompileCommand_getArg".}
+    importc: "clang_CompileCommand_getArg".}
   ##  Get the I'th argument value in the compiler invocations
   ##  Invariant :
   ##   - argument 0 is the compiler executable
 proc getNumMappedSources*(argCXCompileCommand: CXCompileCommand): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_CompileCommand_getNumMappedSources".}
+    importc: "clang_CompileCommand_getNumMappedSources".}
   ##  Get the number of source mappings for the compiler invocation.
 proc getMappedSourcePath*(argCXCompileCommand: CXCompileCommand; i: cuint): CXString {.
-    cdecl, dynlib: libclang, importc: "clang_CompileCommand_getMappedSourcePath".}
+    cdecl, importc: "clang_CompileCommand_getMappedSourcePath".}
   ##  Get the I'th mapped source path for the compiler invocation.
 proc getMappedSourceContent*(argCXCompileCommand: CXCompileCommand; i: cuint): CXString {.
-    cdecl, dynlib: libclang, importc: "clang_CompileCommand_getMappedSourceContent".}
+    cdecl, importc: "clang_CompileCommand_getMappedSourceContent".}
   ##  Get the I'th mapped source content for the compiler invocation.
 type
   CXIndex* = distinct pointer
@@ -173,7 +158,7 @@ type
     ceskUnparsed,             ##  The exception specification has not been parsed yet.
     ceskNoThrow               ##  The cursor has a __declspec(nothrow) exception specification.
 proc createIndex*(excludeDeclarationsFromPCH: cint; displayDiagnostics: cint): CXIndex {.
-    cdecl, dynlib: libclang, importc: "clang_createIndex".}
+    cdecl, importc: "clang_createIndex".}
   ##  Provides a shared context for creating translation units.
   ##  It provides two options:
   ##  - excludeDeclarationsFromPCH: When non-zero, allows enumeration of "local"
@@ -186,7 +171,7 @@ proc createIndex*(excludeDeclarationsFromPCH: cint; displayDiagnostics: cint): C
   ##  This process of creating the 'pch', loading it separately, and using it (via
   ##  -include-pch) allows 'excludeDeclsFromPCH' to remove redundant callbacks
   ##  (which gives the indexer the same performance benefit as the compiler).
-proc disposeIndex*(index: CXIndex): void {.cdecl, dynlib: libclang,
+proc disposeIndex*(index: CXIndex): void {.cdecl,
                                        importc: "clang_disposeIndex".}
   ##  Destroy the given index.
   ##  The index must not be destroyed until all of the translation units created
@@ -205,20 +190,20 @@ type
     gofThreadBackgroundPriorityForAll = 3 ##  Used to indicate that all threads that libclang creates should use
                                        ##  background priority.
 proc setGlobalOptions*(argCXIndex: CXIndex; options: cuint): void {.cdecl,
-    dynlib: libclang, importc: "clang_CXIndex_setGlobalOptions".}
+    importc: "clang_CXIndex_setGlobalOptions".}
   ##  Sets general options associated with a CXIndex.
   ##  For example:
   ## Error: cannot render: rnCodeBlock
   ## **options**
   ##  A bitmask of options, a bitwise OR of CXGlobalOpt_XXX flags.
-proc getGlobalOptions*(argCXIndex: CXIndex): cuint {.cdecl, dynlib: libclang,
+proc getGlobalOptions*(argCXIndex: CXIndex): cuint {.cdecl,
     importc: "clang_CXIndex_getGlobalOptions".}
   ##  Gets the general options associated with a CXIndex.
   ##
   ##  A bitmask of options, a bitwise OR of CXGlobalOpt_XXX flags that
   ##  are associated with the given CXIndex object.
 proc setInvocationEmissionPathOption*(argCXIndex: CXIndex; path: cstring): void {.
-    cdecl, dynlib: libclang,
+    cdecl,
     importc: "clang_CXIndex_setInvocationEmissionPathOption".}
   ##  Sets the invocation emission path option in a CXIndex.
   ##  The invocation emission path specifies a path which will contain log
@@ -226,10 +211,10 @@ proc setInvocationEmissionPathOption*(argCXIndex: CXIndex; path: cstring): void 
   ##  libclang invocations are not logged..
 type
   CXFile* = distinct pointer
-proc getFileName*(sFile: CXFile): CXString {.cdecl, dynlib: libclang,
+proc getFileName*(sFile: CXFile): CXString {.cdecl,
     importc: "clang_getFileName".}
   ##  Retrieve the complete file and path name of the given file.
-proc getFileTime*(sFile: CXFile): time_t {.cdecl, dynlib: libclang,
+proc getFileTime*(sFile: CXFile): time_t {.cdecl,
                                        importc: "clang_getFileTime".}
   ##  Retrieve the last modification time of the given file.
 type
@@ -237,7 +222,7 @@ type
     data*: array[3, culonglong]
 
 proc getFileUniqueID*(file: CXFile; outID: ptr[CXFileUniqueID]): cint {.cdecl,
-    dynlib: libclang, importc: "clang_getFileUniqueID".}
+    importc: "clang_getFileUniqueID".}
   ##  Retrieve the unique ID for the given
   ## **file** the file to get the ID for.
   ## **outID** stores the returned CXFileUniqueID.
@@ -245,12 +230,12 @@ proc getFileUniqueID*(file: CXFile; outID: ptr[CXFileUniqueID]): cint {.cdecl,
   ## If there was a failure getting the unique ID, returns non-zero,
   ##  otherwise returns 0.
 proc isFileMultipleIncludeGuarded*(tu: CXTranslationUnit; file: CXFile): cuint {.
-    cdecl, dynlib: libclang, importc: "clang_isFileMultipleIncludeGuarded".}
+    cdecl, importc: "clang_isFileMultipleIncludeGuarded".}
   ## Determine whether the given header is guarded against multiple
   ## inclusions, either with the conventional ifndef/define/endif macro
   ## guards or with pragma once.
 proc getFile*(tu: CXTranslationUnit; file_name: cstring): CXFile {.cdecl,
-    dynlib: libclang, importc: "clang_getFile".}
+    importc: "clang_getFile".}
   ##  Retrieve a file handle within the given translation unit.
   ## **tu** ##  the translation unit
   ## **file_name** ##  the name of the file.
@@ -258,14 +243,14 @@ proc getFile*(tu: CXTranslationUnit; file_name: cstring): CXFile {.cdecl,
   ##  the file handle for the named file in the translation unit
   ##  or a NULL file handle if the file was not a part of this translation unit.
 proc getFileContents*(tu: CXTranslationUnit; file: CXFile; size: ptr[cint]): cstring {.
-    cdecl, dynlib: libclang, importc: "clang_getFileContents".}
-proc isEqual*(file1: CXFile; file2: CXFile): cint {.cdecl, dynlib: libclang,
+    cdecl, importc: "clang_getFileContents".}
+proc isEqual*(file1: CXFile; file2: CXFile): cint {.cdecl,
     importc: "clang_File_isEqual".}
   ##  Returns non-zero if the
   ##  and
   ##  point to the same file,
   ##  or they are both NULL.
-proc tryGetRealPathName*(file: CXFile): CXString {.cdecl, dynlib: libclang,
+proc tryGetRealPathName*(file: CXFile): CXString {.cdecl,
     importc: "clang_File_tryGetRealPathName".}
   ##  Returns the real path name of
   ##  An empty string may be returned. Use
@@ -281,11 +266,11 @@ type
     begin_int_data*: cuint
     end_int_data*: cuint
 
-proc getNullLocation*(): CXSourceLocation {.cdecl, dynlib: libclang,
+proc getNullLocation*(): CXSourceLocation {.cdecl,
     importc: "clang_getNullLocation".}
   ##  Retrieve a NULL (invalid) source location.
 proc equalLocations*(loc1: CXSourceLocation; loc2: CXSourceLocation): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_equalLocations".}
+    importc: "clang_equalLocations".}
   ##  Determine whether two source locations, which must refer into
   ##  the same translation unit, refer to exactly the same point in the source
   ##  code.
@@ -293,39 +278,39 @@ proc equalLocations*(loc1: CXSourceLocation; loc2: CXSourceLocation): cuint {.cd
   ##  non-zero if the source locations refer to the same location, zero
   ##  if they refer to different locations.
 proc getLocation*(tu: CXTranslationUnit; file: CXFile; line: cuint; column: cuint): CXSourceLocation {.
-    cdecl, dynlib: libclang, importc: "clang_getLocation".}
+    cdecl, importc: "clang_getLocation".}
   ##  Retrieves the source location associated with a given file/line/column
   ##  in a particular translation unit.
 proc getLocationForOffset*(tu: CXTranslationUnit; file: CXFile; offset: cuint): CXSourceLocation {.
-    cdecl, dynlib: libclang, importc: "clang_getLocationForOffset".}
+    cdecl, importc: "clang_getLocationForOffset".}
   ##  Retrieves the source location associated with a given character offset
   ##  in a particular translation unit.
 proc location_isInSystemHeader*(location: CXSourceLocation): cint {.cdecl,
-    dynlib: libclang, importc: "clang_Location_isInSystemHeader".}
+    importc: "clang_Location_isInSystemHeader".}
   ##  Returns non-zero if the given source location is in a system header.
 proc location_isFromMainFile*(location: CXSourceLocation): cint {.cdecl,
-    dynlib: libclang, importc: "clang_Location_isFromMainFile".}
+    importc: "clang_Location_isFromMainFile".}
   ##  Returns non-zero if the given source location is in the main file of
   ##  the corresponding translation unit.
-proc getNullRange*(): CXSourceRange {.cdecl, dynlib: libclang,
+proc getNullRange*(): CXSourceRange {.cdecl,
                                    importc: "clang_getNullRange".}
   ##  Retrieve a NULL (invalid) source range.
 proc getRange*(cxbegin: CXSourceLocation; cxend: CXSourceLocation): CXSourceRange {.
-    cdecl, dynlib: libclang, importc: "clang_getRange".}
+    cdecl, importc: "clang_getRange".}
   ##  Retrieve a source range given the beginning and ending source
   ##  locations.
 proc equalRanges*(range1: CXSourceRange; range2: CXSourceRange): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_equalRanges".}
+    importc: "clang_equalRanges".}
   ##  Determine whether two ranges are equivalent.
   ##
   ##  non-zero if the ranges are the same, zero if they differ.
-proc range_isNull*(cxrange: CXSourceRange): cint {.cdecl, dynlib: libclang,
+proc range_isNull*(cxrange: CXSourceRange): cint {.cdecl,
     importc: "clang_Range_isNull".}
   ##  Returns non-zero if
   ##  is null.
 proc getExpansionLocation*(location: CXSourceLocation; file: ptr[CXFile];
                           line: ptr[cuint]; column: ptr[cuint]; offset: ptr[cuint]): void {.
-    cdecl, dynlib: libclang, importc: "clang_getExpansionLocation".}
+    cdecl, importc: "clang_getExpansionLocation".}
   ##  Retrieve the file, line, column, and offset represented by
   ##  the given source location.
   ##  If the location refers into a macro expansion, retrieves the
@@ -347,7 +332,7 @@ proc getExpansionLocation*(location: CXSourceLocation; file: ptr[CXFile];
   ##  buffer to which the given source location points.
 proc getPresumedLocation*(location: CXSourceLocation; filename: ptr[CXString];
                          line: ptr[cuint]; column: ptr[cuint]): void {.cdecl,
-    dynlib: libclang, importc: "clang_getPresumedLocation".}
+    importc: "clang_getPresumedLocation".}
   ##  Retrieve the file, line and column represented by the given source
   ##  location, as specified in a # line directive.
   ##  Example: given the following source code in a file somefile.c
@@ -376,7 +361,7 @@ proc getPresumedLocation*(location: CXSourceLocation; filename: ptr[CXString];
   ##  source location. For an invalid source location, zero is returned.
 proc getInstantiationLocation*(location: CXSourceLocation; file: ptr[CXFile];
                               line: ptr[cuint]; column: ptr[cuint];
-                              offset: ptr[cuint]): void {.cdecl, dynlib: libclang,
+                              offset: ptr[cuint]): void {.cdecl,
     importc: "clang_getInstantiationLocation".}
   ##  Legacy API to retrieve the file, line, column, and offset represented
   ##  by the given source location.
@@ -385,7 +370,7 @@ proc getInstantiationLocation*(location: CXSourceLocation; file: ptr[CXFile];
   ##  details.
 proc getSpellingLocation*(location: CXSourceLocation; file: ptr[CXFile];
                          line: ptr[cuint]; column: ptr[cuint]; offset: ptr[cuint]): void {.
-    cdecl, dynlib: libclang, importc: "clang_getSpellingLocation".}
+    cdecl, importc: "clang_getSpellingLocation".}
   ##  Retrieve the file, line, column, and offset represented by
   ##  the given source location.
   ##  If the location refers into a macro instantiation, return where the
@@ -407,7 +392,7 @@ proc getSpellingLocation*(location: CXSourceLocation; file: ptr[CXFile];
   ##  buffer to which the given source location points.
 proc getFileLocation*(location: CXSourceLocation; file: ptr[CXFile];
                      line: ptr[cuint]; column: ptr[cuint]; offset: ptr[cuint]): void {.
-    cdecl, dynlib: libclang, importc: "clang_getFileLocation".}
+    cdecl, importc: "clang_getFileLocation".}
   ##  Retrieve the file, line, column, and offset represented by
   ##  the given source location.
   ##  If the location refers into a macro expansion, return where the macro was
@@ -429,11 +414,11 @@ proc getFileLocation*(location: CXSourceLocation; file: ptr[CXFile];
   ##  [out] if non-NULL, will be set to the offset into the
   ##  buffer to which the given source location points.
 proc getRangeStart*(cxrange: CXSourceRange): CXSourceLocation {.cdecl,
-    dynlib: libclang, importc: "clang_getRangeStart".}
+    importc: "clang_getRangeStart".}
   ##  Retrieve a source location representing the first character within a
   ##  source range.
 proc getRangeEnd*(cxrange: CXSourceRange): CXSourceLocation {.cdecl,
-    dynlib: libclang, importc: "clang_getRangeEnd".}
+    importc: "clang_getRangeEnd".}
   ##  Retrieve a source location representing the last character within a
   ##  source range.
 type
@@ -442,18 +427,18 @@ type
     ranges*: ptr[CXSourceRange]
 
 proc getSkippedRanges*(tu: CXTranslationUnit; file: CXFile): ptr[CXSourceRangeList] {.
-    cdecl, dynlib: libclang, importc: "clang_getSkippedRanges".}
+    cdecl, importc: "clang_getSkippedRanges".}
   ##  Retrieve all ranges that were skipped by the preprocessor.
   ##  The preprocessor will skip lines when they are surrounded by an
   ##  if/ifdef/ifndef directive whose condition does not evaluate to true.
 proc getAllSkippedRanges*(tu: CXTranslationUnit): ptr[CXSourceRangeList] {.cdecl,
-    dynlib: libclang, importc: "clang_getAllSkippedRanges".}
+    importc: "clang_getAllSkippedRanges".}
   ##  Retrieve all ranges from all files that were skipped by the
   ##  preprocessor.
   ##  The preprocessor will skip lines when they are surrounded by an
   ##  if/ifdef/ifndef directive whose condition does not evaluate to true.
 proc disposeSourceRangeList*(ranges: ptr[CXSourceRangeList]): void {.cdecl,
-    dynlib: libclang, importc: "clang_disposeSourceRangeList".}
+    importc: "clang_disposeSourceRangeList".}
   ##  Destroy the given
 type
   CXDiagnosticSeverity* = enum  ##  Describes the severity of a particular diagnostic.
@@ -472,10 +457,10 @@ type
 type
   CXDiagnosticSet* = distinct pointer
 proc getNumDiagnosticsInSet*(diags: CXDiagnosticSet): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_getNumDiagnosticsInSet".}
+    importc: "clang_getNumDiagnosticsInSet".}
   ##  Determine the number of diagnostics in a CXDiagnosticSet.
 proc getDiagnosticInSet*(diags: CXDiagnosticSet; index: cuint): CXDiagnostic {.cdecl,
-    dynlib: libclang, importc: "clang_getDiagnosticInSet".}
+    importc: "clang_getDiagnosticInSet".}
   ##  Retrieve a diagnostic associated with the given CXDiagnosticSet.
   ## **Diags** the CXDiagnosticSet to query.
   ## **Index** the zero-based diagnostic number to retrieve.
@@ -493,7 +478,7 @@ type
                     ##  corrupt.
 proc loadDiagnostics*(file: cstring; error: ptr[CXLoadDiag_Error];
                      errorString: ptr[CXString]): CXDiagnosticSet {.cdecl,
-    dynlib: libclang, importc: "clang_loadDiagnostics".}
+    importc: "clang_loadDiagnostics".}
   ##  Deserialize a set of diagnostics from a Clang diagnostics bitcode
   ##  file.
   ## **file**
@@ -507,20 +492,20 @@ proc loadDiagnostics*(file: cstring; error: ptr[CXLoadDiag_Error];
   ##
   ##  A loaded CXDiagnosticSet if successful, and NULL otherwise.  These
   ##  diagnostics should be released using clang_disposeDiagnosticSet().
-proc disposeDiagnosticSet*(diags: CXDiagnosticSet): void {.cdecl, dynlib: libclang,
+proc disposeDiagnosticSet*(diags: CXDiagnosticSet): void {.cdecl,
     importc: "clang_disposeDiagnosticSet".}
   ##  Release a CXDiagnosticSet and all of its contained diagnostics.
 proc getChildDiagnostics*(d: CXDiagnostic): CXDiagnosticSet {.cdecl,
-    dynlib: libclang, importc: "clang_getChildDiagnostics".}
+    importc: "clang_getChildDiagnostics".}
   ##  Retrieve the child diagnostics of a CXDiagnostic.
   ##  This CXDiagnosticSet does not need to be released by
   ##  clang_disposeDiagnosticSet.
-proc getNumDiagnostics*(unit: CXTranslationUnit): cuint {.cdecl, dynlib: libclang,
+proc getNumDiagnostics*(unit: CXTranslationUnit): cuint {.cdecl,
     importc: "clang_getNumDiagnostics".}
   ##  Determine the number of diagnostics produced for the given
   ##  translation unit.
 proc getDiagnostic*(unit: CXTranslationUnit; index: cuint): CXDiagnostic {.cdecl,
-    dynlib: libclang, importc: "clang_getDiagnostic".}
+    importc: "clang_getDiagnostic".}
   ##  Retrieve a diagnostic associated with the given translation unit.
   ## **Unit**
   ##  the translation unit to query.
@@ -530,12 +515,12 @@ proc getDiagnostic*(unit: CXTranslationUnit; index: cuint): CXDiagnostic {.cdecl
   ##  the requested diagnostic. This diagnostic must be freed
   ##  via a call to
 proc getDiagnosticSetFromTU*(unit: CXTranslationUnit): CXDiagnosticSet {.cdecl,
-    dynlib: libclang, importc: "clang_getDiagnosticSetFromTU".}
+    importc: "clang_getDiagnosticSetFromTU".}
   ##  Retrieve the complete set of diagnostics associated with a
   ##         translation unit.
   ## **Unit**
   ##  the translation unit to query.
-proc disposeDiagnostic*(diagnostic: CXDiagnostic): void {.cdecl, dynlib: libclang,
+proc disposeDiagnostic*(diagnostic: CXDiagnostic): void {.cdecl,
     importc: "clang_disposeDiagnostic".}
   ##  Destroy a diagnostic.
 type
@@ -565,7 +550,7 @@ type
                              ##  The category name is displayed within brackets after the diagnostic text.
                              ##  This option corresponds to the clang flag
 proc formatDiagnostic*(diagnostic: CXDiagnostic; options: cuint): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_formatDiagnostic".}
+    importc: "clang_formatDiagnostic".}
   ##  Format the given diagnostic in a manner that is suitable for display.
   ##  This routine will format the given diagnostic to a string, rendering
   ##  the diagnostic according to the various options given. The
@@ -579,25 +564,25 @@ proc formatDiagnostic*(diagnostic: CXDiagnostic; options: cuint): CXString {.cde
   ##  values.
   ##
   ##  A new string containing for formatted diagnostic.
-proc defaultDiagnosticDisplayOptions*(): cuint {.cdecl, dynlib: libclang,
+proc defaultDiagnosticDisplayOptions*(): cuint {.cdecl,
     importc: "clang_defaultDiagnosticDisplayOptions".}
   ##  Retrieve the set of display options most similar to the
   ##  default behavior of the clang compiler.
   ##
   ##  A set of display options suitable for use with
 proc getDiagnosticSeverity*(argCXDiagnostic: CXDiagnostic): CXDiagnosticSeverity {.
-    cdecl, dynlib: libclang, importc: "clang_getDiagnosticSeverity".}
+    cdecl, importc: "clang_getDiagnosticSeverity".}
   ##  Determine the severity of the given diagnostic.
 proc getDiagnosticLocation*(argCXDiagnostic: CXDiagnostic): CXSourceLocation {.
-    cdecl, dynlib: libclang, importc: "clang_getDiagnosticLocation".}
+    cdecl, importc: "clang_getDiagnosticLocation".}
   ##  Retrieve the source location of the given diagnostic.
   ##  This location is where Clang would print the caret ('^') when
   ##  displaying the diagnostic on the command line.
 proc getDiagnosticSpelling*(argCXDiagnostic: CXDiagnostic): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_getDiagnosticSpelling".}
+    importc: "clang_getDiagnosticSpelling".}
   ##  Retrieve the text of the given diagnostic.
 proc getDiagnosticOption*(diag: CXDiagnostic; disable: ptr[CXString]): CXString {.
-    cdecl, dynlib: libclang, importc: "clang_getDiagnosticOption".}
+    cdecl, importc: "clang_getDiagnosticOption".}
   ##  Retrieve the name of the command-line option that enabled this
   ##  diagnostic.
   ## **Diag**
@@ -609,7 +594,7 @@ proc getDiagnosticOption*(diag: CXDiagnostic; disable: ptr[CXString]): CXString 
   ##  A string that contains the command-line option used to enable this
   ##  warning, such as "-Wconversion" or "-pedantic".
 proc getDiagnosticCategory*(argCXDiagnostic: CXDiagnostic): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_getDiagnosticCategory".}
+    importc: "clang_getDiagnosticCategory".}
   ##  Retrieve the category number for this diagnostic.
   ##  Diagnostics can be categorized into groups along with other, related
   ##  diagnostics (e.g., diagnostics under the same warning flag). This routine
@@ -617,7 +602,7 @@ proc getDiagnosticCategory*(argCXDiagnostic: CXDiagnostic): cuint {.cdecl,
   ##
   ##  The number of the category that contains this diagnostic, or zero
   ##  if this diagnostic is uncategorized.
-proc getDiagnosticCategoryName*(category: cuint): CXString {.cdecl, dynlib: libclang,
+proc getDiagnosticCategoryName*(category: cuint): CXString {.cdecl,
     importc: "clang_getDiagnosticCategoryName".}
   ##  Retrieve the name of a particular diagnostic category.  This
   ##   is now deprecated.  Use clang_getDiagnosticCategoryText()
@@ -627,16 +612,16 @@ proc getDiagnosticCategoryName*(category: cuint): CXString {.cdecl, dynlib: libc
   ##
   ##  The name of the given diagnostic category.
 proc getDiagnosticCategoryText*(argCXDiagnostic: CXDiagnostic): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_getDiagnosticCategoryText".}
+    importc: "clang_getDiagnosticCategoryText".}
   ##  Retrieve the diagnostic category text for a given diagnostic.
   ##
   ##  The text of the given diagnostic category.
 proc getDiagnosticNumRanges*(argCXDiagnostic: CXDiagnostic): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_getDiagnosticNumRanges".}
+    importc: "clang_getDiagnosticNumRanges".}
   ##  Determine the number of source ranges associated with the given
   ##  diagnostic.
 proc getDiagnosticRange*(diagnostic: CXDiagnostic; cxrange: cuint): CXSourceRange {.
-    cdecl, dynlib: libclang, importc: "clang_getDiagnosticRange".}
+    cdecl, importc: "clang_getDiagnosticRange".}
   ##  Retrieve a source range associated with the diagnostic.
   ##  A diagnostic's source ranges highlight important elements in the source
   ##  code. On the command line, Clang displays source ranges by
@@ -648,12 +633,12 @@ proc getDiagnosticRange*(diagnostic: CXDiagnostic; cxrange: cuint): CXSourceRang
   ##
   ##  the requested source range.
 proc getDiagnosticNumFixIts*(diagnostic: CXDiagnostic): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_getDiagnosticNumFixIts".}
+    importc: "clang_getDiagnosticNumFixIts".}
   ##  Determine the number of fix-it hints associated with the
   ##  given diagnostic.
 proc getDiagnosticFixIt*(diagnostic: CXDiagnostic; fixIt: cuint;
                         replacementRange: ptr[CXSourceRange]): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_getDiagnosticFixIt".}
+    importc: "clang_getDiagnosticFixIt".}
   ##  Retrieve the replacement information for a given fix-it.
   ##  Fix-its are described in terms of a source range whose contents
   ##  should be replaced by a string. This approach generalizes over
@@ -677,12 +662,12 @@ proc getDiagnosticFixIt*(diagnostic: CXDiagnostic; fixIt: cuint;
   ##  A string containing text that should be replace the source
   ##  code indicated by the
 proc getTranslationUnitSpelling*(cTUnit: CXTranslationUnit): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_getTranslationUnitSpelling".}
+    importc: "clang_getTranslationUnitSpelling".}
   ##  Get the original translation unit source file name.
 proc createTranslationUnitFromSourceFile*(cIdx: CXIndex; source_filename: cstring;
     num_clang_command_line_args: cint; clang_command_line_args: cstringArray;
     num_unsaved_files: cuint; unsaved_files: ptr[CXUnsavedFile]): CXTranslationUnit {.
-    cdecl, dynlib: libclang, importc: "clang_createTranslationUnitFromSourceFile".}
+    cdecl, importc: "clang_createTranslationUnitFromSourceFile".}
   ##  Return the CXTranslationUnit for a given source file and the provided
   ##  command line arguments one would pass to the compiler.
   ##  Note: The 'source_filename' argument is optional.  If the caller provides a
@@ -724,7 +709,7 @@ proc createTranslationUnitFromSourceFile*(cIdx: CXIndex; source_filename: cstrin
   ##  CXUnsavedFile) are copied when necessary, so the client only needs to
   ##  guarantee their validity until the call to this function returns.
 proc createTranslationUnit*(cIdx: CXIndex; ast_filename: cstring): CXTranslationUnit {.
-    cdecl, dynlib: libclang, importc: "clang_createTranslationUnit".}
+    cdecl, importc: "clang_createTranslationUnit".}
   ##  Same as
   ##  but returns
   ##  the
@@ -734,7 +719,7 @@ proc createTranslationUnit*(cIdx: CXIndex; ast_filename: cstring): CXTranslation
   ##  error codes.
 proc createTranslationUnit2*(cIdx: CXIndex; ast_filename: cstring;
                             out_TU: ptr[CXTranslationUnit]): CXErrorCode {.cdecl,
-    dynlib: libclang, importc: "clang_createTranslationUnit2".}
+    importc: "clang_createTranslationUnit2".}
   ##  Create a translation unit from an AST file (
   ## **out_TU**
   ##  A non-NULL pointer to store the created
@@ -813,7 +798,7 @@ type
                                               ##  the case where these warnings are not of interest, as for an IDE for
                                               ##  example, which typically shows only the diagnostics in the main file.
     tufRetainExcludedConditionalBlocks = 32768 ##  Tells the preprocessor not to skip excluded conditional blocks.
-proc defaultEditingTranslationUnitOptions*(): cuint {.cdecl, dynlib: libclang,
+proc defaultEditingTranslationUnitOptions*(): cuint {.cdecl,
     importc: "clang_defaultEditingTranslationUnitOptions".}
   ##  Returns the set of flags that is suitable for parsing a translation
   ##  unit that is being edited.
@@ -831,7 +816,7 @@ proc parseTranslationUnit*(cIdx: CXIndex; source_filename: cstring;
                           num_command_line_args: cint;
                           unsaved_files: ptr[CXUnsavedFile];
                           num_unsaved_files: cuint; options: cuint): CXTranslationUnit {.
-    cdecl, dynlib: libclang, importc: "clang_parseTranslationUnit".}
+    cdecl, importc: "clang_parseTranslationUnit".}
   ##  Same as
   ##  but returns
   ##  the
@@ -845,7 +830,7 @@ proc parseTranslationUnit2*(cIdx: CXIndex; source_filename: cstring;
                            unsaved_files: ptr[CXUnsavedFile];
                            num_unsaved_files: cuint; options: cuint;
                            out_TU: ptr[CXTranslationUnit]): CXErrorCode {.cdecl,
-    dynlib: libclang, importc: "clang_parseTranslationUnit2".}
+    importc: "clang_parseTranslationUnit2".}
   ##  Parse the given source file and the translation unit corresponding
   ##  to that file.
   ##  This routine is the main entry point for the Clang C API, providing the
@@ -894,7 +879,7 @@ proc parseTranslationUnit2FullArgv*(cIdx: CXIndex; source_filename: cstring;
                                    unsaved_files: ptr[CXUnsavedFile];
                                    num_unsaved_files: cuint; options: cuint;
                                    out_TU: ptr[CXTranslationUnit]): CXErrorCode {.
-    cdecl, dynlib: libclang, importc: "clang_parseTranslationUnit2FullArgv".}
+    cdecl, importc: "clang_parseTranslationUnit2FullArgv".}
   ##  Same as clang_parseTranslationUnit2 but requires a full command line
   ##  for
   ##  including argv[0]. This is useful if the standard
@@ -905,7 +890,7 @@ type
                                    ##  ORed together to specify which options should be used when
                                    ##  saving the translation unit.
     stufNone = 0                ##  Used to indicate that no special saving options are needed.
-proc defaultSaveOptions*(tU: CXTranslationUnit): cuint {.cdecl, dynlib: libclang,
+proc defaultSaveOptions*(tU: CXTranslationUnit): cuint {.cdecl,
     importc: "clang_defaultSaveOptions".}
   ##  Returns the set of flags that is suitable for saving a translation
   ##  unit.
@@ -928,7 +913,7 @@ type
     seInvalidTU = 3 ##  Indicates that the translation unit to be saved was somehow
                  ##  invalid (e.g., NULL).
 proc saveTranslationUnit*(tU: CXTranslationUnit; fileName: cstring; options: cuint): cint {.
-    cdecl, dynlib: libclang, importc: "clang_saveTranslationUnit".}
+    cdecl, importc: "clang_saveTranslationUnit".}
   ##  Saves a translation unit into a serialized representation of
   ##  that translation unit on disk.
   ##  Any translation unit that was parsed without error can be saved
@@ -952,14 +937,14 @@ proc saveTranslationUnit*(tU: CXTranslationUnit; fileName: cstring; options: cui
   ##  enumeration. Zero (CXSaveError_None) indicates that the translation unit was
   ##  saved successfully, while a non-zero value indicates that a problem occurred.
 proc suspendTranslationUnit*(argCXTranslationUnit: CXTranslationUnit): cuint {.
-    cdecl, dynlib: libclang, importc: "clang_suspendTranslationUnit".}
+    cdecl, importc: "clang_suspendTranslationUnit".}
   ##  Suspend a translation unit in order to free memory associated with it.
   ##  A suspended translation unit uses significantly less memory but on the other
   ##  side does not support any other calls than
   ##  to resume it or
   ##  to dispose it completely.
 proc disposeTranslationUnit*(argCXTranslationUnit: CXTranslationUnit): void {.cdecl,
-    dynlib: libclang, importc: "clang_disposeTranslationUnit".}
+    importc: "clang_disposeTranslationUnit".}
   ##  Destroy the specified CXTranslationUnit object.
 type
   CXReparse_Flags* = enum ##  Flags that control the reparsing of translation units.
@@ -967,7 +952,7 @@ type
                        ##  ORed together to specify which options should be used when
                        ##  reparsing the translation unit.
     rfNone = 0                  ##  Used to indicate that no special reparsing options are needed.
-proc defaultReparseOptions*(tU: CXTranslationUnit): cuint {.cdecl, dynlib: libclang,
+proc defaultReparseOptions*(tU: CXTranslationUnit): cuint {.cdecl,
     importc: "clang_defaultReparseOptions".}
   ##  Returns the set of flags that is suitable for reparsing a translation
   ##  unit.
@@ -978,7 +963,7 @@ proc defaultReparseOptions*(tU: CXTranslationUnit): cuint {.cdecl, dynlib: libcl
   ##  to the next.
 proc reparseTranslationUnit*(tU: CXTranslationUnit; num_unsaved_files: cuint;
                             unsaved_files: ptr[CXUnsavedFile]; options: cuint): cint {.
-    cdecl, dynlib: libclang, importc: "clang_reparseTranslationUnit".}
+    cdecl, importc: "clang_reparseTranslationUnit".}
   ##  Reparse the source files that produced this translation unit.
   ##  This routine can be used to re-parse the source files that originally
   ##  created the given translation unit, for example because those source files
@@ -1032,7 +1017,7 @@ type
     turukPreprocessingRecord = 12, turukSourceManager_DataStructures = 13,
     turukPreprocessor_HeaderSearch = 14
 proc getTUResourceUsageName*(kind: CXTUResourceUsageKind): cstring {.cdecl,
-    dynlib: libclang, importc: "clang_getTUResourceUsageName".}
+    importc: "clang_getTUResourceUsageName".}
   ##  Returns the human-readable null-terminated C string that represents
   ##   the name of the memory category.  This string should never be freed.
 type
@@ -1047,23 +1032,23 @@ type
     entries*: ptr[CXTUResourceUsageEntry]
 
 proc getCXTUResourceUsage*(tU: CXTranslationUnit): CXTUResourceUsage {.cdecl,
-    dynlib: libclang, importc: "clang_getCXTUResourceUsage".}
+    importc: "clang_getCXTUResourceUsage".}
   ##  Return the memory usage of a translation unit.  This object
   ##   should be released with clang_disposeCXTUResourceUsage().
 proc disposeCXTUResourceUsage*(usage: CXTUResourceUsage): void {.cdecl,
-    dynlib: libclang, importc: "clang_disposeCXTUResourceUsage".}
+    importc: "clang_disposeCXTUResourceUsage".}
 proc getTranslationUnitTargetInfo*(cTUnit: CXTranslationUnit): CXTargetInfo {.cdecl,
-    dynlib: libclang, importc: "clang_getTranslationUnitTargetInfo".}
+    importc: "clang_getTranslationUnitTargetInfo".}
   ##  Get target information for this translation unit.
   ##  The CXTargetInfo object cannot outlive the CXTranslationUnit object.
-proc dispose*(info: CXTargetInfo): void {.cdecl, dynlib: libclang,
+proc dispose*(info: CXTargetInfo): void {.cdecl,
                                       importc: "clang_TargetInfo_dispose".}
   ##  Destroy the CXTargetInfo object.
-proc getTriple*(info: CXTargetInfo): CXString {.cdecl, dynlib: libclang,
+proc getTriple*(info: CXTargetInfo): CXString {.cdecl,
     importc: "clang_TargetInfo_getTriple".}
   ##  Get the normalized target triple as a string.
   ##  Returns the empty string in case of any error.
-proc getPointerWidth*(info: CXTargetInfo): cint {.cdecl, dynlib: libclang,
+proc getPointerWidth*(info: CXTargetInfo): cint {.cdecl,
     importc: "clang_TargetInfo_getPointerWidth".}
   ##  Get the pointer width of the target in bits.
   ##  Returns -1 in case of error.
@@ -1420,70 +1405,70 @@ type
     xdata*: cint
     data*: array[3, pointer]
 
-proc getNullCursor*(): CXCursor {.cdecl, dynlib: libclang,
+proc getNullCursor*(): CXCursor {.cdecl,
                                importc: "clang_getNullCursor".}
   ##  Retrieve the NULL cursor, which represents no entity.
 proc getTranslationUnitCursor*(argCXTranslationUnit: CXTranslationUnit): CXCursor {.
-    cdecl, dynlib: libclang, importc: "clang_getTranslationUnitCursor".}
+    cdecl, importc: "clang_getTranslationUnitCursor".}
   ##  Retrieve the cursor that represents the given translation unit.
   ##  The translation unit cursor can be used to start traversing the
   ##  various declarations within the given translation unit.
 proc equalCursors*(argCXCursor: CXCursor; argCXCursor1: CXCursor): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_equalCursors".}
+    importc: "clang_equalCursors".}
   ##  Determine whether two cursors are equivalent.
-proc isNull*(cursor: CXCursor): cint {.cdecl, dynlib: libclang,
+proc isNull*(cursor: CXCursor): cint {.cdecl,
                                    importc: "clang_Cursor_isNull".}
   ##  Returns non-zero if
   ##  is null.
-proc hashCursor*(argCXCursor: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc hashCursor*(argCXCursor: CXCursor): cuint {.cdecl,
     importc: "clang_hashCursor".}
   ##  Compute a hash value for the given cursor.
-proc getCursorKind*(argCXCursor: CXCursor): CXCursorKind {.cdecl, dynlib: libclang,
+proc getCursorKind*(argCXCursor: CXCursor): CXCursorKind {.cdecl,
     importc: "clang_getCursorKind".}
   ##  Retrieve the kind of the given cursor.
-proc isDeclaration*(argCXCursorKind: CXCursorKind): cuint {.cdecl, dynlib: libclang,
+proc isDeclaration*(argCXCursorKind: CXCursorKind): cuint {.cdecl,
     importc: "clang_isDeclaration".}
   ##  Determine whether the given cursor kind represents a declaration.
-proc isInvalidDeclaration*(argCXCursor: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc isInvalidDeclaration*(argCXCursor: CXCursor): cuint {.cdecl,
     importc: "clang_isInvalidDeclaration".}
   ##  Determine whether the given declaration is invalid.
   ##  A declaration is invalid if it could not be parsed successfully.
   ##
   ##  non-zero if the cursor represents a declaration and it is
   ##  invalid, otherwise NULL.
-proc isReference*(argCXCursorKind: CXCursorKind): cuint {.cdecl, dynlib: libclang,
+proc isReference*(argCXCursorKind: CXCursorKind): cuint {.cdecl,
     importc: "clang_isReference".}
   ##  Determine whether the given cursor kind represents a simple
   ##  reference.
   ##  Note that other kinds of cursors (such as expressions) can also refer to
   ##  other cursors. Use clang_getCursorReferenced() to determine whether a
   ##  particular cursor refers to another entity.
-proc isExpression*(argCXCursorKind: CXCursorKind): cuint {.cdecl, dynlib: libclang,
+proc isExpression*(argCXCursorKind: CXCursorKind): cuint {.cdecl,
     importc: "clang_isExpression".}
   ##  Determine whether the given cursor kind represents an expression.
-proc isStatement*(argCXCursorKind: CXCursorKind): cuint {.cdecl, dynlib: libclang,
+proc isStatement*(argCXCursorKind: CXCursorKind): cuint {.cdecl,
     importc: "clang_isStatement".}
   ##  Determine whether the given cursor kind represents a statement.
-proc isAttribute*(argCXCursorKind: CXCursorKind): cuint {.cdecl, dynlib: libclang,
+proc isAttribute*(argCXCursorKind: CXCursorKind): cuint {.cdecl,
     importc: "clang_isAttribute".}
   ##  Determine whether the given cursor kind represents an attribute.
-proc hasAttrs*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc hasAttrs*(c: CXCursor): cuint {.cdecl,
                                  importc: "clang_Cursor_hasAttrs".}
   ##  Determine whether the given cursor has any attributes.
-proc isInvalid*(argCXCursorKind: CXCursorKind): cuint {.cdecl, dynlib: libclang,
+proc isInvalid*(argCXCursorKind: CXCursorKind): cuint {.cdecl,
     importc: "clang_isInvalid".}
   ##  Determine whether the given cursor kind represents an invalid
   ##  cursor.
 proc isTranslationUnit*(argCXCursorKind: CXCursorKind): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_isTranslationUnit".}
+    importc: "clang_isTranslationUnit".}
   ##  Determine whether the given cursor kind represents a translation
   ##  unit.
 proc isPreprocessing*(argCXCursorKind: CXCursorKind): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_isPreprocessing".}
+    importc: "clang_isPreprocessing".}
   ##
   ##  Determine whether the given cursor represents a preprocessing
   ##  element, such as a preprocessor directive or macro instantiation.
-proc isUnexposed*(argCXCursorKind: CXCursorKind): cuint {.cdecl, dynlib: libclang,
+proc isUnexposed*(argCXCursorKind: CXCursorKind): cuint {.cdecl,
     importc: "clang_isUnexposed".}
   ##
   ##  Determine whether the given cursor represents a currently
@@ -1498,7 +1483,7 @@ type
     lkUniqueExternal, ##  This is the linkage for entities with external linkage that live
                      ##  in C++ anonymous namespaces.
     lkExternal                ##  This is the linkage for entities with true, external linkage.
-proc getCursorLinkage*(cursor: CXCursor): CXLinkageKind {.cdecl, dynlib: libclang,
+proc getCursorLinkage*(cursor: CXCursor): CXLinkageKind {.cdecl,
     importc: "clang_getCursorLinkage".}
   ##  Determine the linkage of the entity referred to by a given cursor.
 type
@@ -1509,7 +1494,7 @@ type
     vkProtected,              ##  Symbol seen by the linker but resolves to a symbol inside this object.
     vkDefault                 ##  Symbol seen by the linker and acts like a normal symbol.
 proc getCursorVisibility*(cursor: CXCursor): CXVisibilityKind {.cdecl,
-    dynlib: libclang, importc: "clang_getCursorVisibility".}
+    importc: "clang_getCursorVisibility".}
   ##  Describe the visibility of the entity referred to by a cursor.
   ##  This returns the default visibility if not explicitly specified by
   ##  a visibility attribute. The default visibility may be changed by
@@ -1519,7 +1504,7 @@ proc getCursorVisibility*(cursor: CXCursor): CXVisibilityKind {.cdecl,
   ##
   ##  The visibility of the cursor.
 proc getCursorAvailability*(cursor: CXCursor): CXAvailabilityKind {.cdecl,
-    dynlib: libclang, importc: "clang_getCursorAvailability".}
+    importc: "clang_getCursorAvailability".}
   ##  Determine the availability of the entity that this cursor refers to,
   ##  taking the current target platform into account.
   ## **cursor**
@@ -1541,7 +1526,7 @@ proc getCursorPlatformAvailability*(cursor: CXCursor; always_deprecated: ptr[cin
                                    unavailable_message: ptr[CXString];
                                    availability: ptr[CXPlatformAvailability];
                                    availability_size: cint): cint {.cdecl,
-    dynlib: libclang, importc: "clang_getCursorPlatformAvailability".}
+    importc: "clang_getCursorPlatformAvailability".}
   ##  Determine the availability of the entity that this cursor refers to
   ##  on any platforms for which availability information is known.
   ## **cursor**
@@ -1577,48 +1562,48 @@ proc getCursorPlatformAvailability*(cursor: CXCursor; always_deprecated: ptr[cin
   ##  platform-availability structures returned. There are
   ##  availability_size) such structures.
 proc disposeCXPlatformAvailability*(availability: ptr[CXPlatformAvailability]): void {.
-    cdecl, dynlib: libclang, importc: "clang_disposeCXPlatformAvailability".}
+    cdecl, importc: "clang_disposeCXPlatformAvailability".}
   ##  Free the memory associated with a
   ##  structure.
 type
   CXLanguageKind* = enum        ##  Describe the "language" of the entity referred to by a cursor.
     lakInvalid = 0, lakC, lakObjC, lakCPlusPlus
-proc getCursorLanguage*(cursor: CXCursor): CXLanguageKind {.cdecl, dynlib: libclang,
+proc getCursorLanguage*(cursor: CXCursor): CXLanguageKind {.cdecl,
     importc: "clang_getCursorLanguage".}
   ##  Determine the "language" of the entity referred to by a given cursor.
 type
   CXTLSKind* = enum ##  Describe the "thread-local storage (TLS) kind" of the declaration
                  ##  referred to by a cursor.
     tlskNone = 0, tlskDynamic, tlskStatic
-proc getCursorTLSKind*(cursor: CXCursor): CXTLSKind {.cdecl, dynlib: libclang,
+proc getCursorTLSKind*(cursor: CXCursor): CXTLSKind {.cdecl,
     importc: "clang_getCursorTLSKind".}
   ##  Determine the "thread-local storage (TLS) kind" of the declaration
   ##  referred to by a cursor.
 proc getTranslationUnit*(argCXCursor: CXCursor): CXTranslationUnit {.cdecl,
-    dynlib: libclang, importc: "clang_Cursor_getTranslationUnit".}
+    importc: "clang_Cursor_getTranslationUnit".}
   ##  Returns the translation unit that a cursor originated from.
 type
   CXCursorSetImpl* {.pure, bycopy.} = object
 
 type
   CXCursorSet* = distinct ptr[CXCursorSetImpl]
-proc createCXCursorSet*(): CXCursorSet {.cdecl, dynlib: libclang,
+proc createCXCursorSet*(): CXCursorSet {.cdecl,
                                       importc: "clang_createCXCursorSet".}
   ##  Creates an empty CXCursorSet.
-proc disposeCXCursorSet*(cset: CXCursorSet): void {.cdecl, dynlib: libclang,
+proc disposeCXCursorSet*(cset: CXCursorSet): void {.cdecl,
     importc: "clang_disposeCXCursorSet".}
   ##  Disposes a CXCursorSet and releases its associated memory.
-proc contains*(cset: CXCursorSet; cursor: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc contains*(cset: CXCursorSet; cursor: CXCursor): cuint {.cdecl,
     importc: "clang_CXCursorSet_contains".}
   ##  Queries a CXCursorSet to see if it contains a specific CXCursor.
   ##
   ##  non-zero if the set contains the specified cursor.
-proc insert*(cset: CXCursorSet; cursor: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc insert*(cset: CXCursorSet; cursor: CXCursor): cuint {.cdecl,
     importc: "clang_CXCursorSet_insert".}
   ##  Inserts a CXCursor into a CXCursorSet.
   ##
   ##  zero if the CXCursor was already in the set, and non-zero otherwise.
-proc getCursorSemanticParent*(cursor: CXCursor): CXCursor {.cdecl, dynlib: libclang,
+proc getCursorSemanticParent*(cursor: CXCursor): CXCursor {.cdecl,
     importc: "clang_getCursorSemanticParent".}
   ##  Determine the semantic parent of the given cursor.
   ##  The semantic parent of a cursor is the cursor that semantically contains
@@ -1647,7 +1632,7 @@ proc getCursorSemanticParent*(cursor: CXCursor): CXCursor {.cdecl, dynlib: libcl
   ##  and the lexical context of the second
   ##  is the translation unit.
   ##  For global declarations, the semantic parent is the translation unit.
-proc getCursorLexicalParent*(cursor: CXCursor): CXCursor {.cdecl, dynlib: libclang,
+proc getCursorLexicalParent*(cursor: CXCursor): CXCursor {.cdecl,
     importc: "clang_getCursorLexicalParent".}
   ##  Determine the lexical parent of the given cursor.
   ##  The lexical parent of a cursor is the cursor in which the given
@@ -1678,7 +1663,7 @@ proc getCursorLexicalParent*(cursor: CXCursor): CXCursor {.cdecl, dynlib: libcla
   ##  the translation unit.
 proc getOverriddenCursors*(cursor: CXCursor; overridden: ptr[ptr[CXCursor]];
                           num_overridden: ptr[cuint]): void {.cdecl,
-    dynlib: libclang, importc: "clang_getOverriddenCursors".}
+    importc: "clang_getOverriddenCursors".}
   ##  Determine the set of methods that are overridden by the given
   ##  method.
   ##  In both Objective-C and C++, a method (aka virtual member function,
@@ -1717,15 +1702,15 @@ proc getOverriddenCursors*(cursor: CXCursor; overridden: ptr[ptr[CXCursor]];
   ##  functions, will be set to the number of overridden functions in the
   ##  array pointed to by
 proc disposeOverriddenCursors*(overridden: ptr[CXCursor]): void {.cdecl,
-    dynlib: libclang, importc: "clang_disposeOverriddenCursors".}
+    importc: "clang_disposeOverriddenCursors".}
   ##  Free the set of overridden cursors returned by
-proc getIncludedFile*(cursor: CXCursor): CXFile {.cdecl, dynlib: libclang,
+proc getIncludedFile*(cursor: CXCursor): CXFile {.cdecl,
     importc: "clang_getIncludedFile".}
   ##  Retrieve the file that is included by the given inclusion directive
   ##  cursor.
 proc getCursor*(argCXTranslationUnit: CXTranslationUnit;
                argCXSourceLocation: CXSourceLocation): CXCursor {.cdecl,
-    dynlib: libclang, importc: "clang_getCursor".}
+    importc: "clang_getCursor".}
   ##  Map a source location to the cursor that describes the entity at that
   ##  location in the source code.
   ##  clang_getCursor() maps an arbitrary source location within a translation
@@ -1740,7 +1725,7 @@ proc getCursor*(argCXTranslationUnit: CXTranslationUnit;
   ##  a cursor representing the entity at the given source location, or
   ##  a NULL cursor if no such entity can be found.
 proc getCursorLocation*(argCXCursor: CXCursor): CXSourceLocation {.cdecl,
-    dynlib: libclang, importc: "clang_getCursorLocation".}
+    importc: "clang_getCursorLocation".}
   ##  Retrieve the physical location of the source constructor referenced
   ##  by the given cursor.
   ##  The location of a declaration is typically the location of the name of that
@@ -1749,7 +1734,7 @@ proc getCursorLocation*(argCXCursor: CXCursor): CXSourceLocation {.cdecl,
   ##  The location of a reference is where that reference occurs within the
   ##  source code.
 proc getCursorExtent*(argCXCursor: CXCursor): CXSourceRange {.cdecl,
-    dynlib: libclang, importc: "clang_getCursorExtent".}
+    importc: "clang_getCursorExtent".}
   ##  Retrieve the physical extent of the source construct referenced by
   ##  the given cursor.
   ##  The extent of a cursor starts with the file/line/column pointing at the
@@ -1823,25 +1808,25 @@ type
     kind*: CXTypeKind
     data*: array[2, pointer]
 
-proc getCursorType*(c: CXCursor): CXType {.cdecl, dynlib: libclang,
+proc getCursorType*(c: CXCursor): CXType {.cdecl,
                                        importc: "clang_getCursorType".}
   ##  Retrieve the type of a CXCursor (if any).
-proc getTypeSpelling*(cT: CXType): CXString {.cdecl, dynlib: libclang,
+proc getTypeSpelling*(cT: CXType): CXString {.cdecl,
     importc: "clang_getTypeSpelling".}
   ##  Pretty-print the underlying type using the rules of the
   ##  language of the translation unit from which it came.
   ##  If the type is invalid, an empty string is returned.
-proc getTypedefDeclUnderlyingType*(c: CXCursor): CXType {.cdecl, dynlib: libclang,
+proc getTypedefDeclUnderlyingType*(c: CXCursor): CXType {.cdecl,
     importc: "clang_getTypedefDeclUnderlyingType".}
   ##  Retrieve the underlying type of a typedef declaration.
   ##  If the cursor does not reference a typedef declaration, an invalid type is
   ##  returned.
-proc getEnumDeclIntegerType*(c: CXCursor): CXType {.cdecl, dynlib: libclang,
+proc getEnumDeclIntegerType*(c: CXCursor): CXType {.cdecl,
     importc: "clang_getEnumDeclIntegerType".}
   ##  Retrieve the integer type of an enum declaration.
   ##  If the cursor does not reference an enum declaration, an invalid type is
   ##  returned.
-proc getEnumConstantDeclValue*(c: CXCursor): clonglong {.cdecl, dynlib: libclang,
+proc getEnumConstantDeclValue*(c: CXCursor): clonglong {.cdecl,
     importc: "clang_getEnumConstantDeclValue".}
   ##  Retrieve the integer value of an enum constant declaration as a signed
   ##   long long.
@@ -1849,23 +1834,23 @@ proc getEnumConstantDeclValue*(c: CXCursor): clonglong {.cdecl, dynlib: libclang
   ##  Since this is also potentially a valid constant value, the kind of the cursor
   ##  must be verified before calling this function.
 proc getEnumConstantDeclUnsignedValue*(c: CXCursor): culonglong {.cdecl,
-    dynlib: libclang, importc: "clang_getEnumConstantDeclUnsignedValue".}
+    importc: "clang_getEnumConstantDeclUnsignedValue".}
   ##  Retrieve the integer value of an enum constant declaration as an unsigned
   ##   long long.
   ##  If the cursor does not reference an enum constant declaration, ULLONG_MAX is returned.
   ##  Since this is also potentially a valid constant value, the kind of the cursor
   ##  must be verified before calling this function.
-proc getFieldDeclBitWidth*(c: CXCursor): cint {.cdecl, dynlib: libclang,
+proc getFieldDeclBitWidth*(c: CXCursor): cint {.cdecl,
     importc: "clang_getFieldDeclBitWidth".}
   ##  Retrieve the bit width of a bit field declaration as an integer.
   ##  If a cursor that is not a bit field declaration is passed in, -1 is returned.
-proc getNumArguments*(c: CXCursor): cint {.cdecl, dynlib: libclang,
+proc getNumArguments*(c: CXCursor): cint {.cdecl,
                                        importc: "clang_Cursor_getNumArguments".}
   ##  Retrieve the number of non-variadic arguments associated with a given
   ##  cursor.
   ##  The number of arguments can be determined for calls as well as for
   ##  declarations of functions or methods. For other cursors -1 is returned.
-proc getArgument*(c: CXCursor; i: cuint): CXCursor {.cdecl, dynlib: libclang,
+proc getArgument*(c: CXCursor; i: cuint): CXCursor {.cdecl,
     importc: "clang_Cursor_getArgument".}
   ##  Retrieve the argument cursor of a function or method.
   ##  The argument cursor can be determined for calls as well as for declarations
@@ -1877,7 +1862,7 @@ type
                               ##  element descriptions.
     takNull, takType, takDeclaration, takNullPtr, takIntegral, takTemplate,
     takTemplateExpansion, takExpression, takPack, takInvalid
-proc getNumTemplateArguments*(c: CXCursor): cint {.cdecl, dynlib: libclang,
+proc getNumTemplateArguments*(c: CXCursor): cint {.cdecl,
     importc: "clang_Cursor_getNumTemplateArguments".}
   ## Returns the number of template args of a function decl representing a
   ##  template specialization.
@@ -1897,7 +1882,7 @@ proc getNumTemplateArguments*(c: CXCursor): cint {.cdecl, dynlib: libclang,
   ##  The value 3 would be returned from this call.
 
 proc getTemplateArgumentKind*(c: CXCursor; i: cuint): CXTemplateArgumentKind {.cdecl,
-    dynlib: libclang, importc: "clang_Cursor_getTemplateArgumentKind".}
+    importc: "clang_Cursor_getTemplateArgumentKind".}
   ##  Retrieve the kind of the I'th template argument of the CXCursor C.
   ##  If the argument CXCursor does not represent a FunctionDecl, an invalid
   ##  template argument kind is returned.
@@ -1914,7 +1899,7 @@ proc getTemplateArgumentKind*(c: CXCursor; i: cuint): CXTemplateArgumentKind {.c
   ##
   ##  For I = 0, 1, and 2, Type, Integral, and Integral will be returned,
   ##  respectively.
-proc getTemplateArgumentType*(c: CXCursor; i: cuint): CXType {.cdecl, dynlib: libclang,
+proc getTemplateArgumentType*(c: CXCursor; i: cuint): CXType {.cdecl,
     importc: "clang_Cursor_getTemplateArgumentType".}
   ##  Retrieve a CXType representing the type of a TemplateArgument of a
   ##   function decl representing a template specialization.
@@ -1934,7 +1919,7 @@ proc getTemplateArgumentType*(c: CXCursor; i: cuint): CXType {.cdecl, dynlib: li
   ##  If called with I = 0, "float", will be returned.
   ##  Invalid types will be returned for I == 1 or 2.
 proc getTemplateArgumentValue*(c: CXCursor; i: cuint): clonglong {.cdecl,
-    dynlib: libclang, importc: "clang_Cursor_getTemplateArgumentValue".}
+    importc: "clang_Cursor_getTemplateArgumentValue".}
   ##  Retrieve the value of an Integral TemplateArgument (of a function
   ##   decl representing a template specialization) as a signed long long.
   ##  It is undefined to call this function on a CXCursor that does not represent a
@@ -1952,7 +1937,7 @@ proc getTemplateArgumentValue*(c: CXCursor; i: cuint): clonglong {.cdecl,
   ##  If called with I = 1 or 2, -7 or true will be returned, respectively.
   ##  For I == 0, this function's behavior is undefined.
 proc getTemplateArgumentUnsignedValue*(c: CXCursor; i: cuint): culonglong {.cdecl,
-    dynlib: libclang, importc: "clang_Cursor_getTemplateArgumentUnsignedValue".}
+    importc: "clang_Cursor_getTemplateArgumentUnsignedValue".}
   ##  Retrieve the value of an Integral TemplateArgument (of a function
   ##   decl representing a template specialization) as an unsigned long long.
   ##  It is undefined to call this function on a CXCursor that does not represent a
@@ -1969,150 +1954,150 @@ proc getTemplateArgumentUnsignedValue*(c: CXCursor; i: cuint): culonglong {.cdec
   ##
   ##  If called with I = 1 or 2, 2147483649 or true will be returned, respectively.
   ##  For I == 0, this function's behavior is undefined.
-proc equalTypes*(a: CXType; b: CXType): cuint {.cdecl, dynlib: libclang,
+proc equalTypes*(a: CXType; b: CXType): cuint {.cdecl,
     importc: "clang_equalTypes".}
   ##  Determine whether two CXTypes represent the same type.
   ##
   ##  non-zero if the CXTypes represent the same type and
   ##           zero otherwise.
-proc getCanonicalType*(t: CXType): CXType {.cdecl, dynlib: libclang,
+proc getCanonicalType*(t: CXType): CXType {.cdecl,
                                         importc: "clang_getCanonicalType".}
   ##  Return the canonical type for a CXType.
   ##  Clang's type system explicitly models typedefs and all the ways
   ##  a specific type can be represented.  The canonical type is the underlying
   ##  type with all the "sugar" removed.  For example, if 'T' is a typedef
   ##  for 'int', the canonical type for 'T' would be 'int'.
-proc isConstQualifiedType*(t: CXType): cuint {.cdecl, dynlib: libclang,
+proc isConstQualifiedType*(t: CXType): cuint {.cdecl,
     importc: "clang_isConstQualifiedType".}
   ##  Determine whether a CXType has the "const" qualifier set,
   ##  without looking through typedefs that may have added "const" at a
   ##  different level.
-proc isMacroFunctionLike*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc isMacroFunctionLike*(c: CXCursor): cuint {.cdecl,
     importc: "clang_Cursor_isMacroFunctionLike".}
   ##  Determine whether a  CXCursor that is a macro, is
   ##  function like.
-proc isMacroBuiltin*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc isMacroBuiltin*(c: CXCursor): cuint {.cdecl,
                                        importc: "clang_Cursor_isMacroBuiltin".}
   ##  Determine whether a  CXCursor that is a macro, is a
   ##  builtin one.
-proc isFunctionInlined*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc isFunctionInlined*(c: CXCursor): cuint {.cdecl,
     importc: "clang_Cursor_isFunctionInlined".}
   ##  Determine whether a  CXCursor that is a function declaration, is an
   ##  inline declaration.
-proc isVolatileQualifiedType*(t: CXType): cuint {.cdecl, dynlib: libclang,
+proc isVolatileQualifiedType*(t: CXType): cuint {.cdecl,
     importc: "clang_isVolatileQualifiedType".}
   ##  Determine whether a CXType has the "volatile" qualifier set,
   ##  without looking through typedefs that may have added "volatile" at
   ##  a different level.
-proc isRestrictQualifiedType*(t: CXType): cuint {.cdecl, dynlib: libclang,
+proc isRestrictQualifiedType*(t: CXType): cuint {.cdecl,
     importc: "clang_isRestrictQualifiedType".}
   ##  Determine whether a CXType has the "restrict" qualifier set,
   ##  without looking through typedefs that may have added "restrict" at a
   ##  different level.
-proc getAddressSpace*(t: CXType): cuint {.cdecl, dynlib: libclang,
+proc getAddressSpace*(t: CXType): cuint {.cdecl,
                                       importc: "clang_getAddressSpace".}
   ##  Returns the address space of the given type.
-proc getTypedefName*(cT: CXType): CXString {.cdecl, dynlib: libclang,
+proc getTypedefName*(cT: CXType): CXString {.cdecl,
     importc: "clang_getTypedefName".}
   ##  Returns the typedef name of the given type.
-proc getPointeeType*(t: CXType): CXType {.cdecl, dynlib: libclang,
+proc getPointeeType*(t: CXType): CXType {.cdecl,
                                       importc: "clang_getPointeeType".}
   ##  For pointer types, returns the type of the pointee.
-proc getTypeDeclaration*(t: CXType): CXCursor {.cdecl, dynlib: libclang,
+proc getTypeDeclaration*(t: CXType): CXCursor {.cdecl,
     importc: "clang_getTypeDeclaration".}
   ##  Return the cursor for the declaration of the given type.
-proc getDeclObjCTypeEncoding*(c: CXCursor): CXString {.cdecl, dynlib: libclang,
+proc getDeclObjCTypeEncoding*(c: CXCursor): CXString {.cdecl,
     importc: "clang_getDeclObjCTypeEncoding".}
   ##  Returns the Objective-C type encoding for the specified declaration.
-proc getObjCEncoding*(cxtype: CXType): CXString {.cdecl, dynlib: libclang,
+proc getObjCEncoding*(cxtype: CXType): CXString {.cdecl,
     importc: "clang_Type_getObjCEncoding".}
   ##  Returns the Objective-C type encoding for the specified CXType.
-proc getTypeKindSpelling*(k: CXTypeKind): CXString {.cdecl, dynlib: libclang,
+proc getTypeKindSpelling*(k: CXTypeKind): CXString {.cdecl,
     importc: "clang_getTypeKindSpelling".}
   ##  Retrieve the spelling of a given CXTypeKind.
-proc getFunctionTypeCallingConv*(t: CXType): CXCallingConv {.cdecl, dynlib: libclang,
+proc getFunctionTypeCallingConv*(t: CXType): CXCallingConv {.cdecl,
     importc: "clang_getFunctionTypeCallingConv".}
   ##  Retrieve the calling convention associated with a function type.
   ##  If a non-function type is passed in, CXCallingConv_Invalid is returned.
-proc getResultType*(t: CXType): CXType {.cdecl, dynlib: libclang,
+proc getResultType*(t: CXType): CXType {.cdecl,
                                      importc: "clang_getResultType".}
   ##  Retrieve the return type associated with a function type.
   ##  If a non-function type is passed in, an invalid type is returned.
-proc getExceptionSpecificationType*(t: CXType): cint {.cdecl, dynlib: libclang,
+proc getExceptionSpecificationType*(t: CXType): cint {.cdecl,
     importc: "clang_getExceptionSpecificationType".}
   ##  Retrieve the exception specification type associated with a function type.
   ##  This is a value of type CXCursor_ExceptionSpecificationKind.
   ##  If a non-function type is passed in, an error code of -1 is returned.
-proc getNumArgTypes*(t: CXType): cint {.cdecl, dynlib: libclang,
+proc getNumArgTypes*(t: CXType): cint {.cdecl,
                                     importc: "clang_getNumArgTypes".}
   ##  Retrieve the number of non-variadic parameters associated with a
   ##  function type.
   ##  If a non-function type is passed in, -1 is returned.
-proc getArgType*(t: CXType; i: cuint): CXType {.cdecl, dynlib: libclang,
+proc getArgType*(t: CXType; i: cuint): CXType {.cdecl,
     importc: "clang_getArgType".}
   ##  Retrieve the type of a parameter of a function type.
   ##  If a non-function type is passed in or the function does not have enough
   ##  parameters, an invalid type is returned.
-proc getObjCObjectBaseType*(t: CXType): CXType {.cdecl, dynlib: libclang,
+proc getObjCObjectBaseType*(t: CXType): CXType {.cdecl,
     importc: "clang_Type_getObjCObjectBaseType".}
   ##  Retrieves the base type of the ObjCObjectType.
   ##  If the type is not an ObjC object, an invalid type is returned.
-proc getNumObjCProtocolRefs*(t: CXType): cuint {.cdecl, dynlib: libclang,
+proc getNumObjCProtocolRefs*(t: CXType): cuint {.cdecl,
     importc: "clang_Type_getNumObjCProtocolRefs".}
   ##  Retrieve the number of protocol references associated with an ObjC object/id.
   ##  If the type is not an ObjC object, 0 is returned.
-proc getObjCProtocolDecl*(t: CXType; i: cuint): CXCursor {.cdecl, dynlib: libclang,
+proc getObjCProtocolDecl*(t: CXType; i: cuint): CXCursor {.cdecl,
     importc: "clang_Type_getObjCProtocolDecl".}
   ##  Retrieve the decl for a protocol reference for an ObjC object/id.
   ##  If the type is not an ObjC object or there are not enough protocol
   ##  references, an invalid cursor is returned.
-proc getNumObjCTypeArgs*(t: CXType): cuint {.cdecl, dynlib: libclang,
+proc getNumObjCTypeArgs*(t: CXType): cuint {.cdecl,
     importc: "clang_Type_getNumObjCTypeArgs".}
   ##  Retreive the number of type arguments associated with an ObjC object.
   ##  If the type is not an ObjC object, 0 is returned.
-proc getObjCTypeArg*(t: CXType; i: cuint): CXType {.cdecl, dynlib: libclang,
+proc getObjCTypeArg*(t: CXType; i: cuint): CXType {.cdecl,
     importc: "clang_Type_getObjCTypeArg".}
   ##  Retrieve a type argument associated with an ObjC object.
   ##  If the type is not an ObjC or the index is not valid,
   ##  an invalid type is returned.
-proc isFunctionTypeVariadic*(t: CXType): cuint {.cdecl, dynlib: libclang,
+proc isFunctionTypeVariadic*(t: CXType): cuint {.cdecl,
     importc: "clang_isFunctionTypeVariadic".}
   ##  Return 1 if the CXType is a variadic function type, and 0 otherwise.
-proc getCursorResultType*(c: CXCursor): CXType {.cdecl, dynlib: libclang,
+proc getCursorResultType*(c: CXCursor): CXType {.cdecl,
     importc: "clang_getCursorResultType".}
   ##  Retrieve the return type associated with a given cursor.
   ##  This only returns a valid type if the cursor refers to a function or method.
 proc getCursorExceptionSpecificationType*(c: CXCursor): cint {.cdecl,
-    dynlib: libclang, importc: "clang_getCursorExceptionSpecificationType".}
+    importc: "clang_getCursorExceptionSpecificationType".}
   ##  Retrieve the exception specification type associated with a given cursor.
   ##  This is a value of type CXCursor_ExceptionSpecificationKind.
   ##  This only returns a valid result if the cursor refers to a function or method.
-proc isPODType*(t: CXType): cuint {.cdecl, dynlib: libclang, importc: "clang_isPODType".}
+proc isPODType*(t: CXType): cuint {.cdecl, importc: "clang_isPODType".}
   ##  Return 1 if the CXType is a POD (plain old data) type, and 0
   ##   otherwise.
-proc getElementType*(t: CXType): CXType {.cdecl, dynlib: libclang,
+proc getElementType*(t: CXType): CXType {.cdecl,
                                       importc: "clang_getElementType".}
   ##  Return the element type of an array, complex, or vector type.
   ##  If a type is passed in that is not an array, complex, or vector type,
   ##  an invalid type is returned.
-proc getNumElements*(t: CXType): clonglong {.cdecl, dynlib: libclang,
+proc getNumElements*(t: CXType): clonglong {.cdecl,
     importc: "clang_getNumElements".}
   ##  Return the number of elements of an array or vector type.
   ##  If a type is passed in that is not an array or vector type,
   ##  -1 is returned.
-proc getArrayElementType*(t: CXType): CXType {.cdecl, dynlib: libclang,
+proc getArrayElementType*(t: CXType): CXType {.cdecl,
     importc: "clang_getArrayElementType".}
   ##  Return the element type of an array type.
   ##  If a non-array type is passed in, an invalid type is returned.
-proc getArraySize*(t: CXType): clonglong {.cdecl, dynlib: libclang,
+proc getArraySize*(t: CXType): clonglong {.cdecl,
                                        importc: "clang_getArraySize".}
   ##  Return the array size of a constant array.
   ##  If a non-array type is passed in, -1 is returned.
-proc getNamedType*(t: CXType): CXType {.cdecl, dynlib: libclang,
+proc getNamedType*(t: CXType): CXType {.cdecl,
                                     importc: "clang_Type_getNamedType".}
   ##  Retrieve the type named by the qualified-id.
   ##  If a non-elaborated type is passed in, an invalid type is returned.
-proc isTransparentTagTypedef*(t: CXType): cuint {.cdecl, dynlib: libclang,
+proc isTransparentTagTypedef*(t: CXType): cuint {.cdecl,
     importc: "clang_Type_isTransparentTagTypedef".}
   ##  Determine if a typedef is 'transparent' tag.
   ##  A typedef is considered 'transparent' if it shares a name and spelling
@@ -2128,7 +2113,7 @@ type
                      ##  can't conclude anything about the nullability of the type even
                      ##  though it has been considered.
     tnkInvalid = 3              ##  Nullability is not applicable to this type.
-proc getNullability*(t: CXType): CXTypeNullabilityKind {.cdecl, dynlib: libclang,
+proc getNullability*(t: CXType): CXTypeNullabilityKind {.cdecl,
     importc: "clang_Type_getNullability".}
   ##  Retrieve the nullability kind of a pointer type.
 type
@@ -2142,7 +2127,7 @@ type
     tleNotConstantSize = 4,     ##  The type is not a constant size type.
     tleInvalidFieldName = 5,    ##  The Field name is not valid for this record.
     tleUndeduced = 6            ##  The type is undeduced.
-proc getAlignOf*(t: CXType): clonglong {.cdecl, dynlib: libclang,
+proc getAlignOf*(t: CXType): clonglong {.cdecl,
                                      importc: "clang_Type_getAlignOf".}
   ##  Return the alignment of a type in bytes as per C++[expr.alignof]
   ##    standard.
@@ -2153,11 +2138,11 @@ proc getAlignOf*(t: CXType): clonglong {.cdecl, dynlib: libclang,
   ##    returned.
   ##  If the type declaration is not a constant size type,
   ##    CXTypeLayoutError_NotConstantSize is returned.
-proc getClassType*(t: CXType): CXType {.cdecl, dynlib: libclang,
+proc getClassType*(t: CXType): CXType {.cdecl,
                                     importc: "clang_Type_getClassType".}
   ##  Return the class type of an member pointer type.
   ##  If a non-member-pointer type is passed in, an invalid type is returned.
-proc getSizeOf*(t: CXType): clonglong {.cdecl, dynlib: libclang,
+proc getSizeOf*(t: CXType): clonglong {.cdecl,
                                     importc: "clang_Type_getSizeOf".}
   ##  Return the size of a type in bytes as per C++[expr.sizeof] standard.
   ##  If the type declaration is invalid, CXTypeLayoutError_Invalid is returned.
@@ -2165,7 +2150,7 @@ proc getSizeOf*(t: CXType): clonglong {.cdecl, dynlib: libclang,
   ##    is returned.
   ##  If the type declaration is a dependent type, CXTypeLayoutError_Dependent is
   ##    returned.
-proc getOffsetOf*(t: CXType; s: cstring): clonglong {.cdecl, dynlib: libclang,
+proc getOffsetOf*(t: CXType; s: cstring): clonglong {.cdecl,
     importc: "clang_Type_getOffsetOf".}
   ##  Return the offset of a field named S in a record of type T in bits
   ##    as it would be returned by __offsetof__ as per C++11[18.2p4]
@@ -2177,11 +2162,11 @@ proc getOffsetOf*(t: CXType; s: cstring): clonglong {.cdecl, dynlib: libclang,
   ##    CXTypeLayoutError_Dependent is returned.
   ##  If the field's name S is not found,
   ##    CXTypeLayoutError_InvalidFieldName is returned.
-proc getModifiedType*(t: CXType): CXType {.cdecl, dynlib: libclang,
+proc getModifiedType*(t: CXType): CXType {.cdecl,
                                        importc: "clang_Type_getModifiedType".}
   ##  Return the type that was modified by this attributed type.
   ##  If the type is not an attributed type, an invalid type is returned.
-proc getOffsetOfField*(c: CXCursor): clonglong {.cdecl, dynlib: libclang,
+proc getOffsetOfField*(c: CXCursor): clonglong {.cdecl,
     importc: "clang_Cursor_getOffsetOfField".}
   ##  Return the offset of the field represented by the Cursor.
   ##  If the cursor is not a field declaration, -1 is returned.
@@ -2193,15 +2178,15 @@ proc getOffsetOfField*(c: CXCursor): clonglong {.cdecl, dynlib: libclang,
   ##    CXTypeLayoutError_Dependent is returned.
   ##  If the field's name S is not found,
   ##    CXTypeLayoutError_InvalidFieldName is returned.
-proc isAnonymous*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc isAnonymous*(c: CXCursor): cuint {.cdecl,
                                     importc: "clang_Cursor_isAnonymous".}
   ##  Determine whether the given cursor represents an anonymous
   ##  tag or namespace
-proc isAnonymousRecordDecl*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc isAnonymousRecordDecl*(c: CXCursor): cuint {.cdecl,
     importc: "clang_Cursor_isAnonymousRecordDecl".}
   ##  Determine whether the given cursor represents an anonymous record
   ##  declaration.
-proc isInlineNamespace*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc isInlineNamespace*(c: CXCursor): cuint {.cdecl,
     importc: "clang_Cursor_isInlineNamespace".}
   ##  Determine whether the given cursor represents an inline namespace
   ##  declaration.
@@ -2210,27 +2195,27 @@ type
     rqkNone = 0,                ##  No ref-qualifier was provided.
     rqkLValue,                ##  An lvalue ref-qualifier was provided (
     rqkRValue                 ##  An rvalue ref-qualifier was provided (
-proc getNumTemplateArguments*(t: CXType): cint {.cdecl, dynlib: libclang,
+proc getNumTemplateArguments*(t: CXType): cint {.cdecl,
     importc: "clang_Type_getNumTemplateArguments".}
   ##  Returns the number of template arguments for given template
   ##  specialization, or -1 if type
   ##  is not a template specialization.
-proc getTemplateArgumentAsType*(t: CXType; i: cuint): CXType {.cdecl, dynlib: libclang,
+proc getTemplateArgumentAsType*(t: CXType; i: cuint): CXType {.cdecl,
     importc: "clang_Type_getTemplateArgumentAsType".}
   ##  Returns the type template argument of a template class specialization
   ##  at given index.
   ##  This function only returns template type arguments and does not handle
   ##  template template arguments or variadic packs.
-proc getRefQualifier*(t: CXType): CXRefQualifierKind {.cdecl, dynlib: libclang,
+proc getRefQualifier*(t: CXType): CXRefQualifierKind {.cdecl,
     importc: "clang_Type_getCXXRefQualifier".}
   ##  Retrieve the ref-qualifier kind of a function or method.
   ##  The ref-qualifier is returned for C++ functions or methods. For other types
   ##  or non-C++ declarations, CXRefQualifier_None is returned.
-proc isBitField*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc isBitField*(c: CXCursor): cuint {.cdecl,
                                    importc: "clang_Cursor_isBitField".}
   ##  Returns non-zero if the cursor specifies a Record member that is a
   ##    bitfield.
-proc isVirtualBase*(argCXCursor: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc isVirtualBase*(argCXCursor: CXCursor): cuint {.cdecl,
     importc: "clang_isVirtualBase".}
   ##  Returns 1 if the base class specified by the cursor with kind
   ##    CX_CXXBaseSpecifier is virtual.
@@ -2239,7 +2224,7 @@ type
                              ##  cursor with kind CX_CXXBaseSpecifier.
     asInvalidAccessSpecifier, asPublic, asProtected, asPrivate
 proc getAccessSpecifier*(argCXCursor: CXCursor): CX_AccessSpecifier {.cdecl,
-    dynlib: libclang, importc: "clang_getCXXAccessSpecifier".}
+    importc: "clang_getCXXAccessSpecifier".}
   ##  Returns the access control level for the referenced object.
   ##  If the cursor refers to a C++ declaration, its access control level within its
   ##  parent scope is returned. Otherwise, if the cursor refers to a base specifier or
@@ -2250,11 +2235,11 @@ type
     scC_Invalid, scC_None, scC_Extern, scC_Static, scC_PrivateExtern,
     scC_OpenCLWorkGroupLocal, scC_Auto, scC_Register
 proc getStorageClass*(argCXCursor: CXCursor): CX_StorageClass {.cdecl,
-    dynlib: libclang, importc: "clang_Cursor_getStorageClass".}
+    importc: "clang_Cursor_getStorageClass".}
   ##  Returns the storage class for a function or variable declaration.
   ##  If the passed in Cursor is not a function or variable declaration,
   ##  CX_SC_Invalid is returned else the storage class.
-proc getNumOverloadedDecls*(cursor: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc getNumOverloadedDecls*(cursor: CXCursor): cuint {.cdecl,
     importc: "clang_getNumOverloadedDecls".}
   ##  Determine the number of overloaded declarations referenced by a
   ##  cursor.
@@ -2266,7 +2251,7 @@ proc getNumOverloadedDecls*(cursor: CXCursor): cuint {.cdecl, dynlib: libclang,
   ##  is not a
   ##  cursor, returns 0.
 proc getOverloadedDecl*(cursor: CXCursor; index: cuint): CXCursor {.cdecl,
-    dynlib: libclang, importc: "clang_getOverloadedDecl".}
+    importc: "clang_getOverloadedDecl".}
   ##  Retrieve a cursor for one of the overloaded declarations referenced
   ##  by a
   ##  cursor.
@@ -2282,7 +2267,7 @@ proc getOverloadedDecl*(cursor: CXCursor; index: cuint): CXCursor {.cdecl,
   ##  associated set of overloaded declarations, or if the index is out of bounds,
   ##  returns
 proc getIBOutletCollectionType*(argCXCursor: CXCursor): CXType {.cdecl,
-    dynlib: libclang, importc: "clang_getIBOutletCollectionType".}
+    importc: "clang_getIBOutletCollectionType".}
   ##  For cursors representing an iboutletcollection attribute,
   ##   this function returns the collection element type.
 type
@@ -2299,7 +2284,7 @@ type
   CXCursorVisitor* = distinct proc (a0: CXCursor; a1: CXCursor; a2: pointer): CXChildVisitResult {.
       cdecl.}
 proc visitChildren*(parent: CXCursor; visitor: CXCursorVisitor;
-                   client_data: CXClientData): cuint {.cdecl, dynlib: libclang,
+                   client_data: CXClientData): cuint {.cdecl,
     importc: "clang_visitChildren".}
   ##  Visit the children of a particular cursor.
   ##  This function visits all the direct children of the given cursor,
@@ -2321,7 +2306,7 @@ proc visitChildren*(parent: CXCursor; visitor: CXCursorVisitor;
   ##
   ##  a non-zero value if the traversal was terminated
   ##  prematurely by the visitor returning
-proc getCursorUSR*(argCXCursor: CXCursor): CXString {.cdecl, dynlib: libclang,
+proc getCursorUSR*(argCXCursor: CXCursor): CXString {.cdecl,
     importc: "clang_getCursorUSR".}
   ##  Retrieve a Unified Symbol Resolution (USR) for the entity referenced
   ##  by the given cursor.
@@ -2330,32 +2315,32 @@ proc getCursorUSR*(argCXCursor: CXCursor): CXString {.cdecl, dynlib: libclang,
   ##  compared across translation units to determine, e.g., when references in
   ##  one translation refer to an entity defined in another translation unit.
 proc constructUSR_ObjCClass*(class_name: cstring): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_constructUSR_ObjCClass".}
+    importc: "clang_constructUSR_ObjCClass".}
   ##  Construct a USR for a specified Objective-C class.
 proc constructUSR_ObjCCategory*(class_name: cstring; category_name: cstring): CXString {.
-    cdecl, dynlib: libclang, importc: "clang_constructUSR_ObjCCategory".}
+    cdecl, importc: "clang_constructUSR_ObjCCategory".}
   ##  Construct a USR for a specified Objective-C category.
 proc constructUSR_ObjCProtocol*(protocol_name: cstring): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_constructUSR_ObjCProtocol".}
+    importc: "clang_constructUSR_ObjCProtocol".}
   ##  Construct a USR for a specified Objective-C protocol.
 proc constructUSR_ObjCIvar*(name: cstring; classUSR: CXString): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_constructUSR_ObjCIvar".}
+    importc: "clang_constructUSR_ObjCIvar".}
   ##  Construct a USR for a specified Objective-C instance variable and
   ##    the USR for its containing class.
 proc constructUSR_ObjCMethod*(name: cstring; isInstanceMethod: cuint;
                              classUSR: CXString): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_constructUSR_ObjCMethod".}
+    importc: "clang_constructUSR_ObjCMethod".}
   ##  Construct a USR for a specified Objective-C method and
   ##    the USR for its containing class.
 proc constructUSR_ObjCProperty*(property: cstring; classUSR: CXString): CXString {.
-    cdecl, dynlib: libclang, importc: "clang_constructUSR_ObjCProperty".}
+    cdecl, importc: "clang_constructUSR_ObjCProperty".}
   ##  Construct a USR for a specified Objective-C property and the USR
   ##   for its containing class.
-proc getCursorSpelling*(argCXCursor: CXCursor): CXString {.cdecl, dynlib: libclang,
+proc getCursorSpelling*(argCXCursor: CXCursor): CXString {.cdecl,
     importc: "clang_getCursorSpelling".}
   ##  Retrieve a name for the entity referenced by this cursor.
 proc getSpellingNameRange*(argCXCursor: CXCursor; pieceIndex: cuint; options: cuint): CXSourceRange {.
-    cdecl, dynlib: libclang, importc: "clang_Cursor_getSpellingNameRange".}
+    cdecl, importc: "clang_Cursor_getSpellingNameRange".}
   ##  Retrieve a range for a piece that forms the cursors spelling name.
   ##  Most of the times there is only one range for the complete spelling but for
   ##  Objective-C methods and Objective-C message expressions, there are multiple
@@ -2383,21 +2368,21 @@ type
     pppIncludeNewlines, pppMSVCFormatting, pppConstantsAsWritten,
     pppSuppressImplicitBase, pppFullyQualifiedName
 proc getProperty*(policy: CXPrintingPolicy; property: CXPrintingPolicyProperty): cuint {.
-    cdecl, dynlib: libclang, importc: "clang_PrintingPolicy_getProperty".}
+    cdecl, importc: "clang_PrintingPolicy_getProperty".}
   ##  Get a property value for the given printing policy.
 proc setProperty*(policy: CXPrintingPolicy; property: CXPrintingPolicyProperty;
-                 value: cuint): void {.cdecl, dynlib: libclang,
+                 value: cuint): void {.cdecl,
                                     importc: "clang_PrintingPolicy_setProperty".}
   ##  Set a property value for the given printing policy.
 proc getCursorPrintingPolicy*(argCXCursor: CXCursor): CXPrintingPolicy {.cdecl,
-    dynlib: libclang, importc: "clang_getCursorPrintingPolicy".}
+    importc: "clang_getCursorPrintingPolicy".}
   ##  Retrieve the default policy for the cursor.
   ##  The policy should be released after use with
-proc dispose*(policy: CXPrintingPolicy): void {.cdecl, dynlib: libclang,
+proc dispose*(policy: CXPrintingPolicy): void {.cdecl,
     importc: "clang_PrintingPolicy_dispose".}
   ##  Release a printing policy.
 proc getCursorPrettyPrinted*(cursor: CXCursor; policy: CXPrintingPolicy): CXString {.
-    cdecl, dynlib: libclang, importc: "clang_getCursorPrettyPrinted".}
+    cdecl, importc: "clang_getCursorPrettyPrinted".}
   ##  Pretty print declarations.
   ## **Cursor**
   ##  The cursor representing a declaration.
@@ -2408,12 +2393,12 @@ proc getCursorPrettyPrinted*(cursor: CXCursor; policy: CXPrintingPolicy): CXStri
   ##  The pretty printed declaration or the empty string for
   ##  other cursors.
 proc getCursorDisplayName*(argCXCursor: CXCursor): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_getCursorDisplayName".}
+    importc: "clang_getCursorDisplayName".}
   ##  Retrieve the display name for the entity referenced by this cursor.
   ##  The display name contains extra information that helps identify the cursor,
   ##  such as the parameters of a function or template or the arguments of a
   ##  class template specialization.
-proc getCursorReferenced*(argCXCursor: CXCursor): CXCursor {.cdecl, dynlib: libclang,
+proc getCursorReferenced*(argCXCursor: CXCursor): CXCursor {.cdecl,
     importc: "clang_getCursorReferenced".}
   ##  For a cursor that is a reference, retrieve a cursor representing the
   ##  entity that it references.
@@ -2423,7 +2408,7 @@ proc getCursorReferenced*(argCXCursor: CXCursor): CXCursor {.cdecl, dynlib: libc
   ##  cursor for the superclass reference. If the input cursor is a declaration or
   ##  definition, it returns that declaration or definition unchanged.
   ##  Otherwise, returns the NULL cursor.
-proc getCursorDefinition*(argCXCursor: CXCursor): CXCursor {.cdecl, dynlib: libclang,
+proc getCursorDefinition*(argCXCursor: CXCursor): CXCursor {.cdecl,
     importc: "clang_getCursorDefinition".}
   ##   For a cursor that is either a reference to or a declaration
   ##   of some entity, retrieve a cursor that describes the definition of
@@ -2442,11 +2427,11 @@ proc getCursorDefinition*(argCXCursor: CXCursor): CXCursor {.cdecl, dynlib: libc
   ##   If given a cursor for which there is no corresponding definition,
   ##   e.g., because there is no definition of that entity within this
   ##   translation unit, returns a NULL cursor.
-proc isCursorDefinition*(argCXCursor: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc isCursorDefinition*(argCXCursor: CXCursor): cuint {.cdecl,
     importc: "clang_isCursorDefinition".}
   ##  Determine whether the declaration pointed to by this cursor
   ##  is also a definition of that entity.
-proc getCanonicalCursor*(argCXCursor: CXCursor): CXCursor {.cdecl, dynlib: libclang,
+proc getCanonicalCursor*(argCXCursor: CXCursor): CXCursor {.cdecl,
     importc: "clang_getCanonicalCursor".}
   ##  Retrieve the canonical cursor corresponding to the given cursor.
   ##  In the C family of languages, many kinds of entities can be declared several
@@ -2462,7 +2447,7 @@ proc getCanonicalCursor*(argCXCursor: CXCursor): CXCursor {.cdecl, dynlib: libcl
   ##  comparing their canonical cursors.
   ##
   ##  The canonical cursor for the entity referred to by the given cursor.
-proc getObjCSelectorIndex*(argCXCursor: CXCursor): cint {.cdecl, dynlib: libclang,
+proc getObjCSelectorIndex*(argCXCursor: CXCursor): cint {.cdecl,
     importc: "clang_Cursor_getObjCSelectorIndex".}
   ##  If the cursor points to a selector identifier in an Objective-C
   ##  method or message expression, this returns the selector index.
@@ -2472,7 +2457,7 @@ proc getObjCSelectorIndex*(argCXCursor: CXCursor): cint {.cdecl, dynlib: libclan
   ##  The selector index if the cursor is an Objective-C method or message
   ##  expression and the cursor is pointing to a selector identifier, or -1
   ##  otherwise.
-proc isDynamicCall*(c: CXCursor): cint {.cdecl, dynlib: libclang,
+proc isDynamicCall*(c: CXCursor): cint {.cdecl,
                                      importc: "clang_Cursor_isDynamicCall".}
   ##  Given a cursor pointing to a C++ method call or an Objective-C
   ##  message, returns non-zero if the method/message is "dynamic", meaning:
@@ -2481,7 +2466,7 @@ proc isDynamicCall*(c: CXCursor): cint {.cdecl, dynlib: libclang,
   ##  or a specific class.
   ##  If the method/message is "static" or the cursor does not point to a
   ##  method/message, it will return zero.
-proc getReceiverType*(c: CXCursor): CXType {.cdecl, dynlib: libclang,
+proc getReceiverType*(c: CXCursor): CXType {.cdecl,
     importc: "clang_Cursor_getReceiverType".}
   ##  Given a cursor pointing to an Objective-C message or property
   ##  reference, or C++ method call, returns the CXType of the receiver.
@@ -2492,16 +2477,16 @@ type
     ocpaksetter = 128, ocpakatomic = 256, ocpakweak = 512, ocpakstrong = 1024,
     ocpakunsafe_unretained = 2048, ocpakclass = 4096
 proc getObjCPropertyAttributes*(c: CXCursor; reserved: cuint): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_Cursor_getObjCPropertyAttributes".}
+    importc: "clang_Cursor_getObjCPropertyAttributes".}
   ##  Given a cursor that represents a property declaration, return the
   ##  associated property attributes. The bits are formed from
   ## **reserved**
   ##  Reserved for future use, pass 0.
-proc getObjCPropertyGetterName*(c: CXCursor): CXString {.cdecl, dynlib: libclang,
+proc getObjCPropertyGetterName*(c: CXCursor): CXString {.cdecl,
     importc: "clang_Cursor_getObjCPropertyGetterName".}
   ##  Given a cursor that represents a property declaration, return the
   ##  name of the method that implements the getter.
-proc getObjCPropertySetterName*(c: CXCursor): CXString {.cdecl, dynlib: libclang,
+proc getObjCPropertySetterName*(c: CXCursor): CXString {.cdecl,
     importc: "clang_Cursor_getObjCPropertySetterName".}
   ##  Given a cursor that represents a property declaration, return the
   ##  name of the method that implements the setter, if any.
@@ -2510,13 +2495,13 @@ type
                                ##  Objective-C method declarations.
     ocdqkNone = 0, ocdqkIn = 1, ocdqkInout = 2, ocdqkOut = 4, ocdqkBycopy = 8, ocdqkByref = 16,
     ocdqkOneway = 32
-proc getObjCDeclQualifiers*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc getObjCDeclQualifiers*(c: CXCursor): cuint {.cdecl,
     importc: "clang_Cursor_getObjCDeclQualifiers".}
   ##  Given a cursor that represents an Objective-C method or parameter
   ##  declaration, return the associated Objective-C qualifiers for the return
   ##  type or the parameter respectively. The bits are formed from
   ##  CXObjCDeclQualifierKind.
-proc isObjCOptional*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc isObjCOptional*(c: CXCursor): cuint {.cdecl,
                                        importc: "clang_Cursor_isObjCOptional".}
   ##  Given a cursor that represents an Objective-C method or property
   ##  declaration, return non-zero if the declaration was affected by "
@@ -2525,12 +2510,12 @@ proc isObjCOptional*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
   ##  Returns zero if the cursor is not such a declaration or it is "
   ##
   ## required".
-proc isVariadic*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc isVariadic*(c: CXCursor): cuint {.cdecl,
                                    importc: "clang_Cursor_isVariadic".}
   ##  Returns non-zero if the given cursor is a variadic function or method.
 proc isExternalSymbol*(c: CXCursor; language: ptr[CXString];
                       definedIn: ptr[CXString]; isGenerated: ptr[cuint]): cuint {.
-    cdecl, dynlib: libclang, importc: "clang_Cursor_isExternalSymbol".}
+    cdecl, importc: "clang_Cursor_isExternalSymbol".}
   ##  Returns non-zero if the given cursor points to a symbol marked with
   ##  external_source_symbol attribute.
   ## **language**
@@ -2542,68 +2527,68 @@ proc isExternalSymbol*(c: CXCursor; language: ptr[CXString];
   ## **isGenerated**
   ##  If non-NULL, and the attribute is present, will be set to
   ##  non-zero if the 'generated_declaration' is set in the attribute.
-proc getCommentRange*(c: CXCursor): CXSourceRange {.cdecl, dynlib: libclang,
+proc getCommentRange*(c: CXCursor): CXSourceRange {.cdecl,
     importc: "clang_Cursor_getCommentRange".}
   ##  Given a cursor that represents a declaration, return the associated
   ##  comment's source range.  The range may include multiple consecutive comments
   ##  with whitespace in between.
-proc getRawCommentText*(c: CXCursor): CXString {.cdecl, dynlib: libclang,
+proc getRawCommentText*(c: CXCursor): CXString {.cdecl,
     importc: "clang_Cursor_getRawCommentText".}
   ##  Given a cursor that represents a declaration, return the associated
   ##  comment text, including comment markers.
-proc getBriefCommentText*(c: CXCursor): CXString {.cdecl, dynlib: libclang,
+proc getBriefCommentText*(c: CXCursor): CXString {.cdecl,
     importc: "clang_Cursor_getBriefCommentText".}
   ##  Given a cursor that represents a documentable entity (e.g.,
   ##  declaration), return the associated
   ##
   ##  first paragraph.
-proc getMangling*(argCXCursor: CXCursor): CXString {.cdecl, dynlib: libclang,
+proc getMangling*(argCXCursor: CXCursor): CXString {.cdecl,
     importc: "clang_Cursor_getMangling".}
   ##  Retrieve the CXString representing the mangled name of the cursor.
 proc getManglings*(argCXCursor: CXCursor): ptr[CXStringSet] {.cdecl,
-    dynlib: libclang, importc: "clang_Cursor_getCXXManglings".}
+    importc: "clang_Cursor_getCXXManglings".}
   ##  Retrieve the CXStrings representing the mangled symbols of the C++
   ##  constructor or destructor at the cursor.
 proc getObjCManglings*(argCXCursor: CXCursor): ptr[CXStringSet] {.cdecl,
-    dynlib: libclang, importc: "clang_Cursor_getObjCManglings".}
+    importc: "clang_Cursor_getObjCManglings".}
   ##  Retrieve the CXStrings representing the mangled symbols of the ObjC
   ##  class interface or implementation at the cursor.
 type
   CXModule* = distinct pointer
-proc getModule*(c: CXCursor): CXModule {.cdecl, dynlib: libclang,
+proc getModule*(c: CXCursor): CXModule {.cdecl,
                                      importc: "clang_Cursor_getModule".}
   ##  Given a CXCursor_ModuleImportDecl cursor, return the associated module.
 proc getModuleForFile*(argCXTranslationUnit: CXTranslationUnit; argCXFile: CXFile): CXModule {.
-    cdecl, dynlib: libclang, importc: "clang_getModuleForFile".}
+    cdecl, importc: "clang_getModuleForFile".}
   ##  Given a CXFile header file, return the module that contains it, if one
   ##  exists.
-proc getASTFile*(module: CXModule): CXFile {.cdecl, dynlib: libclang,
+proc getASTFile*(module: CXModule): CXFile {.cdecl,
     importc: "clang_Module_getASTFile".}
   ## **Module**
   ##  a module object.
   ##
   ##  the module file where the provided module object came from.
-proc getParent*(module: CXModule): CXModule {.cdecl, dynlib: libclang,
+proc getParent*(module: CXModule): CXModule {.cdecl,
     importc: "clang_Module_getParent".}
   ## **Module**
   ##  a module object.
   ##
   ##  the parent of a sub-module or NULL if the given module is top-level,
   ##  e.g. for 'std.vector' it will return the 'std' module.
-proc getName*(module: CXModule): CXString {.cdecl, dynlib: libclang,
+proc getName*(module: CXModule): CXString {.cdecl,
                                         importc: "clang_Module_getName".}
   ## **Module**
   ##  a module object.
   ##
   ##  the name of the module, e.g. for the 'std.vector' sub-module it
   ##  will return "vector".
-proc getFullName*(module: CXModule): CXString {.cdecl, dynlib: libclang,
+proc getFullName*(module: CXModule): CXString {.cdecl,
     importc: "clang_Module_getFullName".}
   ## **Module**
   ##  a module object.
   ##
   ##  the full name of the module, e.g. "std.vector".
-proc isSystem*(module: CXModule): cint {.cdecl, dynlib: libclang,
+proc isSystem*(module: CXModule): cint {.cdecl,
                                      importc: "clang_Module_isSystem".}
   ## **Module**
   ##  a module object.
@@ -2611,14 +2596,14 @@ proc isSystem*(module: CXModule): cint {.cdecl, dynlib: libclang,
   ##  non-zero if the module is a system one.
 proc module_getNumTopLevelHeaders*(argCXTranslationUnit: CXTranslationUnit;
                                   module: CXModule): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_Module_getNumTopLevelHeaders".}
+    importc: "clang_Module_getNumTopLevelHeaders".}
   ## **Module**
   ##  a module object.
   ##
   ##  the number of top level headers associated with this module.
 proc module_getTopLevelHeader*(argCXTranslationUnit: CXTranslationUnit;
                               module: CXModule; index: cuint): CXFile {.cdecl,
-    dynlib: libclang, importc: "clang_Module_getTopLevelHeader".}
+    importc: "clang_Module_getTopLevelHeader".}
   ## **Module**
   ##  a module object.
   ## **Index**
@@ -2626,48 +2611,48 @@ proc module_getTopLevelHeader*(argCXTranslationUnit: CXTranslationUnit;
   ##
   ##  the specified top level header associated with the module.
 proc constructor_isConvertingConstructor*(c: CXCursor): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_CXXConstructor_isConvertingConstructor".}
+    importc: "clang_CXXConstructor_isConvertingConstructor".}
   ##  Determine if a C++ constructor is a converting constructor.
-proc constructor_isCopyConstructor*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc constructor_isCopyConstructor*(c: CXCursor): cuint {.cdecl,
     importc: "clang_CXXConstructor_isCopyConstructor".}
   ##  Determine if a C++ constructor is a copy constructor.
 proc constructor_isDefaultConstructor*(c: CXCursor): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_CXXConstructor_isDefaultConstructor".}
+    importc: "clang_CXXConstructor_isDefaultConstructor".}
   ##  Determine if a C++ constructor is the default constructor.
-proc constructor_isMoveConstructor*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc constructor_isMoveConstructor*(c: CXCursor): cuint {.cdecl,
     importc: "clang_CXXConstructor_isMoveConstructor".}
   ##  Determine if a C++ constructor is a move constructor.
-proc field_isMutable*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc field_isMutable*(c: CXCursor): cuint {.cdecl,
     importc: "clang_CXXField_isMutable".}
   ##  Determine if a C++ field is declared 'mutable'.
-proc method_isDefaulted*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc method_isDefaulted*(c: CXCursor): cuint {.cdecl,
     importc: "clang_CXXMethod_isDefaulted".}
   ##  Determine if a C++ method is declared '= default'.
-proc method_isPureVirtual*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc method_isPureVirtual*(c: CXCursor): cuint {.cdecl,
     importc: "clang_CXXMethod_isPureVirtual".}
   ##  Determine if a C++ member function or member function template is
   ##  pure virtual.
-proc method_isStatic*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc method_isStatic*(c: CXCursor): cuint {.cdecl,
     importc: "clang_CXXMethod_isStatic".}
   ##  Determine if a C++ member function or member function template is
   ##  declared 'static'.
-proc method_isVirtual*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc method_isVirtual*(c: CXCursor): cuint {.cdecl,
     importc: "clang_CXXMethod_isVirtual".}
   ##  Determine if a C++ member function or member function template is
   ##  explicitly declared 'virtual' or if it overrides a virtual method from
   ##  one of the base classes.
-proc record_isAbstract*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc record_isAbstract*(c: CXCursor): cuint {.cdecl,
     importc: "clang_CXXRecord_isAbstract".}
   ##  Determine if a C++ record is abstract, i.e. whether a class or struct
   ##  has a pure virtual member function.
-proc enumDecl_isScoped*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc enumDecl_isScoped*(c: CXCursor): cuint {.cdecl,
     importc: "clang_EnumDecl_isScoped".}
   ##  Determine if an enum declaration refers to a scoped enum.
-proc method_isConst*(c: CXCursor): cuint {.cdecl, dynlib: libclang,
+proc method_isConst*(c: CXCursor): cuint {.cdecl,
     importc: "clang_CXXMethod_isConst".}
   ##  Determine if a C++ member function or member function template is
   ##  declared 'const'.
-proc getTemplateCursorKind*(c: CXCursor): CXCursorKind {.cdecl, dynlib: libclang,
+proc getTemplateCursorKind*(c: CXCursor): CXCursorKind {.cdecl,
     importc: "clang_getTemplateCursorKind".}
   ##  Given a cursor that represents a template, determine
   ##  the cursor kind of the specializations would be generated by instantiating
@@ -2684,7 +2669,7 @@ proc getTemplateCursorKind*(c: CXCursor): CXCursorKind {.cdecl, dynlib: libclang
   ##  by instantiating the template
   ##  If
   ##  is not a template, returns
-proc getSpecializedCursorTemplate*(c: CXCursor): CXCursor {.cdecl, dynlib: libclang,
+proc getSpecializedCursorTemplate*(c: CXCursor): CXCursor {.cdecl,
     importc: "clang_getSpecializedCursorTemplate".}
   ##  Given a cursor that may represent a specialization or instantiation
   ##  of a template, retrieve the cursor that represents the template that it
@@ -2713,7 +2698,7 @@ proc getSpecializedCursorTemplate*(c: CXCursor): CXCursor {.cdecl, dynlib: libcl
   ##  template or a member thereof, the template or member that it specializes or
   ##  from which it was instantiated. Otherwise, returns a NULL cursor.
 proc getCursorReferenceNameRange*(c: CXCursor; nameFlags: cuint; pieceIndex: cuint): CXSourceRange {.
-    cdecl, dynlib: libclang, importc: "clang_getCursorReferenceNameRange".}
+    cdecl, importc: "clang_getCursorReferenceNameRange".}
   ##  Given a cursor that references something else, return the source range
   ##  covering that reference.
   ## **C**
@@ -2759,7 +2744,7 @@ type
     ptr_data*: pointer
 
 proc getToken*(tU: CXTranslationUnit; location: CXSourceLocation): ptr[CXToken] {.
-    cdecl, dynlib: libclang, importc: "clang_getToken".}
+    cdecl, importc: "clang_getToken".}
   ##  Get the raw lexical token starting with the given location.
   ## **TU**
   ##  the translation unit whose text is being tokenized.
@@ -2769,23 +2754,23 @@ proc getToken*(tU: CXTranslationUnit; location: CXSourceLocation): ptr[CXToken] 
   ##  The token starting with the given location or NULL if no such token
   ##  exist. The returned pointer must be freed with clang_disposeTokens before the
   ##  translation unit is destroyed.
-proc getTokenKind*(argCXToken: CXToken): CXTokenKind {.cdecl, dynlib: libclang,
+proc getTokenKind*(argCXToken: CXToken): CXTokenKind {.cdecl,
     importc: "clang_getTokenKind".}
   ##  Determine the kind of the given token.
 proc getTokenSpelling*(argCXTranslationUnit: CXTranslationUnit; argCXToken: CXToken): CXString {.
-    cdecl, dynlib: libclang, importc: "clang_getTokenSpelling".}
+    cdecl, importc: "clang_getTokenSpelling".}
   ##  Determine the spelling of the given token.
   ##  The spelling of a token is the textual representation of that token, e.g.,
   ##  the text of an identifier or keyword.
 proc getTokenLocation*(argCXTranslationUnit: CXTranslationUnit; argCXToken: CXToken): CXSourceLocation {.
-    cdecl, dynlib: libclang, importc: "clang_getTokenLocation".}
+    cdecl, importc: "clang_getTokenLocation".}
   ##  Retrieve the source location of the given token.
 proc getTokenExtent*(argCXTranslationUnit: CXTranslationUnit; argCXToken: CXToken): CXSourceRange {.
-    cdecl, dynlib: libclang, importc: "clang_getTokenExtent".}
+    cdecl, importc: "clang_getTokenExtent".}
   ##  Retrieve a source range that covers the given token.
 proc tokenize*(tU: CXTranslationUnit; cxrange: CXSourceRange;
               tokens: ptr[ptr[CXToken]]; numTokens: ptr[cuint]): void {.cdecl,
-    dynlib: libclang, importc: "clang_tokenize".}
+    importc: "clang_tokenize".}
   ##  Tokenize the source code described by the given range into raw
   ##  lexical tokens.
   ## **TU**
@@ -2801,7 +2786,7 @@ proc tokenize*(tU: CXTranslationUnit; cxrange: CXSourceRange;
   ##  will be set to the number of tokens in the
   ##  array.
 proc annotateTokens*(tU: CXTranslationUnit; tokens: ptr[CXToken]; numTokens: cuint;
-                    cursors: ptr[CXCursor]): void {.cdecl, dynlib: libclang,
+                    cursors: ptr[CXCursor]): void {.cdecl,
     importc: "clang_annotateTokens".}
   ##  Annotate the given set of tokens by providing cursors for each token
   ##  that can be mapped to a specific entity within the abstract syntax tree.
@@ -2830,9 +2815,9 @@ proc annotateTokens*(tU: CXTranslationUnit; tokens: ptr[CXToken]; numTokens: cui
   ##  cursors, whose contents will be
   ##  replaced with the cursors corresponding to each token.
 proc disposeTokens*(tU: CXTranslationUnit; tokens: ptr[CXToken]; numTokens: cuint): void {.
-    cdecl, dynlib: libclang, importc: "clang_disposeTokens".}
+    cdecl, importc: "clang_disposeTokens".}
   ##  Free the given set of tokens.
-proc getCursorKindSpelling*(kind: CXCursorKind): CXString {.cdecl, dynlib: libclang,
+proc getCursorKindSpelling*(kind: CXCursorKind): CXString {.cdecl,
     importc: "clang_getCursorKindSpelling".}
   ##
   ##  These routines are used for testing and debugging, only, and should not
@@ -2843,11 +2828,11 @@ proc getDefinitionSpellingAndExtent*(argCXCursor: CXCursor; startBuf: cstringArr
                                     endBuf: cstringArray; startLine: ptr[cuint];
                                     startColumn: ptr[cuint]; endLine: ptr[cuint];
                                     endColumn: ptr[cuint]): void {.cdecl,
-    dynlib: libclang, importc: "clang_getDefinitionSpellingAndExtent".}
-proc enableStackTraces*(): void {.cdecl, dynlib: libclang,
+    importc: "clang_getDefinitionSpellingAndExtent".}
+proc enableStackTraces*(): void {.cdecl,
                                importc: "clang_enableStackTraces".}
 proc executeOnThread*(fn: proc (a0: pointer): void {.cdecl.}; user_data: pointer;
-                     stack_size: cuint): void {.cdecl, dynlib: libclang,
+                     stack_size: cuint): void {.cdecl,
     importc: "clang_executeOnThread".}
 type
   CXCompletionString* = distinct pointer
@@ -2952,7 +2937,7 @@ type
                     ##  perform indentation.
 proc getCompletionChunkKind*(completion_string: CXCompletionString;
                             chunk_number: cuint): CXCompletionChunkKind {.cdecl,
-    dynlib: libclang, importc: "clang_getCompletionChunkKind".}
+    importc: "clang_getCompletionChunkKind".}
   ##  Determine the kind of a particular chunk within a completion string.
   ## **completion_string**
   ##  the completion string to query.
@@ -2962,7 +2947,7 @@ proc getCompletionChunkKind*(completion_string: CXCompletionString;
   ##  the kind of the chunk at the index
 proc getCompletionChunkText*(completion_string: CXCompletionString;
                             chunk_number: cuint): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_getCompletionChunkText".}
+    importc: "clang_getCompletionChunkText".}
   ##  Retrieve the text associated with a particular chunk within a
   ##  completion string.
   ## **completion_string**
@@ -2973,7 +2958,7 @@ proc getCompletionChunkText*(completion_string: CXCompletionString;
   ##  the text associated with the chunk at index
 proc getCompletionChunkCompletionString*(completion_string: CXCompletionString;
                                         chunk_number: cuint): CXCompletionString {.
-    cdecl, dynlib: libclang, importc: "clang_getCompletionChunkCompletionString".}
+    cdecl, importc: "clang_getCompletionChunkCompletionString".}
   ##  Retrieve the completion string associated with a particular chunk
   ##  within a completion string.
   ## **completion_string**
@@ -2983,10 +2968,10 @@ proc getCompletionChunkCompletionString*(completion_string: CXCompletionString;
   ##
   ##  the completion string associated with the chunk at index
 proc getNumCompletionChunks*(completion_string: CXCompletionString): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_getNumCompletionChunks".}
+    importc: "clang_getNumCompletionChunks".}
   ##  Retrieve the number of chunks in the given code-completion string.
 proc getCompletionPriority*(completion_string: CXCompletionString): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_getCompletionPriority".}
+    importc: "clang_getCompletionPriority".}
   ##  Determine the priority of this code completion.
   ##  The priority of a code completion indicates how likely it is that this
   ##  particular completion is the completion that the user will select. The
@@ -2997,7 +2982,7 @@ proc getCompletionPriority*(completion_string: CXCompletionString): cuint {.cdec
   ##  The priority of this completion string. Smaller values indicate
   ##  higher-priority (more likely) completions.
 proc getCompletionAvailability*(completion_string: CXCompletionString): CXAvailabilityKind {.
-    cdecl, dynlib: libclang, importc: "clang_getCompletionAvailability".}
+    cdecl, importc: "clang_getCompletionAvailability".}
   ##  Determine the availability of the entity that this code-completion
   ##  string refers to.
   ## **completion_string**
@@ -3005,7 +2990,7 @@ proc getCompletionAvailability*(completion_string: CXCompletionString): CXAvaila
   ##
   ##  The availability of the completion string.
 proc getCompletionNumAnnotations*(completion_string: CXCompletionString): cuint {.
-    cdecl, dynlib: libclang, importc: "clang_getCompletionNumAnnotations".}
+    cdecl, importc: "clang_getCompletionNumAnnotations".}
   ##  Retrieve the number of annotations associated with the given
   ##  completion string.
   ## **completion_string**
@@ -3015,7 +3000,7 @@ proc getCompletionNumAnnotations*(completion_string: CXCompletionString): cuint 
   ##  string.
 proc getCompletionAnnotation*(completion_string: CXCompletionString;
                              annotation_number: cuint): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_getCompletionAnnotation".}
+    importc: "clang_getCompletionAnnotation".}
   ##  Retrieve the annotation associated with the given completion string.
   ## **completion_string**
   ##  the completion string to query.
@@ -3027,7 +3012,7 @@ proc getCompletionAnnotation*(completion_string: CXCompletionString;
   ##  or a NULL string if that annotation is not available.
 proc getCompletionParent*(completion_string: CXCompletionString;
                          kind: ptr[CXCursorKind]): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_getCompletionParent".}
+    importc: "clang_getCompletionParent".}
   ##  Retrieve the parent context of the given completion string.
   ##  The parent context of a completion string is the semantic parent of
   ##  the declaration (if any) that the code completion represents. For example,
@@ -3042,11 +3027,11 @@ proc getCompletionParent*(completion_string: CXCompletionString;
   ##  The name of the completion parent, e.g., "NSObject" if
   ##  the completion string represents a method in the NSObject class.
 proc getCompletionBriefComment*(completion_string: CXCompletionString): CXString {.
-    cdecl, dynlib: libclang, importc: "clang_getCompletionBriefComment".}
+    cdecl, importc: "clang_getCompletionBriefComment".}
   ##  Retrieve the brief documentation comment attached to the declaration
   ##  that corresponds to the given completion string.
 proc getCursorCompletionString*(cursor: CXCursor): CXCompletionString {.cdecl,
-    dynlib: libclang, importc: "clang_getCursorCompletionString".}
+    importc: "clang_getCursorCompletionString".}
   ##  Retrieve a completion string for an arbitrary declaration or macro
   ##  definition cursor.
   ## **cursor**
@@ -3061,7 +3046,7 @@ type
 
 proc getCompletionNumFixIts*(results: ptr[CXCodeCompleteResults];
                             completion_index: cuint): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_getCompletionNumFixIts".}
+    importc: "clang_getCompletionNumFixIts".}
   ##  Retrieve the number of fix-its for the given completion index.
   ##  Calling this makes sense only if CXCodeComplete_IncludeCompletionsWithFixIts
   ##  option was set.
@@ -3075,7 +3060,7 @@ proc getCompletionNumFixIts*(results: ptr[CXCodeCompleteResults];
 proc getCompletionFixIt*(results: ptr[CXCodeCompleteResults];
                         completion_index: cuint; fixit_index: cuint;
                         replacement_range: ptr[CXSourceRange]): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_getCompletionFixIt".}
+    importc: "clang_getCompletionFixIt".}
   ##  Fix-its that *must* be applied before inserting the text for the
   ##  corresponding completion.
   ##  By default, clang_codeCompleteAt() only returns completions with empty
@@ -3180,7 +3165,7 @@ type
     cocNaturalLanguage = 2097152, ##  Natural language completions should be included in the results.
     cocIncludedFile = 4194304,  ##  #include file completions should be included in the results.
     cocUnknown                ##  The current context is unknown, so set all contexts.
-proc defaultCodeCompleteOptions*(): cuint {.cdecl, dynlib: libclang,
+proc defaultCodeCompleteOptions*(): cuint {.cdecl,
     importc: "clang_defaultCodeCompleteOptions".}
   ##  Returns a default set of code-completion options that can be
   ##  passed to
@@ -3188,7 +3173,7 @@ proc codeCompleteAt*(tU: CXTranslationUnit; complete_filename: cstring;
                     complete_line: cuint; complete_column: cuint;
                     unsaved_files: ptr[CXUnsavedFile]; num_unsaved_files: cuint;
                     options: cuint): ptr[CXCodeCompleteResults] {.cdecl,
-    dynlib: libclang, importc: "clang_codeCompleteAt".}
+    importc: "clang_codeCompleteAt".}
   ##  Perform code completion at a given location in a translation unit.
   ##  This function performs code completion at a particular file, line, and
   ##  column within source code, providing results that suggest potential
@@ -3259,7 +3244,7 @@ proc codeCompleteAt*(tU: CXTranslationUnit; complete_filename: cstring;
   ##  If code
   ##  completion fails, returns NULL.
 proc sortCodeCompletionResults*(results: ptr[CXCompletionResult]; numResults: cuint): void {.
-    cdecl, dynlib: libclang, importc: "clang_sortCodeCompletionResults".}
+    cdecl, importc: "clang_sortCodeCompletionResults".}
   ##  Sort the code-completion results in case-insensitive alphabetical
   ##  order.
   ## **Results**
@@ -3267,14 +3252,14 @@ proc sortCodeCompletionResults*(results: ptr[CXCompletionResult]; numResults: cu
   ## **NumResults**
   ##  The number of results in
 proc disposeCodeCompleteResults*(results: ptr[CXCodeCompleteResults]): void {.cdecl,
-    dynlib: libclang, importc: "clang_disposeCodeCompleteResults".}
+    importc: "clang_disposeCodeCompleteResults".}
   ##  Free the given set of code-completion results.
 proc codeCompleteGetNumDiagnostics*(results: ptr[CXCodeCompleteResults]): cuint {.
-    cdecl, dynlib: libclang, importc: "clang_codeCompleteGetNumDiagnostics".}
+    cdecl, importc: "clang_codeCompleteGetNumDiagnostics".}
   ##  Determine the number of diagnostics produced prior to the
   ##  location where code completion was performed.
 proc codeCompleteGetDiagnostic*(results: ptr[CXCodeCompleteResults]; index: cuint): CXDiagnostic {.
-    cdecl, dynlib: libclang, importc: "clang_codeCompleteGetDiagnostic".}
+    cdecl, importc: "clang_codeCompleteGetDiagnostic".}
   ##  Retrieve a diagnostic associated with the given code completion.
   ## **Results**
   ##  the code completion results to query.
@@ -3284,7 +3269,7 @@ proc codeCompleteGetDiagnostic*(results: ptr[CXCodeCompleteResults]; index: cuin
   ##  the requested diagnostic. This diagnostic must be freed
   ##  via a call to
 proc codeCompleteGetContexts*(results: ptr[CXCodeCompleteResults]): culonglong {.
-    cdecl, dynlib: libclang, importc: "clang_codeCompleteGetContexts".}
+    cdecl, importc: "clang_codeCompleteGetContexts".}
   ##  Determines what completions are appropriate for the context
   ##  the given code completion.
   ## **Results**
@@ -3294,7 +3279,7 @@ proc codeCompleteGetContexts*(results: ptr[CXCodeCompleteResults]): culonglong {
   ##  along with the given code completion results.
 proc codeCompleteGetContainerKind*(results: ptr[CXCodeCompleteResults];
                                   isIncomplete: ptr[cuint]): CXCursorKind {.cdecl,
-    dynlib: libclang, importc: "clang_codeCompleteGetContainerKind".}
+    importc: "clang_codeCompleteGetContainerKind".}
   ##  Returns the cursor kind for the container for the current code
   ##  completion context. The container is only guaranteed to be set for
   ##  contexts where a container exists (i.e. member accesses or Objective-C
@@ -3310,7 +3295,7 @@ proc codeCompleteGetContainerKind*(results: ptr[CXCodeCompleteResults];
   ##  the container kind, or CXCursor_InvalidCode if there is not a
   ##  container
 proc codeCompleteGetContainerUSR*(results: ptr[CXCodeCompleteResults]): CXString {.
-    cdecl, dynlib: libclang, importc: "clang_codeCompleteGetContainerUSR".}
+    cdecl, importc: "clang_codeCompleteGetContainerUSR".}
   ##  Returns the USR for the container for the current code completion
   ##  context. If there is not a container for the current context, this
   ##  function will return the empty string.
@@ -3319,7 +3304,7 @@ proc codeCompleteGetContainerUSR*(results: ptr[CXCodeCompleteResults]): CXString
   ##
   ##  the USR for the container
 proc codeCompleteGetObjCSelector*(results: ptr[CXCodeCompleteResults]): CXString {.
-    cdecl, dynlib: libclang, importc: "clang_codeCompleteGetObjCSelector".}
+    cdecl, importc: "clang_codeCompleteGetObjCSelector".}
   ##  Returns the currently-entered selector for an Objective-C message
   ##  send, formatted like "initWithFoo:bar:". Only guaranteed to return a
   ##  non-empty string for CXCompletionContext_ObjCInstanceMessage and
@@ -3329,11 +3314,11 @@ proc codeCompleteGetObjCSelector*(results: ptr[CXCodeCompleteResults]): CXString
   ##
   ##  the selector (or partial selector) that has been entered thus far
   ##  for an Objective-C message send.
-proc getClangVersion*(): CXString {.cdecl, dynlib: libclang,
+proc getClangVersion*(): CXString {.cdecl,
                                  importc: "clang_getClangVersion".}
   ##  Return a version string, suitable for showing to a user, but not
   ##         intended to be parsed (the format is not guaranteed to be stable).
-proc toggleCrashRecovery*(isEnabled: cuint): void {.cdecl, dynlib: libclang,
+proc toggleCrashRecovery*(isEnabled: cuint): void {.cdecl,
     importc: "clang_toggleCrashRecovery".}
   ##  Enable/disable crash recovery.
   ## **isEnabled**
@@ -3343,7 +3328,7 @@ type
   CXInclusionVisitor* = distinct proc (a0: pointer; a1: ptr[CXSourceLocation];
                                    a2: cuint; a3: pointer): void {.cdecl.}
 proc getInclusions*(tu: CXTranslationUnit; visitor: CXInclusionVisitor;
-                   client_data: CXClientData): void {.cdecl, dynlib: libclang,
+                   client_data: CXClientData): void {.cdecl,
     importc: "clang_getInclusions".}
   ##  Visit the set of preprocessor inclusions in a translation unit.
   ##    The visitor function is called with the provided data for every included
@@ -3355,47 +3340,47 @@ type
     erkCFStr = 5, erkOther = 6
 type
   CXEvalResult* = distinct pointer
-proc evaluate*(c: CXCursor): CXEvalResult {.cdecl, dynlib: libclang,
+proc evaluate*(c: CXCursor): CXEvalResult {.cdecl,
                                         importc: "clang_Cursor_Evaluate".}
   ##  If cursor is a statement declaration tries to evaluate the
   ##  statement and if its variable, tries to evaluate its initializer,
   ##  into its corresponding type.
-proc getKind*(e: CXEvalResult): CXEvalResultKind {.cdecl, dynlib: libclang,
+proc getKind*(e: CXEvalResult): CXEvalResultKind {.cdecl,
     importc: "clang_EvalResult_getKind".}
   ##  Returns the kind of the evaluated result.
-proc getAsInt*(e: CXEvalResult): cint {.cdecl, dynlib: libclang,
+proc getAsInt*(e: CXEvalResult): cint {.cdecl,
                                     importc: "clang_EvalResult_getAsInt".}
   ##  Returns the evaluation result as integer if the
   ##  kind is Int.
-proc getAsLongLong*(e: CXEvalResult): clonglong {.cdecl, dynlib: libclang,
+proc getAsLongLong*(e: CXEvalResult): clonglong {.cdecl,
     importc: "clang_EvalResult_getAsLongLong".}
   ##  Returns the evaluation result as a long long integer if the
   ##  kind is Int. This prevents overflows that may happen if the result is
   ##  returned with clang_EvalResult_getAsInt.
-proc isUnsignedInt*(e: CXEvalResult): cuint {.cdecl, dynlib: libclang,
+proc isUnsignedInt*(e: CXEvalResult): cuint {.cdecl,
     importc: "clang_EvalResult_isUnsignedInt".}
   ##  Returns a non-zero value if the kind is Int and the evaluation
   ##  result resulted in an unsigned integer.
-proc getAsUnsigned*(e: CXEvalResult): culonglong {.cdecl, dynlib: libclang,
+proc getAsUnsigned*(e: CXEvalResult): culonglong {.cdecl,
     importc: "clang_EvalResult_getAsUnsigned".}
   ##  Returns the evaluation result as an unsigned integer if
   ##  the kind is Int and clang_EvalResult_isUnsignedInt is non-zero.
-proc getAsDouble*(e: CXEvalResult): cdouble {.cdecl, dynlib: libclang,
+proc getAsDouble*(e: CXEvalResult): cdouble {.cdecl,
     importc: "clang_EvalResult_getAsDouble".}
   ##  Returns the evaluation result as double if the
   ##  kind is double.
-proc getAsStr*(e: CXEvalResult): cstring {.cdecl, dynlib: libclang,
+proc getAsStr*(e: CXEvalResult): cstring {.cdecl,
                                        importc: "clang_EvalResult_getAsStr".}
   ##  Returns the evaluation result as a constant string if the
   ##  kind is other than Int or float. User must not free this pointer,
   ##  instead call clang_EvalResult_dispose on the CXEvalResult returned
   ##  by clang_Cursor_Evaluate.
-proc dispose*(e: CXEvalResult): void {.cdecl, dynlib: libclang,
+proc dispose*(e: CXEvalResult): void {.cdecl,
                                    importc: "clang_EvalResult_dispose".}
   ##  Disposes the created Eval memory.
 type
   CXRemapping* = distinct pointer
-proc getRemappings*(path: cstring): CXRemapping {.cdecl, dynlib: libclang,
+proc getRemappings*(path: cstring): CXRemapping {.cdecl,
     importc: "clang_getRemappings".}
   ##  Retrieve a remapping.
   ## **path**
@@ -3405,7 +3390,7 @@ proc getRemappings*(path: cstring): CXRemapping {.cdecl, dynlib: libclang,
   ##  via a call to
   ##  Can return NULL if an error occurred.
 proc getRemappingsFromFileList*(filePaths: cstringArray; numFiles: cuint): CXRemapping {.
-    cdecl, dynlib: libclang, importc: "clang_getRemappingsFromFileList".}
+    cdecl, importc: "clang_getRemappingsFromFileList".}
   ##  Retrieve a remapping.
   ## **filePaths**
   ##  pointer to an array of file paths containing remapping info.
@@ -3416,18 +3401,18 @@ proc getRemappingsFromFileList*(filePaths: cstringArray; numFiles: cuint): CXRem
   ##  via a call to
   ##  Can return NULL if an error occurred.
 proc remap_getNumFiles*(argCXRemapping: CXRemapping): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_remap_getNumFiles".}
+    importc: "clang_remap_getNumFiles".}
   ##  Determine the number of remappings.
 proc remap_getFilenames*(argCXRemapping: CXRemapping; index: cuint;
                         original: ptr[CXString]; transformed: ptr[CXString]): void {.
-    cdecl, dynlib: libclang, importc: "clang_remap_getFilenames".}
+    cdecl, importc: "clang_remap_getFilenames".}
   ##  Get the original and the associated filename from the remapping.
   ## **original**
   ##  If non-NULL, will be set to the original filename.
   ## **transformed**
   ##  If non-NULL, will be set to the filename that the original
   ##  is associated with.
-proc remap_dispose*(argCXRemapping: CXRemapping): void {.cdecl, dynlib: libclang,
+proc remap_dispose*(argCXRemapping: CXRemapping): void {.cdecl,
     importc: "clang_remap_dispose".}
   ##  Dispose the remapping.
 type
@@ -3446,7 +3431,7 @@ type
                  ##  CXVisit_Break)
 proc findReferencesInFile*(cursor: CXCursor; file: CXFile;
                           visitor: CXCursorAndRangeVisitor): CXResult {.cdecl,
-    dynlib: libclang, importc: "clang_findReferencesInFile".}
+    importc: "clang_findReferencesInFile".}
   ##  Find references of a declaration in a specific file.
   ## **cursor**
   ##  pointing to a declaration or a reference of one.
@@ -3461,7 +3446,7 @@ proc findReferencesInFile*(cursor: CXCursor; file: CXFile;
   ##  one of the CXResult enumerators.
 proc findIncludesInFile*(tU: CXTranslationUnit; file: CXFile;
                         visitor: CXCursorAndRangeVisitor): CXResult {.cdecl,
-    dynlib: libclang, importc: "clang_findIncludesInFile".}
+    importc: "clang_findIncludesInFile".}
   ##  Find #import/#include directives in a specific file.
   ## **TU**
   ##  translation unit containing the file to query.
@@ -3667,49 +3652,49 @@ type
         cdecl.}
 
 proc index_isEntityObjCContainerKind*(argCXIdxEntityKind: CXIdxEntityKind): cint {.
-    cdecl, dynlib: libclang, importc: "clang_index_isEntityObjCContainerKind".}
+    cdecl, importc: "clang_index_isEntityObjCContainerKind".}
 proc index_getObjCContainerDeclInfo*(argCXIdxDeclInfo: ptr[CXIdxDeclInfo]): ptr[
-    CXIdxObjCContainerDeclInfo] {.cdecl, dynlib: libclang, importc: "clang_index_getObjCContainerDeclInfo".}
+    CXIdxObjCContainerDeclInfo] {.cdecl, importc: "clang_index_getObjCContainerDeclInfo".}
 proc index_getObjCInterfaceDeclInfo*(argCXIdxDeclInfo: ptr[CXIdxDeclInfo]): ptr[
-    CXIdxObjCInterfaceDeclInfo] {.cdecl, dynlib: libclang, importc: "clang_index_getObjCInterfaceDeclInfo".}
+    CXIdxObjCInterfaceDeclInfo] {.cdecl, importc: "clang_index_getObjCInterfaceDeclInfo".}
 proc index_getObjCCategoryDeclInfo*(argCXIdxDeclInfo: ptr[CXIdxDeclInfo]): ptr[
-    CXIdxObjCCategoryDeclInfo] {.cdecl, dynlib: libclang,
+    CXIdxObjCCategoryDeclInfo] {.cdecl,
                                 importc: "clang_index_getObjCCategoryDeclInfo".}
 proc index_getObjCProtocolRefListInfo*(argCXIdxDeclInfo: ptr[CXIdxDeclInfo]): ptr[
-    CXIdxObjCProtocolRefListInfo] {.cdecl, dynlib: libclang, importc: "clang_index_getObjCProtocolRefListInfo".}
+    CXIdxObjCProtocolRefListInfo] {.cdecl, importc: "clang_index_getObjCProtocolRefListInfo".}
 proc index_getObjCPropertyDeclInfo*(argCXIdxDeclInfo: ptr[CXIdxDeclInfo]): ptr[
-    CXIdxObjCPropertyDeclInfo] {.cdecl, dynlib: libclang,
+    CXIdxObjCPropertyDeclInfo] {.cdecl,
                                 importc: "clang_index_getObjCPropertyDeclInfo".}
 proc index_getIBOutletCollectionAttrInfo*(argCXIdxAttrInfo: ptr[CXIdxAttrInfo]): ptr[
-    CXIdxIBOutletCollectionAttrInfo] {.cdecl, dynlib: libclang, importc: "clang_index_getIBOutletCollectionAttrInfo".}
+    CXIdxIBOutletCollectionAttrInfo] {.cdecl, importc: "clang_index_getIBOutletCollectionAttrInfo".}
 proc index_getClassDeclInfo*(argCXIdxDeclInfo: ptr[CXIdxDeclInfo]): ptr[
-    CXIdxClassDeclInfo] {.cdecl, dynlib: libclang,
+    CXIdxClassDeclInfo] {.cdecl,
                             importc: "clang_index_getCXXClassDeclInfo".}
 proc index_getClientContainer*(argCXIdxContainerInfo: ptr[CXIdxContainerInfo]): CXIdxClientContainer {.
-    cdecl, dynlib: libclang, importc: "clang_index_getClientContainer".}
+    cdecl, importc: "clang_index_getClientContainer".}
   ##  For retrieving a custom CXIdxClientContainer attached to a
   ##  container.
 proc index_setClientContainer*(argCXIdxContainerInfo: ptr[CXIdxContainerInfo];
                               argCXIdxClientContainer: CXIdxClientContainer): void {.
-    cdecl, dynlib: libclang, importc: "clang_index_setClientContainer".}
+    cdecl, importc: "clang_index_setClientContainer".}
   ##  For setting a custom CXIdxClientContainer attached to a
   ##  container.
 proc index_getClientEntity*(argCXIdxEntityInfo: ptr[CXIdxEntityInfo]): CXIdxClientEntity {.
-    cdecl, dynlib: libclang, importc: "clang_index_getClientEntity".}
+    cdecl, importc: "clang_index_getClientEntity".}
   ##  For retrieving a custom CXIdxClientEntity attached to an entity.
 proc index_setClientEntity*(argCXIdxEntityInfo: ptr[CXIdxEntityInfo];
                            argCXIdxClientEntity: CXIdxClientEntity): void {.cdecl,
-    dynlib: libclang, importc: "clang_index_setClientEntity".}
+    importc: "clang_index_setClientEntity".}
   ##  For setting a custom CXIdxClientEntity attached to an entity.
 type
   CXIndexAction* = distinct pointer
-proc indexAction_create*(cIdx: CXIndex): CXIndexAction {.cdecl, dynlib: libclang,
+proc indexAction_create*(cIdx: CXIndex): CXIndexAction {.cdecl,
     importc: "clang_IndexAction_create".}
   ##  An indexing action/session, to be applied to one or multiple
   ##  translation units.
   ## **CIdx**
   ##  The index object with which the index action will be associated.
-proc dispose*(argCXIndexAction: CXIndexAction): void {.cdecl, dynlib: libclang,
+proc dispose*(argCXIndexAction: CXIndexAction): void {.cdecl,
     importc: "clang_IndexAction_dispose".}
   ##  Destroy the given index action.
   ##  The index action must not be destroyed until all of the translation units
@@ -3736,7 +3721,7 @@ proc indexSourceFile*(argCXIndexAction: CXIndexAction; client_data: CXClientData
                      num_command_line_args: cint;
                      unsaved_files: ptr[CXUnsavedFile]; num_unsaved_files: cuint;
                      out_TU: ptr[CXTranslationUnit]; tU_options: cuint): cint {.
-    cdecl, dynlib: libclang, importc: "clang_indexSourceFile".}
+    cdecl, importc: "clang_indexSourceFile".}
   ##  Index the given source file and the translation unit corresponding
   ##  to that file via callbacks implemented through #IndexerCallbacks.
   ## **client_data**
@@ -3771,7 +3756,7 @@ proc indexSourceFileFullArgv*(argCXIndexAction: CXIndexAction;
                              unsaved_files: ptr[CXUnsavedFile];
                              num_unsaved_files: cuint;
                              out_TU: ptr[CXTranslationUnit]; tU_options: cuint): cint {.
-    cdecl, dynlib: libclang, importc: "clang_indexSourceFileFullArgv".}
+    cdecl, importc: "clang_indexSourceFileFullArgv".}
   ##  Same as clang_indexSourceFile but requires a full command line
   ##  for
   ##  including argv[0]. This is useful if the standard
@@ -3781,7 +3766,7 @@ proc indexTranslationUnit*(argCXIndexAction: CXIndexAction;
                           index_callbacks: ptr[IndexerCallbacks];
                           index_callbacks_size: cuint; index_options: cuint;
                           argCXTranslationUnit: CXTranslationUnit): cint {.cdecl,
-    dynlib: libclang, importc: "clang_indexTranslationUnit".}
+    importc: "clang_indexTranslationUnit".}
   ##  Index the given translation unit via callbacks implemented through
   ##  #IndexerCallbacks.
   ##  The order of callback invocations is not guaranteed to be the same as
@@ -3796,19 +3781,19 @@ proc indexTranslationUnit*(argCXIndexAction: CXIndexAction;
 proc indexLoc_getFileLocation*(loc: CXIdxLoc; indexFile: ptr[CXIdxClientFile];
                               file: ptr[CXFile]; line: ptr[cuint];
                               column: ptr[cuint]; offset: ptr[cuint]): void {.cdecl,
-    dynlib: libclang, importc: "clang_indexLoc_getFileLocation".}
+    importc: "clang_indexLoc_getFileLocation".}
   ##  Retrieve the CXIdxFile, file, line, column, and offset represented by
   ##  the given CXIdxLoc.
   ##  If the location refers into a macro expansion, retrieves the
   ##  location of the macro expansion and if it refers into a macro argument
   ##  retrieves the location of the argument.
 proc indexLoc_getCXSourceLocation*(loc: CXIdxLoc): CXSourceLocation {.cdecl,
-    dynlib: libclang, importc: "clang_indexLoc_getCXSourceLocation".}
+    importc: "clang_indexLoc_getCXSourceLocation".}
   ##  Retrieve the CXSourceLocation represented by the given CXIdxLoc.
 type
   CXFieldVisitor* = distinct proc (a0: CXCursor; a1: pointer): CXVisitorResult {.cdecl.}
 proc visitFields*(t: CXType; visitor: CXFieldVisitor; client_data: CXClientData): cuint {.
-    cdecl, dynlib: libclang, importc: "clang_Type_visitFields".}
+    cdecl, importc: "clang_Type_visitFields".}
   ##  Visit the fields of a particular type.
   ##  This function visits all the direct fields of the given cursor,
   ##  invoking the given
@@ -3831,7 +3816,7 @@ type
     aSTNode*: pointer
     translationUnit*: CXTranslationUnit
 
-proc getParsedComment*(c: CXCursor): CXComment {.cdecl, dynlib: libclang,
+proc getParsedComment*(c: CXCursor): CXComment {.cdecl,
     importc: "clang_Cursor_getParsedComment".}
   ##  Given a cursor that represents a documentable entity (e.g.,
   ##  declaration), return the associated parsed comment as a
@@ -3914,27 +3899,27 @@ type
     cppdIn,                   ##  The parameter is an input parameter.
     cppdOut,                  ##  The parameter is an output parameter.
     cppdInOut                 ##  The parameter is an input and output parameter.
-proc getKind*(comment: CXComment): CXCommentKind {.cdecl, dynlib: libclang,
+proc getKind*(comment: CXComment): CXCommentKind {.cdecl,
     importc: "clang_Comment_getKind".}
   ## **Comment**
   ##  AST node of any kind.
   ##
   ##  the type of the AST node.
-proc getNumChildren*(comment: CXComment): cuint {.cdecl, dynlib: libclang,
+proc getNumChildren*(comment: CXComment): cuint {.cdecl,
     importc: "clang_Comment_getNumChildren".}
   ## **Comment**
   ##  AST node of any kind.
   ##
   ##  number of children of the AST node.
 proc getChild*(comment: CXComment; childIdx: cuint): CXComment {.cdecl,
-    dynlib: libclang, importc: "clang_Comment_getChild".}
+    importc: "clang_Comment_getChild".}
   ## **Comment**
   ##  AST node of any kind.
   ## **ChildIdx**
   ##  child index (zero-based).
   ##
   ##  the specified child of the AST node.
-proc isWhitespace*(comment: CXComment): cuint {.cdecl, dynlib: libclang,
+proc isWhitespace*(comment: CXComment): cuint {.cdecl,
     importc: "clang_Comment_isWhitespace".}
   ##  A
   ##  node is considered whitespace if it contains
@@ -3948,13 +3933,13 @@ proc isWhitespace*(comment: CXComment): cuint {.cdecl, dynlib: libclang,
   ##  non-zero if
   ##  is whitespace.
 proc inlineContentComment_hasTrailingNewline*(comment: CXComment): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_InlineContentComment_hasTrailingNewline".}
+    importc: "clang_InlineContentComment_hasTrailingNewline".}
   ##
   ##  non-zero if
   ##  is inline content and has a newline
   ##  immediately following it in the comment text.  Newlines between paragraphs
   ##  do not count.
-proc textComment_getText*(comment: CXComment): CXString {.cdecl, dynlib: libclang,
+proc textComment_getText*(comment: CXComment): CXString {.cdecl,
     importc: "clang_TextComment_getText".}
   ## **Comment**
   ##  a
@@ -3962,14 +3947,14 @@ proc textComment_getText*(comment: CXComment): CXString {.cdecl, dynlib: libclan
   ##
   ##  text contained in the AST node.
 proc inlineCommandComment_getCommandName*(comment: CXComment): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_InlineCommandComment_getCommandName".}
+    importc: "clang_InlineCommandComment_getCommandName".}
   ## **Comment**
   ##  a
   ##  AST node.
   ##
   ##  name of the inline command.
 proc inlineCommandComment_getRenderKind*(comment: CXComment): CXCommentInlineCommandRenderKind {.
-    cdecl, dynlib: libclang, importc: "clang_InlineCommandComment_getRenderKind".}
+    cdecl, importc: "clang_InlineCommandComment_getRenderKind".}
   ## **Comment**
   ##  a
   ##  AST node.
@@ -3977,14 +3962,14 @@ proc inlineCommandComment_getRenderKind*(comment: CXComment): CXCommentInlineCom
   ##  the most appropriate rendering mode, chosen on command
   ##  semantics in Doxygen.
 proc inlineCommandComment_getNumArgs*(comment: CXComment): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_InlineCommandComment_getNumArgs".}
+    importc: "clang_InlineCommandComment_getNumArgs".}
   ## **Comment**
   ##  a
   ##  AST node.
   ##
   ##  number of command arguments.
 proc inlineCommandComment_getArgText*(comment: CXComment; argIdx: cuint): CXString {.
-    cdecl, dynlib: libclang, importc: "clang_InlineCommandComment_getArgText".}
+    cdecl, importc: "clang_InlineCommandComment_getArgText".}
   ## **Comment**
   ##  a
   ##  AST node.
@@ -3993,7 +3978,7 @@ proc inlineCommandComment_getArgText*(comment: CXComment; argIdx: cuint): CXStri
   ##
   ##  text of the specified argument.
 proc hTMLTagComment_getTagName*(comment: CXComment): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_HTMLTagComment_getTagName".}
+    importc: "clang_HTMLTagComment_getTagName".}
   ## **Comment**
   ##  a
   ##  or
@@ -4002,12 +3987,12 @@ proc hTMLTagComment_getTagName*(comment: CXComment): CXString {.cdecl,
   ##
   ##  HTML tag name.
 proc hTMLStartTagComment_isSelfClosing*(comment: CXComment): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_HTMLStartTagComment_isSelfClosing".}
+    importc: "clang_HTMLStartTagComment_isSelfClosing".}
   ## **Comment**
   ##  a
   ##  AST node.
   ##  non-zero if tag is self-closing (for example, `<br/>`).
-proc hTMLStartTag_getNumAttrs*(comment: CXComment): cuint {.cdecl, dynlib: libclang,
+proc hTMLStartTag_getNumAttrs*(comment: CXComment): cuint {.cdecl,
     importc: "clang_HTMLStartTag_getNumAttrs".}
   ## **Comment**
   ##  a
@@ -4015,7 +4000,7 @@ proc hTMLStartTag_getNumAttrs*(comment: CXComment): cuint {.cdecl, dynlib: libcl
   ##
   ##  number of attributes (name-value pairs) attached to the start tag.
 proc hTMLStartTag_getAttrName*(comment: CXComment; attrIdx: cuint): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_HTMLStartTag_getAttrName".}
+    importc: "clang_HTMLStartTag_getAttrName".}
   ## **Comment**
   ##  a
   ##  AST node.
@@ -4024,7 +4009,7 @@ proc hTMLStartTag_getAttrName*(comment: CXComment; attrIdx: cuint): CXString {.c
   ##
   ##  name of the specified attribute.
 proc hTMLStartTag_getAttrValue*(comment: CXComment; attrIdx: cuint): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_HTMLStartTag_getAttrValue".}
+    importc: "clang_HTMLStartTag_getAttrValue".}
   ## **Comment**
   ##  a
   ##  AST node.
@@ -4033,21 +4018,21 @@ proc hTMLStartTag_getAttrValue*(comment: CXComment; attrIdx: cuint): CXString {.
   ##
   ##  value of the specified attribute.
 proc blockCommandComment_getCommandName*(comment: CXComment): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_BlockCommandComment_getCommandName".}
+    importc: "clang_BlockCommandComment_getCommandName".}
   ## **Comment**
   ##  a
   ##  AST node.
   ##
   ##  name of the block command.
 proc blockCommandComment_getNumArgs*(comment: CXComment): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_BlockCommandComment_getNumArgs".}
+    importc: "clang_BlockCommandComment_getNumArgs".}
   ## **Comment**
   ##  a
   ##  AST node.
   ##
   ##  number of word-like arguments.
 proc blockCommandComment_getArgText*(comment: CXComment; argIdx: cuint): CXString {.
-    cdecl, dynlib: libclang, importc: "clang_BlockCommandComment_getArgText".}
+    cdecl, importc: "clang_BlockCommandComment_getArgText".}
   ## **Comment**
   ##  a
   ##  AST node.
@@ -4056,7 +4041,7 @@ proc blockCommandComment_getArgText*(comment: CXComment; argIdx: cuint): CXStrin
   ##
   ##  text of the specified word-like argument.
 proc blockCommandComment_getParagraph*(comment: CXComment): CXComment {.cdecl,
-    dynlib: libclang, importc: "clang_BlockCommandComment_getParagraph".}
+    importc: "clang_BlockCommandComment_getParagraph".}
   ## **Comment**
   ##  a
   ##  or
@@ -4064,14 +4049,14 @@ proc blockCommandComment_getParagraph*(comment: CXComment): CXComment {.cdecl,
   ##
   ##  paragraph argument of the block command.
 proc paramCommandComment_getParamName*(comment: CXComment): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_ParamCommandComment_getParamName".}
+    importc: "clang_ParamCommandComment_getParamName".}
   ## **Comment**
   ##  a
   ##  AST node.
   ##
   ##  parameter name.
 proc paramCommandComment_isParamIndexValid*(comment: CXComment): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_ParamCommandComment_isParamIndexValid".}
+    importc: "clang_ParamCommandComment_isParamIndexValid".}
   ## **Comment**
   ##  a
   ##  AST node.
@@ -4080,14 +4065,14 @@ proc paramCommandComment_isParamIndexValid*(comment: CXComment): cuint {.cdecl,
   ##  in the function prototype and
   ##  function will return a meaningful value.
 proc paramCommandComment_getParamIndex*(comment: CXComment): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_ParamCommandComment_getParamIndex".}
+    importc: "clang_ParamCommandComment_getParamIndex".}
   ## **Comment**
   ##  a
   ##  AST node.
   ##
   ##  zero-based parameter index in function prototype.
 proc paramCommandComment_isDirectionExplicit*(comment: CXComment): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_ParamCommandComment_isDirectionExplicit".}
+    importc: "clang_ParamCommandComment_isDirectionExplicit".}
   ## **Comment**
   ##  a
   ##  AST node.
@@ -4095,21 +4080,21 @@ proc paramCommandComment_isDirectionExplicit*(comment: CXComment): cuint {.cdecl
   ##  non-zero if parameter passing direction was specified explicitly in
   ##  the comment.
 proc paramCommandComment_getDirection*(comment: CXComment): CXCommentParamPassDirection {.
-    cdecl, dynlib: libclang, importc: "clang_ParamCommandComment_getDirection".}
+    cdecl, importc: "clang_ParamCommandComment_getDirection".}
   ## **Comment**
   ##  a
   ##  AST node.
   ##
   ##  parameter passing direction.
 proc tParamCommandComment_getParamName*(comment: CXComment): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_TParamCommandComment_getParamName".}
+    importc: "clang_TParamCommandComment_getParamName".}
   ## **Comment**
   ##  a
   ##  AST node.
   ##
   ##  template parameter name.
 proc tParamCommandComment_isParamPositionValid*(comment: CXComment): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_TParamCommandComment_isParamPositionValid".}
+    importc: "clang_TParamCommandComment_isParamPositionValid".}
   ## **Comment**
   ##  a
   ##  AST node.
@@ -4120,7 +4105,7 @@ proc tParamCommandComment_isParamPositionValid*(comment: CXComment): cuint {.cde
   ##  functions will return a meaningful
   ##  value.
 proc tParamCommandComment_getDepth*(comment: CXComment): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_TParamCommandComment_getDepth".}
+    importc: "clang_TParamCommandComment_getDepth".}
   ## **Comment**
   ##  a
   ##  AST node.
@@ -4131,7 +4116,7 @@ proc tParamCommandComment_getDepth*(comment: CXComment): cuint {.cdecl,
   ##  for C and TT nesting depth is 0,
   ##  for T nesting depth is 1.
 proc tParamCommandComment_getIndex*(comment: CXComment; depth: cuint): cuint {.cdecl,
-    dynlib: libclang, importc: "clang_TParamCommandComment_getIndex".}
+    importc: "clang_TParamCommandComment_getIndex".}
   ## **Comment**
   ##  a
   ##  AST node.
@@ -4146,21 +4131,21 @@ proc tParamCommandComment_getIndex*(comment: CXComment; depth: cuint): cuint {.c
   ##  at depth 0 T's index is 1 (same as TT's),
   ##  at depth 1 T's index is 0.
 proc verbatimBlockLineComment_getText*(comment: CXComment): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_VerbatimBlockLineComment_getText".}
+    importc: "clang_VerbatimBlockLineComment_getText".}
   ## **Comment**
   ##  a
   ##  AST node.
   ##
   ##  text contained in the AST node.
 proc verbatimLineComment_getText*(comment: CXComment): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_VerbatimLineComment_getText".}
+    importc: "clang_VerbatimLineComment_getText".}
   ## **Comment**
   ##  a
   ##  AST node.
   ##
   ##  text contained in the AST node.
 proc hTMLTagComment_getAsString*(comment: CXComment): CXString {.cdecl,
-    dynlib: libclang, importc: "clang_HTMLTagComment_getAsString".}
+    importc: "clang_HTMLTagComment_getAsString".}
   ##  Convert an HTML tag AST node to string.
   ## **Comment**
   ##  a
@@ -4169,7 +4154,7 @@ proc hTMLTagComment_getAsString*(comment: CXComment): CXString {.cdecl,
   ##  node.
   ##
   ##  string containing an HTML tag.
-proc fullComment_getAsHTML*(comment: CXComment): CXString {.cdecl, dynlib: libclang,
+proc fullComment_getAsHTML*(comment: CXComment): CXString {.cdecl,
     importc: "clang_FullComment_getAsHTML".}
   ## Convert a given full parsed comment to an HTML fragment.
   ##
@@ -4201,7 +4186,7 @@ proc fullComment_getAsHTML*(comment: CXComment): CXString {.cdecl, dynlib: libcl
   ##
   ## returns string containing an HTML fragment.
 
-proc fullComment_getAsXML*(comment: CXComment): CXString {.cdecl, dynlib: libclang,
+proc fullComment_getAsXML*(comment: CXComment): CXString {.cdecl,
     importc: "clang_FullComment_getAsXML".}
   ##  Convert a given full parsed comment to an XML document.
   ##  A Relax NG schema for the XML can be found in comment-xml-schema.rng file

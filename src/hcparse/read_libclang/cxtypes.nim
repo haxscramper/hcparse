@@ -586,53 +586,6 @@ proc `[]`*(comment: CXComment, idx: int): CXComment =
   assert idx < comment.len
   getChild(comment, cuint(idx))
 
-# proc objTreeRepr*(comment: CXComment): ObjTree =
-#   ## Convert comment to `ObjTree` repr
-#   case comment.cxKind:
-#     of cokText:
-#       pptConst $comment.textComment_getText()
-#     of cokParamCommand:
-#       pptObj(
-#         $comment.cxKind,
-#         [(
-#           $paramCommandComment_getParamName(comment),
-#           pptSeq(toSeq(comment.children).mapIt(it.objTreeRepr()))
-#           # objTreeRepr(comment[0])
-#         )]
-#       )
-#     of cokInlineCommand:
-#       let args: seq[string] = collect(newSeq):
-#         for i in 0 ..< inlineCommandComment_getNumArgs(comment):
-#           $inlineCommandComment_getArgText(comment, cuint(i))
-
-#       pptObj(
-#         $comment.cxKind,
-#         [(
-#           $inlineCommandComment_getCommandName(comment),
-#           pptSeq(
-#             args.mapIt(it.pptConst) &
-#             toSeq(comment.children).mapIt(it.objTreeRepr())
-#           )
-#         )]
-#       )
-#     of cokBlockCommand:
-#       pptObj(
-#         $comment.cxKind,
-#         [(
-#           $blockCommandComment_getCommandName(comment),
-#           pptSeq(toSeq(comment.children).mapIt(it.objTreeRepr()))
-#           # objTreeRepr(comment[0])
-#         )]
-#       )
-#     else:
-#       if comment.len == 0:
-#         pptObj($comment.cxKind,
-#                pptConst($comment.fullComment_getAsXML()))
-#       else:
-#         pptObj($comment.cxKind,
-#                toSeq(comment.children).mapIt(it.objTreeRepr()))
-
-
 #*************************************************************************#
 #***************************  Pretty-printing  ***************************#
 #*************************************************************************#
