@@ -18,7 +18,8 @@ jobs:
             wget \
             git \
             cmake \
-            make
+            make \
+            graphviz
 
       - name: "Install conan"
         run: pip install conan

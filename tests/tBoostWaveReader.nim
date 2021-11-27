@@ -13,7 +13,7 @@ suite "Basic reader":
     )
 
     for tok in items(reader.ctx):
-      echov "safasdf"
+      discard
 
   test "Parse relative source":
     var cache = newWaveCache()

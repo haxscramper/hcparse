@@ -11,7 +11,7 @@ jobs:
       - run: apt-get -qq update
       - run: |
           apt-get -qq -y install \
-            cmake git g++ gcc make sudo tar wget curl xz-utils pip clang
+            cmake git g++ gcc make sudo tar wget curl xz-utils pip clang graphviz
 
         env:
           DEBIAN_FRONTEND: noninteractive

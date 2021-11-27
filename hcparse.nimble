@@ -19,8 +19,10 @@ task test, "Run tests":
   for file in listFiles(dir):
     let (_, name, _) = splitFile(file)
     if name.startsWith("t") and file.endsWith(".nim"):
+      echo "[[[[[[[[[[ file run start"
       echo file
       exec "nim r " & file
+      echo "]]]]]]]]]] file run done"
   # exec "nim r tests/runall.nim test " & currentSourcePath() & " --parse-errors=false"
 
 task docgen, "Generate documentation":
