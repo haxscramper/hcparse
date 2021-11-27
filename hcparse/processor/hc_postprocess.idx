@@ -1,0 +1,25 @@
+cancFirstArgType	hcparse/processor/hc_postprocess.html#cancFirstArgType	CxxAdjacentNameContext.cancFirstArgType	
+cancFirstArgName	hcparse/processor/hc_postprocess.html#cancFirstArgName	CxxAdjacentNameContext.cancFirstArgName	
+cancParentEnumName	hcparse/processor/hc_postprocess.html#cancParentEnumName	CxxAdjacentNameContext.cancParentEnumName	
+cancParentObjectName	hcparse/processor/hc_postprocess.html#cancParentObjectName	CxxAdjacentNameContext.cancParentObjectName	
+cancLibName	hcparse/processor/hc_postprocess.html#cancLibName	CxxAdjacentNameContext.cancLibName	
+CxxAdjacentNameContext	hcparse/processor/hc_postprocess.html#CxxAdjacentNameContext	hc_postprocess: CxxAdjacentNameContext	
+CxxNameFixContext	hcparse/processor/hc_postprocess.html#CxxNameFixContext	hc_postprocess: CxxNameFixContext	
+CxxFixConf	hcparse/processor/hc_postprocess.html#CxxFixConf	hc_postprocess: CxxFixConf	
+getBind	hcparse/processor/hc_postprocess.html#getBind,CxxFixConf,CxxEntry	hc_postprocess: getBind(conf: CxxFixConf; entry: CxxEntry): CxxBind	
+onGetBind	hcparse/processor/hc_postprocess.html#onGetBind.t,CxxFixConf,untyped	hc_postprocess: onGetBind(fixConf: var CxxFixConf; body: untyped): untyped	
+onFixName	hcparse/processor/hc_postprocess.html#onFixName.t,CxxFixConf,untyped	hc_postprocess: onFixName(fixConf: var CxxFixConf; body: untyped): untyped	
+fixName	hcparse/processor/hc_postprocess.html#fixName,CxxFixConf,CxxNamePair,StringNameCache,CxxNameFixContext	hc_postprocess: fixName(conf: CxxFixConf; name: CxxNamePair; cache: var StringNameCache;\n        context: CxxNameFixContext): string	
+setHeaderRec	hcparse/processor/hc_postprocess.html#setHeaderRec,CxxEntry,CxxFixConf	hc_postprocess: setHeaderRec(entry: var CxxEntry; conf: CxxFixConf)	
+libImport	hcparse/processor/hc_postprocess.html#libImport,CxxFixConf,AbsDir,AbsFile	hc_postprocess: libImport(conf: CxxFixConf; dir: AbsDir; file: AbsFile): CxxLibImport	
+registerDeclarations	hcparse/processor/hc_postprocess.html#registerDeclarations,CxxEntry,CxxTypeStore,CxxLibImport	hc_postprocess: registerDeclarations(entry: var CxxEntry; store: var CxxTypeStore;\n                     lib: CxxLibImport)	
+postprocessTypeUses	hcparse/processor/hc_postprocess.html#postprocessTypeUses,CxxEntry,CxxTypeStore,CxxLibImport	hc_postprocess: postprocessTypeUses(entry: var CxxEntry; store: var CxxTypeStore;\n                    lib: CxxLibImport)	
+fixIdentsRec	hcparse/processor/hc_postprocess.html#fixIdentsRec,CxxEntry,StringNameCache,CxxFixConf	hc_postprocess: fixIdentsRec(entry: var CxxEntry; cache: var StringNameCache; conf: CxxFixConf)	
+fragmentType	hcparse/processor/hc_postprocess.html#fragmentType,CxxEntry	hc_postprocess: fragmentType(entry: var CxxEntry): tuple[newDecl: seq[CxxEntry],\n    extras: seq[CxxEntry]]	
+add	hcparse/processor/hc_postprocess.html#add,CxxTypeStore,CxxTypeStore	hc_postprocess: add(store: var CxxTypeStore; other: CxxTypeStore)	
+reuseStore	hcparse/processor/hc_postprocess.html#reuseStore,CxxEntry,CxxTypeStore,CxxTypeStore	hc_postprocess: reuseStore(entry: var CxxEntry; store: var CxxTypeStore;\n           other: CxxTypeStore = nil)	
+postFixEntries	hcparse/processor/hc_postprocess.html#postFixEntries,CxxFixConf,seq[CxxEntry],CxxLibImport,Option[AbsFile]	hc_postprocess: postFixEntries(conf: CxxFixConf; entries: var seq[CxxEntry]; lib: CxxLibImport;\n               file: Option[AbsFile] = none AbsFile)	
+postFixEntries	hcparse/processor/hc_postprocess.html#postFixEntries,sinkseq[CxxEntry],CxxFixConf,CxxLibImport,Option[AbsFile]	hc_postprocess: postFixEntries(entries: sink seq[CxxEntry]; conf: CxxFixConf; lib: CxxLibImport;\n               file: Option[AbsFile] = none AbsFile): seq[CxxEntry]	
+mentries	hcparse/processor/hc_postprocess.html#mentries.i,seq[CxxFile]	hc_postprocess: mentries(files: var seq[CxxFile]): var CxxEntry	
+postFixEntries	hcparse/processor/hc_postprocess.html#postFixEntries,CxxFixConf,seq[CxxFile]	hc_postprocess: postFixEntries(conf: CxxFixConf; files: var seq[CxxFile])	
+postFixEntries	hcparse/processor/hc_postprocess.html#postFixEntries,sinkseq[CxxFile],CxxFixConf	hc_postprocess: postFixEntries(files: sink seq[CxxFile]; conf: CxxFixConf): seq[CxxFile]	

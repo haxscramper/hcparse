@@ -1,0 +1,6 @@
+toClientData	hcparse/read_libclang/cxvisitors.html#toClientData,T	cxvisitors: toClientData[T](val: var T): CXClientData	
+toCursorVisitor	hcparse/read_libclang/cxvisitors.html#toCursorVisitor,CXVisitor	cxvisitors: toCursorVisitor(impl: CXVisitor): CXCursorVisitor	
+visitChildren	hcparse/read_libclang/cxvisitors.html#visitChildren,CXCursor,tuple[T,CXVisitor]	cxvisitors: visitChildren[T](cursor: CXCursor; callback: tuple[data: T, impl: CXVisitor])	
+makeVisitorImpl	hcparse/read_libclang/cxvisitors.html#makeVisitorImpl,seq[NimNode],openArray[],NType[NimNode],NimNode	cxvisitors: makeVisitorImpl(varnames: seq[NimNode];\n                procArgs: openArray[(string, NType[NimNode])];\n                returnType: NType[NimNode]; body: NimNode): NimNode	
+makeVisitor	hcparse/read_libclang/cxvisitors.html#makeVisitor.m,untyped,untyped	cxvisitors: makeVisitor(captureVars, body: untyped): untyped	
+makeDeclarationIndexer	hcparse/read_libclang/cxvisitors.html#makeDeclarationIndexer.m,untyped,untyped	cxvisitors: makeDeclarationIndexer(captureVars, body: untyped): untyped	

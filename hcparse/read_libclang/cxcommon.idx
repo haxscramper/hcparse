@@ -1,0 +1,9 @@
+toCamelCase	hcparse/read_libclang/cxcommon.html#toCamelCase,string	cxcommon: toCamelCase(str: string): string	
+fixIdentName	hcparse/read_libclang/cxcommon.html#fixIdentName,string	cxcommon: fixIdentName(str: string): string	
+toPascalCase	hcparse/read_libclang/cxcommon.html#toPascalCase,string	cxcommon: toPascalCase(str: string): string	
+fixStdTypeName	hcparse/read_libclang/cxcommon.html#fixStdTypeName,string,int	cxcommon: fixStdTypeName(head: string; idx: int): string	
+toIncludes	hcparse/read_libclang/cxcommon.html#toIncludes,seq[AbsDir]	cxcommon: toIncludes(files: seq[AbsDir]): seq[string]	
+validCxxIdentifier	hcparse/read_libclang/cxcommon.html#validCxxIdentifier,string	cxcommon: validCxxIdentifier(str: string): bool	
+fixFileName	hcparse/read_libclang/cxcommon.html#fixFileName,string	cxcommon: fixFileName(name: string): string	
+toNimFile	hcparse/read_libclang/cxcommon.html#toNimFile,RelFile	cxcommon: toNimFile(file: RelFile): RelFile	
+stripComment	hcparse/read_libclang/cxcommon.html#stripComment,string	cxcommon: stripComment(text: string): string	

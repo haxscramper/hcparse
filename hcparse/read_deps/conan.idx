@@ -1,0 +1,5 @@
+ConanDep	hcparse/read_deps/conan.html#ConanDep	conan: ConanDep	
+ConanBuildInfo	hcparse/read_deps/conan.html#ConanBuildInfo	conan: ConanBuildInfo	
+findIncludePath	hcparse/read_deps/conan.html#findIncludePath,ConanBuildInfo,string	conan: findIncludePath(info: ConanBuildInfo; lib: string): seq[AbsDir]	
+getBuildInfo	hcparse/read_deps/conan.html#getBuildInfo,string,tuple[int,int,int],AbsDir	conan: getBuildInfo(name: string; version: tuple[major, minor, patch: int];\n             tempDir: AbsDir): ConanBuildInfo	
+add	hcparse/read_deps/conan.html#add,ParseConf,ConanBuildInfo	conan: add(conf: var ParseConf; info: ConanBuildInfo)	

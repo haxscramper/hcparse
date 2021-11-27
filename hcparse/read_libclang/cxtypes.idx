@@ -1,0 +1,77 @@
+`$`	hcparse/read_libclang/cxtypes.html#$,CXString	cxtypes: `$`(cxstr: CXString): string	
+`$`	hcparse/read_libclang/cxtypes.html#$,CXSourceRange	cxtypes: `$`(cxRange: CXSourceRange): string	
+`$`	hcparse/read_libclang/cxtypes.html#$,CXFile	cxtypes: `$`(file: CXFile): string	
+`$`	hcparse/read_libclang/cxtypes.html#$,CXSourceLocation	cxtypes: `$`(loc: CXSourceLocation): string	
+getExpansionLocation	hcparse/read_libclang/cxtypes.html#getExpansionLocation,CXSourceLocation	cxtypes: getExpansionLocation(location: CXSourceLocation): Option[\n    tuple[file: AbsFile, line, column, offset: int]]	
+`$`	hcparse/read_libclang/cxtypes.html#$,CXType	cxtypes: `$`(cxtype: CXType): string	
+`==`	hcparse/read_libclang/cxtypes.html#==,CXType,CXType	cxtypes: `==`(t1, t2: CXType): bool	
+isConstQualified	hcparse/read_libclang/cxtypes.html#isConstQualified,CXType	cxtypes: isConstQualified(t: CXType): bool	
+`[]`	hcparse/read_libclang/cxtypes.html#[],CXType	cxtypes: `[]`(t: CXType): CXType	
+cxKind	hcparse/read_libclang/cxtypes.html#cxKind,CXType	cxtypes: cxKind(cxtype: CXType): CXTypeKind	
+expectKind	hcparse/read_libclang/cxtypes.html#expectKind,CXType,CXTypeKind	cxtypes: expectKind(cxtype: CXType; kind: CXTypeKind)	
+argTypes	hcparse/read_libclang/cxtypes.html#argTypes,CXType	cxtypes: argTypes(cursor: CXType): seq[CXType]	
+tkPODKinds	hcparse/read_libclang/cxtypes.html#tkPODKinds	cxtypes: tkPODKinds	
+isConstQualifiedDeep	hcparse/read_libclang/cxtypes.html#isConstQualifiedDeep,CXType	cxtypes: isConstQualifiedDeep(cxtype: CXType): bool	
+templateParams	hcparse/read_libclang/cxtypes.html#templateParams,CXType	cxtypes: templateParams(cxType: CXType): seq[CXType]	
+getDiagnostics	hcparse/read_libclang/cxtypes.html#getDiagnostics,CXTranslationUnit	cxtypes: getDiagnostics(unit: CXTranslationUnit): seq[CXDiagnostic]	
+`$`	hcparse/read_libclang/cxtypes.html#$,CXDiagnostic	cxtypes: `$`(diag: CXDiagnostic): string	
+createIndex	hcparse/read_libclang/cxtypes.html#createIndex,bool,bool	cxtypes: createIndex(excludeDeclarations: bool = false; showDiagnostics: bool = false): CXIndex	
+createDatabase	hcparse/read_libclang/cxtypes.html#createDatabase,string	cxtypes: createDatabase(directory: string): CXCompilationDatabase	
+getArgs	hcparse/read_libclang/cxtypes.html#getArgs,CXCompileCommand	cxtypes: getArgs(command: CXCompileCommand): seq[string]	
+items	hcparse/read_libclang/cxtypes.html#items.i,CXCompileCommands	cxtypes: items(commands: CXCompileCommands): CXCompileCommand	
+`[]`	hcparse/read_libclang/cxtypes.html#[],CXCompileCommands,int	cxtypes: `[]`(commands: CXCompileCommands; idx: int): CXCompileCommand	
+absFile	hcparse/read_libclang/cxtypes.html#absFile,CXCompileCommand	cxtypes: absFile(command: CXCompileCommand): AbsFile	
+isNil	hcparse/read_libclang/cxtypes.html#isNil,CXTranslationUnit	cxtypes: isNil(tu: CXTranslationUnit): bool	
+getFile	hcparse/read_libclang/cxtypes.html#getFile,CXTranslationUnit	cxtypes: getFile(tu: CXTranslationUnit): AbsFile	
+getTuFile	hcparse/read_libclang/cxtypes.html#getTuFile,CXCursor	cxtypes: getTuFile(cx: CXCursor): AbsFile	
+getParentTranslationUnit	hcparse/read_libclang/cxtypes.html#getParentTranslationUnit,CXCursor	cxtypes: getParentTranslationUnit(cursor: CXCursor): CXTranslationUnit	
+tokens	hcparse/read_libclang/cxtypes.html#tokens,CXCursor,CXTranslationUnit	cxtypes: tokens(cursor: CXCursor; tu: CXTranslationUnit): seq[CXToken]	
+tokenStrings	hcparse/read_libclang/cxtypes.html#tokenStrings,CXCursor,Option[CXTranslationUnit]	cxtypes: tokenStrings(cursor: CXCursor;\n             tu: Option[CXTranslationUnit] = none(CXTranslationUnit)): seq[\n    string]	
+tokenKinds	hcparse/read_libclang/cxtypes.html#tokenKinds,CXCursor,CXTranslationUnit	cxtypes: tokenKinds(cursor: CXCursor; tu: CXTranslationUnit): seq[(string, CXTokenKind)]	
+annotateTokens	hcparse/read_libclang/cxtypes.html#annotateTokens,CXCursor,CXTranslationUnit	cxtypes: annotateTokens(cursor: CXCursor; tu: CXTranslationUnit): seq[\n    tuple[tok: CXToken, cursor: CXCursor]]	
+str	hcparse/read_libclang/cxtypes.html#str,CXToken,CXTranslationUnit	cxtypes: str(tok: CXToken; tu: CXTranslationUnit): string	
+cxKind	hcparse/read_libclang/cxtypes.html#cxKind,CXToken	cxtypes: cxKind(cxTok: CXToken): CXTokenKind	
+fromTokens	hcparse/read_libclang/cxtypes.html#fromTokens,seq[CXToken],CXTranslationUnit	cxtypes: fromTokens(toks: seq[CXToken]; unit: CXTranslationUnit): string	
+`$`	hcparse/read_libclang/cxtypes.html#$,CXCursor	cxtypes: `$`(cursor: CXCursor): string	
+ckTypeDeclKinds	hcparse/read_libclang/cxtypes.html#ckTypeDeclKinds	cxtypes: ckTypeDeclKinds	
+hash	hcparse/read_libclang/cxtypes.html#hash,CXCursor	cxtypes: hash(cursor: CXCursor): Hash	
+cxKind	hcparse/read_libclang/cxtypes.html#cxKind,CXCursor	cxtypes: cxKind(cursor: CXCursor): CXCursorKind	
+expectKind	hcparse/read_libclang/cxtypes.html#expectKind,CXCursor,CXCursorKind	cxtypes: expectKind(cursor: CXCursor; kind: CXCursorKind)	
+expectKind	hcparse/read_libclang/cxtypes.html#expectKind,CXCursor,set[CXCursorKind]	cxtypes: expectKind(cursor: CXCursor; kind: set[CXCursorKind])	
+cxType	hcparse/read_libclang/cxtypes.html#cxType,CXCursor	cxtypes: cxType(cursor: CXCursor): CXType	
+comment	hcparse/read_libclang/cxtypes.html#comment,CXCursor	cxtypes: comment(cursor: CXCursor): CXComment	
+rawComment	hcparse/read_libclang/cxtypes.html#rawComment,CXCursor	cxtypes: rawComment(cursor: CXCursor): string	
+children	hcparse/read_libclang/cxtypes.html#children,CXCursor	cxtypes: children(cursor: CXCursor): seq[CXCursor]	
+children	hcparse/read_libclang/cxtypes.html#children,CXCursor,set[CXCursorKind]	cxtypes: children(cursor: CXCursor; kind: set[CXCursorKind]): seq[CXCursor]	
+items	hcparse/read_libclang/cxtypes.html#items.i,CXCursor,set[CXCursorKind]	cxtypes: items(cursor: CXCursor;\n      filter: set[CXCursorKind] = {low(CXCursorKind) .. high(CXCursorKind)}): CXCursor	
+`[]`	hcparse/read_libclang/cxtypes.html#[],CXCursor,int	cxtypes: `[]`(cursor: CXCursor; idx: int): CXCursor	
+len	hcparse/read_libclang/cxtypes.html#len,CXCursor	cxtypes: len(cursor: CXCursor): int	
+isForward	hcparse/read_libclang/cxtypes.html#isForward,CXCursor	cxtypes: isForward(cursor: CXCursor): bool	
+getFirstOfKind	hcparse/read_libclang/cxtypes.html#getFirstOfKind,CXCursor,set[CXCursorKind],bool	cxtypes: getFirstOfKind(cursor: CXCursor; kindSet: set[CXCursorKind];\n               recurse: bool = true): CXCursor	
+argc	hcparse/read_libclang/cxtypes.html#argc,CXType	cxtypes: argc(cxtype: CXType): int	
+params	hcparse/read_libclang/cxtypes.html#params,CXCursor	cxtypes: params(cursor: CXCursor): seq[CXCursor]	
+retType	hcparse/read_libclang/cxtypes.html#retType,CXCursor	cxtypes: retType(cursor: CXCursor): CXType	
+argc	hcparse/read_libclang/cxtypes.html#argc,CXCursor	cxtypes: argc(cursor: CXCursor): int	
+nthArg	hcparse/read_libclang/cxtypes.html#nthArg,CXType,int	cxtypes: nthArg(cxtype: CXType; idx: int): CXType	
+argTypes	hcparse/read_libclang/cxtypes.html#argTypes,CXCursor	cxtypes: argTypes(cursor: CXCursor): seq[CXType]	
+isConstMethod	hcparse/read_libclang/cxtypes.html#isConstMethod,CXCursor	cxtypes: isConstMethod(cursor: CXCursor): bool	
+isFromMainFile	hcparse/read_libclang/cxtypes.html#isFromMainFile,CXCursor	cxtypes: isFromMainFile(cursor: CXCursor): bool	
+isStatic	hcparse/read_libclang/cxtypes.html#isStatic,CXCursor	cxtypes: isStatic(cursor: CXCursor): bool	
+`==`	hcparse/read_libclang/cxtypes.html#==,CXCursor,CXCursor	cxtypes: `==`(c1, c2: CXCursor): bool	
+getSpellingLocation	hcparse/read_libclang/cxtypes.html#getSpellingLocation,CXCursor	cxtypes: getSpellingLocation(cursor: CXCursor): Option[CxLocation]	
+`$`	hcparse/read_libclang/cxtypes.html#$,CxLocation	cxtypes: `$`(loc: CxLocation): string	
+relSpellingFile	hcparse/read_libclang/cxtypes.html#relSpellingFile,CXCursor	cxtypes: relSpellingFile(cursor: CXCursor): RelFile	
+getCursorSemanticSiblings	hcparse/read_libclang/cxtypes.html#getCursorSemanticSiblings,CXCursor	cxtypes: getCursorSemanticSiblings(cursor: CXCursor): tuple[before, after: seq[CXCursor]]	
+isSemanticAncestorOf	hcparse/read_libclang/cxtypes.html#isSemanticAncestorOf,CXCursor,CXCursor	cxtypes: isSemanticAncestorOf(ancestor, cursor: CXCursor): bool	
+inheritsGenParamsOf	hcparse/read_libclang/cxtypes.html#inheritsGenParamsOf,CXCursor,CXCursor	cxtypes: inheritsGenParamsOf(cursor, ancestor: CXCursor): bool	
+cxKind	hcparse/read_libclang/cxtypes.html#cxKind,CXComment	cxtypes: cxKind(comment: CXComment): CXCommentKind	
+`$`	hcparse/read_libclang/cxtypes.html#$,CXComment	cxtypes: `$`(comment: CXComment): string	
+children	hcparse/read_libclang/cxtypes.html#children.i,CXComment	cxtypes: children(comment: CXComment): CXComment	
+len	hcparse/read_libclang/cxtypes.html#len,CXComment	cxtypes: len(comment: CXComment): int	
+`[]`	hcparse/read_libclang/cxtypes.html#[],CXComment,int	cxtypes: `[]`(comment: CXComment; idx: int): CXComment	
+dropTemplateArgs	hcparse/read_libclang/cxtypes.html#dropTemplateArgs,string	cxtypes: dropTemplateArgs(old: string): string	
+hshow	hcparse/read_libclang/cxtypes.html#hshow,CXType,HDisplayOpts	cxtypes: hshow(cxtype: CXType; opts: HDisplayOpts = defaultHDisplay): ColoredText	
+treeRepr	hcparse/read_libclang/cxtypes.html#treeRepr,CXCursor,Option[CXTranslationUnit],HDisplayOpts,bool	cxtypes: treeRepr(cursor: CXCursor;\n         tu: Option[CXTranslationUnit] = none(CXTranslationUnit);\n         opts: HDisplayOpts = defaultHDisplay; tokenKinds: bool = false): ColoredText	
+treeRepr	hcparse/read_libclang/cxtypes.html#treeRepr,CXCursor,CXTranslationUnit,HDisplayOpts	cxtypes: treeRepr(cursor: CXCursor; tu: CXTranslationUnit;\n         opts: HDisplayOpts = defaultHDisplay): ColoredText	
+getClassBaseCursors	hcparse/read_libclang/cxtypes.html#getClassBaseCursors,CXCursor	cxtypes: getClassBaseCursors(inCursor: CXCursor): seq[CXCursor]	
+isAnnotatedWith	hcparse/read_libclang/cxtypes.html#isAnnotatedWith,CXCursor,CXTranslationUnit,string	cxtypes: isAnnotatedWith(cursor: CXCursor; tu: CXTranslationUnit; attr: string): bool	

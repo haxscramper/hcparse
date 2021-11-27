@@ -1,0 +1,28 @@
+incl	hcparse/read_libclang/hc_clangreader.html#incl,OrderedSet[I],OrderedSet[I]	hc_clangreader: incl[I](s1: var OrderedSet[I]; other: OrderedSet[I])	
+excl	hcparse/read_libclang/hc_clangreader.html#excl,OrderedSet[I],OrderedSet[I]	hc_clangreader: excl[I](s1: var OrderedSet[I]; other: OrderedSet[I])	
+cxxPair	hcparse/read_libclang/hc_clangreader.html#cxxPair,CScopedIdent,bool	hc_clangreader: cxxPair(ident: CScopedIdent; last: bool = false): CxxNamePair	
+cxxPair	hcparse/read_libclang/hc_clangreader.html#cxxPair,CXType,WrapConf	hc_clangreader: cxxPair(cxtype: CXType; conf: WrapConf): CxxNamePair	
+cxxPair	hcparse/read_libclang/hc_clangreader.html#cxxPair,CXCursor,WrapConf	hc_clangreader: cxxPair(cursor: CXCursor; conf: WrapConf): CxxNamePair	
+toCxxType	hcparse/read_libclang/hc_clangreader.html#toCxxType,CxxEntry,CxxNamePair,CxxNamePair	hc_clangreader: toCxxType(anon: CxxEntry; parent: CxxNamePair; user: CxxNamePair): CxxTypeUse	
+toCxxType	hcparse/read_libclang/hc_clangreader.html#toCxxType,CXType,WrapConf,WrapCache	hc_clangreader: toCxxType(cxtype: CXType; conf: WrapConf; cache: var WrapCache): CxxTypeUse	
+toCxxType	hcparse/read_libclang/hc_clangreader.html#toCxxType,NimType,WrapConf,WrapCache	hc_clangreader: toCxxType(t: NimType; conf: WrapConf; cache: var WrapCache): CxxTypeUse	
+cxxPair	hcparse/read_libclang/hc_clangreader.html#cxxPair,NimType,WrapConf	hc_clangreader: cxxPair(t: NimType; conf: WrapConf): CxxNamePair	
+toCxxArg	hcparse/read_libclang/hc_clangreader.html#toCxxArg,CArg,WrapConf,WrapCache	hc_clangreader: toCxxArg(arg: CArg; conf: WrapConf; cache: var WrapCache): CxxArg	
+declGenParams	hcparse/read_libclang/hc_clangreader.html#declGenParams,CName	hc_clangreader: declGenParams(part: CName): seq[tuple[ptype: CXCursor,\n                                      pdefault: Option[CXCursor]]]	
+getPartialParams	hcparse/read_libclang/hc_clangreader.html#getPartialParams,CxxName,int,WrapConf,WrapCache	hc_clangreader: getPartialParams(name: CxxName; partialMax: int; conf: WrapConf;\n                 cache: var WrapCache): seq[NimType]	
+genParamsForIdent	hcparse/read_libclang/hc_clangreader.html#genParamsForIdent,WrapConf,CScopedIdent,WrapCache	hc_clangreader: genParamsForIdent(conf: WrapConf; scoped: CScopedIdent; cache: var WrapCache): CxxGenParams	
+wrapProcedure	hcparse/read_libclang/hc_clangreader.html#wrapProcedure,CDecl,WrapConf,WrapCache,Option[CDecl]	hc_clangreader: wrapProcedure(pr: CDecl; conf: WrapConf; cache: var WrapCache;\n              parentDecl: Option[CDecl]): CxxProc	
+wrapFunction	hcparse/read_libclang/hc_clangreader.html#wrapFunction,CDecl,WrapConf,WrapCache	hc_clangreader: wrapFunction(cd: CDecl; conf: WrapConf; cache: var WrapCache): CxxProc	
+wrapTypeDecl	hcparse/read_libclang/hc_clangreader.html#wrapTypeDecl,CDecl,WrapConf,WrapCache	hc_clangreader: wrapTypeDecl(decl: CDecl; conf: WrapConf; cache: var WrapCache): Option[CxxEntry]	
+wrapField	hcparse/read_libclang/hc_clangreader.html#wrapField,CDecl,WrapConf,WrapCache,CxxNamePair	hc_clangreader: wrapField(cd: CDecl; conf: WrapConf; cache: var WrapCache; parent: CxxNamePair): CxxField	
+wrapAlias	hcparse/read_libclang/hc_clangreader.html#wrapAlias,CDecl,CScopedIdent,WrapConf,WrapCache	hc_clangreader: wrapAlias(al: CDecl; parent: CScopedIdent; conf: WrapConf; cache: var WrapCache): CxxAlias	
+getDefaultAccess	hcparse/read_libclang/hc_clangreader.html#getDefaultAccess,CXCursor	hc_clangreader: getDefaultAccess(cursor: CXCursor): CX_AccessSpecifier	
+publicFields	hcparse/read_libclang/hc_clangreader.html#publicFields,CDecl	hc_clangreader: publicFields(cd: CDecl): seq[CDecl]	
+wrapObject	hcparse/read_libclang/hc_clangreader.html#wrapObject,CDecl,WrapConf,WrapCache	hc_clangreader: wrapObject(cd: CDecl; conf: WrapConf; cache: var WrapCache): CxxObject	
+wrapEnum	hcparse/read_libclang/hc_clangreader.html#wrapEnum,CDecl,WrapConf,WrapCache	hc_clangreader: wrapEnum(declEn: CDecl; conf: WrapConf; cache: var WrapCache): CxxEnum	
+capitalAscii	hcparse/read_libclang/hc_clangreader.html#capitalAscii,string	hc_clangreader: capitalAscii(str: string): string	
+capitalAscii	hcparse/read_libclang/hc_clangreader.html#capitalAscii,seq[string]	hc_clangreader: capitalAscii(strs: seq[string]): seq[string]	
+wrapForward	hcparse/read_libclang/hc_clangreader.html#wrapForward,CDecl,WrapConf,WrapCache	hc_clangreader: wrapForward(mdecl: CDecl; conf: WrapConf; cache: var WrapCache): CxxForward	
+wrapToken	hcparse/read_libclang/hc_clangreader.html#wrapToken,string,CXTokenKind	hc_clangreader: wrapToken(val: string; tok: CXTokenKind): CxxMacroToken	
+wrapMacro	hcparse/read_libclang/hc_clangreader.html#wrapMacro,CDecl,WrapConf,WrapCache,CXTranslationUnit	hc_clangreader: wrapMacro(mdecl: CDecl; conf: WrapConf; cache: var WrapCache;\n          tu: CXTranslationUnit): CxxMacro	
+wrapApiUnit	hcparse/read_libclang/hc_clangreader.html#wrapApiUnit,CApiUnit,WrapConf,WrapCache	hc_clangreader: wrapApiUnit(api: CApiUnit; conf: WrapConf; cache: var WrapCache): seq[CxxEntry]	

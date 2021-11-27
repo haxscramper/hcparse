@@ -1,0 +1,359 @@
+ctkIdent	hcparse/processor/wrap_store.html#ctkIdent	CxxTypeKind.ctkIdent	
+ctkPod	hcparse/processor/wrap_store.html#ctkPod	CxxTypeKind.ctkPod	
+ctkProc	hcparse/processor/wrap_store.html#ctkProc	CxxTypeKind.ctkProc	
+ctkPtr	hcparse/processor/wrap_store.html#ctkPtr	CxxTypeKind.ctkPtr	
+ctkLVref	hcparse/processor/wrap_store.html#ctkLVref	CxxTypeKind.ctkLVref	
+ctkRVref	hcparse/processor/wrap_store.html#ctkRVref	CxxTypeKind.ctkRVref	
+ctkFixedArray	hcparse/processor/wrap_store.html#ctkFixedArray	CxxTypeKind.ctkFixedArray	
+ctkDependentArray	hcparse/processor/wrap_store.html#ctkDependentArray	CxxTypeKind.ctkDependentArray	
+ctkDynamicArray	hcparse/processor/wrap_store.html#ctkDynamicArray	CxxTypeKind.ctkDynamicArray	
+ctkStaticParam	hcparse/processor/wrap_store.html#ctkStaticParam	CxxTypeKind.ctkStaticParam	
+ctkAnonObject	hcparse/processor/wrap_store.html#ctkAnonObject	CxxTypeKind.ctkAnonObject	
+ctkAnonEnum	hcparse/processor/wrap_store.html#ctkAnonEnum	CxxTypeKind.ctkAnonEnum	
+CxxTypeKind	hcparse/processor/wrap_store.html#CxxTypeKind	wrap_store: CxxTypeKind	
+nctRegular	hcparse/processor/wrap_store.html#nctRegular	NimConstructorTarget.nctRegular	
+nctPtr	hcparse/processor/wrap_store.html#nctPtr	NimConstructorTarget.nctPtr	
+nctRef	hcparse/processor/wrap_store.html#nctRef	NimConstructorTarget.nctRef	
+NimConstructorTarget	hcparse/processor/wrap_store.html#NimConstructorTarget	wrap_store: NimConstructorTarget	
+ctkWrapKinds	hcparse/processor/wrap_store.html#ctkWrapKinds	wrap_store: ctkWrapKinds	
+ctkArrayKinds	hcparse/processor/wrap_store.html#ctkArrayKinds	wrap_store: ctkArrayKinds	
+CxxSpellingLocation	hcparse/processor/wrap_store.html#CxxSpellingLocation	wrap_store: CxxSpellingLocation	
+cbkNone	hcparse/processor/wrap_store.html#cbkNone	CxxBindKind.cbkNone	
+cbkGlobal	hcparse/processor/wrap_store.html#cbkGlobal	CxxBindKind.cbkGlobal	
+cbkAbsolute	hcparse/processor/wrap_store.html#cbkAbsolute	CxxBindKind.cbkAbsolute	
+cbkPNode	hcparse/processor/wrap_store.html#cbkPNode	CxxBindKind.cbkPNode	
+cbkDynamicPatt	hcparse/processor/wrap_store.html#cbkDynamicPatt	CxxBindKind.cbkDynamicPatt	
+cbkDynamicExpr	hcparse/processor/wrap_store.html#cbkDynamicExpr	CxxBindKind.cbkDynamicExpr	
+cbkDynamicCall	hcparse/processor/wrap_store.html#cbkDynamicCall	CxxBindKind.cbkDynamicCall	
+cbkMacroBind	hcparse/processor/wrap_store.html#cbkMacroBind	CxxBindKind.cbkMacroBind	
+cbkLink	hcparse/processor/wrap_store.html#cbkLink	CxxBindKind.cbkLink	
+CxxBindKind	hcparse/processor/wrap_store.html#CxxBindKind	wrap_store: CxxBindKind	
+CxxLibImport	hcparse/processor/wrap_store.html#CxxLibImport	wrap_store: CxxLibImport	
+CxxBind	hcparse/processor/wrap_store.html#CxxBind	wrap_store: CxxBind	
+CxxComment	hcparse/processor/wrap_store.html#CxxComment	wrap_store: CxxComment	
+CxxBase	hcparse/processor/wrap_store.html#CxxBase	wrap_store: CxxBase	
+CxxName	hcparse/processor/wrap_store.html#CxxName	wrap_store: CxxName	
+cncNone	hcparse/processor/wrap_store.html#cncNone	CxxNameContext.cncNone	
+cncType	hcparse/processor/wrap_store.html#cncType	CxxNameContext.cncType	
+cncArg	hcparse/processor/wrap_store.html#cncArg	CxxNameContext.cncArg	
+cncVar	hcparse/processor/wrap_store.html#cncVar	CxxNameContext.cncVar	
+cncProc	hcparse/processor/wrap_store.html#cncProc	CxxNameContext.cncProc	
+cncMethod	hcparse/processor/wrap_store.html#cncMethod	CxxNameContext.cncMethod	
+cncField	hcparse/processor/wrap_store.html#cncField	CxxNameContext.cncField	
+cncEnumField	hcparse/processor/wrap_store.html#cncEnumField	CxxNameContext.cncEnumField	
+CxxNameContext	hcparse/processor/wrap_store.html#CxxNameContext	wrap_store: CxxNameContext	
+CxxNamePair	hcparse/processor/wrap_store.html#CxxNamePair	wrap_store: CxxNamePair	
+CxxIdent	hcparse/processor/wrap_store.html#CxxIdent	wrap_store: CxxIdent	
+CxxGenParams	hcparse/processor/wrap_store.html#CxxGenParams	wrap_store: CxxGenParams	
+ctdkNone	hcparse/processor/wrap_store.html#ctdkNone	CxxTypeDeclKind.ctdkNone	
+ctdkEnum	hcparse/processor/wrap_store.html#ctdkEnum	CxxTypeDeclKind.ctdkEnum	
+ctdkStruct	hcparse/processor/wrap_store.html#ctdkStruct	CxxTypeDeclKind.ctdkStruct	
+ctdkClass	hcparse/processor/wrap_store.html#ctdkClass	CxxTypeDeclKind.ctdkClass	
+ctdkUnion	hcparse/processor/wrap_store.html#ctdkUnion	CxxTypeDeclKind.ctdkUnion	
+ctdkTypedef	hcparse/processor/wrap_store.html#ctdkTypedef	CxxTypeDeclKind.ctdkTypedef	
+ctdkProc	hcparse/processor/wrap_store.html#ctdkProc	CxxTypeDeclKind.ctdkProc	
+CxxTypeDeclKind	hcparse/processor/wrap_store.html#CxxTypeDeclKind	wrap_store: CxxTypeDeclKind	
+CxxTypeDecl	hcparse/processor/wrap_store.html#CxxTypeDecl	wrap_store: CxxTypeDecl	
+CxxTypeStore	hcparse/processor/wrap_store.html#CxxTypeStore	wrap_store: CxxTypeStore	
+CxxTypeRef	hcparse/processor/wrap_store.html#CxxTypeRef	wrap_store: CxxTypeRef	
+ctfNone	hcparse/processor/wrap_store.html#ctfNone	CxxTypeFlag.ctfNone	
+ctfConst	hcparse/processor/wrap_store.html#ctfConst	CxxTypeFlag.ctfConst	
+ctfMutable	hcparse/processor/wrap_store.html#ctfMutable	CxxTypeFlag.ctfMutable	
+ctfComplex	hcparse/processor/wrap_store.html#ctfComplex	CxxTypeFlag.ctfComplex	
+ctfParam	hcparse/processor/wrap_store.html#ctfParam	CxxTypeFlag.ctfParam	
+ctfDefaultedParam	hcparse/processor/wrap_store.html#ctfDefaultedParam	CxxTypeFlag.ctfDefaultedParam	
+ctfUnexposed	hcparse/processor/wrap_store.html#ctfUnexposed	CxxTypeFlag.ctfUnexposed	
+ctfIsPodType	hcparse/processor/wrap_store.html#ctfIsPodType	CxxTypeFlag.ctfIsPodType	
+ctfIsEnumType	hcparse/processor/wrap_store.html#ctfIsEnumType	CxxTypeFlag.ctfIsEnumType	
+ctfIsStructType	hcparse/processor/wrap_store.html#ctfIsStructType	CxxTypeFlag.ctfIsStructType	
+ctfIsUnionType	hcparse/processor/wrap_store.html#ctfIsUnionType	CxxTypeFlag.ctfIsUnionType	
+ctfIsClassType	hcparse/processor/wrap_store.html#ctfIsClassType	CxxTypeFlag.ctfIsClassType	
+ctfIsTypedefType	hcparse/processor/wrap_store.html#ctfIsTypedefType	CxxTypeFlag.ctfIsTypedefType	
+ctfPtrToArray	hcparse/processor/wrap_store.html#ctfPtrToArray	CxxTypeFlag.ctfPtrToArray	
+ctfNoCdeclProc	hcparse/processor/wrap_store.html#ctfNoCdeclProc	CxxTypeFlag.ctfNoCdeclProc	
+CxxTypeFlag	hcparse/processor/wrap_store.html#CxxTypeFlag	wrap_store: CxxTypeFlag	
+cptNone	hcparse/processor/wrap_store.html#cptNone	CxxPodTypeKind.cptNone	
+cptU8	hcparse/processor/wrap_store.html#cptU8	CxxPodTypeKind.cptU8	
+cptU16	hcparse/processor/wrap_store.html#cptU16	CxxPodTypeKind.cptU16	
+cptU32	hcparse/processor/wrap_store.html#cptU32	CxxPodTypeKind.cptU32	
+cptU64	hcparse/processor/wrap_store.html#cptU64	CxxPodTypeKind.cptU64	
+cptI8	hcparse/processor/wrap_store.html#cptI8	CxxPodTypeKind.cptI8	
+cptI16	hcparse/processor/wrap_store.html#cptI16	CxxPodTypeKind.cptI16	
+cptI32	hcparse/processor/wrap_store.html#cptI32	CxxPodTypeKind.cptI32	
+cptI64	hcparse/processor/wrap_store.html#cptI64	CxxPodTypeKind.cptI64	
+cptVoid	hcparse/processor/wrap_store.html#cptVoid	CxxPodTypeKind.cptVoid	
+cptNullptr	hcparse/processor/wrap_store.html#cptNullptr	CxxPodTypeKind.cptNullptr	
+cptChar	hcparse/processor/wrap_store.html#cptChar	CxxPodTypeKind.cptChar	
+cptUChar	hcparse/processor/wrap_store.html#cptUChar	CxxPodTypeKind.cptUChar	
+cptWChar	hcparse/processor/wrap_store.html#cptWChar	CxxPodTypeKind.cptWChar	
+cptChar16	hcparse/processor/wrap_store.html#cptChar16	CxxPodTypeKind.cptChar16	
+cptChar32	hcparse/processor/wrap_store.html#cptChar32	CxxPodTypeKind.cptChar32	
+cptInt	hcparse/processor/wrap_store.html#cptInt	CxxPodTypeKind.cptInt	
+cptUInt	hcparse/processor/wrap_store.html#cptUInt	CxxPodTypeKind.cptUInt	
+cptBool	hcparse/processor/wrap_store.html#cptBool	CxxPodTypeKind.cptBool	
+cptFloat	hcparse/processor/wrap_store.html#cptFloat	CxxPodTypeKind.cptFloat	
+cptDouble	hcparse/processor/wrap_store.html#cptDouble	CxxPodTypeKind.cptDouble	
+cptLongDouble	hcparse/processor/wrap_store.html#cptLongDouble	CxxPodTypeKind.cptLongDouble	
+cptSizeT	hcparse/processor/wrap_store.html#cptSizeT	CxxPodTypeKind.cptSizeT	
+cptSSizeT	hcparse/processor/wrap_store.html#cptSSizeT	CxxPodTypeKind.cptSSizeT	
+CxxPodTypeKind	hcparse/processor/wrap_store.html#CxxPodTypeKind	wrap_store: CxxPodTypeKind	
+CxxTypeUse	hcparse/processor/wrap_store.html#CxxTypeUse	wrap_store: CxxTypeUse	
+cpkRegular	hcparse/processor/wrap_store.html#cpkRegular	CxxProcKind.cpkRegular	
+cpkConstructor	hcparse/processor/wrap_store.html#cpkConstructor	CxxProcKind.cpkConstructor	
+cpkDestructor	hcparse/processor/wrap_store.html#cpkDestructor	CxxProcKind.cpkDestructor	
+cpkPrefixOp	hcparse/processor/wrap_store.html#cpkPrefixOp	CxxProcKind.cpkPrefixOp	
+cpkPostfixOp	hcparse/processor/wrap_store.html#cpkPostfixOp	CxxProcKind.cpkPostfixOp	
+cpkInfixOP	hcparse/processor/wrap_store.html#cpkInfixOP	CxxProcKind.cpkInfixOP	
+cpkAsgnOp	hcparse/processor/wrap_store.html#cpkAsgnOp	CxxProcKind.cpkAsgnOp	
+cpkCopyAsgnOp	hcparse/processor/wrap_store.html#cpkCopyAsgnOp	CxxProcKind.cpkCopyAsgnOp	
+cpkArrayOp	hcparse/processor/wrap_store.html#cpkArrayOp	CxxProcKind.cpkArrayOp	
+cpkArrowOp	hcparse/processor/wrap_store.html#cpkArrowOp	CxxProcKind.cpkArrowOp	
+cpkCallOp	hcparse/processor/wrap_store.html#cpkCallOp	CxxProcKind.cpkCallOp	
+cpkDerefOp	hcparse/processor/wrap_store.html#cpkDerefOp	CxxProcKind.cpkDerefOp	
+cpkCommaOp	hcparse/processor/wrap_store.html#cpkCommaOp	CxxProcKind.cpkCommaOp	
+cpkConvertOp	hcparse/processor/wrap_store.html#cpkConvertOp	CxxProcKind.cpkConvertOp	
+cpkUserLitOp	hcparse/processor/wrap_store.html#cpkUserLitOp	CxxProcKind.cpkUserLitOp	
+cpkNewOp	hcparse/processor/wrap_store.html#cpkNewOp	CxxProcKind.cpkNewOp	
+cpkDeleteOp	hcparse/processor/wrap_store.html#cpkDeleteOp	CxxProcKind.cpkDeleteOp	
+CxxProcKind	hcparse/processor/wrap_store.html#CxxProcKind	wrap_store: CxxProcKind	
+cpfConst	hcparse/processor/wrap_store.html#cpfConst	CxxProcFlag.cpfConst	
+cpfStatic	hcparse/processor/wrap_store.html#cpfStatic	CxxProcFlag.cpfStatic	
+cpfOperator	hcparse/processor/wrap_store.html#cpfOperator	CxxProcFlag.cpfOperator	
+cpfOverride	hcparse/processor/wrap_store.html#cpfOverride	CxxProcFlag.cpfOverride	
+cpfExportc	hcparse/processor/wrap_store.html#cpfExportc	CxxProcFlag.cpfExportc	
+cpfSlot	hcparse/processor/wrap_store.html#cpfSlot	CxxProcFlag.cpfSlot	
+cpfSignal	hcparse/processor/wrap_store.html#cpfSignal	CxxProcFlag.cpfSignal	
+cpfVirtual	hcparse/processor/wrap_store.html#cpfVirtual	CxxProcFlag.cpfVirtual	
+cpfVariadic	hcparse/processor/wrap_store.html#cpfVariadic	CxxProcFlag.cpfVariadic	
+cpfMethod	hcparse/processor/wrap_store.html#cpfMethod	CxxProcFlag.cpfMethod	
+cpfNoexcept	hcparse/processor/wrap_store.html#cpfNoexcept	CxxProcFlag.cpfNoexcept	
+CxxProcFlag	hcparse/processor/wrap_store.html#CxxProcFlag	wrap_store: CxxProcFlag	
+CxxProc	hcparse/processor/wrap_store.html#CxxProc	wrap_store: CxxProc	
+cekIntLit	hcparse/processor/wrap_store.html#cekIntLit	CxxExprKind.cekIntLit	
+cekStrLit	hcparse/processor/wrap_store.html#cekStrLit	CxxExprKind.cekStrLit	
+cekCall	hcparse/processor/wrap_store.html#cekCall	CxxExprKind.cekCall	
+CxxExprKind	hcparse/processor/wrap_store.html#CxxExprKind	wrap_store: CxxExprKind	
+CxxExpr	hcparse/processor/wrap_store.html#CxxExpr	wrap_store: CxxExpr	
+CxxArg	hcparse/processor/wrap_store.html#CxxArg	wrap_store: CxxArg	
+cffStatic	hcparse/processor/wrap_store.html#cffStatic	CxxFieldFlag.cffStatic	
+cffPublic	hcparse/processor/wrap_store.html#cffPublic	CxxFieldFlag.cffPublic	
+cffPrivate	hcparse/processor/wrap_store.html#cffPrivate	CxxFieldFlag.cffPrivate	
+cffProtected	hcparse/processor/wrap_store.html#cffProtected	CxxFieldFlag.cffProtected	
+CxxFieldFlag	hcparse/processor/wrap_store.html#CxxFieldFlag	wrap_store: CxxFieldFlag	
+CxxField	hcparse/processor/wrap_store.html#CxxField	wrap_store: CxxField	
+CxxAlias	hcparse/processor/wrap_store.html#CxxAlias	wrap_store: CxxAlias	
+CxxEnumValue	hcparse/processor/wrap_store.html#CxxEnumValue	wrap_store: CxxEnumValue	
+CxxEnum	hcparse/processor/wrap_store.html#CxxEnum	wrap_store: CxxEnum	
+cokUnion	hcparse/processor/wrap_store.html#cokUnion	CxxObjectKind.cokUnion	
+cokStruct	hcparse/processor/wrap_store.html#cokStruct	CxxObjectKind.cokStruct	
+cokClass	hcparse/processor/wrap_store.html#cokClass	CxxObjectKind.cokClass	
+CxxObjectKind	hcparse/processor/wrap_store.html#CxxObjectKind	wrap_store: CxxObjectKind	
+casPublic	hcparse/processor/wrap_store.html#casPublic	CxxAccessSpecifier.casPublic	
+casProtected	hcparse/processor/wrap_store.html#casProtected	CxxAccessSpecifier.casProtected	
+casPrivate	hcparse/processor/wrap_store.html#casPrivate	CxxAccessSpecifier.casPrivate	
+CxxAccessSpecifier	hcparse/processor/wrap_store.html#CxxAccessSpecifier	wrap_store: CxxAccessSpecifier	
+cqsNone	hcparse/processor/wrap_store.html#cqsNone	CxxQSignals.cqsNone	
+cqsSlot	hcparse/processor/wrap_store.html#cqsSlot	CxxQSignals.cqsSlot	
+cqsSignal	hcparse/processor/wrap_store.html#cqsSignal	CxxQSignals.cqsSignal	
+CxxQSignals	hcparse/processor/wrap_store.html#CxxQSignals	wrap_store: CxxQSignals	
+cofExplicitConstructor	hcparse/processor/wrap_store.html#cofExplicitConstructor	CxxObjectFlag.cofExplicitConstructor	
+cofExplicitDestructor	hcparse/processor/wrap_store.html#cofExplicitDestructor	CxxObjectFlag.cofExplicitDestructor	
+cofCanAggregateInit	hcparse/processor/wrap_store.html#cofCanAggregateInit	CxxObjectFlag.cofCanAggregateInit	
+CxxObjectFlag	hcparse/processor/wrap_store.html#CxxObjectFlag	wrap_store: CxxObjectFlag	
+CxxObject	hcparse/processor/wrap_store.html#CxxObject	wrap_store: CxxObject	
+CxxForward	hcparse/processor/wrap_store.html#CxxForward	wrap_store: CxxForward	
+cmtkIntLit	hcparse/processor/wrap_store.html#cmtkIntLit	CxxMacroTokenKind.cmtkIntLit	
+cmtkIdent	hcparse/processor/wrap_store.html#cmtkIdent	CxxMacroTokenKind.cmtkIdent	
+cmtkPunctuation	hcparse/processor/wrap_store.html#cmtkPunctuation	CxxMacroTokenKind.cmtkPunctuation	
+cmtkKeyword	hcparse/processor/wrap_store.html#cmtkKeyword	CxxMacroTokenKind.cmtkKeyword	
+CxxMacroTokenKind	hcparse/processor/wrap_store.html#CxxMacroTokenKind	wrap_store: CxxMacroTokenKind	
+CxxMacroToken	hcparse/processor/wrap_store.html#CxxMacroToken	wrap_store: CxxMacroToken	
+CxxMacro	hcparse/processor/wrap_store.html#CxxMacro	wrap_store: CxxMacro	
+CxxMacroGroup	hcparse/processor/wrap_store.html#CxxMacroGroup	wrap_store: CxxMacroGroup	
+cekEnum	hcparse/processor/wrap_store.html#cekEnum	CxxEntryKind.cekEnum	
+cekProc	hcparse/processor/wrap_store.html#cekProc	CxxEntryKind.cekProc	
+cekObject	hcparse/processor/wrap_store.html#cekObject	CxxEntryKind.cekObject	
+cekAlias	hcparse/processor/wrap_store.html#cekAlias	CxxEntryKind.cekAlias	
+cekPass	hcparse/processor/wrap_store.html#cekPass	CxxEntryKind.cekPass	
+cekForward	hcparse/processor/wrap_store.html#cekForward	CxxEntryKind.cekForward	
+cekImport	hcparse/processor/wrap_store.html#cekImport	CxxEntryKind.cekImport	
+cekEmpty	hcparse/processor/wrap_store.html#cekEmpty	CxxEntryKind.cekEmpty	
+cekTypeGroup	hcparse/processor/wrap_store.html#cekTypeGroup	CxxEntryKind.cekTypeGroup	
+cekMacroGroup	hcparse/processor/wrap_store.html#cekMacroGroup	CxxEntryKind.cekMacroGroup	
+cekMacro	hcparse/processor/wrap_store.html#cekMacro	CxxEntryKind.cekMacro	
+cekComment	hcparse/processor/wrap_store.html#cekComment	CxxEntryKind.cekComment	
+CxxEntryKind	hcparse/processor/wrap_store.html#CxxEntryKind	wrap_store: CxxEntryKind	
+CxxEntry	hcparse/processor/wrap_store.html#CxxEntry	wrap_store: CxxEntry	
+CxxFile	hcparse/processor/wrap_store.html#CxxFile	wrap_store: CxxFile	
+cekTypeStored	hcparse/processor/wrap_store.html#cekTypeStored	wrap_store: cekTypeStored	
+cpkOperatorKinds	hcparse/processor/wrap_store.html#cpkOperatorKinds	wrap_store: cpkOperatorKinds	
+`$`	hcparse/processor/wrap_store.html#$,CxxLibImport	wrap_store: `$`(cxx: CxxLibImport): string	
+`$`	hcparse/processor/wrap_store.html#$,CxxFile	wrap_store: `$`(file: CxxFile): string	
+cxxStr	hcparse/processor/wrap_store.html#cxxStr,CxxName	wrap_store: cxxStr(name: CxxName): string	
+cxxStr	hcparse/processor/wrap_store.html#cxxStr,CxxNamePair	wrap_store: cxxStr(name: CxxNamePair): string	
+`$`	hcparse/processor/wrap_store.html#$,CxxName	wrap_store: `$`(name: CxxName): string	
+`$`	hcparse/processor/wrap_store.html#$,CxxNamePair	wrap_store: `$`(name: CxxNamePair): string	
+`$`	hcparse/processor/wrap_store.html#$,CxxExpr	wrap_store: `$`(expr: CxxExpr): string	
+`$`	hcparse/processor/wrap_store.html#$,CxxTypeRef	wrap_store: `$`(tref: CxxTypeRef): string	
+`$`	hcparse/processor/wrap_store.html#$,CxxArg	wrap_store: `$`(arg: CxxArg): string	
+`$`	hcparse/processor/wrap_store.html#$,CxxTypeUse	wrap_store: `$`(ct: CxxTypeUse): string	
+`$`	hcparse/processor/wrap_store.html#$,CxxTypeDecl	wrap_store: `$`(decl: CxxTypeDecl): string	
+`$`	hcparse/processor/wrap_store.html#$,CxxProc	wrap_store: `$`(p: CxxProc): string	
+`$`	hcparse/processor/wrap_store.html#$,CxxAlias	wrap_store: `$`(alias: CxxAlias): string	
+`$`	hcparse/processor/wrap_store.html#$,CxxObject	wrap_store: `$`(obj: CxxObject): string	
+`$`	hcparse/processor/wrap_store.html#$,CxxEntry	wrap_store: `$`(e: CxxEntry): string	
+`[]`	hcparse/processor/wrap_store.html#[],CxxTypeUse,int	wrap_store: `[]`(t: CxxTypeUse; idx: int): CxxTypeUse	
+len	hcparse/processor/wrap_store.html#len,CxxTypeUse	wrap_store: len(t: CxxTypeUse): int	
+`[]`	hcparse/processor/wrap_store.html#[],CxxTypeUse,BackwardsIndex	wrap_store: `[]`(back: CxxTypeUse; idx: BackwardsIndex): CxxTypeUse	
+items	hcparse/processor/wrap_store.html#items.i,CxxTypeUse	wrap_store: items(use: CxxTypeUse): CxxTypeUse	
+`==`	hcparse/processor/wrap_store.html#==,CxxName,CxxName	wrap_store: `==`(n1, n2: CxxName): bool	
+`==`	hcparse/processor/wrap_store.html#==,CxxLibImport,CxxLibImport	wrap_store: `==`(l1, l2: CxxLibImport): bool	
+`&lt;`	hcparse/processor/wrap_store.html#<,CxxLibImport,CxxLibImport	wrap_store: `&lt;`(l1, l2: CxxLibImport): bool	
+hash	hcparse/processor/wrap_store.html#hash,CxxName	wrap_store: hash(name: CxxName): Hash	
+hash	hcparse/processor/wrap_store.html#hash,Option[T]	wrap_store: hash[T](opt: Option[T]): Hash	
+hash	hcparse/processor/wrap_store.html#hash,CxxNamePair	wrap_store: hash(pair: CxxNamePair): Hash	
+hash	hcparse/processor/wrap_store.html#hash,CxxTypeRef	wrap_store: hash(tref: CxxTypeRef): Hash	
+hash	hcparse/processor/wrap_store.html#hash,CxxLibImport	wrap_store: hash(lib: CxxLibImport): Hash	
+hash	hcparse/processor/wrap_store.html#hash,CxxArg	wrap_store: hash(arg: CxxArg): Hash	
+hash	hcparse/processor/wrap_store.html#hash,CxxTypeUse	wrap_store: hash(use: CxxTypeUse): Hash	
+hash	hcparse/processor/wrap_store.html#hash,CxxTypeDecl	wrap_store: hash(decl: CxxTypeDecl): Hash	
+nimName=	hcparse/processor/wrap_store.html#nimName=,CxxProc,string	wrap_store: nimName=(pr: var CxxProc; name: string)	
+name=	hcparse/processor/wrap_store.html#name=,CxxEnum,CxxNamePair	wrap_store: name=(en: var CxxEnum; name: CxxNamePair)	
+name=	hcparse/processor/wrap_store.html#name=,CxxObject,CxxNamePair	wrap_store: name=(obj: var CxxObject; name: CxxNamePair)	
+name	hcparse/processor/wrap_store.html#name,CxxTypeUse	wrap_store: name(use: CxxTypeUse): CxxNamePair	
+name	hcparse/processor/wrap_store.html#name,CxxProc	wrap_store: name(pr: CxxProc): CxxNamePair	
+name	hcparse/processor/wrap_store.html#name,CxxObject	wrap_store: name(pr: CxxObject): CxxNamePair	
+nimName=	hcparse/processor/wrap_store.html#nimName=,CxxAlias,string	wrap_store: nimName=(obj: var CxxAlias; name: string)	
+nimName	hcparse/processor/wrap_store.html#nimName,CxxProc	wrap_store: nimName(pr: CxxProc): string	
+nimName	hcparse/processor/wrap_store.html#nimName,CxxArg	wrap_store: nimName(arg: CxxArg): string	
+nimName	hcparse/processor/wrap_store.html#nimName,CxxEnumValue	wrap_store: nimName(arg: CxxEnumValue): string	
+nimName	hcparse/processor/wrap_store.html#nimName,CxxTypeUse	wrap_store: nimName(t: CxxTypeUse): string	
+nimName	hcparse/processor/wrap_store.html#nimName,CxxObject	wrap_store: nimName(obj: CxxObject): string	
+nimName	hcparse/processor/wrap_store.html#nimName,CxxForward	wrap_store: nimName(obj: CxxForward): string	
+nimName	hcparse/processor/wrap_store.html#nimName,CxxEnum	wrap_store: nimName(obj: CxxEnum): string	
+nimName	hcparse/processor/wrap_store.html#nimName,CxxAlias	wrap_store: nimName(obj: CxxAlias): string	
+nimName	hcparse/processor/wrap_store.html#nimName,CxxField	wrap_store: nimName(field: CxxField): string	
+nimName	hcparse/processor/wrap_store.html#nimName,CxxTypeDecl	wrap_store: nimName(t: CxxTypeDecl): string	
+nimName	hcparse/processor/wrap_store.html#nimName,CxxNamePair	wrap_store: nimName(pair: CxxNamePair): string	
+cxxName	hcparse/processor/wrap_store.html#cxxName,CxxNamePair	wrap_store: cxxName(pair: CxxNamePair): CxxName	
+cxxName	hcparse/processor/wrap_store.html#cxxName,CxxArg	wrap_store: cxxName(arg: CxxArg): CxxName	
+cxxName	hcparse/processor/wrap_store.html#cxxName,CxxField	wrap_store: cxxName(field: CxxField): CxxName	
+cxxName	hcparse/processor/wrap_store.html#cxxName,CxxTypeUse	wrap_store: cxxName(t: CxxTypeUse): CxxName	
+cxxName	hcparse/processor/wrap_store.html#cxxName,CxxTypeDecl	wrap_store: cxxName(t: CxxTypeDecl): CxxName	
+cxxName	hcparse/processor/wrap_store.html#cxxName,CxxProc	wrap_store: cxxName(pr: CxxProc): CxxName	
+cxxName	hcparse/processor/wrap_store.html#cxxName,CxxObject	wrap_store: cxxName(obj: CxxObject): CxxName	
+cxxName	hcparse/processor/wrap_store.html#cxxName,CxxForward	wrap_store: cxxName(obj: CxxForward): CxxName	
+cxxName	hcparse/processor/wrap_store.html#cxxName,CxxEnum	wrap_store: cxxName(obj: CxxEnum): CxxName	
+cxxName	hcparse/processor/wrap_store.html#cxxName,CxxAlias	wrap_store: cxxName(alias: CxxAlias): CxxName	
+cxxName	hcparse/processor/wrap_store.html#cxxName,string	wrap_store: cxxName(name: string): CxxName	
+cxxName	hcparse/processor/wrap_store.html#cxxName,seq[string]	wrap_store: cxxName(scopes: seq[string]): CxxName	
+name	hcparse/processor/wrap_store.html#name,CxxEntry	wrap_store: name(e: CxxEntry): CxxNamePair	
+cxxName	hcparse/processor/wrap_store.html#cxxName,CxxEntry	wrap_store: cxxName(e: CxxEntry): CxxName	
+getLocation	hcparse/processor/wrap_store.html#getLocation,CxxEntry	wrap_store: getLocation(e: CxxEntry): CxxSpellingLocation	
+cxxPair	hcparse/processor/wrap_store.html#cxxPair,string,CxxName,CxxNameContext	wrap_store: cxxPair(nim: string; cxx: CxxName; context: CxxNameContext = cncNone): CxxNamePair	
+cxxPair	hcparse/processor/wrap_store.html#cxxPair,string,CxxNameContext	wrap_store: cxxPair(name: string; context: CxxNameContext = cncNone): CxxNamePair	
+`&amp;`	hcparse/processor/wrap_store.html#&,CxxNamePair,CxxNamePair	wrap_store: `&amp;`(p1, p2: CxxNamePair): CxxNamePair	
+isConst	hcparse/processor/wrap_store.html#isConst,CxxProc	wrap_store: isConst(pr: CxxProc): bool	
+isStatic	hcparse/processor/wrap_store.html#isStatic,CxxProc	wrap_store: isStatic(pr: CxxProc): bool	
+isConstructor	hcparse/processor/wrap_store.html#isConstructor,CxxProc	wrap_store: isConstructor(pr: CxxProc): bool	
+isDestructor	hcparse/processor/wrap_store.html#isDestructor,CxxProc	wrap_store: isDestructor(pr: CxxProc): bool	
+isMethod	hcparse/processor/wrap_store.html#isMethod,CxxProc	wrap_store: isMethod(pr: CxxProc): bool	
+isEmpty	hcparse/processor/wrap_store.html#isEmpty,CxxName	wrap_store: isEmpty(name: CxxName): bool	
+isPOD	hcparse/processor/wrap_store.html#isPOD,CxxTypeUse	wrap_store: isPOD(use: CxxTypeUse): bool	
+add	hcparse/processor/wrap_store.html#add,CxxTypeUse,CxxTypeUse	wrap_store: add(t: var CxxTypeUse; other: CxxTypeUse)	
+getConstructed	hcparse/processor/wrap_store.html#getConstructed,CxxProc	wrap_store: getConstructed(pr: CxxProc): CxxNamePair	
+getIcppName	hcparse/processor/wrap_store.html#getIcppName,CxxProc,bool	wrap_store: getIcppName(pr: CxxProc; asMethod: bool = false): string	
+cxxDynlib	hcparse/processor/wrap_store.html#cxxDynlib,string	wrap_store: cxxDynlib(dyn: string): CxxBind	
+cxxDynlibVar	hcparse/processor/wrap_store.html#cxxDynlibVar,string	wrap_store: cxxDynlibVar(name: string): CxxBind	
+cxxDynlibCall	hcparse/processor/wrap_store.html#cxxDynlibCall,string	wrap_store: cxxDynlibCall(name: string): CxxBind	
+cxxMacroBind	hcparse/processor/wrap_store.html#cxxMacroBind,string	wrap_store: cxxMacroBind(name: string): CxxBind	
+cxxHeader	hcparse/processor/wrap_store.html#cxxHeader,string	wrap_store: cxxHeader(global: string): CxxBind	
+cxxHeader	hcparse/processor/wrap_store.html#cxxHeader,AbsFile	wrap_store: cxxHeader(file: AbsFile): CxxBind	
+cxxLinkBind	hcparse/processor/wrap_store.html#cxxLinkBind	wrap_store: cxxLinkBind(): CxxBind	
+cxxNoBind	hcparse/processor/wrap_store.html#cxxNoBind	wrap_store: cxxNoBind(): CxxBind	
+cxxArg	hcparse/processor/wrap_store.html#cxxArg,CxxNamePair,CxxTypeUse	wrap_store: cxxArg(name: CxxNamePair; argType: CxxTypeUse): CxxArg	
+wrapArray	hcparse/processor/wrap_store.html#wrapArray,CxxTypeUse,CxxTypeUse	wrap_store: wrapArray(size, element: CxxTypeUse): CxxTypeUse	
+wrap	hcparse/processor/wrap_store.html#wrap,CxxTypeUse,CxxTypeKind	wrap_store: wrap(wrapped: CxxTypeUse; kind: CxxTypeKind): CxxTypeUse	
+cxxTypeRef	hcparse/processor/wrap_store.html#cxxTypeRef,CxxNamePair,CxxTypeStore	wrap_store: cxxTypeRef(name: CxxNamePair; store: CxxTypeStore = nil): CxxTypeRef	
+cxxTypeDecl	hcparse/processor/wrap_store.html#cxxTypeDecl,CxxNamePair,CxxTypeDeclKind,CxxGenParams	wrap_store: cxxTypeDecl(head: CxxNamePair; kind: CxxTypeDeclKind;\n            genParams: CxxGenParams = @[]): CxxTypeDecl	
+cxxTypeUse	hcparse/processor/wrap_store.html#cxxTypeUse,CxxPodTypeKind	wrap_store: cxxTypeUse(pod: CxxPodTypeKind): CxxTypeUse	
+cxxTypeUse	hcparse/processor/wrap_store.html#cxxTypeUse,CxxNamePair,seq[CxxTypeUse],CxxTypeStore	wrap_store: cxxTypeUse(head: CxxNamePair; genParams: seq[CxxTypeUse] = @[];\n           store: CxxTypeStore = nil): CxxTypeUse	
+cxxTypeParams	hcparse/processor/wrap_store.html#cxxTypeParams,CxxTypeDecl	wrap_store: cxxTypeParams(decl: CxxTypeDecl): seq[CxxTypeUse]	
+cxxTypeUse	hcparse/processor/wrap_store.html#cxxTypeUse,CxxObject,CxxNamePair,CxxNamePair	wrap_store: cxxTypeUse(objDef: CxxObject; parent, user: CxxNamePair): CxxTypeUse	
+cxxTypeUse	hcparse/processor/wrap_store.html#cxxTypeUse,CxxEnum,CxxNamePair,CxxNamePair	wrap_store: cxxTypeUse(enumDef: CxxEnum; parent, user: CxxNamePair): CxxTypeUse	
+box	hcparse/processor/wrap_store.html#box,CxxEnum	wrap_store: box(en: CxxEnum): CxxEntry	
+box	hcparse/processor/wrap_store.html#box,CxxForward	wrap_store: box(en: CxxForward): CxxEntry	
+box	hcparse/processor/wrap_store.html#box,CxxObject	wrap_store: box(ob: CxxObject): CxxEntry	
+box	hcparse/processor/wrap_store.html#box,CxxProc	wrap_store: box(en: CxxProc): CxxEntry	
+box	hcparse/processor/wrap_store.html#box,CxxAlias	wrap_store: box(en: CxxAlias): CxxEntry	
+box	hcparse/processor/wrap_store.html#box,CxxMacro	wrap_store: box(en: CxxMacro): CxxEntry	
+toDecl	hcparse/processor/wrap_store.html#toDecl,CxxTypeUse,CxxTypeDeclKind	wrap_store: toDecl(use: CxxTypeUse; kind: CxxTypeDeclKind): CxxTypeDecl	
+addDecl	hcparse/processor/wrap_store.html#addDecl,CxxTypeStore,CxxTypeDecl	wrap_store: addDecl(store: var CxxTypeStore; decl: CxxTypeDecl)	
+addDecl	hcparse/processor/wrap_store.html#addDecl,CxxTypeStore,CxxObject	wrap_store: addDecl(store: var CxxTypeStore; decl: CxxObject)	
+addForwardDecl	hcparse/processor/wrap_store.html#addForwardDecl,CxxTypeStore,CxxTypeDecl	wrap_store: addForwardDecl(store: var CxxTypeStore; decl: CxxTypeDecl)	
+hasFullDecl	hcparse/processor/wrap_store.html#hasFullDecl,CxxTypeStore,CxxTypeDecl	wrap_store: hasFullDecl(store: CxxTypeStore; decl: CxxTypeDecl): bool	
+getDecl	hcparse/processor/wrap_store.html#getDecl,CxxTypeStore,CxxName,Option[string]	wrap_store: getDecl(store: CxxTypeStore; name: CxxName; lib: Option[string]): Option[\n    CxxTypeDecl]	
+getTypeImpls	hcparse/processor/wrap_store.html#getTypeImpls,CxxTypeStore,CxxName,Option[string],set[CxxEntryKind]	wrap_store: getTypeImpls(store: CxxTypeStore; name: CxxName;\n             lib: Option[string] = none(string); kinds: set[CxxEntryKind] = {\n    low(CxxEntryKind) .. high(CxxEntryKind)}): seq[CxxEntry]	
+getObject	hcparse/processor/wrap_store.html#getObject,CxxTypeStore,CxxName,Option[string]	wrap_store: getObject(store: CxxTypeStore; name: CxxName; lib: Option[string]): Option[\n    CxxObject]	
+getDecl	hcparse/processor/wrap_store.html#getDecl,CxxTypeUse	wrap_store: getDecl(use: CxxTypeUse): Option[CxxTypeDecl]	
+hasExternalImport	hcparse/processor/wrap_store.html#hasExternalImport,CxxTypeUse	wrap_store: hasExternalImport(use: CxxTypeUse): bool	
+getExternalImport	hcparse/processor/wrap_store.html#getExternalImport,CxxTypeUse	wrap_store: getExternalImport(use: CxxTypeUse): CxxLibImport	
+hasImport	hcparse/processor/wrap_store.html#hasImport,CxxTypeUse	wrap_store: hasImport(use: CxxTypeUse): bool	
+getImport	hcparse/processor/wrap_store.html#getImport,CxxTypeUse	wrap_store: getImport(use: CxxTypeUse): CxxLibImport	
+hasImport	hcparse/processor/wrap_store.html#hasImport,CxxTypeDecl	wrap_store: hasImport(decl: CxxTypeDecl): bool	
+hasAnyDecl	hcparse/processor/wrap_store.html#hasAnyDecl,CxxTypeUse	wrap_store: hasAnyDecl(use: CxxTypeUse): bool	
+hasFullDecl	hcparse/processor/wrap_store.html#hasFullDecl,CxxTypeDecl	wrap_store: hasFullDecl(decl: CxxTypeDecl): bool	
+cxxLibImport	hcparse/processor/wrap_store.html#cxxLibImport,string,seq[string]	wrap_store: cxxLibImport(library: string; path: seq[string]): CxxLibImport	
+getImport	hcparse/processor/wrap_store.html#getImport,CxxTypeDecl	wrap_store: getImport(decl: CxxTypeDecl): CxxLibImport	
+getLibrary	hcparse/processor/wrap_store.html#getLibrary,CxxLibImport	wrap_store: getLibrary(imp: CxxLibImport): string	
+getLibrary	hcparse/processor/wrap_store.html#getLibrary,CxxFile	wrap_store: getLibrary(file: CxxFile): string	
+getFilename	hcparse/processor/wrap_store.html#getFilename,CxxLibImport	wrap_store: getFilename(limport: CxxLibImport): string	
+getPathNoExt	hcparse/processor/wrap_store.html#getPathNoExt,CxxLibImport	wrap_store: getPathNoExt(limport: CxxLibImport): seq[string]	
+getFile	hcparse/processor/wrap_store.html#getFile,CxxLibImport	wrap_store: getFile(lib: CxxLibImport): RelFile	
+getFile	hcparse/processor/wrap_store.html#getFile,CxxFile	wrap_store: getFile(file: CxxFile): RelFile	
+getFilename	hcparse/processor/wrap_store.html#getFilename,CxxFile	wrap_store: getFilename(file: CxxFile): string	
+getType	hcparse/processor/wrap_store.html#getType,CxxArg	wrap_store: getType(arg: CxxArg): CxxTypeUse	
+getType	hcparse/processor/wrap_store.html#getType,CxxField	wrap_store: getType(field: CxxField): CxxTypeUse	
+add	hcparse/processor/wrap_store.html#add,CxxFile,CxxEntry	wrap_store: add(file: var CxxFile; entry: CxxEntry)	
+addImport	hcparse/processor/wrap_store.html#addImport,CxxFile,CxxLibImport	wrap_store: addImport(file: var CxxFile; cimport: CxxLibImport)	
+addExport	hcparse/processor/wrap_store.html#addExport,CxxFile,CxxLibImport	wrap_store: addExport(file: var CxxFile; cexport: CxxLibImport)	
+addReExport	hcparse/processor/wrap_store.html#addReExport,CxxFile,CxxLibImport	wrap_store: addReExport(file: var CxxFile; cimport: CxxLibImport)	
+eachKind	hcparse/processor/wrap_store.html#eachKind,CxxTypeUse,set[CxxTypeKind],proc(CxxTypeUse)	wrap_store: eachKind(use: var CxxTypeUse; target: set[CxxTypeKind];\n         cb: proc (ident: var CxxTypeUse))	
+eachKind	hcparse/processor/wrap_store.html#eachKind,CxxTypeUse,set[CxxTypeKind],proc(CxxTypeUse)_2	wrap_store: eachKind(use: CxxTypeUse; target: set[CxxTypeKind]; cb: proc (ident: CxxTypeUse))	
+getUsedTypesRec	hcparse/processor/wrap_store.html#getUsedTypesRec,CxxTypeUse,bool	wrap_store: getUsedTypesRec(t: CxxTypeUse; ignoreHead: bool = false): seq[CxxTypeUse]	
+icpp=	hcparse/processor/wrap_store.html#icpp=,CxxProc,IcppPattern	wrap_store: icpp=(pr: var CxxProc; icpp: IcppPattern)	
+getIcpp	hcparse/processor/wrap_store.html#getIcpp,CxxProc,CxxTypeKind	wrap_store: getIcpp(pr: CxxProc; onConstructor: CxxTypeKind = ctkIdent): IcppPattern	
+getIcppStr	hcparse/processor/wrap_store.html#getIcppStr,CxxProc,CxxTypeKind	wrap_store: getIcppStr(pr: CxxProc; onConstructor: CxxTypeKind = ctkIdent): string	
+getIcpp	hcparse/processor/wrap_store.html#getIcpp	wrap_store: getIcpp(pr: CxxObject | CxxForward): IcppPattern	
+getIcppStr	hcparse/processor/wrap_store.html#getIcppStr	wrap_store: getIcppStr(pr: CxxObject | CxxForward): string	
+initIcpp	hcparse/processor/wrap_store.html#initIcpp,CxxProc,CxxTypeKind	wrap_store: initIcpp(pr: var CxxProc; onConstructor: CxxTypeKind = ctkIdent)	
+cxxTypeUse	hcparse/processor/wrap_store.html#cxxTypeUse,seq[CxxArg],CxxTypeUse	wrap_store: cxxTypeUse(arguments: seq[CxxArg]; returnType: CxxTypeUse): CxxTypeUse	
+cxxTypeUse	hcparse/processor/wrap_store.html#cxxTypeUse,CxxTypeDecl,CxxTypeStore	wrap_store: cxxTypeUse(decl: CxxTypeDecl; store: CxxTypeStore = nil): CxxTypeUse	
+cxxTypeUse	hcparse/processor/wrap_store.html#cxxTypeUse,string,seq[CxxTypeUse]	wrap_store: cxxTypeUse(name: string; args: seq[CxxTypeUse]): CxxTypeUse	
+cxxObject	hcparse/processor/wrap_store.html#cxxObject,CxxNamePair,CxxGenParams	wrap_store: cxxObject(name: CxxNamePair; genParams: CxxGenParams = @[]): CxxObject	
+cxxForward	hcparse/processor/wrap_store.html#cxxForward,CxxNamePair,CxxTypeDeclKind	wrap_store: cxxForward(name: CxxNamePair; kind: CxxTypeDeclKind): CxxForward	
+cxxEnum	hcparse/processor/wrap_store.html#cxxEnum,CxxNamePair	wrap_store: cxxEnum(name: CxxNamePair): CxxEnum	
+cxxContext	hcparse/processor/wrap_store.html#cxxContext,sinkCxxNamePair,CxxNameContext	wrap_store: cxxContext(name: sink CxxNamePair; ctx: CxxNameContext): CxxNamePair	
+cxxContext	hcparse/processor/wrap_store.html#cxxContext,sinkCxxTypeDecl,CxxNameContext	wrap_store: cxxContext(name: sink CxxTypeDecl; ctx: CxxNameContext): CxxTypeDecl	
+cxxField	hcparse/processor/wrap_store.html#cxxField,CxxNamePair,CxxTypeUse	wrap_store: cxxField(name: CxxNamePair; nimType: CxxTypeUse): CxxField	
+cxxAlias	hcparse/processor/wrap_store.html#cxxAlias,CxxTypeDecl,CxxTypeUse	wrap_store: cxxAlias(decl: CxxTypeDecl; baseType: CxxTypeUse): CxxAlias	
+cxxEmpty	hcparse/processor/wrap_store.html#cxxEmpty	wrap_store: cxxEmpty(): CxxEntry	
+cxxEnumValue	hcparse/processor/wrap_store.html#cxxEnumValue,CxxNamePair,BiggestInt	wrap_store: cxxEnumValue(name: CxxNamePair; value: BiggestInt): CxxEnumValue	
+cxxComment	hcparse/processor/wrap_store.html#cxxComment,string	wrap_store: cxxComment(com: string): CxxComment	
+cxxProc	hcparse/processor/wrap_store.html#cxxProc,CxxNamePair,seq[CxxArg],CxxTypeUse,CxxGenParams	wrap_store: cxxProc(name: CxxNamePair; arguments: seq[CxxArg] = @[];\n        returnType: CxxTypeUse = cxxTypeUse(cxxPair&quot;void&quot;);\n        genParams: CxxGenParams = @[]): CxxProc	
+cxxMacro	hcparse/processor/wrap_store.html#cxxMacro,CxxNamePair	wrap_store: cxxMacro(name: CxxNamePair): CxxMacro	
+cxxFile	hcparse/processor/wrap_store.html#cxxFile,seq[CxxEntry],CxxLibImport,AbsFile	wrap_store: cxxFile(entries: seq[CxxEntry]; path: CxxLibImport; original: AbsFile): CxxFile	
+add	hcparse/processor/wrap_store.html#add,CxxProc,CxxArg	wrap_store: add(pr: var CxxProc; arg: CxxArg)	
+setCxxBind	hcparse/processor/wrap_store.html#setCxxBind,CxxBind,CxxBind	wrap_store: setCxxBind(target: var CxxBind; source: CxxBind)	
+setStoreRec	hcparse/processor/wrap_store.html#setStoreRec,CxxEntry,CxxTypeStore	wrap_store: setStoreRec(entry: var CxxEntry; store: CxxTypeStore)	
+setFileRec	hcparse/processor/wrap_store.html#setFileRec,CxxEntry,AbsFile	wrap_store: setFileRec(entry: var CxxEntry; file: AbsFile)	
+getBindImports	hcparse/processor/wrap_store.html#getBindImports,CxxFile	wrap_store: getBindImports(file: CxxFile): HashSet[CxxLibImport]	
+newTypeStore	hcparse/processor/wrap_store.html#newTypeStore	wrap_store: newTypeStore(): CxxTypeStore	
+getSuperTypes	hcparse/processor/wrap_store.html#getSuperTypes,CxxTypeStore,CxxTypeDecl	wrap_store: getSuperTypes(store: CxxTypeStore; decl: CxxTypeDecl): seq[CxxObject]	
+hasTypeDecl	hcparse/processor/wrap_store.html#hasTypeDecl,CxxEntry	wrap_store: hasTypeDecl(entry: CxxEntry): bool	
+getTypeDecl	hcparse/processor/wrap_store.html#getTypeDecl,CxxEntry	wrap_store: getTypeDecl(entry: CxxEntry): CxxTypeDecl	
+toRealDecl	hcparse/processor/wrap_store.html#toRealDecl,CxxEntry	wrap_store: toRealDecl(entry: CxxEntry): CxxEntry	
+add	hcparse/processor/wrap_store.html#add,E,	wrap_store: add[E: CxxMacro | CxxAlias | CxxObject | CxxForward | CxxProc | CxxEnum |\n    CxxEnumValue |\n    CxxField |\n    CxxArg](s: var E; comment: CxxComment | seq[CxxComment])	
+add	hcparse/processor/wrap_store.html#add,seq[CxxEntry],	wrap_store: add(s: var seq[CxxEntry]; other: CxxMacro | CxxAlias | CxxObject | CxxForward |\n    CxxProc |\n    CxxEnum |\n    CxxObject)	
+getTypeStore	hcparse/processor/wrap_store.html#getTypeStore,CxxEntry	wrap_store: getTypeStore(entry: CxxEntry): CxxTypeStore	
+getTypeStore	hcparse/processor/wrap_store.html#getTypeStore,seq[CxxEntry]	wrap_store: getTypeStore(entries: seq[CxxEntry]): CxxTypeStore	

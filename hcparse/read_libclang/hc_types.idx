@@ -1,0 +1,117 @@
+drkIgnoreIfUsed	hcparse/read_libclang/hc_types.html#drkIgnoreIfUsed	DepResolutionKind.drkIgnoreIfUsed	
+drkWrapDirectly	hcparse/read_libclang/hc_types.html#drkWrapDirectly	DepResolutionKind.drkWrapDirectly	
+drkImportUses	hcparse/read_libclang/hc_types.html#drkImportUses	DepResolutionKind.drkImportUses	
+DepResolutionKind	hcparse/read_libclang/hc_types.html#DepResolutionKind	hc_types: DepResolutionKind	
+ctskNone	hcparse/read_libclang/hc_types.html#ctskNone	CTypeSpecialKind.ctskNone	
+ctskLValueRef	hcparse/read_libclang/hc_types.html#ctskLValueRef	CTypeSpecialKind.ctskLValueRef	
+ctskRvalueRef	hcparse/read_libclang/hc_types.html#ctskRvalueRef	CTypeSpecialKind.ctskRvalueRef	
+ctskConstLvalueRef	hcparse/read_libclang/hc_types.html#ctskConstLvalueRef	CTypeSpecialKind.ctskConstLvalueRef	
+CTypeSpecialKind	hcparse/read_libclang/hc_types.html#CTypeSpecialKind	hc_types: CTypeSpecialKind	
+NimType	hcparse/read_libclang/hc_types.html#NimType	hc_types: NimType	
+cdkClass	hcparse/read_libclang/hc_types.html#cdkClass	CDeclKind.cdkClass	
+cdkStruct	hcparse/read_libclang/hc_types.html#cdkStruct	CDeclKind.cdkStruct	
+cdkUnion	hcparse/read_libclang/hc_types.html#cdkUnion	CDeclKind.cdkUnion	
+cdkEnum	hcparse/read_libclang/hc_types.html#cdkEnum	CDeclKind.cdkEnum	
+cdkFunction	hcparse/read_libclang/hc_types.html#cdkFunction	CDeclKind.cdkFunction	
+cdkMethod	hcparse/read_libclang/hc_types.html#cdkMethod	CDeclKind.cdkMethod	
+cdkField	hcparse/read_libclang/hc_types.html#cdkField	CDeclKind.cdkField	
+cdkAlias	hcparse/read_libclang/hc_types.html#cdkAlias	CDeclKind.cdkAlias	
+cdkMacro	hcparse/read_libclang/hc_types.html#cdkMacro	CDeclKind.cdkMacro	
+cdkForward	hcparse/read_libclang/hc_types.html#cdkForward	CDeclKind.cdkForward	
+CDeclKind	hcparse/read_libclang/hc_types.html#CDeclKind	hc_types: CDeclKind	
+CArg	hcparse/read_libclang/hc_types.html#CArg	hc_types: CArg	
+CName	hcparse/read_libclang/hc_types.html#CName	hc_types: CName	
+CScopedIdent	hcparse/read_libclang/hc_types.html#CScopedIdent	hc_types: CScopedIdent	
+ParentDecl	hcparse/read_libclang/hc_types.html#ParentDecl	hc_types: ParentDecl	
+CDecl	hcparse/read_libclang/hc_types.html#CDecl	hc_types: CDecl	
+CApiUnit	hcparse/read_libclang/hc_types.html#CApiUnit	hc_types: CApiUnit	
+ParsedFile	hcparse/read_libclang/hc_types.html#ParsedFile	hc_types: ParsedFile	
+ParseConf	hcparse/read_libclang/hc_types.html#ParseConf	hc_types: ParseConf	
+NimHeaderSpec	hcparse/read_libclang/hc_types.html#NimHeaderSpec	hc_types: NimHeaderSpec	
+DoxRefid	hcparse/read_libclang/hc_types.html#DoxRefid	hc_types: DoxRefid	
+RefidMap	hcparse/read_libclang/hc_types.html#RefidMap	hc_types: RefidMap	
+WrapConf	hcparse/read_libclang/hc_types.html#WrapConf	hc_types: WrapConf	
+tukInProcs	hcparse/read_libclang/hc_types.html#tukInProcs	TypeUseKind.tukInProcs	
+tukInTypes	hcparse/read_libclang/hc_types.html#tukInTypes	TypeUseKind.tukInTypes	
+TypeUseKind	hcparse/read_libclang/hc_types.html#TypeUseKind	hc_types: TypeUseKind	
+WrapCache	hcparse/read_libclang/hc_types.html#WrapCache	hc_types: WrapCache	
+gpcNoImportcpp	hcparse/read_libclang/hc_types.html#gpcNoImportcpp	GenPragmaConf.gpcNoImportcpp	
+gpcNoHeader	hcparse/read_libclang/hc_types.html#gpcNoHeader	GenPragmaConf.gpcNoHeader	
+GenPragmaConf	hcparse/read_libclang/hc_types.html#GenPragmaConf	hc_types: GenPragmaConf	
+newWrapCache	hcparse/read_libclang/hc_types.html#newWrapCache	hc_types: newWrapCache(): WrapCache	
+success	hcparse/read_libclang/hc_types.html#success.t,WrapConf,varargs[string,$]	hc_types: success(o`gensym0: WrapConf; args`gensym0: varargs[string, $]): untyped	
+fail	hcparse/read_libclang/hc_types.html#fail.t,WrapConf,varargs[string,$]	hc_types: fail(o`gensym1: WrapConf; args`gensym1: varargs[string, $]): untyped	
+done	hcparse/read_libclang/hc_types.html#done.t,WrapConf,varargs[string,$]	hc_types: done(o`gensym2: WrapConf; args`gensym2: varargs[string, $]): untyped	
+wait	hcparse/read_libclang/hc_types.html#wait.t,WrapConf,varargs[string,$]	hc_types: wait(o`gensym3: WrapConf; args`gensym3: varargs[string, $]): untyped	
+notice	hcparse/read_libclang/hc_types.html#notice.t,WrapConf,varargs[string,$]	hc_types: notice(o`gensym4: WrapConf; args`gensym4: varargs[string, $]): untyped	
+fatal	hcparse/read_libclang/hc_types.html#fatal.t,WrapConf,varargs[string,$]	hc_types: fatal(o`gensym5: WrapConf; args`gensym5: varargs[string, $]): untyped	
+err	hcparse/read_libclang/hc_types.html#err.t,WrapConf,varargs[string,$]	hc_types: err(o`gensym6: WrapConf; args`gensym6: varargs[string, $]): untyped	
+warn	hcparse/read_libclang/hc_types.html#warn.t,WrapConf,varargs[string,$]	hc_types: warn(o`gensym7: WrapConf; args`gensym7: varargs[string, $]): untyped	
+info	hcparse/read_libclang/hc_types.html#info.t,WrapConf,varargs[string,$]	hc_types: info(o`gensym8: WrapConf; args`gensym8: varargs[string, $]): untyped	
+trace	hcparse/read_libclang/hc_types.html#trace.t,WrapConf,varargs[string,$]	hc_types: trace(o`gensym9: WrapConf; args`gensym9: varargs[string, $]): untyped	
+debug	hcparse/read_libclang/hc_types.html#debug.t,WrapConf,varargs[string,$]	hc_types: debug(o`gensym10: WrapConf; args`gensym10: varargs[string, $]): untyped	
+dump	hcparse/read_libclang/hc_types.html#dump.t,WrapConf,untyped,varargs[string,$]	hc_types: dump(o`gensym11: WrapConf; expr`gensym11: untyped;\n     args`gensym11: varargs[string, $]): untyped	
+pdump	hcparse/read_libclang/hc_types.html#pdump.t,WrapConf,untyped,varargs[string,$]	hc_types: pdump(o`gensym11: WrapConf; expr`gensym11: untyped;\n      args`gensym11: varargs[string, $]): untyped	
+gpcNoPragma	hcparse/read_libclang/hc_types.html#gpcNoPragma	hc_types: gpcNoPragma	
+getName	hcparse/read_libclang/hc_types.html#getName,CXCursor	hc_types: getName(c: CXCursor): string	
+getName	hcparse/read_libclang/hc_types.html#getName,CName	hc_types: getName(cn: CName): string	
+getSemanticNamespaces	hcparse/read_libclang/hc_types.html#getSemanticNamespaces,WrapConf,CXCursor,bool,bool	hc_types: getSemanticNamespaces(conf: WrapConf; parent: CXCursor;\n                      filterInline: bool = true; withType: bool = true): seq[\n    CXCursor]	
+getTypeNamespaces	hcparse/read_libclang/hc_types.html#getTypeNamespaces,WrapConf,CXType,bool,bool	hc_types: getTypeNamespaces(conf: WrapConf; cxtype: CXType; filterInline: bool = true;\n                  withType: bool = true): seq[CXCursor]	
+findSemParent	hcparse/read_libclang/hc_types.html#findSemParent,WrapConf,CXType,set[CXCursorKind]	hc_types: findSemParent(conf: WrapConf; cxType: CXType; kind: set[CXCursorKind]): CXCursor	
+findSemParentFull	hcparse/read_libclang/hc_types.html#findSemParentFull,WrapConf,CXType,set[CXCursorKind]	hc_types: findSemParentFull(conf: WrapConf; cxType: CXType; kind: set[CXCursorKind]): seq[\n    CXCursor]	
+requiredGenericParams	hcparse/read_libclang/hc_types.html#requiredGenericParams,CXCursor	hc_types: requiredGenericParams(cursor: CXCursor): seq[CXCursor]	
+toCppNamespace	hcparse/read_libclang/hc_types.html#toCppNamespace,CScopedIdent,bool,bool	hc_types: toCppNamespace(ns: CScopedIdent; withGenerics: bool = true;\n               withNames: bool = false): string	
+toHaxdocType	hcparse/read_libclang/hc_types.html#toHaxdocType,WrapConf,CXType	hc_types: toHaxdocType(conf: WrapConf; cxtype: CXType): JsonNode	
+ckProcEntryKinds	hcparse/read_libclang/hc_types.html#ckProcEntryKinds	hc_types: ckProcEntryKinds	
+toHaxdocJson	hcparse/read_libclang/hc_types.html#toHaxdocJson,WrapConf,CScopedIdent	hc_types: toHaxdocJson(conf: WrapConf; ns: CScopedIdent): JsonNode	
+reconst	hcparse/read_libclang/hc_types.html#reconst,string	hc_types: reconst(cxType: string): string	
+toHaxdocIdentType	hcparse/read_libclang/hc_types.html#toHaxdocIdentType,WrapConf,CXType,string	hc_types: toHaxdocIdentType(conf: WrapConf; cxtype: CXType; procname: string = &quot;proc&quot;): string	
+toHaxdocIdent	hcparse/read_libclang/hc_types.html#toHaxdocIdent,WrapConf,CScopedIdent	hc_types: toHaxdocIdent(conf: WrapConf; ns: CScopedIdent): string	
+`$`	hcparse/read_libclang/hc_types.html#$,CScopedIdent	hc_types: `$`(ident: CScopedIdent): string	
+`$`	hcparse/read_libclang/hc_types.html#$,CName	hc_types: `$`(name: CName): string	
+hash	hcparse/read_libclang/hc_types.html#hash,CScopedIdent	hc_types: hash(ident: CScopedIdent): Hash	
+`==`	hcparse/read_libclang/hc_types.html#==,CName,CName	hc_types: `==`(a, b: CName): bool	
+addDoc	hcparse/read_libclang/hc_types.html#addDoc,WrapCache,CScopedIdent,seq[string]	hc_types: addDoc(cache: var WrapCache; id: CScopedIdent; doc: seq[string])	
+initHeaderSpec	hcparse/read_libclang/hc_types.html#initHeaderSpec,AbsFile	hc_types: initHeaderSpec(file: AbsFile): NimHeaderSpec	
+initHeaderSpec	hcparse/read_libclang/hc_types.html#initHeaderSpec,string	hc_types: initHeaderSpec(global: string): NimHeaderSpec	
+initHeaderSpec	hcparse/read_libclang/hc_types.html#initHeaderSpec,PNode	hc_types: initHeaderSpec(pnode: PNode): NimHeaderSpec	
+`==`	hcparse/read_libclang/hc_types.html#==,NimHeaderSpec,NimHeaderSpec	hc_types: `==`(a, b: NimHeaderSpec): bool	
+`==`	hcparse/read_libclang/hc_types.html#==,CArg,CArg	hc_types: `==`(a, b: CArg): bool	
+arg	hcparse/read_libclang/hc_types.html#arg,CDecl,int	hc_types: arg(cd: CDecl; idx: int): CArg	
+member	hcparse/read_libclang/hc_types.html#member,CDecl,int	hc_types: member(cd: CDecl; idx: int): CDecl	
+methods	hcparse/read_libclang/hc_types.html#methods,CDecl,set[CXCursorKind]	hc_types: methods(cd: CDecl; kinds: set[CXCursorKind]): seq[CDecl]	
+newNimType	hcparse/read_libclang/hc_types.html#newNimType,string,CXType,bool	hc_types: newNimType(name: string; cxType: CXType; isParam: bool = false): NimType	
+newNimType	hcparse/read_libclang/hc_types.html#newNimType,string,openArray[NimType],CxxLibImport,Option[CXType],bool	hc_types: newNimType(name: string; genParams: openArray[NimType] = @[];\n           libImport: CxxLibImport = CxxLibImport();\n           original: Option[CXType] = none(CXType); isParam: bool = false): NimType	
+newNimType	hcparse/read_libclang/hc_types.html#newNimType,seq[CArg],NimType	hc_types: newNimType(arguments: seq[CArg];\n           returnType: NimType = newNimType(&quot;void&quot;, @[], isParam = false)): NimType	
+newNimType	hcparse/read_libclang/hc_types.html#newNimType,string,openArray[NimType],CXType,bool	hc_types: newNimType(name: string; genParams: openArray[NimType]; cxType: CXType;\n           isParam: bool = false): NimType	
+withLib	hcparse/read_libclang/hc_types.html#withLib,sinkNimType,CxxLibImport	hc_types: withLib(ntype: sink NimType; libImport: CxxLibImport): NimType	
+addIdent	hcparse/read_libclang/hc_types.html#addIdent,sinkNimType,CScopedIdent	hc_types: addIdent(nimType: sink NimType; id: CScopedIdent): NimType	
+initCxxLibImport	hcparse/read_libclang/hc_types.html#initCxxLibImport,string,seq[string]	hc_types: initCxxLibImport(name: string; path: seq[string]): CxxLibImport	
+hash	hcparse/read_libclang/hc_types.html#hash,NimType	hc_types: hash(nt: NimType): Hash	
+`==`	hcparse/read_libclang/hc_types.html#==,NimType,NimType	hc_types: `==`(t1, t2: NimType): bool	
+hash	hcparse/read_libclang/hc_types.html#hash,CxxLibImport	hc_types: hash(lib: CxxLibImport): Hash	
+libImport	hcparse/read_libclang/hc_types.html#libImport,WrapConf,seq[string]	hc_types: libImport(conf: WrapConf; path: seq[string]): CxxLibImport	
+libImport	hcparse/read_libclang/hc_types.html#libImport,WrapConf,RelFile	hc_types: libImport(conf: WrapConf; file: RelFile): CxxLibImport	
+isValid	hcparse/read_libclang/hc_types.html#isValid,CxxLibImport	hc_types: isValid(lib: CxxLibImport): bool	
+toRelative	hcparse/read_libclang/hc_types.html#toRelative,CxxLibImport	hc_types: toRelative(lib: CxxLibImport): RelFile	
+asImport	hcparse/read_libclang/hc_types.html#asImport,CxxLibImport	hc_types: asImport(lib: CxxLibImport): RelFile	
+`&amp;`	hcparse/read_libclang/hc_types.html#&,CxxLibImport,openArray[string]	hc_types: `&amp;`(lib: CxxLibImport; path: openArray[string]): CxxLibImport	
+addNamePrefix	hcparse/read_libclang/hc_types.html#addNamePrefix,CxxLibImport,string,IndexTypes	hc_types: addNamePrefix(lib: var CxxLibImport; prefix: string; idx: IndexTypes = ^1)	
+addPathPrefix	hcparse/read_libclang/hc_types.html#addPathPrefix,CxxLibImport,string	hc_types: addPathPrefix(lib: var CxxLibImport; prefix: string)	
+`$`	hcparse/read_libclang/hc_types.html#$,NimType	hc_types: `$`(nimType: NimType): string	
+initCArg	hcparse/read_libclang/hc_types.html#initCArg,string,NimType,NVarDeclKind	hc_types: initCArg(name: string; nimType: NimType; varkind: NVarDeclKind): CArg	
+initCArg	hcparse/read_libclang/hc_types.html#initCArg,string,NimType	hc_types: initCArg(name: string; nimType: NimType): CArg	
+initCArg	hcparse/read_libclang/hc_types.html#initCArg,string,CXCursor	hc_types: initCArg(name: string; cursor: CXCursor): CArg	
+declHash	hcparse/read_libclang/hc_types.html#declHash,CXCursor	hc_types: declHash(cursor: CXCursor): Hash	
+markWrap	hcparse/read_libclang/hc_types.html#markWrap,WrapCache,CXCursor	hc_types: markWrap(cache: var WrapCache; cursor: CXCursor)	
+canWrap	hcparse/read_libclang/hc_types.html#canWrap,WrapCache,CXCursor	hc_types: canWrap(cache: WrapCache; cursor: CXCursor): bool	
+markSeen	hcparse/read_libclang/hc_types.html#markSeen,WrapCache,CXCursor	hc_types: markSeen(cache: var WrapCache; cursor: CXCursor)	
+seenCursor	hcparse/read_libclang/hc_types.html#seenCursor,WrapCache,CXCursor	hc_types: seenCursor(cache: WrapCache; cursor: CXCursor): bool	
+lastName	hcparse/read_libclang/hc_types.html#lastName,CDecl,WrapConf,bool	hc_types: lastName(cd: CDecl; conf: WrapConf; dropTemplate: bool = true): string	
+isOperator	hcparse/read_libclang/hc_types.html#isOperator,CDecl,WrapConf	hc_types: isOperator(cd: CDecl; conf: WrapConf): bool	
+isOperator	hcparse/read_libclang/hc_types.html#isOperator,CXCursor	hc_types: isOperator(cx: CXCursor): bool	
+cxType	hcparse/read_libclang/hc_types.html#cxType,CArg	hc_types: cxType(arg: CArg): CXType	
+classifyOperator	hcparse/read_libclang/hc_types.html#classifyOperator,CDecl,WrapConf	hc_types: classifyOperator(cd: CDecl; conf: WrapConf): CxxProcKind	
+getNimName	hcparse/read_libclang/hc_types.html#getNimName,CDecl,WrapConf,bool	hc_types: getNimName(cd: CDecl; conf: WrapConf; dropTemplate: bool = true): string	
+getFlags	hcparse/read_libclang/hc_types.html#getFlags,ParseConf,AbsFile	hc_types: getFlags(config: ParseConf; file: AbsFile): seq[string]	
+Fields	hcparse/read_libclang/hc_types.html#fields	  Fields	

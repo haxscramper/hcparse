@@ -1,0 +1,4 @@
+getIdent	hcparse/read_tree_sitter/hc_tsconvert.html#getIdent,CppNode,StringNameCache	hc_tsconvert: getIdent(node: CppNode; c: var StringNameCache): PNode	
+wrap	hcparse/read_tree_sitter/hc_tsconvert.html#wrap,NType[PNode],CxxTypeKind	hc_tsconvert: wrap(ntype: NType[PNode]; kind: CxxTypeKind): NType[PNode]	
+toPType	hcparse/read_tree_sitter/hc_tsconvert.html#toPType,CppNode	hc_tsconvert: toPType(node: CppNode): NType[PNode]	
+conv	hcparse/read_tree_sitter/hc_tsconvert.html#conv,CppNode,string,StringNameCache	hc_tsconvert: conv(node: CppNode; str: string; c: var StringNameCache): PNode	

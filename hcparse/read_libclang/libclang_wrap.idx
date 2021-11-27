@@ -1,0 +1,1213 @@
+CXVirtualFileOverlayImpl	hcparse/read_libclang/libclang_wrap.html#CXVirtualFileOverlayImpl	libclang_wrap: CXVirtualFileOverlayImpl	
+CXModuleMapDescriptorImpl	hcparse/read_libclang/libclang_wrap.html#CXModuleMapDescriptorImpl	libclang_wrap: CXModuleMapDescriptorImpl	
+time_t	hcparse/read_libclang/libclang_wrap.html#time_t	libclang_wrap: time_t	
+install_aborting_llvm_fatal_error_handler	hcparse/read_libclang/libclang_wrap.html#install_aborting_llvm_fatal_error_handler	libclang_wrap: install_aborting_llvm_fatal_error_handler(): void	
+uninstall_llvm_fatal_error_handler	hcparse/read_libclang/libclang_wrap.html#uninstall_llvm_fatal_error_handler	libclang_wrap: uninstall_llvm_fatal_error_handler(): void	
+ecSuccess	hcparse/read_libclang/libclang_wrap.html#ecSuccess	CXErrorCode.ecSuccess	
+ecFailure	hcparse/read_libclang/libclang_wrap.html#ecFailure	CXErrorCode.ecFailure	
+ecCrashed	hcparse/read_libclang/libclang_wrap.html#ecCrashed	CXErrorCode.ecCrashed	
+ecInvalidArguments	hcparse/read_libclang/libclang_wrap.html#ecInvalidArguments	CXErrorCode.ecInvalidArguments	
+ecASTReadError	hcparse/read_libclang/libclang_wrap.html#ecASTReadError	CXErrorCode.ecASTReadError	
+CXErrorCode	hcparse/read_libclang/libclang_wrap.html#CXErrorCode	libclang_wrap: CXErrorCode	
+CXString	hcparse/read_libclang/libclang_wrap.html#CXString	libclang_wrap: CXString	
+CXStringSet	hcparse/read_libclang/libclang_wrap.html#CXStringSet	libclang_wrap: CXStringSet	
+getCString	hcparse/read_libclang/libclang_wrap.html#getCString,CXString	libclang_wrap: getCString(cxstring: CXString): cstring	
+disposeString	hcparse/read_libclang/libclang_wrap.html#disposeString,CXString	libclang_wrap: disposeString(cxstring: CXString): void	
+disposeStringSet	hcparse/read_libclang/libclang_wrap.html#disposeStringSet,ptr.	libclang_wrap: disposeStringSet(cxset: ptr [CXStringSet]): void	
+CXCompilationDatabase	hcparse/read_libclang/libclang_wrap.html#CXCompilationDatabase	libclang_wrap: CXCompilationDatabase	
+CXCompileCommands	hcparse/read_libclang/libclang_wrap.html#CXCompileCommands	libclang_wrap: CXCompileCommands	
+CXCompileCommand	hcparse/read_libclang/libclang_wrap.html#CXCompileCommand	libclang_wrap: CXCompileCommand	
+cdeNoError	hcparse/read_libclang/libclang_wrap.html#cdeNoError	CXCompilationDatabase_Error.cdeNoError	
+cdeCanNotLoadDatabase	hcparse/read_libclang/libclang_wrap.html#cdeCanNotLoadDatabase	CXCompilationDatabase_Error.cdeCanNotLoadDatabase	
+CXCompilationDatabase_Error	hcparse/read_libclang/libclang_wrap.html#CXCompilationDatabase_Error	libclang_wrap: CXCompilationDatabase_Error	
+compilationDatabase_fromDirectory	hcparse/read_libclang/libclang_wrap.html#compilationDatabase_fromDirectory,cstring,ptr.	libclang_wrap: compilationDatabase_fromDirectory(buildDir: cstring;\n                                  errorCode: ptr [CXCompilationDatabase_Error]): CXCompilationDatabase	
+dispose	hcparse/read_libclang/libclang_wrap.html#dispose,CXCompilationDatabase	libclang_wrap: dispose(argCXCompilationDatabase: CXCompilationDatabase): void	
+getCompileCommands	hcparse/read_libclang/libclang_wrap.html#getCompileCommands,CXCompilationDatabase,cstring	libclang_wrap: getCompileCommands(argCXCompilationDatabase: CXCompilationDatabase;\n                   completeFileName: cstring): CXCompileCommands	
+getAllCompileCommands	hcparse/read_libclang/libclang_wrap.html#getAllCompileCommands,CXCompilationDatabase	libclang_wrap: getAllCompileCommands(argCXCompilationDatabase: CXCompilationDatabase): CXCompileCommands	
+dispose	hcparse/read_libclang/libclang_wrap.html#dispose,CXCompileCommands	libclang_wrap: dispose(argCXCompileCommands: CXCompileCommands): void	
+getSize	hcparse/read_libclang/libclang_wrap.html#getSize,CXCompileCommands	libclang_wrap: getSize(argCXCompileCommands: CXCompileCommands): cuint	
+getCommand	hcparse/read_libclang/libclang_wrap.html#getCommand,CXCompileCommands,cuint	libclang_wrap: getCommand(argCXCompileCommands: CXCompileCommands; i: cuint): CXCompileCommand	
+getDirectory	hcparse/read_libclang/libclang_wrap.html#getDirectory,CXCompileCommand	libclang_wrap: getDirectory(argCXCompileCommand: CXCompileCommand): CXString	
+getFilename	hcparse/read_libclang/libclang_wrap.html#getFilename,CXCompileCommand	libclang_wrap: getFilename(argCXCompileCommand: CXCompileCommand): CXString	
+getNumArgs	hcparse/read_libclang/libclang_wrap.html#getNumArgs,CXCompileCommand	libclang_wrap: getNumArgs(argCXCompileCommand: CXCompileCommand): cuint	
+getArg	hcparse/read_libclang/libclang_wrap.html#getArg,CXCompileCommand,cuint	libclang_wrap: getArg(argCXCompileCommand: CXCompileCommand; i: cuint): CXString	
+getNumMappedSources	hcparse/read_libclang/libclang_wrap.html#getNumMappedSources,CXCompileCommand	libclang_wrap: getNumMappedSources(argCXCompileCommand: CXCompileCommand): cuint	
+getMappedSourcePath	hcparse/read_libclang/libclang_wrap.html#getMappedSourcePath,CXCompileCommand,cuint	libclang_wrap: getMappedSourcePath(argCXCompileCommand: CXCompileCommand; i: cuint): CXString	
+getMappedSourceContent	hcparse/read_libclang/libclang_wrap.html#getMappedSourceContent,CXCompileCommand,cuint	libclang_wrap: getMappedSourceContent(argCXCompileCommand: CXCompileCommand; i: cuint): CXString	
+CXIndex	hcparse/read_libclang/libclang_wrap.html#CXIndex	libclang_wrap: CXIndex	
+CXTargetInfoImpl	hcparse/read_libclang/libclang_wrap.html#CXTargetInfoImpl	libclang_wrap: CXTargetInfoImpl	
+CXTargetInfo	hcparse/read_libclang/libclang_wrap.html#CXTargetInfo	libclang_wrap: CXTargetInfo	
+CXTranslationUnitImpl	hcparse/read_libclang/libclang_wrap.html#CXTranslationUnitImpl	libclang_wrap: CXTranslationUnitImpl	
+CXTranslationUnit	hcparse/read_libclang/libclang_wrap.html#CXTranslationUnit	libclang_wrap: CXTranslationUnit	
+CXClientData	hcparse/read_libclang/libclang_wrap.html#CXClientData	libclang_wrap: CXClientData	
+CXUnsavedFile	hcparse/read_libclang/libclang_wrap.html#CXUnsavedFile	libclang_wrap: CXUnsavedFile	
+akAvailable	hcparse/read_libclang/libclang_wrap.html#akAvailable	CXAvailabilityKind.akAvailable	
+akDeprecated	hcparse/read_libclang/libclang_wrap.html#akDeprecated	CXAvailabilityKind.akDeprecated	
+akNotAvailable	hcparse/read_libclang/libclang_wrap.html#akNotAvailable	CXAvailabilityKind.akNotAvailable	
+akNotAccessible	hcparse/read_libclang/libclang_wrap.html#akNotAccessible	CXAvailabilityKind.akNotAccessible	
+CXAvailabilityKind	hcparse/read_libclang/libclang_wrap.html#CXAvailabilityKind	libclang_wrap: CXAvailabilityKind	
+CXVersion	hcparse/read_libclang/libclang_wrap.html#CXVersion	libclang_wrap: CXVersion	
+ceskNone	hcparse/read_libclang/libclang_wrap.html#ceskNone	ExceptionSpecificationKind.ceskNone	
+ceskDynamicNone	hcparse/read_libclang/libclang_wrap.html#ceskDynamicNone	ExceptionSpecificationKind.ceskDynamicNone	
+ceskDynamic	hcparse/read_libclang/libclang_wrap.html#ceskDynamic	ExceptionSpecificationKind.ceskDynamic	
+ceskMSAny	hcparse/read_libclang/libclang_wrap.html#ceskMSAny	ExceptionSpecificationKind.ceskMSAny	
+ceskBasicNoexcept	hcparse/read_libclang/libclang_wrap.html#ceskBasicNoexcept	ExceptionSpecificationKind.ceskBasicNoexcept	
+ceskComputedNoexcept	hcparse/read_libclang/libclang_wrap.html#ceskComputedNoexcept	ExceptionSpecificationKind.ceskComputedNoexcept	
+ceskUnevaluated	hcparse/read_libclang/libclang_wrap.html#ceskUnevaluated	ExceptionSpecificationKind.ceskUnevaluated	
+ceskUninstantiated	hcparse/read_libclang/libclang_wrap.html#ceskUninstantiated	ExceptionSpecificationKind.ceskUninstantiated	
+ceskUnparsed	hcparse/read_libclang/libclang_wrap.html#ceskUnparsed	ExceptionSpecificationKind.ceskUnparsed	
+ceskNoThrow	hcparse/read_libclang/libclang_wrap.html#ceskNoThrow	ExceptionSpecificationKind.ceskNoThrow	
+ExceptionSpecificationKind	hcparse/read_libclang/libclang_wrap.html#ExceptionSpecificationKind	libclang_wrap: ExceptionSpecificationKind	
+createIndex	hcparse/read_libclang/libclang_wrap.html#createIndex,cint,cint	libclang_wrap: createIndex(excludeDeclarationsFromPCH: cint; displayDiagnostics: cint): CXIndex	
+disposeIndex	hcparse/read_libclang/libclang_wrap.html#disposeIndex,CXIndex	libclang_wrap: disposeIndex(index: CXIndex): void	
+gofNone	hcparse/read_libclang/libclang_wrap.html#gofNone	CXGlobalOptFlags.gofNone	
+gofThreadBackgroundPriorityForIndexing	hcparse/read_libclang/libclang_wrap.html#gofThreadBackgroundPriorityForIndexing	CXGlobalOptFlags.gofThreadBackgroundPriorityForIndexing	
+gofThreadBackgroundPriorityForEditing	hcparse/read_libclang/libclang_wrap.html#gofThreadBackgroundPriorityForEditing	CXGlobalOptFlags.gofThreadBackgroundPriorityForEditing	
+gofThreadBackgroundPriorityForAll	hcparse/read_libclang/libclang_wrap.html#gofThreadBackgroundPriorityForAll	CXGlobalOptFlags.gofThreadBackgroundPriorityForAll	
+CXGlobalOptFlags	hcparse/read_libclang/libclang_wrap.html#CXGlobalOptFlags	libclang_wrap: CXGlobalOptFlags	
+setGlobalOptions	hcparse/read_libclang/libclang_wrap.html#setGlobalOptions,CXIndex,cuint	libclang_wrap: setGlobalOptions(argCXIndex: CXIndex; options: cuint): void	
+getGlobalOptions	hcparse/read_libclang/libclang_wrap.html#getGlobalOptions,CXIndex	libclang_wrap: getGlobalOptions(argCXIndex: CXIndex): cuint	
+setInvocationEmissionPathOption	hcparse/read_libclang/libclang_wrap.html#setInvocationEmissionPathOption,CXIndex,cstring	libclang_wrap: setInvocationEmissionPathOption(argCXIndex: CXIndex; path: cstring): void	
+CXFile	hcparse/read_libclang/libclang_wrap.html#CXFile	libclang_wrap: CXFile	
+getFileName	hcparse/read_libclang/libclang_wrap.html#getFileName,CXFile	libclang_wrap: getFileName(sFile: CXFile): CXString	
+getFileTime	hcparse/read_libclang/libclang_wrap.html#getFileTime,CXFile	libclang_wrap: getFileTime(sFile: CXFile): time_t	
+CXFileUniqueID	hcparse/read_libclang/libclang_wrap.html#CXFileUniqueID	libclang_wrap: CXFileUniqueID	
+getFileUniqueID	hcparse/read_libclang/libclang_wrap.html#getFileUniqueID,CXFile,ptr.	libclang_wrap: getFileUniqueID(file: CXFile; outID: ptr [CXFileUniqueID]): cint	
+isFileMultipleIncludeGuarded	hcparse/read_libclang/libclang_wrap.html#isFileMultipleIncludeGuarded,CXTranslationUnit,CXFile	libclang_wrap: isFileMultipleIncludeGuarded(tu: CXTranslationUnit; file: CXFile): cuint	
+getFile	hcparse/read_libclang/libclang_wrap.html#getFile,CXTranslationUnit,cstring	libclang_wrap: getFile(tu: CXTranslationUnit; file_name: cstring): CXFile	
+getFileContents	hcparse/read_libclang/libclang_wrap.html#getFileContents,CXTranslationUnit,CXFile,ptr.	libclang_wrap: getFileContents(tu: CXTranslationUnit; file: CXFile; size: ptr [cint]): cstring	
+isEqual	hcparse/read_libclang/libclang_wrap.html#isEqual,CXFile,CXFile	libclang_wrap: isEqual(file1: CXFile; file2: CXFile): cint	
+tryGetRealPathName	hcparse/read_libclang/libclang_wrap.html#tryGetRealPathName,CXFile	libclang_wrap: tryGetRealPathName(file: CXFile): CXString	
+CXSourceLocation	hcparse/read_libclang/libclang_wrap.html#CXSourceLocation	libclang_wrap: CXSourceLocation	
+CXSourceRange	hcparse/read_libclang/libclang_wrap.html#CXSourceRange	libclang_wrap: CXSourceRange	
+getNullLocation	hcparse/read_libclang/libclang_wrap.html#getNullLocation	libclang_wrap: getNullLocation(): CXSourceLocation	
+equalLocations	hcparse/read_libclang/libclang_wrap.html#equalLocations,CXSourceLocation,CXSourceLocation	libclang_wrap: equalLocations(loc1: CXSourceLocation; loc2: CXSourceLocation): cuint	
+getLocation	hcparse/read_libclang/libclang_wrap.html#getLocation,CXTranslationUnit,CXFile,cuint,cuint	libclang_wrap: getLocation(tu: CXTranslationUnit; file: CXFile; line: cuint; column: cuint): CXSourceLocation	
+getLocationForOffset	hcparse/read_libclang/libclang_wrap.html#getLocationForOffset,CXTranslationUnit,CXFile,cuint	libclang_wrap: getLocationForOffset(tu: CXTranslationUnit; file: CXFile; offset: cuint): CXSourceLocation	
+location_isInSystemHeader	hcparse/read_libclang/libclang_wrap.html#location_isInSystemHeader,CXSourceLocation	libclang_wrap: location_isInSystemHeader(location: CXSourceLocation): cint	
+location_isFromMainFile	hcparse/read_libclang/libclang_wrap.html#location_isFromMainFile,CXSourceLocation	libclang_wrap: location_isFromMainFile(location: CXSourceLocation): cint	
+getNullRange	hcparse/read_libclang/libclang_wrap.html#getNullRange	libclang_wrap: getNullRange(): CXSourceRange	
+getRange	hcparse/read_libclang/libclang_wrap.html#getRange,CXSourceLocation,CXSourceLocation	libclang_wrap: getRange(cxbegin: CXSourceLocation; cxend: CXSourceLocation): CXSourceRange	
+equalRanges	hcparse/read_libclang/libclang_wrap.html#equalRanges,CXSourceRange,CXSourceRange	libclang_wrap: equalRanges(range1: CXSourceRange; range2: CXSourceRange): cuint	
+range_isNull	hcparse/read_libclang/libclang_wrap.html#range_isNull,CXSourceRange	libclang_wrap: range_isNull(cxrange: CXSourceRange): cint	
+getExpansionLocation	hcparse/read_libclang/libclang_wrap.html#getExpansionLocation,CXSourceLocation,ptr.,ptr.,ptr.,ptr.	libclang_wrap: getExpansionLocation(location: CXSourceLocation; file: ptr [CXFile];\n                     line: ptr [cuint]; column: ptr [cuint]; offset: ptr [cuint]): void	
+getPresumedLocation	hcparse/read_libclang/libclang_wrap.html#getPresumedLocation,CXSourceLocation,ptr.,ptr.,ptr.	libclang_wrap: getPresumedLocation(location: CXSourceLocation; filename: ptr [CXString];\n                    line: ptr [cuint]; column: ptr [cuint]): void	
+getInstantiationLocation	hcparse/read_libclang/libclang_wrap.html#getInstantiationLocation,CXSourceLocation,ptr.,ptr.,ptr.,ptr.	libclang_wrap: getInstantiationLocation(location: CXSourceLocation; file: ptr [CXFile];\n                         line: ptr [cuint]; column: ptr [cuint];\n                         offset: ptr [cuint]): void	
+getSpellingLocation	hcparse/read_libclang/libclang_wrap.html#getSpellingLocation,CXSourceLocation,ptr.,ptr.,ptr.,ptr.	libclang_wrap: getSpellingLocation(location: CXSourceLocation; file: ptr [CXFile];\n                    line: ptr [cuint]; column: ptr [cuint]; offset: ptr [cuint]): void	
+getFileLocation	hcparse/read_libclang/libclang_wrap.html#getFileLocation,CXSourceLocation,ptr.,ptr.,ptr.,ptr.	libclang_wrap: getFileLocation(location: CXSourceLocation; file: ptr [CXFile];\n                line: ptr [cuint]; column: ptr [cuint]; offset: ptr [cuint]): void	
+getRangeStart	hcparse/read_libclang/libclang_wrap.html#getRangeStart,CXSourceRange	libclang_wrap: getRangeStart(cxrange: CXSourceRange): CXSourceLocation	
+getRangeEnd	hcparse/read_libclang/libclang_wrap.html#getRangeEnd,CXSourceRange	libclang_wrap: getRangeEnd(cxrange: CXSourceRange): CXSourceLocation	
+CXSourceRangeList	hcparse/read_libclang/libclang_wrap.html#CXSourceRangeList	libclang_wrap: CXSourceRangeList	
+getSkippedRanges	hcparse/read_libclang/libclang_wrap.html#getSkippedRanges,CXTranslationUnit,CXFile	libclang_wrap: getSkippedRanges(tu: CXTranslationUnit; file: CXFile): ptr [CXSourceRangeList]	
+getAllSkippedRanges	hcparse/read_libclang/libclang_wrap.html#getAllSkippedRanges,CXTranslationUnit	libclang_wrap: getAllSkippedRanges(tu: CXTranslationUnit): ptr [CXSourceRangeList]	
+disposeSourceRangeList	hcparse/read_libclang/libclang_wrap.html#disposeSourceRangeList,ptr.	libclang_wrap: disposeSourceRangeList(ranges: ptr [CXSourceRangeList]): void	
+dsIgnored	hcparse/read_libclang/libclang_wrap.html#dsIgnored	CXDiagnosticSeverity.dsIgnored	
+dsNote	hcparse/read_libclang/libclang_wrap.html#dsNote	CXDiagnosticSeverity.dsNote	
+dsWarning	hcparse/read_libclang/libclang_wrap.html#dsWarning	CXDiagnosticSeverity.dsWarning	
+dsError	hcparse/read_libclang/libclang_wrap.html#dsError	CXDiagnosticSeverity.dsError	
+dsFatal	hcparse/read_libclang/libclang_wrap.html#dsFatal	CXDiagnosticSeverity.dsFatal	
+CXDiagnosticSeverity	hcparse/read_libclang/libclang_wrap.html#CXDiagnosticSeverity	libclang_wrap: CXDiagnosticSeverity	
+CXDiagnostic	hcparse/read_libclang/libclang_wrap.html#CXDiagnostic	libclang_wrap: CXDiagnostic	
+CXDiagnosticSet	hcparse/read_libclang/libclang_wrap.html#CXDiagnosticSet	libclang_wrap: CXDiagnosticSet	
+getNumDiagnosticsInSet	hcparse/read_libclang/libclang_wrap.html#getNumDiagnosticsInSet,CXDiagnosticSet	libclang_wrap: getNumDiagnosticsInSet(diags: CXDiagnosticSet): cuint	
+getDiagnosticInSet	hcparse/read_libclang/libclang_wrap.html#getDiagnosticInSet,CXDiagnosticSet,cuint	libclang_wrap: getDiagnosticInSet(diags: CXDiagnosticSet; index: cuint): CXDiagnostic	
+ldeNone	hcparse/read_libclang/libclang_wrap.html#ldeNone	CXLoadDiag_Error.ldeNone	
+ldeUnknown	hcparse/read_libclang/libclang_wrap.html#ldeUnknown	CXLoadDiag_Error.ldeUnknown	
+ldeCannotLoad	hcparse/read_libclang/libclang_wrap.html#ldeCannotLoad	CXLoadDiag_Error.ldeCannotLoad	
+ldeInvalidFile	hcparse/read_libclang/libclang_wrap.html#ldeInvalidFile	CXLoadDiag_Error.ldeInvalidFile	
+CXLoadDiag_Error	hcparse/read_libclang/libclang_wrap.html#CXLoadDiag_Error	libclang_wrap: CXLoadDiag_Error	
+loadDiagnostics	hcparse/read_libclang/libclang_wrap.html#loadDiagnostics,cstring,ptr.,ptr.	libclang_wrap: loadDiagnostics(file: cstring; error: ptr [CXLoadDiag_Error];\n                errorString: ptr [CXString]): CXDiagnosticSet	
+disposeDiagnosticSet	hcparse/read_libclang/libclang_wrap.html#disposeDiagnosticSet,CXDiagnosticSet	libclang_wrap: disposeDiagnosticSet(diags: CXDiagnosticSet): void	
+getChildDiagnostics	hcparse/read_libclang/libclang_wrap.html#getChildDiagnostics,CXDiagnostic	libclang_wrap: getChildDiagnostics(d: CXDiagnostic): CXDiagnosticSet	
+getNumDiagnostics	hcparse/read_libclang/libclang_wrap.html#getNumDiagnostics,CXTranslationUnit	libclang_wrap: getNumDiagnostics(unit: CXTranslationUnit): cuint	
+getDiagnostic	hcparse/read_libclang/libclang_wrap.html#getDiagnostic,CXTranslationUnit,cuint	libclang_wrap: getDiagnostic(unit: CXTranslationUnit; index: cuint): CXDiagnostic	
+getDiagnosticSetFromTU	hcparse/read_libclang/libclang_wrap.html#getDiagnosticSetFromTU,CXTranslationUnit	libclang_wrap: getDiagnosticSetFromTU(unit: CXTranslationUnit): CXDiagnosticSet	
+disposeDiagnostic	hcparse/read_libclang/libclang_wrap.html#disposeDiagnostic,CXDiagnostic	libclang_wrap: disposeDiagnostic(diagnostic: CXDiagnostic): void	
+ddoDisplaySourceLocation	hcparse/read_libclang/libclang_wrap.html#ddoDisplaySourceLocation	CXDiagnosticDisplayOptions.ddoDisplaySourceLocation	
+ddoDisplayColumn	hcparse/read_libclang/libclang_wrap.html#ddoDisplayColumn	CXDiagnosticDisplayOptions.ddoDisplayColumn	
+ddoDisplaySourceRanges	hcparse/read_libclang/libclang_wrap.html#ddoDisplaySourceRanges	CXDiagnosticDisplayOptions.ddoDisplaySourceRanges	
+ddoDisplayOption	hcparse/read_libclang/libclang_wrap.html#ddoDisplayOption	CXDiagnosticDisplayOptions.ddoDisplayOption	
+ddoDisplayCategoryId	hcparse/read_libclang/libclang_wrap.html#ddoDisplayCategoryId	CXDiagnosticDisplayOptions.ddoDisplayCategoryId	
+ddoDisplayCategoryName	hcparse/read_libclang/libclang_wrap.html#ddoDisplayCategoryName	CXDiagnosticDisplayOptions.ddoDisplayCategoryName	
+CXDiagnosticDisplayOptions	hcparse/read_libclang/libclang_wrap.html#CXDiagnosticDisplayOptions	libclang_wrap: CXDiagnosticDisplayOptions	
+formatDiagnostic	hcparse/read_libclang/libclang_wrap.html#formatDiagnostic,CXDiagnostic,cuint	libclang_wrap: formatDiagnostic(diagnostic: CXDiagnostic; options: cuint): CXString	
+defaultDiagnosticDisplayOptions	hcparse/read_libclang/libclang_wrap.html#defaultDiagnosticDisplayOptions	libclang_wrap: defaultDiagnosticDisplayOptions(): cuint	
+getDiagnosticSeverity	hcparse/read_libclang/libclang_wrap.html#getDiagnosticSeverity,CXDiagnostic	libclang_wrap: getDiagnosticSeverity(argCXDiagnostic: CXDiagnostic): CXDiagnosticSeverity	
+getDiagnosticLocation	hcparse/read_libclang/libclang_wrap.html#getDiagnosticLocation,CXDiagnostic	libclang_wrap: getDiagnosticLocation(argCXDiagnostic: CXDiagnostic): CXSourceLocation	
+getDiagnosticSpelling	hcparse/read_libclang/libclang_wrap.html#getDiagnosticSpelling,CXDiagnostic	libclang_wrap: getDiagnosticSpelling(argCXDiagnostic: CXDiagnostic): CXString	
+getDiagnosticOption	hcparse/read_libclang/libclang_wrap.html#getDiagnosticOption,CXDiagnostic,ptr.	libclang_wrap: getDiagnosticOption(diag: CXDiagnostic; disable: ptr [CXString]): CXString	
+getDiagnosticCategory	hcparse/read_libclang/libclang_wrap.html#getDiagnosticCategory,CXDiagnostic	libclang_wrap: getDiagnosticCategory(argCXDiagnostic: CXDiagnostic): cuint	
+getDiagnosticCategoryName	hcparse/read_libclang/libclang_wrap.html#getDiagnosticCategoryName,cuint	libclang_wrap: getDiagnosticCategoryName(category: cuint): CXString	
+getDiagnosticCategoryText	hcparse/read_libclang/libclang_wrap.html#getDiagnosticCategoryText,CXDiagnostic	libclang_wrap: getDiagnosticCategoryText(argCXDiagnostic: CXDiagnostic): CXString	
+getDiagnosticNumRanges	hcparse/read_libclang/libclang_wrap.html#getDiagnosticNumRanges,CXDiagnostic	libclang_wrap: getDiagnosticNumRanges(argCXDiagnostic: CXDiagnostic): cuint	
+getDiagnosticRange	hcparse/read_libclang/libclang_wrap.html#getDiagnosticRange,CXDiagnostic,cuint	libclang_wrap: getDiagnosticRange(diagnostic: CXDiagnostic; cxrange: cuint): CXSourceRange	
+getDiagnosticNumFixIts	hcparse/read_libclang/libclang_wrap.html#getDiagnosticNumFixIts,CXDiagnostic	libclang_wrap: getDiagnosticNumFixIts(diagnostic: CXDiagnostic): cuint	
+getDiagnosticFixIt	hcparse/read_libclang/libclang_wrap.html#getDiagnosticFixIt,CXDiagnostic,cuint,ptr.	libclang_wrap: getDiagnosticFixIt(diagnostic: CXDiagnostic; fixIt: cuint;\n                   replacementRange: ptr [CXSourceRange]): CXString	
+getTranslationUnitSpelling	hcparse/read_libclang/libclang_wrap.html#getTranslationUnitSpelling,CXTranslationUnit	libclang_wrap: getTranslationUnitSpelling(cTUnit: CXTranslationUnit): CXString	
+createTranslationUnitFromSourceFile	hcparse/read_libclang/libclang_wrap.html#createTranslationUnitFromSourceFile,CXIndex,cstring,cint,cstringArray,cuint,ptr.	libclang_wrap: createTranslationUnitFromSourceFile(cIdx: CXIndex; source_filename: cstring;\n                                    num_clang_command_line_args: cint;\n                                    clang_command_line_args: cstringArray;\n                                    num_unsaved_files: cuint;\n                                    unsaved_files: ptr [CXUnsavedFile]): CXTranslationUnit	
+createTranslationUnit	hcparse/read_libclang/libclang_wrap.html#createTranslationUnit,CXIndex,cstring	libclang_wrap: createTranslationUnit(cIdx: CXIndex; ast_filename: cstring): CXTranslationUnit	
+createTranslationUnit2	hcparse/read_libclang/libclang_wrap.html#createTranslationUnit2,CXIndex,cstring,ptr.	libclang_wrap: createTranslationUnit2(cIdx: CXIndex; ast_filename: cstring;\n                       out_TU: ptr [CXTranslationUnit]): CXErrorCode	
+tufNone	hcparse/read_libclang/libclang_wrap.html#tufNone	CXTranslationUnit_Flags.tufNone	
+tufDetailedPreprocessingRecord	hcparse/read_libclang/libclang_wrap.html#tufDetailedPreprocessingRecord	CXTranslationUnit_Flags.tufDetailedPreprocessingRecord	
+tufIncomplete	hcparse/read_libclang/libclang_wrap.html#tufIncomplete	CXTranslationUnit_Flags.tufIncomplete	
+tufPrecompiledPreamble	hcparse/read_libclang/libclang_wrap.html#tufPrecompiledPreamble	CXTranslationUnit_Flags.tufPrecompiledPreamble	
+tufCacheCompletionResults	hcparse/read_libclang/libclang_wrap.html#tufCacheCompletionResults	CXTranslationUnit_Flags.tufCacheCompletionResults	
+tufForSerialization	hcparse/read_libclang/libclang_wrap.html#tufForSerialization	CXTranslationUnit_Flags.tufForSerialization	
+tufChainedPCH	hcparse/read_libclang/libclang_wrap.html#tufChainedPCH	CXTranslationUnit_Flags.tufChainedPCH	
+tufSkipFunctionBodies	hcparse/read_libclang/libclang_wrap.html#tufSkipFunctionBodies	CXTranslationUnit_Flags.tufSkipFunctionBodies	
+tufIncludeBriefCommentsInCodeCompletion	hcparse/read_libclang/libclang_wrap.html#tufIncludeBriefCommentsInCodeCompletion	CXTranslationUnit_Flags.tufIncludeBriefCommentsInCodeCompletion	
+tufCreatePreambleOnFirstParse	hcparse/read_libclang/libclang_wrap.html#tufCreatePreambleOnFirstParse	CXTranslationUnit_Flags.tufCreatePreambleOnFirstParse	
+tufKeepGoing	hcparse/read_libclang/libclang_wrap.html#tufKeepGoing	CXTranslationUnit_Flags.tufKeepGoing	
+tufSingleFileParse	hcparse/read_libclang/libclang_wrap.html#tufSingleFileParse	CXTranslationUnit_Flags.tufSingleFileParse	
+tufLimitSkipFunctionBodiesToPreamble	hcparse/read_libclang/libclang_wrap.html#tufLimitSkipFunctionBodiesToPreamble	CXTranslationUnit_Flags.tufLimitSkipFunctionBodiesToPreamble	
+tufIncludeAttributedTypes	hcparse/read_libclang/libclang_wrap.html#tufIncludeAttributedTypes	CXTranslationUnit_Flags.tufIncludeAttributedTypes	
+tufVisitImplicitAttributes	hcparse/read_libclang/libclang_wrap.html#tufVisitImplicitAttributes	CXTranslationUnit_Flags.tufVisitImplicitAttributes	
+tufIgnoreNonErrorsFromIncludedFiles	hcparse/read_libclang/libclang_wrap.html#tufIgnoreNonErrorsFromIncludedFiles	CXTranslationUnit_Flags.tufIgnoreNonErrorsFromIncludedFiles	
+tufRetainExcludedConditionalBlocks	hcparse/read_libclang/libclang_wrap.html#tufRetainExcludedConditionalBlocks	CXTranslationUnit_Flags.tufRetainExcludedConditionalBlocks	
+CXTranslationUnit_Flags	hcparse/read_libclang/libclang_wrap.html#CXTranslationUnit_Flags	libclang_wrap: CXTranslationUnit_Flags	
+defaultEditingTranslationUnitOptions	hcparse/read_libclang/libclang_wrap.html#defaultEditingTranslationUnitOptions	libclang_wrap: defaultEditingTranslationUnitOptions(): cuint	
+parseTranslationUnit	hcparse/read_libclang/libclang_wrap.html#parseTranslationUnit,CXIndex,cstring,cstringArray,cint,ptr.,cuint,cuint	libclang_wrap: parseTranslationUnit(cIdx: CXIndex; source_filename: cstring;\n                     command_line_args: cstringArray;\n                     num_command_line_args: cint;\n                     unsaved_files: ptr [CXUnsavedFile];\n                     num_unsaved_files: cuint; options: cuint): CXTranslationUnit	
+parseTranslationUnit2	hcparse/read_libclang/libclang_wrap.html#parseTranslationUnit2,CXIndex,cstring,cstringArray,cint,ptr.,cuint,cuint,ptr.	libclang_wrap: parseTranslationUnit2(cIdx: CXIndex; source_filename: cstring;\n                      command_line_args: cstringArray;\n                      num_command_line_args: cint;\n                      unsaved_files: ptr [CXUnsavedFile];\n                      num_unsaved_files: cuint; options: cuint;\n                      out_TU: ptr [CXTranslationUnit]): CXErrorCode	
+parseTranslationUnit2FullArgv	hcparse/read_libclang/libclang_wrap.html#parseTranslationUnit2FullArgv,CXIndex,cstring,cstringArray,cint,ptr.,cuint,cuint,ptr.	libclang_wrap: parseTranslationUnit2FullArgv(cIdx: CXIndex; source_filename: cstring;\n                              command_line_args: cstringArray;\n                              num_command_line_args: cint;\n                              unsaved_files: ptr [CXUnsavedFile];\n                              num_unsaved_files: cuint; options: cuint;\n                              out_TU: ptr [CXTranslationUnit]): CXErrorCode	
+stufNone	hcparse/read_libclang/libclang_wrap.html#stufNone	CXSaveTranslationUnit_Flags.stufNone	
+CXSaveTranslationUnit_Flags	hcparse/read_libclang/libclang_wrap.html#CXSaveTranslationUnit_Flags	libclang_wrap: CXSaveTranslationUnit_Flags	
+defaultSaveOptions	hcparse/read_libclang/libclang_wrap.html#defaultSaveOptions,CXTranslationUnit	libclang_wrap: defaultSaveOptions(tU: CXTranslationUnit): cuint	
+seNone	hcparse/read_libclang/libclang_wrap.html#seNone	CXSaveError.seNone	
+seUnknown	hcparse/read_libclang/libclang_wrap.html#seUnknown	CXSaveError.seUnknown	
+seTranslationErrors	hcparse/read_libclang/libclang_wrap.html#seTranslationErrors	CXSaveError.seTranslationErrors	
+seInvalidTU	hcparse/read_libclang/libclang_wrap.html#seInvalidTU	CXSaveError.seInvalidTU	
+CXSaveError	hcparse/read_libclang/libclang_wrap.html#CXSaveError	libclang_wrap: CXSaveError	
+saveTranslationUnit	hcparse/read_libclang/libclang_wrap.html#saveTranslationUnit,CXTranslationUnit,cstring,cuint	libclang_wrap: saveTranslationUnit(tU: CXTranslationUnit; fileName: cstring; options: cuint): cint	
+suspendTranslationUnit	hcparse/read_libclang/libclang_wrap.html#suspendTranslationUnit,CXTranslationUnit	libclang_wrap: suspendTranslationUnit(argCXTranslationUnit: CXTranslationUnit): cuint	
+disposeTranslationUnit	hcparse/read_libclang/libclang_wrap.html#disposeTranslationUnit,CXTranslationUnit	libclang_wrap: disposeTranslationUnit(argCXTranslationUnit: CXTranslationUnit): void	
+rfNone	hcparse/read_libclang/libclang_wrap.html#rfNone	CXReparse_Flags.rfNone	
+CXReparse_Flags	hcparse/read_libclang/libclang_wrap.html#CXReparse_Flags	libclang_wrap: CXReparse_Flags	
+defaultReparseOptions	hcparse/read_libclang/libclang_wrap.html#defaultReparseOptions,CXTranslationUnit	libclang_wrap: defaultReparseOptions(tU: CXTranslationUnit): cuint	
+reparseTranslationUnit	hcparse/read_libclang/libclang_wrap.html#reparseTranslationUnit,CXTranslationUnit,cuint,ptr.,cuint	libclang_wrap: reparseTranslationUnit(tU: CXTranslationUnit; num_unsaved_files: cuint;\n                       unsaved_files: ptr [CXUnsavedFile]; options: cuint): cint	
+turukAST	hcparse/read_libclang/libclang_wrap.html#turukAST	CXTUResourceUsageKind.turukAST	
+turukIdentifiers	hcparse/read_libclang/libclang_wrap.html#turukIdentifiers	CXTUResourceUsageKind.turukIdentifiers	
+turukSelectors	hcparse/read_libclang/libclang_wrap.html#turukSelectors	CXTUResourceUsageKind.turukSelectors	
+turukGlobalCompletionResults	hcparse/read_libclang/libclang_wrap.html#turukGlobalCompletionResults	CXTUResourceUsageKind.turukGlobalCompletionResults	
+turukSourceManagerContentCache	hcparse/read_libclang/libclang_wrap.html#turukSourceManagerContentCache	CXTUResourceUsageKind.turukSourceManagerContentCache	
+turukAST_SideTables	hcparse/read_libclang/libclang_wrap.html#turukAST_SideTables	CXTUResourceUsageKind.turukAST_SideTables	
+turukSourceManager_Membuffer_Malloc	hcparse/read_libclang/libclang_wrap.html#turukSourceManager_Membuffer_Malloc	CXTUResourceUsageKind.turukSourceManager_Membuffer_Malloc	
+turukSourceManager_Membuffer_MMap	hcparse/read_libclang/libclang_wrap.html#turukSourceManager_Membuffer_MMap	CXTUResourceUsageKind.turukSourceManager_Membuffer_MMap	
+turukExternalASTSource_Membuffer_Malloc	hcparse/read_libclang/libclang_wrap.html#turukExternalASTSource_Membuffer_Malloc	CXTUResourceUsageKind.turukExternalASTSource_Membuffer_Malloc	
+turukExternalASTSource_Membuffer_MMap	hcparse/read_libclang/libclang_wrap.html#turukExternalASTSource_Membuffer_MMap	CXTUResourceUsageKind.turukExternalASTSource_Membuffer_MMap	
+turukPreprocessor	hcparse/read_libclang/libclang_wrap.html#turukPreprocessor	CXTUResourceUsageKind.turukPreprocessor	
+turukPreprocessingRecord	hcparse/read_libclang/libclang_wrap.html#turukPreprocessingRecord	CXTUResourceUsageKind.turukPreprocessingRecord	
+turukSourceManager_DataStructures	hcparse/read_libclang/libclang_wrap.html#turukSourceManager_DataStructures	CXTUResourceUsageKind.turukSourceManager_DataStructures	
+turukPreprocessor_HeaderSearch	hcparse/read_libclang/libclang_wrap.html#turukPreprocessor_HeaderSearch	CXTUResourceUsageKind.turukPreprocessor_HeaderSearch	
+CXTUResourceUsageKind	hcparse/read_libclang/libclang_wrap.html#CXTUResourceUsageKind	libclang_wrap: CXTUResourceUsageKind	
+getTUResourceUsageName	hcparse/read_libclang/libclang_wrap.html#getTUResourceUsageName,CXTUResourceUsageKind	libclang_wrap: getTUResourceUsageName(kind: CXTUResourceUsageKind): cstring	
+CXTUResourceUsageEntry	hcparse/read_libclang/libclang_wrap.html#CXTUResourceUsageEntry	libclang_wrap: CXTUResourceUsageEntry	
+CXTUResourceUsage	hcparse/read_libclang/libclang_wrap.html#CXTUResourceUsage	libclang_wrap: CXTUResourceUsage	
+getCXTUResourceUsage	hcparse/read_libclang/libclang_wrap.html#getCXTUResourceUsage,CXTranslationUnit	libclang_wrap: getCXTUResourceUsage(tU: CXTranslationUnit): CXTUResourceUsage	
+disposeCXTUResourceUsage	hcparse/read_libclang/libclang_wrap.html#disposeCXTUResourceUsage,CXTUResourceUsage	libclang_wrap: disposeCXTUResourceUsage(usage: CXTUResourceUsage): void	
+getTranslationUnitTargetInfo	hcparse/read_libclang/libclang_wrap.html#getTranslationUnitTargetInfo,CXTranslationUnit	libclang_wrap: getTranslationUnitTargetInfo(cTUnit: CXTranslationUnit): CXTargetInfo	
+dispose	hcparse/read_libclang/libclang_wrap.html#dispose,CXTargetInfo	libclang_wrap: dispose(info: CXTargetInfo): void	
+getTriple	hcparse/read_libclang/libclang_wrap.html#getTriple,CXTargetInfo	libclang_wrap: getTriple(info: CXTargetInfo): CXString	
+getPointerWidth	hcparse/read_libclang/libclang_wrap.html#getPointerWidth,CXTargetInfo	libclang_wrap: getPointerWidth(info: CXTargetInfo): cint	
+ckUnexposedDecl	hcparse/read_libclang/libclang_wrap.html#ckUnexposedDecl	CXCursorKind.ckUnexposedDecl	
+ckStructDecl	hcparse/read_libclang/libclang_wrap.html#ckStructDecl	CXCursorKind.ckStructDecl	
+ckUnionDecl	hcparse/read_libclang/libclang_wrap.html#ckUnionDecl	CXCursorKind.ckUnionDecl	
+ckClassDecl	hcparse/read_libclang/libclang_wrap.html#ckClassDecl	CXCursorKind.ckClassDecl	
+ckEnumDecl	hcparse/read_libclang/libclang_wrap.html#ckEnumDecl	CXCursorKind.ckEnumDecl	
+ckFieldDecl	hcparse/read_libclang/libclang_wrap.html#ckFieldDecl	CXCursorKind.ckFieldDecl	
+ckEnumConstantDecl	hcparse/read_libclang/libclang_wrap.html#ckEnumConstantDecl	CXCursorKind.ckEnumConstantDecl	
+ckFunctionDecl	hcparse/read_libclang/libclang_wrap.html#ckFunctionDecl	CXCursorKind.ckFunctionDecl	
+ckVarDecl	hcparse/read_libclang/libclang_wrap.html#ckVarDecl	CXCursorKind.ckVarDecl	
+ckParmDecl	hcparse/read_libclang/libclang_wrap.html#ckParmDecl	CXCursorKind.ckParmDecl	
+ckObjCInterfaceDecl	hcparse/read_libclang/libclang_wrap.html#ckObjCInterfaceDecl	CXCursorKind.ckObjCInterfaceDecl	
+ckObjCCategoryDecl	hcparse/read_libclang/libclang_wrap.html#ckObjCCategoryDecl	CXCursorKind.ckObjCCategoryDecl	
+ckObjCProtocolDecl	hcparse/read_libclang/libclang_wrap.html#ckObjCProtocolDecl	CXCursorKind.ckObjCProtocolDecl	
+ckObjCPropertyDecl	hcparse/read_libclang/libclang_wrap.html#ckObjCPropertyDecl	CXCursorKind.ckObjCPropertyDecl	
+ckObjCIvarDecl	hcparse/read_libclang/libclang_wrap.html#ckObjCIvarDecl	CXCursorKind.ckObjCIvarDecl	
+ckObjCInstanceMethodDecl	hcparse/read_libclang/libclang_wrap.html#ckObjCInstanceMethodDecl	CXCursorKind.ckObjCInstanceMethodDecl	
+ckObjCClassMethodDecl	hcparse/read_libclang/libclang_wrap.html#ckObjCClassMethodDecl	CXCursorKind.ckObjCClassMethodDecl	
+ckObjCImplementationDecl	hcparse/read_libclang/libclang_wrap.html#ckObjCImplementationDecl	CXCursorKind.ckObjCImplementationDecl	
+ckObjCCategoryImplDecl	hcparse/read_libclang/libclang_wrap.html#ckObjCCategoryImplDecl	CXCursorKind.ckObjCCategoryImplDecl	
+ckTypedefDecl	hcparse/read_libclang/libclang_wrap.html#ckTypedefDecl	CXCursorKind.ckTypedefDecl	
+ckMethod	hcparse/read_libclang/libclang_wrap.html#ckMethod	CXCursorKind.ckMethod	
+ckNamespace	hcparse/read_libclang/libclang_wrap.html#ckNamespace	CXCursorKind.ckNamespace	
+ckLinkageSpec	hcparse/read_libclang/libclang_wrap.html#ckLinkageSpec	CXCursorKind.ckLinkageSpec	
+ckConstructor	hcparse/read_libclang/libclang_wrap.html#ckConstructor	CXCursorKind.ckConstructor	
+ckDestructor	hcparse/read_libclang/libclang_wrap.html#ckDestructor	CXCursorKind.ckDestructor	
+ckConversionFunction	hcparse/read_libclang/libclang_wrap.html#ckConversionFunction	CXCursorKind.ckConversionFunction	
+ckTemplateTypeParameter	hcparse/read_libclang/libclang_wrap.html#ckTemplateTypeParameter	CXCursorKind.ckTemplateTypeParameter	
+ckNonTypeTemplateParameter	hcparse/read_libclang/libclang_wrap.html#ckNonTypeTemplateParameter	CXCursorKind.ckNonTypeTemplateParameter	
+ckTemplateTemplateParameter	hcparse/read_libclang/libclang_wrap.html#ckTemplateTemplateParameter	CXCursorKind.ckTemplateTemplateParameter	
+ckFunctionTemplate	hcparse/read_libclang/libclang_wrap.html#ckFunctionTemplate	CXCursorKind.ckFunctionTemplate	
+ckClassTemplate	hcparse/read_libclang/libclang_wrap.html#ckClassTemplate	CXCursorKind.ckClassTemplate	
+ckClassTemplatePartialSpecialization	hcparse/read_libclang/libclang_wrap.html#ckClassTemplatePartialSpecialization	CXCursorKind.ckClassTemplatePartialSpecialization	
+ckNamespaceAlias	hcparse/read_libclang/libclang_wrap.html#ckNamespaceAlias	CXCursorKind.ckNamespaceAlias	
+ckUsingDirective	hcparse/read_libclang/libclang_wrap.html#ckUsingDirective	CXCursorKind.ckUsingDirective	
+ckUsingDeclaration	hcparse/read_libclang/libclang_wrap.html#ckUsingDeclaration	CXCursorKind.ckUsingDeclaration	
+ckTypeAliasDecl	hcparse/read_libclang/libclang_wrap.html#ckTypeAliasDecl	CXCursorKind.ckTypeAliasDecl	
+ckObjCSynthesizeDecl	hcparse/read_libclang/libclang_wrap.html#ckObjCSynthesizeDecl	CXCursorKind.ckObjCSynthesizeDecl	
+ckObjCDynamicDecl	hcparse/read_libclang/libclang_wrap.html#ckObjCDynamicDecl	CXCursorKind.ckObjCDynamicDecl	
+ckAccessSpecifier	hcparse/read_libclang/libclang_wrap.html#ckAccessSpecifier	CXCursorKind.ckAccessSpecifier	
+ckFirstRef	hcparse/read_libclang/libclang_wrap.html#ckFirstRef	CXCursorKind.ckFirstRef	
+ckObjCProtocolRef	hcparse/read_libclang/libclang_wrap.html#ckObjCProtocolRef	CXCursorKind.ckObjCProtocolRef	
+ckObjCClassRef	hcparse/read_libclang/libclang_wrap.html#ckObjCClassRef	CXCursorKind.ckObjCClassRef	
+ckTypeRef	hcparse/read_libclang/libclang_wrap.html#ckTypeRef	CXCursorKind.ckTypeRef	
+ckBaseSpecifier	hcparse/read_libclang/libclang_wrap.html#ckBaseSpecifier	CXCursorKind.ckBaseSpecifier	
+ckTemplateRef	hcparse/read_libclang/libclang_wrap.html#ckTemplateRef	CXCursorKind.ckTemplateRef	
+ckNamespaceRef	hcparse/read_libclang/libclang_wrap.html#ckNamespaceRef	CXCursorKind.ckNamespaceRef	
+ckMemberRef	hcparse/read_libclang/libclang_wrap.html#ckMemberRef	CXCursorKind.ckMemberRef	
+ckLabelRef	hcparse/read_libclang/libclang_wrap.html#ckLabelRef	CXCursorKind.ckLabelRef	
+ckOverloadedDeclRef	hcparse/read_libclang/libclang_wrap.html#ckOverloadedDeclRef	CXCursorKind.ckOverloadedDeclRef	
+ckVariableRef	hcparse/read_libclang/libclang_wrap.html#ckVariableRef	CXCursorKind.ckVariableRef	
+ckFirstInvalid	hcparse/read_libclang/libclang_wrap.html#ckFirstInvalid	CXCursorKind.ckFirstInvalid	
+ckNoDeclFound	hcparse/read_libclang/libclang_wrap.html#ckNoDeclFound	CXCursorKind.ckNoDeclFound	
+ckNotImplemented	hcparse/read_libclang/libclang_wrap.html#ckNotImplemented	CXCursorKind.ckNotImplemented	
+ckInvalidCode	hcparse/read_libclang/libclang_wrap.html#ckInvalidCode	CXCursorKind.ckInvalidCode	
+ckFirstExpr	hcparse/read_libclang/libclang_wrap.html#ckFirstExpr	CXCursorKind.ckFirstExpr	
+ckDeclRefExpr	hcparse/read_libclang/libclang_wrap.html#ckDeclRefExpr	CXCursorKind.ckDeclRefExpr	
+ckMemberRefExpr	hcparse/read_libclang/libclang_wrap.html#ckMemberRefExpr	CXCursorKind.ckMemberRefExpr	
+ckCallExpr	hcparse/read_libclang/libclang_wrap.html#ckCallExpr	CXCursorKind.ckCallExpr	
+ckObjCMessageExpr	hcparse/read_libclang/libclang_wrap.html#ckObjCMessageExpr	CXCursorKind.ckObjCMessageExpr	
+ckBlockExpr	hcparse/read_libclang/libclang_wrap.html#ckBlockExpr	CXCursorKind.ckBlockExpr	
+ckIntegerLiteral	hcparse/read_libclang/libclang_wrap.html#ckIntegerLiteral	CXCursorKind.ckIntegerLiteral	
+ckFloatingLiteral	hcparse/read_libclang/libclang_wrap.html#ckFloatingLiteral	CXCursorKind.ckFloatingLiteral	
+ckImaginaryLiteral	hcparse/read_libclang/libclang_wrap.html#ckImaginaryLiteral	CXCursorKind.ckImaginaryLiteral	
+ckStringLiteral	hcparse/read_libclang/libclang_wrap.html#ckStringLiteral	CXCursorKind.ckStringLiteral	
+ckCharacterLiteral	hcparse/read_libclang/libclang_wrap.html#ckCharacterLiteral	CXCursorKind.ckCharacterLiteral	
+ckParenExpr	hcparse/read_libclang/libclang_wrap.html#ckParenExpr	CXCursorKind.ckParenExpr	
+ckUnaryOperator	hcparse/read_libclang/libclang_wrap.html#ckUnaryOperator	CXCursorKind.ckUnaryOperator	
+ckArraySubscriptExpr	hcparse/read_libclang/libclang_wrap.html#ckArraySubscriptExpr	CXCursorKind.ckArraySubscriptExpr	
+ckBinaryOperator	hcparse/read_libclang/libclang_wrap.html#ckBinaryOperator	CXCursorKind.ckBinaryOperator	
+ckCompoundAssignOperator	hcparse/read_libclang/libclang_wrap.html#ckCompoundAssignOperator	CXCursorKind.ckCompoundAssignOperator	
+ckConditionalOperator	hcparse/read_libclang/libclang_wrap.html#ckConditionalOperator	CXCursorKind.ckConditionalOperator	
+ckCStyleCastExpr	hcparse/read_libclang/libclang_wrap.html#ckCStyleCastExpr	CXCursorKind.ckCStyleCastExpr	
+ckCompoundLiteralExpr	hcparse/read_libclang/libclang_wrap.html#ckCompoundLiteralExpr	CXCursorKind.ckCompoundLiteralExpr	
+ckInitListExpr	hcparse/read_libclang/libclang_wrap.html#ckInitListExpr	CXCursorKind.ckInitListExpr	
+ckAddrLabelExpr	hcparse/read_libclang/libclang_wrap.html#ckAddrLabelExpr	CXCursorKind.ckAddrLabelExpr	
+ckStmtExpr	hcparse/read_libclang/libclang_wrap.html#ckStmtExpr	CXCursorKind.ckStmtExpr	
+ckGenericSelectionExpr	hcparse/read_libclang/libclang_wrap.html#ckGenericSelectionExpr	CXCursorKind.ckGenericSelectionExpr	
+ckGNUNullExpr	hcparse/read_libclang/libclang_wrap.html#ckGNUNullExpr	CXCursorKind.ckGNUNullExpr	
+ckStaticCastExpr	hcparse/read_libclang/libclang_wrap.html#ckStaticCastExpr	CXCursorKind.ckStaticCastExpr	
+ckDynamicCastExpr	hcparse/read_libclang/libclang_wrap.html#ckDynamicCastExpr	CXCursorKind.ckDynamicCastExpr	
+ckReinterpretCastExpr	hcparse/read_libclang/libclang_wrap.html#ckReinterpretCastExpr	CXCursorKind.ckReinterpretCastExpr	
+ckConstCastExpr	hcparse/read_libclang/libclang_wrap.html#ckConstCastExpr	CXCursorKind.ckConstCastExpr	
+ckFunctionalCastExpr	hcparse/read_libclang/libclang_wrap.html#ckFunctionalCastExpr	CXCursorKind.ckFunctionalCastExpr	
+ckTypeidExpr	hcparse/read_libclang/libclang_wrap.html#ckTypeidExpr	CXCursorKind.ckTypeidExpr	
+ckBoolLiteralExpr	hcparse/read_libclang/libclang_wrap.html#ckBoolLiteralExpr	CXCursorKind.ckBoolLiteralExpr	
+ckNullPtrLiteralExpr	hcparse/read_libclang/libclang_wrap.html#ckNullPtrLiteralExpr	CXCursorKind.ckNullPtrLiteralExpr	
+ckThisExpr	hcparse/read_libclang/libclang_wrap.html#ckThisExpr	CXCursorKind.ckThisExpr	
+ckThrowExpr	hcparse/read_libclang/libclang_wrap.html#ckThrowExpr	CXCursorKind.ckThrowExpr	
+ckNewExpr	hcparse/read_libclang/libclang_wrap.html#ckNewExpr	CXCursorKind.ckNewExpr	
+ckDeleteExpr	hcparse/read_libclang/libclang_wrap.html#ckDeleteExpr	CXCursorKind.ckDeleteExpr	
+ckUnaryExpr	hcparse/read_libclang/libclang_wrap.html#ckUnaryExpr	CXCursorKind.ckUnaryExpr	
+ckObjCStringLiteral	hcparse/read_libclang/libclang_wrap.html#ckObjCStringLiteral	CXCursorKind.ckObjCStringLiteral	
+ckObjCEncodeExpr	hcparse/read_libclang/libclang_wrap.html#ckObjCEncodeExpr	CXCursorKind.ckObjCEncodeExpr	
+ckObjCSelectorExpr	hcparse/read_libclang/libclang_wrap.html#ckObjCSelectorExpr	CXCursorKind.ckObjCSelectorExpr	
+ckObjCProtocolExpr	hcparse/read_libclang/libclang_wrap.html#ckObjCProtocolExpr	CXCursorKind.ckObjCProtocolExpr	
+ckObjCBridgedCastExpr	hcparse/read_libclang/libclang_wrap.html#ckObjCBridgedCastExpr	CXCursorKind.ckObjCBridgedCastExpr	
+ckPackExpansionExpr	hcparse/read_libclang/libclang_wrap.html#ckPackExpansionExpr	CXCursorKind.ckPackExpansionExpr	
+ckSizeOfPackExpr	hcparse/read_libclang/libclang_wrap.html#ckSizeOfPackExpr	CXCursorKind.ckSizeOfPackExpr	
+ckLambdaExpr	hcparse/read_libclang/libclang_wrap.html#ckLambdaExpr	CXCursorKind.ckLambdaExpr	
+ckObjCBoolLiteralExpr	hcparse/read_libclang/libclang_wrap.html#ckObjCBoolLiteralExpr	CXCursorKind.ckObjCBoolLiteralExpr	
+ckObjCSelfExpr	hcparse/read_libclang/libclang_wrap.html#ckObjCSelfExpr	CXCursorKind.ckObjCSelfExpr	
+ckOMPArraySectionExpr	hcparse/read_libclang/libclang_wrap.html#ckOMPArraySectionExpr	CXCursorKind.ckOMPArraySectionExpr	
+ckObjCAvailabilityCheckExpr	hcparse/read_libclang/libclang_wrap.html#ckObjCAvailabilityCheckExpr	CXCursorKind.ckObjCAvailabilityCheckExpr	
+ckFixedPointLiteral	hcparse/read_libclang/libclang_wrap.html#ckFixedPointLiteral	CXCursorKind.ckFixedPointLiteral	
+ckFirstStmt	hcparse/read_libclang/libclang_wrap.html#ckFirstStmt	CXCursorKind.ckFirstStmt	
+ckLabelStmt	hcparse/read_libclang/libclang_wrap.html#ckLabelStmt	CXCursorKind.ckLabelStmt	
+ckCompoundStmt	hcparse/read_libclang/libclang_wrap.html#ckCompoundStmt	CXCursorKind.ckCompoundStmt	
+ckCaseStmt	hcparse/read_libclang/libclang_wrap.html#ckCaseStmt	CXCursorKind.ckCaseStmt	
+ckDefaultStmt	hcparse/read_libclang/libclang_wrap.html#ckDefaultStmt	CXCursorKind.ckDefaultStmt	
+ckIfStmt	hcparse/read_libclang/libclang_wrap.html#ckIfStmt	CXCursorKind.ckIfStmt	
+ckSwitchStmt	hcparse/read_libclang/libclang_wrap.html#ckSwitchStmt	CXCursorKind.ckSwitchStmt	
+ckWhileStmt	hcparse/read_libclang/libclang_wrap.html#ckWhileStmt	CXCursorKind.ckWhileStmt	
+ckDoStmt	hcparse/read_libclang/libclang_wrap.html#ckDoStmt	CXCursorKind.ckDoStmt	
+ckForStmt	hcparse/read_libclang/libclang_wrap.html#ckForStmt	CXCursorKind.ckForStmt	
+ckGotoStmt	hcparse/read_libclang/libclang_wrap.html#ckGotoStmt	CXCursorKind.ckGotoStmt	
+ckIndirectGotoStmt	hcparse/read_libclang/libclang_wrap.html#ckIndirectGotoStmt	CXCursorKind.ckIndirectGotoStmt	
+ckContinueStmt	hcparse/read_libclang/libclang_wrap.html#ckContinueStmt	CXCursorKind.ckContinueStmt	
+ckBreakStmt	hcparse/read_libclang/libclang_wrap.html#ckBreakStmt	CXCursorKind.ckBreakStmt	
+ckReturnStmt	hcparse/read_libclang/libclang_wrap.html#ckReturnStmt	CXCursorKind.ckReturnStmt	
+ckGCCAsmStmt	hcparse/read_libclang/libclang_wrap.html#ckGCCAsmStmt	CXCursorKind.ckGCCAsmStmt	
+ckObjCAtTryStmt	hcparse/read_libclang/libclang_wrap.html#ckObjCAtTryStmt	CXCursorKind.ckObjCAtTryStmt	
+ckObjCAtCatchStmt	hcparse/read_libclang/libclang_wrap.html#ckObjCAtCatchStmt	CXCursorKind.ckObjCAtCatchStmt	
+ckObjCAtFinallyStmt	hcparse/read_libclang/libclang_wrap.html#ckObjCAtFinallyStmt	CXCursorKind.ckObjCAtFinallyStmt	
+ckObjCAtThrowStmt	hcparse/read_libclang/libclang_wrap.html#ckObjCAtThrowStmt	CXCursorKind.ckObjCAtThrowStmt	
+ckObjCAtSynchronizedStmt	hcparse/read_libclang/libclang_wrap.html#ckObjCAtSynchronizedStmt	CXCursorKind.ckObjCAtSynchronizedStmt	
+ckObjCAutoreleasePoolStmt	hcparse/read_libclang/libclang_wrap.html#ckObjCAutoreleasePoolStmt	CXCursorKind.ckObjCAutoreleasePoolStmt	
+ckObjCForCollectionStmt	hcparse/read_libclang/libclang_wrap.html#ckObjCForCollectionStmt	CXCursorKind.ckObjCForCollectionStmt	
+ckCatchStmt	hcparse/read_libclang/libclang_wrap.html#ckCatchStmt	CXCursorKind.ckCatchStmt	
+ckTryStmt	hcparse/read_libclang/libclang_wrap.html#ckTryStmt	CXCursorKind.ckTryStmt	
+ckForRangeStmt	hcparse/read_libclang/libclang_wrap.html#ckForRangeStmt	CXCursorKind.ckForRangeStmt	
+ckSEHTryStmt	hcparse/read_libclang/libclang_wrap.html#ckSEHTryStmt	CXCursorKind.ckSEHTryStmt	
+ckSEHExceptStmt	hcparse/read_libclang/libclang_wrap.html#ckSEHExceptStmt	CXCursorKind.ckSEHExceptStmt	
+ckSEHFinallyStmt	hcparse/read_libclang/libclang_wrap.html#ckSEHFinallyStmt	CXCursorKind.ckSEHFinallyStmt	
+ckMSAsmStmt	hcparse/read_libclang/libclang_wrap.html#ckMSAsmStmt	CXCursorKind.ckMSAsmStmt	
+ckNullStmt	hcparse/read_libclang/libclang_wrap.html#ckNullStmt	CXCursorKind.ckNullStmt	
+ckDeclStmt	hcparse/read_libclang/libclang_wrap.html#ckDeclStmt	CXCursorKind.ckDeclStmt	
+ckOMPParallelDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPParallelDirective	CXCursorKind.ckOMPParallelDirective	
+ckOMPSimdDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPSimdDirective	CXCursorKind.ckOMPSimdDirective	
+ckOMPForDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPForDirective	CXCursorKind.ckOMPForDirective	
+ckOMPSectionsDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPSectionsDirective	CXCursorKind.ckOMPSectionsDirective	
+ckOMPSectionDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPSectionDirective	CXCursorKind.ckOMPSectionDirective	
+ckOMPSingleDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPSingleDirective	CXCursorKind.ckOMPSingleDirective	
+ckOMPParallelForDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPParallelForDirective	CXCursorKind.ckOMPParallelForDirective	
+ckOMPParallelSectionsDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPParallelSectionsDirective	CXCursorKind.ckOMPParallelSectionsDirective	
+ckOMPTaskDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTaskDirective	CXCursorKind.ckOMPTaskDirective	
+ckOMPMasterDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPMasterDirective	CXCursorKind.ckOMPMasterDirective	
+ckOMPCriticalDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPCriticalDirective	CXCursorKind.ckOMPCriticalDirective	
+ckOMPTaskyieldDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTaskyieldDirective	CXCursorKind.ckOMPTaskyieldDirective	
+ckOMPBarrierDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPBarrierDirective	CXCursorKind.ckOMPBarrierDirective	
+ckOMPTaskwaitDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTaskwaitDirective	CXCursorKind.ckOMPTaskwaitDirective	
+ckOMPFlushDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPFlushDirective	CXCursorKind.ckOMPFlushDirective	
+ckSEHLeaveStmt	hcparse/read_libclang/libclang_wrap.html#ckSEHLeaveStmt	CXCursorKind.ckSEHLeaveStmt	
+ckOMPOrderedDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPOrderedDirective	CXCursorKind.ckOMPOrderedDirective	
+ckOMPAtomicDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPAtomicDirective	CXCursorKind.ckOMPAtomicDirective	
+ckOMPForSimdDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPForSimdDirective	CXCursorKind.ckOMPForSimdDirective	
+ckOMPParallelForSimdDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPParallelForSimdDirective	CXCursorKind.ckOMPParallelForSimdDirective	
+ckOMPTargetDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTargetDirective	CXCursorKind.ckOMPTargetDirective	
+ckOMPTeamsDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTeamsDirective	CXCursorKind.ckOMPTeamsDirective	
+ckOMPTaskgroupDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTaskgroupDirective	CXCursorKind.ckOMPTaskgroupDirective	
+ckOMPCancellationPointDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPCancellationPointDirective	CXCursorKind.ckOMPCancellationPointDirective	
+ckOMPCancelDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPCancelDirective	CXCursorKind.ckOMPCancelDirective	
+ckOMPTargetDataDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTargetDataDirective	CXCursorKind.ckOMPTargetDataDirective	
+ckOMPTaskLoopDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTaskLoopDirective	CXCursorKind.ckOMPTaskLoopDirective	
+ckOMPTaskLoopSimdDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTaskLoopSimdDirective	CXCursorKind.ckOMPTaskLoopSimdDirective	
+ckOMPDistributeDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPDistributeDirective	CXCursorKind.ckOMPDistributeDirective	
+ckOMPTargetEnterDataDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTargetEnterDataDirective	CXCursorKind.ckOMPTargetEnterDataDirective	
+ckOMPTargetExitDataDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTargetExitDataDirective	CXCursorKind.ckOMPTargetExitDataDirective	
+ckOMPTargetParallelDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTargetParallelDirective	CXCursorKind.ckOMPTargetParallelDirective	
+ckOMPTargetParallelForDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTargetParallelForDirective	CXCursorKind.ckOMPTargetParallelForDirective	
+ckOMPTargetUpdateDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTargetUpdateDirective	CXCursorKind.ckOMPTargetUpdateDirective	
+ckOMPDistributeParallelForDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPDistributeParallelForDirective	CXCursorKind.ckOMPDistributeParallelForDirective	
+ckOMPDistributeParallelForSimdDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPDistributeParallelForSimdDirective	CXCursorKind.ckOMPDistributeParallelForSimdDirective	
+ckOMPDistributeSimdDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPDistributeSimdDirective	CXCursorKind.ckOMPDistributeSimdDirective	
+ckOMPTargetParallelForSimdDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTargetParallelForSimdDirective	CXCursorKind.ckOMPTargetParallelForSimdDirective	
+ckOMPTargetSimdDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTargetSimdDirective	CXCursorKind.ckOMPTargetSimdDirective	
+ckOMPTeamsDistributeDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTeamsDistributeDirective	CXCursorKind.ckOMPTeamsDistributeDirective	
+ckOMPTeamsDistributeSimdDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTeamsDistributeSimdDirective	CXCursorKind.ckOMPTeamsDistributeSimdDirective	
+ckOMPTeamsDistributeParallelForSimdDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTeamsDistributeParallelForSimdDirective	CXCursorKind.ckOMPTeamsDistributeParallelForSimdDirective	
+ckOMPTeamsDistributeParallelForDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTeamsDistributeParallelForDirective	CXCursorKind.ckOMPTeamsDistributeParallelForDirective	
+ckOMPTargetTeamsDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTargetTeamsDirective	CXCursorKind.ckOMPTargetTeamsDirective	
+ckOMPTargetTeamsDistributeDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTargetTeamsDistributeDirective	CXCursorKind.ckOMPTargetTeamsDistributeDirective	
+ckOMPTargetTeamsDistributeParallelForDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTargetTeamsDistributeParallelForDirective	CXCursorKind.ckOMPTargetTeamsDistributeParallelForDirective	
+ckOMPTargetTeamsDistributeParallelForSimdDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTargetTeamsDistributeParallelForSimdDirective	CXCursorKind.ckOMPTargetTeamsDistributeParallelForSimdDirective	
+ckOMPTargetTeamsDistributeSimdDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPTargetTeamsDistributeSimdDirective	CXCursorKind.ckOMPTargetTeamsDistributeSimdDirective	
+ckBuiltinBitCastExpr	hcparse/read_libclang/libclang_wrap.html#ckBuiltinBitCastExpr	CXCursorKind.ckBuiltinBitCastExpr	
+ckOMPMasterTaskLoopDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPMasterTaskLoopDirective	CXCursorKind.ckOMPMasterTaskLoopDirective	
+ckOMPParallelMasterTaskLoopDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPParallelMasterTaskLoopDirective	CXCursorKind.ckOMPParallelMasterTaskLoopDirective	
+ckOMPMasterTaskLoopSimdDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPMasterTaskLoopSimdDirective	CXCursorKind.ckOMPMasterTaskLoopSimdDirective	
+ckOMPParallelMasterTaskLoopSimdDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPParallelMasterTaskLoopSimdDirective	CXCursorKind.ckOMPParallelMasterTaskLoopSimdDirective	
+ckOMPParallelMasterDirective	hcparse/read_libclang/libclang_wrap.html#ckOMPParallelMasterDirective	CXCursorKind.ckOMPParallelMasterDirective	
+ckTranslationUnit	hcparse/read_libclang/libclang_wrap.html#ckTranslationUnit	CXCursorKind.ckTranslationUnit	
+ckFirstAttr	hcparse/read_libclang/libclang_wrap.html#ckFirstAttr	CXCursorKind.ckFirstAttr	
+ckIBActionAttr	hcparse/read_libclang/libclang_wrap.html#ckIBActionAttr	CXCursorKind.ckIBActionAttr	
+ckIBOutletAttr	hcparse/read_libclang/libclang_wrap.html#ckIBOutletAttr	CXCursorKind.ckIBOutletAttr	
+ckIBOutletCollectionAttr	hcparse/read_libclang/libclang_wrap.html#ckIBOutletCollectionAttr	CXCursorKind.ckIBOutletCollectionAttr	
+ckFinalAttr	hcparse/read_libclang/libclang_wrap.html#ckFinalAttr	CXCursorKind.ckFinalAttr	
+ckOverrideAttr	hcparse/read_libclang/libclang_wrap.html#ckOverrideAttr	CXCursorKind.ckOverrideAttr	
+ckAnnotateAttr	hcparse/read_libclang/libclang_wrap.html#ckAnnotateAttr	CXCursorKind.ckAnnotateAttr	
+ckAsmLabelAttr	hcparse/read_libclang/libclang_wrap.html#ckAsmLabelAttr	CXCursorKind.ckAsmLabelAttr	
+ckPackedAttr	hcparse/read_libclang/libclang_wrap.html#ckPackedAttr	CXCursorKind.ckPackedAttr	
+ckPureAttr	hcparse/read_libclang/libclang_wrap.html#ckPureAttr	CXCursorKind.ckPureAttr	
+ckConstAttr	hcparse/read_libclang/libclang_wrap.html#ckConstAttr	CXCursorKind.ckConstAttr	
+ckNoDuplicateAttr	hcparse/read_libclang/libclang_wrap.html#ckNoDuplicateAttr	CXCursorKind.ckNoDuplicateAttr	
+ckCUDAConstantAttr	hcparse/read_libclang/libclang_wrap.html#ckCUDAConstantAttr	CXCursorKind.ckCUDAConstantAttr	
+ckCUDADeviceAttr	hcparse/read_libclang/libclang_wrap.html#ckCUDADeviceAttr	CXCursorKind.ckCUDADeviceAttr	
+ckCUDAGlobalAttr	hcparse/read_libclang/libclang_wrap.html#ckCUDAGlobalAttr	CXCursorKind.ckCUDAGlobalAttr	
+ckCUDAHostAttr	hcparse/read_libclang/libclang_wrap.html#ckCUDAHostAttr	CXCursorKind.ckCUDAHostAttr	
+ckCUDASharedAttr	hcparse/read_libclang/libclang_wrap.html#ckCUDASharedAttr	CXCursorKind.ckCUDASharedAttr	
+ckVisibilityAttr	hcparse/read_libclang/libclang_wrap.html#ckVisibilityAttr	CXCursorKind.ckVisibilityAttr	
+ckDLLExport	hcparse/read_libclang/libclang_wrap.html#ckDLLExport	CXCursorKind.ckDLLExport	
+ckDLLImport	hcparse/read_libclang/libclang_wrap.html#ckDLLImport	CXCursorKind.ckDLLImport	
+ckNSReturnsRetained	hcparse/read_libclang/libclang_wrap.html#ckNSReturnsRetained	CXCursorKind.ckNSReturnsRetained	
+ckNSReturnsNotRetained	hcparse/read_libclang/libclang_wrap.html#ckNSReturnsNotRetained	CXCursorKind.ckNSReturnsNotRetained	
+ckNSReturnsAutoreleased	hcparse/read_libclang/libclang_wrap.html#ckNSReturnsAutoreleased	CXCursorKind.ckNSReturnsAutoreleased	
+ckNSConsumesSelf	hcparse/read_libclang/libclang_wrap.html#ckNSConsumesSelf	CXCursorKind.ckNSConsumesSelf	
+ckNSConsumed	hcparse/read_libclang/libclang_wrap.html#ckNSConsumed	CXCursorKind.ckNSConsumed	
+ckObjCException	hcparse/read_libclang/libclang_wrap.html#ckObjCException	CXCursorKind.ckObjCException	
+ckObjCNSObject	hcparse/read_libclang/libclang_wrap.html#ckObjCNSObject	CXCursorKind.ckObjCNSObject	
+ckObjCIndependentClass	hcparse/read_libclang/libclang_wrap.html#ckObjCIndependentClass	CXCursorKind.ckObjCIndependentClass	
+ckObjCPreciseLifetime	hcparse/read_libclang/libclang_wrap.html#ckObjCPreciseLifetime	CXCursorKind.ckObjCPreciseLifetime	
+ckObjCReturnsInnerPointer	hcparse/read_libclang/libclang_wrap.html#ckObjCReturnsInnerPointer	CXCursorKind.ckObjCReturnsInnerPointer	
+ckObjCRequiresSuper	hcparse/read_libclang/libclang_wrap.html#ckObjCRequiresSuper	CXCursorKind.ckObjCRequiresSuper	
+ckObjCRootClass	hcparse/read_libclang/libclang_wrap.html#ckObjCRootClass	CXCursorKind.ckObjCRootClass	
+ckObjCSubclassingRestricted	hcparse/read_libclang/libclang_wrap.html#ckObjCSubclassingRestricted	CXCursorKind.ckObjCSubclassingRestricted	
+ckObjCExplicitProtocolImpl	hcparse/read_libclang/libclang_wrap.html#ckObjCExplicitProtocolImpl	CXCursorKind.ckObjCExplicitProtocolImpl	
+ckObjCDesignatedInitializer	hcparse/read_libclang/libclang_wrap.html#ckObjCDesignatedInitializer	CXCursorKind.ckObjCDesignatedInitializer	
+ckObjCRuntimeVisible	hcparse/read_libclang/libclang_wrap.html#ckObjCRuntimeVisible	CXCursorKind.ckObjCRuntimeVisible	
+ckObjCBoxable	hcparse/read_libclang/libclang_wrap.html#ckObjCBoxable	CXCursorKind.ckObjCBoxable	
+ckFlagEnum	hcparse/read_libclang/libclang_wrap.html#ckFlagEnum	CXCursorKind.ckFlagEnum	
+ckConvergentAttr	hcparse/read_libclang/libclang_wrap.html#ckConvergentAttr	CXCursorKind.ckConvergentAttr	
+ckWarnUnusedAttr	hcparse/read_libclang/libclang_wrap.html#ckWarnUnusedAttr	CXCursorKind.ckWarnUnusedAttr	
+ckWarnUnusedResultAttr	hcparse/read_libclang/libclang_wrap.html#ckWarnUnusedResultAttr	CXCursorKind.ckWarnUnusedResultAttr	
+ckAlignedAttr	hcparse/read_libclang/libclang_wrap.html#ckAlignedAttr	CXCursorKind.ckAlignedAttr	
+ckPreprocessingDirective	hcparse/read_libclang/libclang_wrap.html#ckPreprocessingDirective	CXCursorKind.ckPreprocessingDirective	
+ckMacroDefinition	hcparse/read_libclang/libclang_wrap.html#ckMacroDefinition	CXCursorKind.ckMacroDefinition	
+ckMacroExpansion	hcparse/read_libclang/libclang_wrap.html#ckMacroExpansion	CXCursorKind.ckMacroExpansion	
+ckInclusionDirective	hcparse/read_libclang/libclang_wrap.html#ckInclusionDirective	CXCursorKind.ckInclusionDirective	
+ckModuleImportDecl	hcparse/read_libclang/libclang_wrap.html#ckModuleImportDecl	CXCursorKind.ckModuleImportDecl	
+ckTypeAliasTemplateDecl	hcparse/read_libclang/libclang_wrap.html#ckTypeAliasTemplateDecl	CXCursorKind.ckTypeAliasTemplateDecl	
+ckStaticAssert	hcparse/read_libclang/libclang_wrap.html#ckStaticAssert	CXCursorKind.ckStaticAssert	
+ckFriendDecl	hcparse/read_libclang/libclang_wrap.html#ckFriendDecl	CXCursorKind.ckFriendDecl	
+ckOverloadCandidate	hcparse/read_libclang/libclang_wrap.html#ckOverloadCandidate	CXCursorKind.ckOverloadCandidate	
+CXCursorKind	hcparse/read_libclang/libclang_wrap.html#CXCursorKind	libclang_wrap: CXCursorKind	
+ckFirstDecl	hcparse/read_libclang/libclang_wrap.html#ckFirstDecl	libclang_wrap: ckFirstDecl	
+ckLastDecl	hcparse/read_libclang/libclang_wrap.html#ckLastDecl	libclang_wrap: ckLastDecl	
+ckObjCSuperClassRef	hcparse/read_libclang/libclang_wrap.html#ckObjCSuperClassRef	libclang_wrap: ckObjCSuperClassRef	
+ckLastRef	hcparse/read_libclang/libclang_wrap.html#ckLastRef	libclang_wrap: ckLastRef	
+ckInvalidFile	hcparse/read_libclang/libclang_wrap.html#ckInvalidFile	libclang_wrap: ckInvalidFile	
+ckLastInvalid	hcparse/read_libclang/libclang_wrap.html#ckLastInvalid	libclang_wrap: ckLastInvalid	
+ckUnexposedExpr	hcparse/read_libclang/libclang_wrap.html#ckUnexposedExpr	libclang_wrap: ckUnexposedExpr	
+ckLastExpr	hcparse/read_libclang/libclang_wrap.html#ckLastExpr	libclang_wrap: ckLastExpr	
+ckUnexposedStmt	hcparse/read_libclang/libclang_wrap.html#ckUnexposedStmt	libclang_wrap: ckUnexposedStmt	
+ckAsmStmt	hcparse/read_libclang/libclang_wrap.html#ckAsmStmt	libclang_wrap: ckAsmStmt	
+ckLastStmt	hcparse/read_libclang/libclang_wrap.html#ckLastStmt	libclang_wrap: ckLastStmt	
+ckUnexposedAttr	hcparse/read_libclang/libclang_wrap.html#ckUnexposedAttr	libclang_wrap: ckUnexposedAttr	
+ckLastAttr	hcparse/read_libclang/libclang_wrap.html#ckLastAttr	libclang_wrap: ckLastAttr	
+ckMacroInstantiation	hcparse/read_libclang/libclang_wrap.html#ckMacroInstantiation	libclang_wrap: ckMacroInstantiation	
+ckFirstPreprocessing	hcparse/read_libclang/libclang_wrap.html#ckFirstPreprocessing	libclang_wrap: ckFirstPreprocessing	
+ckLastPreprocessing	hcparse/read_libclang/libclang_wrap.html#ckLastPreprocessing	libclang_wrap: ckLastPreprocessing	
+ckFirstExtraDecl	hcparse/read_libclang/libclang_wrap.html#ckFirstExtraDecl	libclang_wrap: ckFirstExtraDecl	
+ckLastExtraDecl	hcparse/read_libclang/libclang_wrap.html#ckLastExtraDecl	libclang_wrap: ckLastExtraDecl	
+CXCursor	hcparse/read_libclang/libclang_wrap.html#CXCursor	libclang_wrap: CXCursor	
+getNullCursor	hcparse/read_libclang/libclang_wrap.html#getNullCursor	libclang_wrap: getNullCursor(): CXCursor	
+getTranslationUnitCursor	hcparse/read_libclang/libclang_wrap.html#getTranslationUnitCursor,CXTranslationUnit	libclang_wrap: getTranslationUnitCursor(argCXTranslationUnit: CXTranslationUnit): CXCursor	
+equalCursors	hcparse/read_libclang/libclang_wrap.html#equalCursors,CXCursor,CXCursor	libclang_wrap: equalCursors(argCXCursor: CXCursor; argCXCursor1: CXCursor): cuint	
+isNull	hcparse/read_libclang/libclang_wrap.html#isNull,CXCursor	libclang_wrap: isNull(cursor: CXCursor): cint	
+hashCursor	hcparse/read_libclang/libclang_wrap.html#hashCursor,CXCursor	libclang_wrap: hashCursor(argCXCursor: CXCursor): cuint	
+getCursorKind	hcparse/read_libclang/libclang_wrap.html#getCursorKind,CXCursor	libclang_wrap: getCursorKind(argCXCursor: CXCursor): CXCursorKind	
+isDeclaration	hcparse/read_libclang/libclang_wrap.html#isDeclaration,CXCursorKind	libclang_wrap: isDeclaration(argCXCursorKind: CXCursorKind): cuint	
+isInvalidDeclaration	hcparse/read_libclang/libclang_wrap.html#isInvalidDeclaration,CXCursor	libclang_wrap: isInvalidDeclaration(argCXCursor: CXCursor): cuint	
+isReference	hcparse/read_libclang/libclang_wrap.html#isReference,CXCursorKind	libclang_wrap: isReference(argCXCursorKind: CXCursorKind): cuint	
+isExpression	hcparse/read_libclang/libclang_wrap.html#isExpression,CXCursorKind	libclang_wrap: isExpression(argCXCursorKind: CXCursorKind): cuint	
+isStatement	hcparse/read_libclang/libclang_wrap.html#isStatement,CXCursorKind	libclang_wrap: isStatement(argCXCursorKind: CXCursorKind): cuint	
+isAttribute	hcparse/read_libclang/libclang_wrap.html#isAttribute,CXCursorKind	libclang_wrap: isAttribute(argCXCursorKind: CXCursorKind): cuint	
+hasAttrs	hcparse/read_libclang/libclang_wrap.html#hasAttrs,CXCursor	libclang_wrap: hasAttrs(c: CXCursor): cuint	
+isInvalid	hcparse/read_libclang/libclang_wrap.html#isInvalid,CXCursorKind	libclang_wrap: isInvalid(argCXCursorKind: CXCursorKind): cuint	
+isTranslationUnit	hcparse/read_libclang/libclang_wrap.html#isTranslationUnit,CXCursorKind	libclang_wrap: isTranslationUnit(argCXCursorKind: CXCursorKind): cuint	
+isPreprocessing	hcparse/read_libclang/libclang_wrap.html#isPreprocessing,CXCursorKind	libclang_wrap: isPreprocessing(argCXCursorKind: CXCursorKind): cuint	
+isUnexposed	hcparse/read_libclang/libclang_wrap.html#isUnexposed,CXCursorKind	libclang_wrap: isUnexposed(argCXCursorKind: CXCursorKind): cuint	
+lkInvalid	hcparse/read_libclang/libclang_wrap.html#lkInvalid	CXLinkageKind.lkInvalid	
+lkNoLinkage	hcparse/read_libclang/libclang_wrap.html#lkNoLinkage	CXLinkageKind.lkNoLinkage	
+lkInternal	hcparse/read_libclang/libclang_wrap.html#lkInternal	CXLinkageKind.lkInternal	
+lkUniqueExternal	hcparse/read_libclang/libclang_wrap.html#lkUniqueExternal	CXLinkageKind.lkUniqueExternal	
+lkExternal	hcparse/read_libclang/libclang_wrap.html#lkExternal	CXLinkageKind.lkExternal	
+CXLinkageKind	hcparse/read_libclang/libclang_wrap.html#CXLinkageKind	libclang_wrap: CXLinkageKind	
+getCursorLinkage	hcparse/read_libclang/libclang_wrap.html#getCursorLinkage,CXCursor	libclang_wrap: getCursorLinkage(cursor: CXCursor): CXLinkageKind	
+vkInvalid	hcparse/read_libclang/libclang_wrap.html#vkInvalid	CXVisibilityKind.vkInvalid	
+vkHidden	hcparse/read_libclang/libclang_wrap.html#vkHidden	CXVisibilityKind.vkHidden	
+vkProtected	hcparse/read_libclang/libclang_wrap.html#vkProtected	CXVisibilityKind.vkProtected	
+vkDefault	hcparse/read_libclang/libclang_wrap.html#vkDefault	CXVisibilityKind.vkDefault	
+CXVisibilityKind	hcparse/read_libclang/libclang_wrap.html#CXVisibilityKind	libclang_wrap: CXVisibilityKind	
+getCursorVisibility	hcparse/read_libclang/libclang_wrap.html#getCursorVisibility,CXCursor	libclang_wrap: getCursorVisibility(cursor: CXCursor): CXVisibilityKind	
+getCursorAvailability	hcparse/read_libclang/libclang_wrap.html#getCursorAvailability,CXCursor	libclang_wrap: getCursorAvailability(cursor: CXCursor): CXAvailabilityKind	
+CXPlatformAvailability	hcparse/read_libclang/libclang_wrap.html#CXPlatformAvailability	libclang_wrap: CXPlatformAvailability	
+getCursorPlatformAvailability	hcparse/read_libclang/libclang_wrap.html#getCursorPlatformAvailability,CXCursor,ptr.,ptr.,ptr.,ptr.,ptr.,cint	libclang_wrap: getCursorPlatformAvailability(cursor: CXCursor; always_deprecated: ptr [cint];\n                              deprecated_message: ptr [CXString];\n                              always_unavailable: ptr [cint];\n                              unavailable_message: ptr [CXString];\n                              availability: ptr [CXPlatformAvailability];\n                              availability_size: cint): cint	
+disposeCXPlatformAvailability	hcparse/read_libclang/libclang_wrap.html#disposeCXPlatformAvailability,ptr.	libclang_wrap: disposeCXPlatformAvailability(availability: ptr [CXPlatformAvailability]): void	
+lakInvalid	hcparse/read_libclang/libclang_wrap.html#lakInvalid	CXLanguageKind.lakInvalid	
+lakC	hcparse/read_libclang/libclang_wrap.html#lakC	CXLanguageKind.lakC	
+lakObjC	hcparse/read_libclang/libclang_wrap.html#lakObjC	CXLanguageKind.lakObjC	
+lakCPlusPlus	hcparse/read_libclang/libclang_wrap.html#lakCPlusPlus	CXLanguageKind.lakCPlusPlus	
+CXLanguageKind	hcparse/read_libclang/libclang_wrap.html#CXLanguageKind	libclang_wrap: CXLanguageKind	
+getCursorLanguage	hcparse/read_libclang/libclang_wrap.html#getCursorLanguage,CXCursor	libclang_wrap: getCursorLanguage(cursor: CXCursor): CXLanguageKind	
+tlskNone	hcparse/read_libclang/libclang_wrap.html#tlskNone	CXTLSKind.tlskNone	
+tlskDynamic	hcparse/read_libclang/libclang_wrap.html#tlskDynamic	CXTLSKind.tlskDynamic	
+tlskStatic	hcparse/read_libclang/libclang_wrap.html#tlskStatic	CXTLSKind.tlskStatic	
+CXTLSKind	hcparse/read_libclang/libclang_wrap.html#CXTLSKind	libclang_wrap: CXTLSKind	
+getCursorTLSKind	hcparse/read_libclang/libclang_wrap.html#getCursorTLSKind,CXCursor	libclang_wrap: getCursorTLSKind(cursor: CXCursor): CXTLSKind	
+getTranslationUnit	hcparse/read_libclang/libclang_wrap.html#getTranslationUnit,CXCursor	libclang_wrap: getTranslationUnit(argCXCursor: CXCursor): CXTranslationUnit	
+CXCursorSetImpl	hcparse/read_libclang/libclang_wrap.html#CXCursorSetImpl	libclang_wrap: CXCursorSetImpl	
+CXCursorSet	hcparse/read_libclang/libclang_wrap.html#CXCursorSet	libclang_wrap: CXCursorSet	
+createCXCursorSet	hcparse/read_libclang/libclang_wrap.html#createCXCursorSet	libclang_wrap: createCXCursorSet(): CXCursorSet	
+disposeCXCursorSet	hcparse/read_libclang/libclang_wrap.html#disposeCXCursorSet,CXCursorSet	libclang_wrap: disposeCXCursorSet(cset: CXCursorSet): void	
+contains	hcparse/read_libclang/libclang_wrap.html#contains,CXCursorSet,CXCursor	libclang_wrap: contains(cset: CXCursorSet; cursor: CXCursor): cuint	
+insert	hcparse/read_libclang/libclang_wrap.html#insert,CXCursorSet,CXCursor	libclang_wrap: insert(cset: CXCursorSet; cursor: CXCursor): cuint	
+getCursorSemanticParent	hcparse/read_libclang/libclang_wrap.html#getCursorSemanticParent,CXCursor	libclang_wrap: getCursorSemanticParent(cursor: CXCursor): CXCursor	
+getCursorLexicalParent	hcparse/read_libclang/libclang_wrap.html#getCursorLexicalParent,CXCursor	libclang_wrap: getCursorLexicalParent(cursor: CXCursor): CXCursor	
+getOverriddenCursors	hcparse/read_libclang/libclang_wrap.html#getOverriddenCursors,CXCursor,ptr.,ptr.	libclang_wrap: getOverriddenCursors(cursor: CXCursor; overridden: ptr [ptr [CXCursor]];\n                     num_overridden: ptr [cuint]): void	
+disposeOverriddenCursors	hcparse/read_libclang/libclang_wrap.html#disposeOverriddenCursors,ptr.	libclang_wrap: disposeOverriddenCursors(overridden: ptr [CXCursor]): void	
+getIncludedFile	hcparse/read_libclang/libclang_wrap.html#getIncludedFile,CXCursor	libclang_wrap: getIncludedFile(cursor: CXCursor): CXFile	
+getCursor	hcparse/read_libclang/libclang_wrap.html#getCursor,CXTranslationUnit,CXSourceLocation	libclang_wrap: getCursor(argCXTranslationUnit: CXTranslationUnit;\n          argCXSourceLocation: CXSourceLocation): CXCursor	
+getCursorLocation	hcparse/read_libclang/libclang_wrap.html#getCursorLocation,CXCursor	libclang_wrap: getCursorLocation(argCXCursor: CXCursor): CXSourceLocation	
+getCursorExtent	hcparse/read_libclang/libclang_wrap.html#getCursorExtent,CXCursor	libclang_wrap: getCursorExtent(argCXCursor: CXCursor): CXSourceRange	
+tkInvalid	hcparse/read_libclang/libclang_wrap.html#tkInvalid	CXTypeKind.tkInvalid	
+tkUnexposed	hcparse/read_libclang/libclang_wrap.html#tkUnexposed	CXTypeKind.tkUnexposed	
+tkVoid	hcparse/read_libclang/libclang_wrap.html#tkVoid	CXTypeKind.tkVoid	
+tkBool	hcparse/read_libclang/libclang_wrap.html#tkBool	CXTypeKind.tkBool	
+tkChar_U	hcparse/read_libclang/libclang_wrap.html#tkChar_U	CXTypeKind.tkChar_U	
+tkUChar	hcparse/read_libclang/libclang_wrap.html#tkUChar	CXTypeKind.tkUChar	
+tkChar16	hcparse/read_libclang/libclang_wrap.html#tkChar16	CXTypeKind.tkChar16	
+tkChar32	hcparse/read_libclang/libclang_wrap.html#tkChar32	CXTypeKind.tkChar32	
+tkUShort	hcparse/read_libclang/libclang_wrap.html#tkUShort	CXTypeKind.tkUShort	
+tkUInt	hcparse/read_libclang/libclang_wrap.html#tkUInt	CXTypeKind.tkUInt	
+tkULong	hcparse/read_libclang/libclang_wrap.html#tkULong	CXTypeKind.tkULong	
+tkULongLong	hcparse/read_libclang/libclang_wrap.html#tkULongLong	CXTypeKind.tkULongLong	
+tkUInt128	hcparse/read_libclang/libclang_wrap.html#tkUInt128	CXTypeKind.tkUInt128	
+tkChar_S	hcparse/read_libclang/libclang_wrap.html#tkChar_S	CXTypeKind.tkChar_S	
+tkSChar	hcparse/read_libclang/libclang_wrap.html#tkSChar	CXTypeKind.tkSChar	
+tkWChar	hcparse/read_libclang/libclang_wrap.html#tkWChar	CXTypeKind.tkWChar	
+tkShort	hcparse/read_libclang/libclang_wrap.html#tkShort	CXTypeKind.tkShort	
+tkInt	hcparse/read_libclang/libclang_wrap.html#tkInt	CXTypeKind.tkInt	
+tkLong	hcparse/read_libclang/libclang_wrap.html#tkLong	CXTypeKind.tkLong	
+tkLongLong	hcparse/read_libclang/libclang_wrap.html#tkLongLong	CXTypeKind.tkLongLong	
+tkInt128	hcparse/read_libclang/libclang_wrap.html#tkInt128	CXTypeKind.tkInt128	
+tkFloat	hcparse/read_libclang/libclang_wrap.html#tkFloat	CXTypeKind.tkFloat	
+tkDouble	hcparse/read_libclang/libclang_wrap.html#tkDouble	CXTypeKind.tkDouble	
+tkLongDouble	hcparse/read_libclang/libclang_wrap.html#tkLongDouble	CXTypeKind.tkLongDouble	
+tkNullPtr	hcparse/read_libclang/libclang_wrap.html#tkNullPtr	CXTypeKind.tkNullPtr	
+tkOverload	hcparse/read_libclang/libclang_wrap.html#tkOverload	CXTypeKind.tkOverload	
+tkDependent	hcparse/read_libclang/libclang_wrap.html#tkDependent	CXTypeKind.tkDependent	
+tkObjCId	hcparse/read_libclang/libclang_wrap.html#tkObjCId	CXTypeKind.tkObjCId	
+tkObjCClass	hcparse/read_libclang/libclang_wrap.html#tkObjCClass	CXTypeKind.tkObjCClass	
+tkObjCSel	hcparse/read_libclang/libclang_wrap.html#tkObjCSel	CXTypeKind.tkObjCSel	
+tkFloat128	hcparse/read_libclang/libclang_wrap.html#tkFloat128	CXTypeKind.tkFloat128	
+tkHalf	hcparse/read_libclang/libclang_wrap.html#tkHalf	CXTypeKind.tkHalf	
+tkFloat16	hcparse/read_libclang/libclang_wrap.html#tkFloat16	CXTypeKind.tkFloat16	
+tkShortAccum	hcparse/read_libclang/libclang_wrap.html#tkShortAccum	CXTypeKind.tkShortAccum	
+tkAccum	hcparse/read_libclang/libclang_wrap.html#tkAccum	CXTypeKind.tkAccum	
+tkLongAccum	hcparse/read_libclang/libclang_wrap.html#tkLongAccum	CXTypeKind.tkLongAccum	
+tkUShortAccum	hcparse/read_libclang/libclang_wrap.html#tkUShortAccum	CXTypeKind.tkUShortAccum	
+tkUAccum	hcparse/read_libclang/libclang_wrap.html#tkUAccum	CXTypeKind.tkUAccum	
+tkULongAccum	hcparse/read_libclang/libclang_wrap.html#tkULongAccum	CXTypeKind.tkULongAccum	
+tkComplex	hcparse/read_libclang/libclang_wrap.html#tkComplex	CXTypeKind.tkComplex	
+tkPointer	hcparse/read_libclang/libclang_wrap.html#tkPointer	CXTypeKind.tkPointer	
+tkBlockPointer	hcparse/read_libclang/libclang_wrap.html#tkBlockPointer	CXTypeKind.tkBlockPointer	
+tkLValueReference	hcparse/read_libclang/libclang_wrap.html#tkLValueReference	CXTypeKind.tkLValueReference	
+tkRValueReference	hcparse/read_libclang/libclang_wrap.html#tkRValueReference	CXTypeKind.tkRValueReference	
+tkRecord	hcparse/read_libclang/libclang_wrap.html#tkRecord	CXTypeKind.tkRecord	
+tkEnum	hcparse/read_libclang/libclang_wrap.html#tkEnum	CXTypeKind.tkEnum	
+tkTypedef	hcparse/read_libclang/libclang_wrap.html#tkTypedef	CXTypeKind.tkTypedef	
+tkObjCInterface	hcparse/read_libclang/libclang_wrap.html#tkObjCInterface	CXTypeKind.tkObjCInterface	
+tkObjCObjectPointer	hcparse/read_libclang/libclang_wrap.html#tkObjCObjectPointer	CXTypeKind.tkObjCObjectPointer	
+tkFunctionNoProto	hcparse/read_libclang/libclang_wrap.html#tkFunctionNoProto	CXTypeKind.tkFunctionNoProto	
+tkFunctionProto	hcparse/read_libclang/libclang_wrap.html#tkFunctionProto	CXTypeKind.tkFunctionProto	
+tkConstantArray	hcparse/read_libclang/libclang_wrap.html#tkConstantArray	CXTypeKind.tkConstantArray	
+tkVector	hcparse/read_libclang/libclang_wrap.html#tkVector	CXTypeKind.tkVector	
+tkIncompleteArray	hcparse/read_libclang/libclang_wrap.html#tkIncompleteArray	CXTypeKind.tkIncompleteArray	
+tkVariableArray	hcparse/read_libclang/libclang_wrap.html#tkVariableArray	CXTypeKind.tkVariableArray	
+tkDependentSizedArray	hcparse/read_libclang/libclang_wrap.html#tkDependentSizedArray	CXTypeKind.tkDependentSizedArray	
+tkMemberPointer	hcparse/read_libclang/libclang_wrap.html#tkMemberPointer	CXTypeKind.tkMemberPointer	
+tkAuto	hcparse/read_libclang/libclang_wrap.html#tkAuto	CXTypeKind.tkAuto	
+tkElaborated	hcparse/read_libclang/libclang_wrap.html#tkElaborated	CXTypeKind.tkElaborated	
+tkPipe	hcparse/read_libclang/libclang_wrap.html#tkPipe	CXTypeKind.tkPipe	
+tkOCLImage1dRO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage1dRO	CXTypeKind.tkOCLImage1dRO	
+tkOCLImage1dArrayRO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage1dArrayRO	CXTypeKind.tkOCLImage1dArrayRO	
+tkOCLImage1dBufferRO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage1dBufferRO	CXTypeKind.tkOCLImage1dBufferRO	
+tkOCLImage2dRO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dRO	CXTypeKind.tkOCLImage2dRO	
+tkOCLImage2dArrayRO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dArrayRO	CXTypeKind.tkOCLImage2dArrayRO	
+tkOCLImage2dDepthRO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dDepthRO	CXTypeKind.tkOCLImage2dDepthRO	
+tkOCLImage2dArrayDepthRO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dArrayDepthRO	CXTypeKind.tkOCLImage2dArrayDepthRO	
+tkOCLImage2dMSAARO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dMSAARO	CXTypeKind.tkOCLImage2dMSAARO	
+tkOCLImage2dArrayMSAARO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dArrayMSAARO	CXTypeKind.tkOCLImage2dArrayMSAARO	
+tkOCLImage2dMSAADepthRO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dMSAADepthRO	CXTypeKind.tkOCLImage2dMSAADepthRO	
+tkOCLImage2dArrayMSAADepthRO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dArrayMSAADepthRO	CXTypeKind.tkOCLImage2dArrayMSAADepthRO	
+tkOCLImage3dRO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage3dRO	CXTypeKind.tkOCLImage3dRO	
+tkOCLImage1dWO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage1dWO	CXTypeKind.tkOCLImage1dWO	
+tkOCLImage1dArrayWO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage1dArrayWO	CXTypeKind.tkOCLImage1dArrayWO	
+tkOCLImage1dBufferWO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage1dBufferWO	CXTypeKind.tkOCLImage1dBufferWO	
+tkOCLImage2dWO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dWO	CXTypeKind.tkOCLImage2dWO	
+tkOCLImage2dArrayWO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dArrayWO	CXTypeKind.tkOCLImage2dArrayWO	
+tkOCLImage2dDepthWO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dDepthWO	CXTypeKind.tkOCLImage2dDepthWO	
+tkOCLImage2dArrayDepthWO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dArrayDepthWO	CXTypeKind.tkOCLImage2dArrayDepthWO	
+tkOCLImage2dMSAAWO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dMSAAWO	CXTypeKind.tkOCLImage2dMSAAWO	
+tkOCLImage2dArrayMSAAWO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dArrayMSAAWO	CXTypeKind.tkOCLImage2dArrayMSAAWO	
+tkOCLImage2dMSAADepthWO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dMSAADepthWO	CXTypeKind.tkOCLImage2dMSAADepthWO	
+tkOCLImage2dArrayMSAADepthWO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dArrayMSAADepthWO	CXTypeKind.tkOCLImage2dArrayMSAADepthWO	
+tkOCLImage3dWO	hcparse/read_libclang/libclang_wrap.html#tkOCLImage3dWO	CXTypeKind.tkOCLImage3dWO	
+tkOCLImage1dRW	hcparse/read_libclang/libclang_wrap.html#tkOCLImage1dRW	CXTypeKind.tkOCLImage1dRW	
+tkOCLImage1dArrayRW	hcparse/read_libclang/libclang_wrap.html#tkOCLImage1dArrayRW	CXTypeKind.tkOCLImage1dArrayRW	
+tkOCLImage1dBufferRW	hcparse/read_libclang/libclang_wrap.html#tkOCLImage1dBufferRW	CXTypeKind.tkOCLImage1dBufferRW	
+tkOCLImage2dRW	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dRW	CXTypeKind.tkOCLImage2dRW	
+tkOCLImage2dArrayRW	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dArrayRW	CXTypeKind.tkOCLImage2dArrayRW	
+tkOCLImage2dDepthRW	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dDepthRW	CXTypeKind.tkOCLImage2dDepthRW	
+tkOCLImage2dArrayDepthRW	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dArrayDepthRW	CXTypeKind.tkOCLImage2dArrayDepthRW	
+tkOCLImage2dMSAARW	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dMSAARW	CXTypeKind.tkOCLImage2dMSAARW	
+tkOCLImage2dArrayMSAARW	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dArrayMSAARW	CXTypeKind.tkOCLImage2dArrayMSAARW	
+tkOCLImage2dMSAADepthRW	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dMSAADepthRW	CXTypeKind.tkOCLImage2dMSAADepthRW	
+tkOCLImage2dArrayMSAADepthRW	hcparse/read_libclang/libclang_wrap.html#tkOCLImage2dArrayMSAADepthRW	CXTypeKind.tkOCLImage2dArrayMSAADepthRW	
+tkOCLImage3dRW	hcparse/read_libclang/libclang_wrap.html#tkOCLImage3dRW	CXTypeKind.tkOCLImage3dRW	
+tkOCLSampler	hcparse/read_libclang/libclang_wrap.html#tkOCLSampler	CXTypeKind.tkOCLSampler	
+tkOCLEvent	hcparse/read_libclang/libclang_wrap.html#tkOCLEvent	CXTypeKind.tkOCLEvent	
+tkOCLQueue	hcparse/read_libclang/libclang_wrap.html#tkOCLQueue	CXTypeKind.tkOCLQueue	
+tkOCLReserveID	hcparse/read_libclang/libclang_wrap.html#tkOCLReserveID	CXTypeKind.tkOCLReserveID	
+tkObjCObject	hcparse/read_libclang/libclang_wrap.html#tkObjCObject	CXTypeKind.tkObjCObject	
+tkObjCTypeParam	hcparse/read_libclang/libclang_wrap.html#tkObjCTypeParam	CXTypeKind.tkObjCTypeParam	
+tkAttributed	hcparse/read_libclang/libclang_wrap.html#tkAttributed	CXTypeKind.tkAttributed	
+tkOCLIntelSubgroupAVCMcePayload	hcparse/read_libclang/libclang_wrap.html#tkOCLIntelSubgroupAVCMcePayload	CXTypeKind.tkOCLIntelSubgroupAVCMcePayload	
+tkOCLIntelSubgroupAVCImePayload	hcparse/read_libclang/libclang_wrap.html#tkOCLIntelSubgroupAVCImePayload	CXTypeKind.tkOCLIntelSubgroupAVCImePayload	
+tkOCLIntelSubgroupAVCRefPayload	hcparse/read_libclang/libclang_wrap.html#tkOCLIntelSubgroupAVCRefPayload	CXTypeKind.tkOCLIntelSubgroupAVCRefPayload	
+tkOCLIntelSubgroupAVCSicPayload	hcparse/read_libclang/libclang_wrap.html#tkOCLIntelSubgroupAVCSicPayload	CXTypeKind.tkOCLIntelSubgroupAVCSicPayload	
+tkOCLIntelSubgroupAVCMceResult	hcparse/read_libclang/libclang_wrap.html#tkOCLIntelSubgroupAVCMceResult	CXTypeKind.tkOCLIntelSubgroupAVCMceResult	
+tkOCLIntelSubgroupAVCImeResult	hcparse/read_libclang/libclang_wrap.html#tkOCLIntelSubgroupAVCImeResult	CXTypeKind.tkOCLIntelSubgroupAVCImeResult	
+tkOCLIntelSubgroupAVCRefResult	hcparse/read_libclang/libclang_wrap.html#tkOCLIntelSubgroupAVCRefResult	CXTypeKind.tkOCLIntelSubgroupAVCRefResult	
+tkOCLIntelSubgroupAVCSicResult	hcparse/read_libclang/libclang_wrap.html#tkOCLIntelSubgroupAVCSicResult	CXTypeKind.tkOCLIntelSubgroupAVCSicResult	
+tkOCLIntelSubgroupAVCImeResultSingleRefStreamout	hcparse/read_libclang/libclang_wrap.html#tkOCLIntelSubgroupAVCImeResultSingleRefStreamout	CXTypeKind.tkOCLIntelSubgroupAVCImeResultSingleRefStreamout	
+tkOCLIntelSubgroupAVCImeResultDualRefStreamout	hcparse/read_libclang/libclang_wrap.html#tkOCLIntelSubgroupAVCImeResultDualRefStreamout	CXTypeKind.tkOCLIntelSubgroupAVCImeResultDualRefStreamout	
+tkOCLIntelSubgroupAVCImeSingleRefStreamin	hcparse/read_libclang/libclang_wrap.html#tkOCLIntelSubgroupAVCImeSingleRefStreamin	CXTypeKind.tkOCLIntelSubgroupAVCImeSingleRefStreamin	
+tkOCLIntelSubgroupAVCImeDualRefStreamin	hcparse/read_libclang/libclang_wrap.html#tkOCLIntelSubgroupAVCImeDualRefStreamin	CXTypeKind.tkOCLIntelSubgroupAVCImeDualRefStreamin	
+tkExtVector	hcparse/read_libclang/libclang_wrap.html#tkExtVector	CXTypeKind.tkExtVector	
+CXTypeKind	hcparse/read_libclang/libclang_wrap.html#CXTypeKind	libclang_wrap: CXTypeKind	
+tkTypeRef	hcparse/read_libclang/libclang_wrap.html#tkTypeRef	libclang_wrap: tkTypeRef	
+ccDefault	hcparse/read_libclang/libclang_wrap.html#ccDefault	CXCallingConv.ccDefault	
+ccC	hcparse/read_libclang/libclang_wrap.html#ccC	CXCallingConv.ccC	
+ccX86StdCall	hcparse/read_libclang/libclang_wrap.html#ccX86StdCall	CXCallingConv.ccX86StdCall	
+ccX86FastCall	hcparse/read_libclang/libclang_wrap.html#ccX86FastCall	CXCallingConv.ccX86FastCall	
+ccX86ThisCall	hcparse/read_libclang/libclang_wrap.html#ccX86ThisCall	CXCallingConv.ccX86ThisCall	
+ccX86Pascal	hcparse/read_libclang/libclang_wrap.html#ccX86Pascal	CXCallingConv.ccX86Pascal	
+ccAAPCS	hcparse/read_libclang/libclang_wrap.html#ccAAPCS	CXCallingConv.ccAAPCS	
+ccAAPCS_VFP	hcparse/read_libclang/libclang_wrap.html#ccAAPCS_VFP	CXCallingConv.ccAAPCS_VFP	
+ccX86RegCall	hcparse/read_libclang/libclang_wrap.html#ccX86RegCall	CXCallingConv.ccX86RegCall	
+ccIntelOclBicc	hcparse/read_libclang/libclang_wrap.html#ccIntelOclBicc	CXCallingConv.ccIntelOclBicc	
+ccWin64	hcparse/read_libclang/libclang_wrap.html#ccWin64	CXCallingConv.ccWin64	
+ccX86_64SysV	hcparse/read_libclang/libclang_wrap.html#ccX86_64SysV	CXCallingConv.ccX86_64SysV	
+ccX86VectorCall	hcparse/read_libclang/libclang_wrap.html#ccX86VectorCall	CXCallingConv.ccX86VectorCall	
+ccSwift	hcparse/read_libclang/libclang_wrap.html#ccSwift	CXCallingConv.ccSwift	
+ccPreserveMost	hcparse/read_libclang/libclang_wrap.html#ccPreserveMost	CXCallingConv.ccPreserveMost	
+ccPreserveAll	hcparse/read_libclang/libclang_wrap.html#ccPreserveAll	CXCallingConv.ccPreserveAll	
+ccAArch64VectorCall	hcparse/read_libclang/libclang_wrap.html#ccAArch64VectorCall	CXCallingConv.ccAArch64VectorCall	
+ccInvalid	hcparse/read_libclang/libclang_wrap.html#ccInvalid	CXCallingConv.ccInvalid	
+ccUnexposed	hcparse/read_libclang/libclang_wrap.html#ccUnexposed	CXCallingConv.ccUnexposed	
+CXCallingConv	hcparse/read_libclang/libclang_wrap.html#CXCallingConv	libclang_wrap: CXCallingConv	
+CXType	hcparse/read_libclang/libclang_wrap.html#CXType	libclang_wrap: CXType	
+getCursorType	hcparse/read_libclang/libclang_wrap.html#getCursorType,CXCursor	libclang_wrap: getCursorType(c: CXCursor): CXType	
+getTypeSpelling	hcparse/read_libclang/libclang_wrap.html#getTypeSpelling,CXType	libclang_wrap: getTypeSpelling(cT: CXType): CXString	
+getTypedefDeclUnderlyingType	hcparse/read_libclang/libclang_wrap.html#getTypedefDeclUnderlyingType,CXCursor	libclang_wrap: getTypedefDeclUnderlyingType(c: CXCursor): CXType	
+getEnumDeclIntegerType	hcparse/read_libclang/libclang_wrap.html#getEnumDeclIntegerType,CXCursor	libclang_wrap: getEnumDeclIntegerType(c: CXCursor): CXType	
+getEnumConstantDeclValue	hcparse/read_libclang/libclang_wrap.html#getEnumConstantDeclValue,CXCursor	libclang_wrap: getEnumConstantDeclValue(c: CXCursor): clonglong	
+getEnumConstantDeclUnsignedValue	hcparse/read_libclang/libclang_wrap.html#getEnumConstantDeclUnsignedValue,CXCursor	libclang_wrap: getEnumConstantDeclUnsignedValue(c: CXCursor): culonglong	
+getFieldDeclBitWidth	hcparse/read_libclang/libclang_wrap.html#getFieldDeclBitWidth,CXCursor	libclang_wrap: getFieldDeclBitWidth(c: CXCursor): cint	
+getNumArguments	hcparse/read_libclang/libclang_wrap.html#getNumArguments,CXCursor	libclang_wrap: getNumArguments(c: CXCursor): cint	
+getArgument	hcparse/read_libclang/libclang_wrap.html#getArgument,CXCursor,cuint	libclang_wrap: getArgument(c: CXCursor; i: cuint): CXCursor	
+takNull	hcparse/read_libclang/libclang_wrap.html#takNull	CXTemplateArgumentKind.takNull	
+takType	hcparse/read_libclang/libclang_wrap.html#takType	CXTemplateArgumentKind.takType	
+takDeclaration	hcparse/read_libclang/libclang_wrap.html#takDeclaration	CXTemplateArgumentKind.takDeclaration	
+takNullPtr	hcparse/read_libclang/libclang_wrap.html#takNullPtr	CXTemplateArgumentKind.takNullPtr	
+takIntegral	hcparse/read_libclang/libclang_wrap.html#takIntegral	CXTemplateArgumentKind.takIntegral	
+takTemplate	hcparse/read_libclang/libclang_wrap.html#takTemplate	CXTemplateArgumentKind.takTemplate	
+takTemplateExpansion	hcparse/read_libclang/libclang_wrap.html#takTemplateExpansion	CXTemplateArgumentKind.takTemplateExpansion	
+takExpression	hcparse/read_libclang/libclang_wrap.html#takExpression	CXTemplateArgumentKind.takExpression	
+takPack	hcparse/read_libclang/libclang_wrap.html#takPack	CXTemplateArgumentKind.takPack	
+takInvalid	hcparse/read_libclang/libclang_wrap.html#takInvalid	CXTemplateArgumentKind.takInvalid	
+CXTemplateArgumentKind	hcparse/read_libclang/libclang_wrap.html#CXTemplateArgumentKind	libclang_wrap: CXTemplateArgumentKind	
+getNumTemplateArguments	hcparse/read_libclang/libclang_wrap.html#getNumTemplateArguments,CXCursor	libclang_wrap: getNumTemplateArguments(c: CXCursor): cint	
+getTemplateArgumentKind	hcparse/read_libclang/libclang_wrap.html#getTemplateArgumentKind,CXCursor,cuint	libclang_wrap: getTemplateArgumentKind(c: CXCursor; i: cuint): CXTemplateArgumentKind	
+getTemplateArgumentType	hcparse/read_libclang/libclang_wrap.html#getTemplateArgumentType,CXCursor,cuint	libclang_wrap: getTemplateArgumentType(c: CXCursor; i: cuint): CXType	
+getTemplateArgumentValue	hcparse/read_libclang/libclang_wrap.html#getTemplateArgumentValue,CXCursor,cuint	libclang_wrap: getTemplateArgumentValue(c: CXCursor; i: cuint): clonglong	
+getTemplateArgumentUnsignedValue	hcparse/read_libclang/libclang_wrap.html#getTemplateArgumentUnsignedValue,CXCursor,cuint	libclang_wrap: getTemplateArgumentUnsignedValue(c: CXCursor; i: cuint): culonglong	
+equalTypes	hcparse/read_libclang/libclang_wrap.html#equalTypes,CXType,CXType	libclang_wrap: equalTypes(a: CXType; b: CXType): cuint	
+getCanonicalType	hcparse/read_libclang/libclang_wrap.html#getCanonicalType,CXType	libclang_wrap: getCanonicalType(t: CXType): CXType	
+isConstQualifiedType	hcparse/read_libclang/libclang_wrap.html#isConstQualifiedType,CXType	libclang_wrap: isConstQualifiedType(t: CXType): cuint	
+isMacroFunctionLike	hcparse/read_libclang/libclang_wrap.html#isMacroFunctionLike,CXCursor	libclang_wrap: isMacroFunctionLike(c: CXCursor): cuint	
+isMacroBuiltin	hcparse/read_libclang/libclang_wrap.html#isMacroBuiltin,CXCursor	libclang_wrap: isMacroBuiltin(c: CXCursor): cuint	
+isFunctionInlined	hcparse/read_libclang/libclang_wrap.html#isFunctionInlined,CXCursor	libclang_wrap: isFunctionInlined(c: CXCursor): cuint	
+isVolatileQualifiedType	hcparse/read_libclang/libclang_wrap.html#isVolatileQualifiedType,CXType	libclang_wrap: isVolatileQualifiedType(t: CXType): cuint	
+isRestrictQualifiedType	hcparse/read_libclang/libclang_wrap.html#isRestrictQualifiedType,CXType	libclang_wrap: isRestrictQualifiedType(t: CXType): cuint	
+getAddressSpace	hcparse/read_libclang/libclang_wrap.html#getAddressSpace,CXType	libclang_wrap: getAddressSpace(t: CXType): cuint	
+getTypedefName	hcparse/read_libclang/libclang_wrap.html#getTypedefName,CXType	libclang_wrap: getTypedefName(cT: CXType): CXString	
+getPointeeType	hcparse/read_libclang/libclang_wrap.html#getPointeeType,CXType	libclang_wrap: getPointeeType(t: CXType): CXType	
+getTypeDeclaration	hcparse/read_libclang/libclang_wrap.html#getTypeDeclaration,CXType	libclang_wrap: getTypeDeclaration(t: CXType): CXCursor	
+getDeclObjCTypeEncoding	hcparse/read_libclang/libclang_wrap.html#getDeclObjCTypeEncoding,CXCursor	libclang_wrap: getDeclObjCTypeEncoding(c: CXCursor): CXString	
+getObjCEncoding	hcparse/read_libclang/libclang_wrap.html#getObjCEncoding,CXType	libclang_wrap: getObjCEncoding(cxtype: CXType): CXString	
+getTypeKindSpelling	hcparse/read_libclang/libclang_wrap.html#getTypeKindSpelling,CXTypeKind	libclang_wrap: getTypeKindSpelling(k: CXTypeKind): CXString	
+getFunctionTypeCallingConv	hcparse/read_libclang/libclang_wrap.html#getFunctionTypeCallingConv,CXType	libclang_wrap: getFunctionTypeCallingConv(t: CXType): CXCallingConv	
+getResultType	hcparse/read_libclang/libclang_wrap.html#getResultType,CXType	libclang_wrap: getResultType(t: CXType): CXType	
+getExceptionSpecificationType	hcparse/read_libclang/libclang_wrap.html#getExceptionSpecificationType,CXType	libclang_wrap: getExceptionSpecificationType(t: CXType): cint	
+getNumArgTypes	hcparse/read_libclang/libclang_wrap.html#getNumArgTypes,CXType	libclang_wrap: getNumArgTypes(t: CXType): cint	
+getArgType	hcparse/read_libclang/libclang_wrap.html#getArgType,CXType,cuint	libclang_wrap: getArgType(t: CXType; i: cuint): CXType	
+getObjCObjectBaseType	hcparse/read_libclang/libclang_wrap.html#getObjCObjectBaseType,CXType	libclang_wrap: getObjCObjectBaseType(t: CXType): CXType	
+getNumObjCProtocolRefs	hcparse/read_libclang/libclang_wrap.html#getNumObjCProtocolRefs,CXType	libclang_wrap: getNumObjCProtocolRefs(t: CXType): cuint	
+getObjCProtocolDecl	hcparse/read_libclang/libclang_wrap.html#getObjCProtocolDecl,CXType,cuint	libclang_wrap: getObjCProtocolDecl(t: CXType; i: cuint): CXCursor	
+getNumObjCTypeArgs	hcparse/read_libclang/libclang_wrap.html#getNumObjCTypeArgs,CXType	libclang_wrap: getNumObjCTypeArgs(t: CXType): cuint	
+getObjCTypeArg	hcparse/read_libclang/libclang_wrap.html#getObjCTypeArg,CXType,cuint	libclang_wrap: getObjCTypeArg(t: CXType; i: cuint): CXType	
+isFunctionTypeVariadic	hcparse/read_libclang/libclang_wrap.html#isFunctionTypeVariadic,CXType	libclang_wrap: isFunctionTypeVariadic(t: CXType): cuint	
+getCursorResultType	hcparse/read_libclang/libclang_wrap.html#getCursorResultType,CXCursor	libclang_wrap: getCursorResultType(c: CXCursor): CXType	
+getCursorExceptionSpecificationType	hcparse/read_libclang/libclang_wrap.html#getCursorExceptionSpecificationType,CXCursor	libclang_wrap: getCursorExceptionSpecificationType(c: CXCursor): cint	
+isPODType	hcparse/read_libclang/libclang_wrap.html#isPODType,CXType	libclang_wrap: isPODType(t: CXType): cuint	
+getElementType	hcparse/read_libclang/libclang_wrap.html#getElementType,CXType	libclang_wrap: getElementType(t: CXType): CXType	
+getNumElements	hcparse/read_libclang/libclang_wrap.html#getNumElements,CXType	libclang_wrap: getNumElements(t: CXType): clonglong	
+getArrayElementType	hcparse/read_libclang/libclang_wrap.html#getArrayElementType,CXType	libclang_wrap: getArrayElementType(t: CXType): CXType	
+getArraySize	hcparse/read_libclang/libclang_wrap.html#getArraySize,CXType	libclang_wrap: getArraySize(t: CXType): clonglong	
+getNamedType	hcparse/read_libclang/libclang_wrap.html#getNamedType,CXType	libclang_wrap: getNamedType(t: CXType): CXType	
+isTransparentTagTypedef	hcparse/read_libclang/libclang_wrap.html#isTransparentTagTypedef,CXType	libclang_wrap: isTransparentTagTypedef(t: CXType): cuint	
+tnkNonNull	hcparse/read_libclang/libclang_wrap.html#tnkNonNull	CXTypeNullabilityKind.tnkNonNull	
+tnkNullable	hcparse/read_libclang/libclang_wrap.html#tnkNullable	CXTypeNullabilityKind.tnkNullable	
+tnkUnspecified	hcparse/read_libclang/libclang_wrap.html#tnkUnspecified	CXTypeNullabilityKind.tnkUnspecified	
+tnkInvalid	hcparse/read_libclang/libclang_wrap.html#tnkInvalid	CXTypeNullabilityKind.tnkInvalid	
+CXTypeNullabilityKind	hcparse/read_libclang/libclang_wrap.html#CXTypeNullabilityKind	libclang_wrap: CXTypeNullabilityKind	
+getNullability	hcparse/read_libclang/libclang_wrap.html#getNullability,CXType	libclang_wrap: getNullability(t: CXType): CXTypeNullabilityKind	
+tleInvalid	hcparse/read_libclang/libclang_wrap.html#tleInvalid	CXTypeLayoutError.tleInvalid	
+tleIncomplete	hcparse/read_libclang/libclang_wrap.html#tleIncomplete	CXTypeLayoutError.tleIncomplete	
+tleDependent	hcparse/read_libclang/libclang_wrap.html#tleDependent	CXTypeLayoutError.tleDependent	
+tleNotConstantSize	hcparse/read_libclang/libclang_wrap.html#tleNotConstantSize	CXTypeLayoutError.tleNotConstantSize	
+tleInvalidFieldName	hcparse/read_libclang/libclang_wrap.html#tleInvalidFieldName	CXTypeLayoutError.tleInvalidFieldName	
+tleUndeduced	hcparse/read_libclang/libclang_wrap.html#tleUndeduced	CXTypeLayoutError.tleUndeduced	
+CXTypeLayoutError	hcparse/read_libclang/libclang_wrap.html#CXTypeLayoutError	libclang_wrap: CXTypeLayoutError	
+getAlignOf	hcparse/read_libclang/libclang_wrap.html#getAlignOf,CXType	libclang_wrap: getAlignOf(t: CXType): clonglong	
+getClassType	hcparse/read_libclang/libclang_wrap.html#getClassType,CXType	libclang_wrap: getClassType(t: CXType): CXType	
+getSizeOf	hcparse/read_libclang/libclang_wrap.html#getSizeOf,CXType	libclang_wrap: getSizeOf(t: CXType): clonglong	
+getOffsetOf	hcparse/read_libclang/libclang_wrap.html#getOffsetOf,CXType,cstring	libclang_wrap: getOffsetOf(t: CXType; s: cstring): clonglong	
+getModifiedType	hcparse/read_libclang/libclang_wrap.html#getModifiedType,CXType	libclang_wrap: getModifiedType(t: CXType): CXType	
+getOffsetOfField	hcparse/read_libclang/libclang_wrap.html#getOffsetOfField,CXCursor	libclang_wrap: getOffsetOfField(c: CXCursor): clonglong	
+isAnonymous	hcparse/read_libclang/libclang_wrap.html#isAnonymous,CXCursor	libclang_wrap: isAnonymous(c: CXCursor): cuint	
+isAnonymousRecordDecl	hcparse/read_libclang/libclang_wrap.html#isAnonymousRecordDecl,CXCursor	libclang_wrap: isAnonymousRecordDecl(c: CXCursor): cuint	
+isInlineNamespace	hcparse/read_libclang/libclang_wrap.html#isInlineNamespace,CXCursor	libclang_wrap: isInlineNamespace(c: CXCursor): cuint	
+rqkNone	hcparse/read_libclang/libclang_wrap.html#rqkNone	CXRefQualifierKind.rqkNone	
+rqkLValue	hcparse/read_libclang/libclang_wrap.html#rqkLValue	CXRefQualifierKind.rqkLValue	
+rqkRValue	hcparse/read_libclang/libclang_wrap.html#rqkRValue	CXRefQualifierKind.rqkRValue	
+CXRefQualifierKind	hcparse/read_libclang/libclang_wrap.html#CXRefQualifierKind	libclang_wrap: CXRefQualifierKind	
+getNumTemplateArguments	hcparse/read_libclang/libclang_wrap.html#getNumTemplateArguments,CXType	libclang_wrap: getNumTemplateArguments(t: CXType): cint	
+getTemplateArgumentAsType	hcparse/read_libclang/libclang_wrap.html#getTemplateArgumentAsType,CXType,cuint	libclang_wrap: getTemplateArgumentAsType(t: CXType; i: cuint): CXType	
+getRefQualifier	hcparse/read_libclang/libclang_wrap.html#getRefQualifier,CXType	libclang_wrap: getRefQualifier(t: CXType): CXRefQualifierKind	
+isBitField	hcparse/read_libclang/libclang_wrap.html#isBitField,CXCursor	libclang_wrap: isBitField(c: CXCursor): cuint	
+isVirtualBase	hcparse/read_libclang/libclang_wrap.html#isVirtualBase,CXCursor	libclang_wrap: isVirtualBase(argCXCursor: CXCursor): cuint	
+asInvalidAccessSpecifier	hcparse/read_libclang/libclang_wrap.html#asInvalidAccessSpecifier	CX_AccessSpecifier.asInvalidAccessSpecifier	
+asPublic	hcparse/read_libclang/libclang_wrap.html#asPublic	CX_AccessSpecifier.asPublic	
+asProtected	hcparse/read_libclang/libclang_wrap.html#asProtected	CX_AccessSpecifier.asProtected	
+asPrivate	hcparse/read_libclang/libclang_wrap.html#asPrivate	CX_AccessSpecifier.asPrivate	
+CX_AccessSpecifier	hcparse/read_libclang/libclang_wrap.html#CX_AccessSpecifier	libclang_wrap: CX_AccessSpecifier	
+getAccessSpecifier	hcparse/read_libclang/libclang_wrap.html#getAccessSpecifier,CXCursor	libclang_wrap: getAccessSpecifier(argCXCursor: CXCursor): CX_AccessSpecifier	
+scC_Invalid	hcparse/read_libclang/libclang_wrap.html#scC_Invalid	CX_StorageClass.scC_Invalid	
+scC_None	hcparse/read_libclang/libclang_wrap.html#scC_None	CX_StorageClass.scC_None	
+scC_Extern	hcparse/read_libclang/libclang_wrap.html#scC_Extern	CX_StorageClass.scC_Extern	
+scC_Static	hcparse/read_libclang/libclang_wrap.html#scC_Static	CX_StorageClass.scC_Static	
+scC_PrivateExtern	hcparse/read_libclang/libclang_wrap.html#scC_PrivateExtern	CX_StorageClass.scC_PrivateExtern	
+scC_OpenCLWorkGroupLocal	hcparse/read_libclang/libclang_wrap.html#scC_OpenCLWorkGroupLocal	CX_StorageClass.scC_OpenCLWorkGroupLocal	
+scC_Auto	hcparse/read_libclang/libclang_wrap.html#scC_Auto	CX_StorageClass.scC_Auto	
+scC_Register	hcparse/read_libclang/libclang_wrap.html#scC_Register	CX_StorageClass.scC_Register	
+CX_StorageClass	hcparse/read_libclang/libclang_wrap.html#CX_StorageClass	libclang_wrap: CX_StorageClass	
+getStorageClass	hcparse/read_libclang/libclang_wrap.html#getStorageClass,CXCursor	libclang_wrap: getStorageClass(argCXCursor: CXCursor): CX_StorageClass	
+getNumOverloadedDecls	hcparse/read_libclang/libclang_wrap.html#getNumOverloadedDecls,CXCursor	libclang_wrap: getNumOverloadedDecls(cursor: CXCursor): cuint	
+getOverloadedDecl	hcparse/read_libclang/libclang_wrap.html#getOverloadedDecl,CXCursor,cuint	libclang_wrap: getOverloadedDecl(cursor: CXCursor; index: cuint): CXCursor	
+getIBOutletCollectionType	hcparse/read_libclang/libclang_wrap.html#getIBOutletCollectionType,CXCursor	libclang_wrap: getIBOutletCollectionType(argCXCursor: CXCursor): CXType	
+cvrBreak	hcparse/read_libclang/libclang_wrap.html#cvrBreak	CXChildVisitResult.cvrBreak	
+cvrContinue	hcparse/read_libclang/libclang_wrap.html#cvrContinue	CXChildVisitResult.cvrContinue	
+cvrRecurse	hcparse/read_libclang/libclang_wrap.html#cvrRecurse	CXChildVisitResult.cvrRecurse	
+CXChildVisitResult	hcparse/read_libclang/libclang_wrap.html#CXChildVisitResult	libclang_wrap: CXChildVisitResult	
+CXCursorVisitor	hcparse/read_libclang/libclang_wrap.html#CXCursorVisitor	libclang_wrap: CXCursorVisitor	
+visitChildren	hcparse/read_libclang/libclang_wrap.html#visitChildren,CXCursor,CXCursorVisitor,CXClientData	libclang_wrap: visitChildren(parent: CXCursor; visitor: CXCursorVisitor;\n              client_data: CXClientData): cuint	
+getCursorUSR	hcparse/read_libclang/libclang_wrap.html#getCursorUSR,CXCursor	libclang_wrap: getCursorUSR(argCXCursor: CXCursor): CXString	
+constructUSR_ObjCClass	hcparse/read_libclang/libclang_wrap.html#constructUSR_ObjCClass,cstring	libclang_wrap: constructUSR_ObjCClass(class_name: cstring): CXString	
+constructUSR_ObjCCategory	hcparse/read_libclang/libclang_wrap.html#constructUSR_ObjCCategory,cstring,cstring	libclang_wrap: constructUSR_ObjCCategory(class_name: cstring; category_name: cstring): CXString	
+constructUSR_ObjCProtocol	hcparse/read_libclang/libclang_wrap.html#constructUSR_ObjCProtocol,cstring	libclang_wrap: constructUSR_ObjCProtocol(protocol_name: cstring): CXString	
+constructUSR_ObjCIvar	hcparse/read_libclang/libclang_wrap.html#constructUSR_ObjCIvar,cstring,CXString	libclang_wrap: constructUSR_ObjCIvar(name: cstring; classUSR: CXString): CXString	
+constructUSR_ObjCMethod	hcparse/read_libclang/libclang_wrap.html#constructUSR_ObjCMethod,cstring,cuint,CXString	libclang_wrap: constructUSR_ObjCMethod(name: cstring; isInstanceMethod: cuint;\n                        classUSR: CXString): CXString	
+constructUSR_ObjCProperty	hcparse/read_libclang/libclang_wrap.html#constructUSR_ObjCProperty,cstring,CXString	libclang_wrap: constructUSR_ObjCProperty(property: cstring; classUSR: CXString): CXString	
+getCursorSpelling	hcparse/read_libclang/libclang_wrap.html#getCursorSpelling,CXCursor	libclang_wrap: getCursorSpelling(argCXCursor: CXCursor): CXString	
+getSpellingNameRange	hcparse/read_libclang/libclang_wrap.html#getSpellingNameRange,CXCursor,cuint,cuint	libclang_wrap: getSpellingNameRange(argCXCursor: CXCursor; pieceIndex: cuint; options: cuint): CXSourceRange	
+CXPrintingPolicy	hcparse/read_libclang/libclang_wrap.html#CXPrintingPolicy	libclang_wrap: CXPrintingPolicy	
+pppIndentation	hcparse/read_libclang/libclang_wrap.html#pppIndentation	CXPrintingPolicyProperty.pppIndentation	
+pppSuppressSpecifiers	hcparse/read_libclang/libclang_wrap.html#pppSuppressSpecifiers	CXPrintingPolicyProperty.pppSuppressSpecifiers	
+pppSuppressTagKeyword	hcparse/read_libclang/libclang_wrap.html#pppSuppressTagKeyword	CXPrintingPolicyProperty.pppSuppressTagKeyword	
+pppIncludeTagDefinition	hcparse/read_libclang/libclang_wrap.html#pppIncludeTagDefinition	CXPrintingPolicyProperty.pppIncludeTagDefinition	
+pppSuppressScope	hcparse/read_libclang/libclang_wrap.html#pppSuppressScope	CXPrintingPolicyProperty.pppSuppressScope	
+pppSuppressUnwrittenScope	hcparse/read_libclang/libclang_wrap.html#pppSuppressUnwrittenScope	CXPrintingPolicyProperty.pppSuppressUnwrittenScope	
+pppSuppressInitializers	hcparse/read_libclang/libclang_wrap.html#pppSuppressInitializers	CXPrintingPolicyProperty.pppSuppressInitializers	
+pppConstantArraySizeAsWritten	hcparse/read_libclang/libclang_wrap.html#pppConstantArraySizeAsWritten	CXPrintingPolicyProperty.pppConstantArraySizeAsWritten	
+pppAnonymousTagLocations	hcparse/read_libclang/libclang_wrap.html#pppAnonymousTagLocations	CXPrintingPolicyProperty.pppAnonymousTagLocations	
+pppSuppressStrongLifetime	hcparse/read_libclang/libclang_wrap.html#pppSuppressStrongLifetime	CXPrintingPolicyProperty.pppSuppressStrongLifetime	
+pppSuppressLifetimeQualifiers	hcparse/read_libclang/libclang_wrap.html#pppSuppressLifetimeQualifiers	CXPrintingPolicyProperty.pppSuppressLifetimeQualifiers	
+pppSuppressTemplateArgsInConstructors	hcparse/read_libclang/libclang_wrap.html#pppSuppressTemplateArgsInConstructors	CXPrintingPolicyProperty.pppSuppressTemplateArgsInConstructors	
+pppBool	hcparse/read_libclang/libclang_wrap.html#pppBool	CXPrintingPolicyProperty.pppBool	
+pppRestrict	hcparse/read_libclang/libclang_wrap.html#pppRestrict	CXPrintingPolicyProperty.pppRestrict	
+pppAlignof	hcparse/read_libclang/libclang_wrap.html#pppAlignof	CXPrintingPolicyProperty.pppAlignof	
+pppUnderscoreAlignof	hcparse/read_libclang/libclang_wrap.html#pppUnderscoreAlignof	CXPrintingPolicyProperty.pppUnderscoreAlignof	
+pppUseVoidForZeroParams	hcparse/read_libclang/libclang_wrap.html#pppUseVoidForZeroParams	CXPrintingPolicyProperty.pppUseVoidForZeroParams	
+pppTerseOutput	hcparse/read_libclang/libclang_wrap.html#pppTerseOutput	CXPrintingPolicyProperty.pppTerseOutput	
+pppPolishForDeclaration	hcparse/read_libclang/libclang_wrap.html#pppPolishForDeclaration	CXPrintingPolicyProperty.pppPolishForDeclaration	
+pppHalf	hcparse/read_libclang/libclang_wrap.html#pppHalf	CXPrintingPolicyProperty.pppHalf	
+pppMSWChar	hcparse/read_libclang/libclang_wrap.html#pppMSWChar	CXPrintingPolicyProperty.pppMSWChar	
+pppIncludeNewlines	hcparse/read_libclang/libclang_wrap.html#pppIncludeNewlines	CXPrintingPolicyProperty.pppIncludeNewlines	
+pppMSVCFormatting	hcparse/read_libclang/libclang_wrap.html#pppMSVCFormatting	CXPrintingPolicyProperty.pppMSVCFormatting	
+pppConstantsAsWritten	hcparse/read_libclang/libclang_wrap.html#pppConstantsAsWritten	CXPrintingPolicyProperty.pppConstantsAsWritten	
+pppSuppressImplicitBase	hcparse/read_libclang/libclang_wrap.html#pppSuppressImplicitBase	CXPrintingPolicyProperty.pppSuppressImplicitBase	
+pppFullyQualifiedName	hcparse/read_libclang/libclang_wrap.html#pppFullyQualifiedName	CXPrintingPolicyProperty.pppFullyQualifiedName	
+CXPrintingPolicyProperty	hcparse/read_libclang/libclang_wrap.html#CXPrintingPolicyProperty	libclang_wrap: CXPrintingPolicyProperty	
+getProperty	hcparse/read_libclang/libclang_wrap.html#getProperty,CXPrintingPolicy,CXPrintingPolicyProperty	libclang_wrap: getProperty(policy: CXPrintingPolicy; property: CXPrintingPolicyProperty): cuint	
+setProperty	hcparse/read_libclang/libclang_wrap.html#setProperty,CXPrintingPolicy,CXPrintingPolicyProperty,cuint	libclang_wrap: setProperty(policy: CXPrintingPolicy; property: CXPrintingPolicyProperty;\n            value: cuint): void	
+getCursorPrintingPolicy	hcparse/read_libclang/libclang_wrap.html#getCursorPrintingPolicy,CXCursor	libclang_wrap: getCursorPrintingPolicy(argCXCursor: CXCursor): CXPrintingPolicy	
+dispose	hcparse/read_libclang/libclang_wrap.html#dispose,CXPrintingPolicy	libclang_wrap: dispose(policy: CXPrintingPolicy): void	
+getCursorPrettyPrinted	hcparse/read_libclang/libclang_wrap.html#getCursorPrettyPrinted,CXCursor,CXPrintingPolicy	libclang_wrap: getCursorPrettyPrinted(cursor: CXCursor; policy: CXPrintingPolicy): CXString	
+getCursorDisplayName	hcparse/read_libclang/libclang_wrap.html#getCursorDisplayName,CXCursor	libclang_wrap: getCursorDisplayName(argCXCursor: CXCursor): CXString	
+getCursorReferenced	hcparse/read_libclang/libclang_wrap.html#getCursorReferenced,CXCursor	libclang_wrap: getCursorReferenced(argCXCursor: CXCursor): CXCursor	
+getCursorDefinition	hcparse/read_libclang/libclang_wrap.html#getCursorDefinition,CXCursor	libclang_wrap: getCursorDefinition(argCXCursor: CXCursor): CXCursor	
+isCursorDefinition	hcparse/read_libclang/libclang_wrap.html#isCursorDefinition,CXCursor	libclang_wrap: isCursorDefinition(argCXCursor: CXCursor): cuint	
+getCanonicalCursor	hcparse/read_libclang/libclang_wrap.html#getCanonicalCursor,CXCursor	libclang_wrap: getCanonicalCursor(argCXCursor: CXCursor): CXCursor	
+getObjCSelectorIndex	hcparse/read_libclang/libclang_wrap.html#getObjCSelectorIndex,CXCursor	libclang_wrap: getObjCSelectorIndex(argCXCursor: CXCursor): cint	
+isDynamicCall	hcparse/read_libclang/libclang_wrap.html#isDynamicCall,CXCursor	libclang_wrap: isDynamicCall(c: CXCursor): cint	
+getReceiverType	hcparse/read_libclang/libclang_wrap.html#getReceiverType,CXCursor	libclang_wrap: getReceiverType(c: CXCursor): CXType	
+ocpaknoattr	hcparse/read_libclang/libclang_wrap.html#ocpaknoattr	CXObjCPropertyAttrKind.ocpaknoattr	
+ocpakreadonly	hcparse/read_libclang/libclang_wrap.html#ocpakreadonly	CXObjCPropertyAttrKind.ocpakreadonly	
+ocpakgetter	hcparse/read_libclang/libclang_wrap.html#ocpakgetter	CXObjCPropertyAttrKind.ocpakgetter	
+ocpakassign	hcparse/read_libclang/libclang_wrap.html#ocpakassign	CXObjCPropertyAttrKind.ocpakassign	
+ocpakreadwrite	hcparse/read_libclang/libclang_wrap.html#ocpakreadwrite	CXObjCPropertyAttrKind.ocpakreadwrite	
+ocpakretain	hcparse/read_libclang/libclang_wrap.html#ocpakretain	CXObjCPropertyAttrKind.ocpakretain	
+ocpakcopy	hcparse/read_libclang/libclang_wrap.html#ocpakcopy	CXObjCPropertyAttrKind.ocpakcopy	
+ocpaknonatomic	hcparse/read_libclang/libclang_wrap.html#ocpaknonatomic	CXObjCPropertyAttrKind.ocpaknonatomic	
+ocpaksetter	hcparse/read_libclang/libclang_wrap.html#ocpaksetter	CXObjCPropertyAttrKind.ocpaksetter	
+ocpakatomic	hcparse/read_libclang/libclang_wrap.html#ocpakatomic	CXObjCPropertyAttrKind.ocpakatomic	
+ocpakweak	hcparse/read_libclang/libclang_wrap.html#ocpakweak	CXObjCPropertyAttrKind.ocpakweak	
+ocpakstrong	hcparse/read_libclang/libclang_wrap.html#ocpakstrong	CXObjCPropertyAttrKind.ocpakstrong	
+ocpakunsafe_unretained	hcparse/read_libclang/libclang_wrap.html#ocpakunsafe_unretained	CXObjCPropertyAttrKind.ocpakunsafe_unretained	
+ocpakclass	hcparse/read_libclang/libclang_wrap.html#ocpakclass	CXObjCPropertyAttrKind.ocpakclass	
+CXObjCPropertyAttrKind	hcparse/read_libclang/libclang_wrap.html#CXObjCPropertyAttrKind	libclang_wrap: CXObjCPropertyAttrKind	
+getObjCPropertyAttributes	hcparse/read_libclang/libclang_wrap.html#getObjCPropertyAttributes,CXCursor,cuint	libclang_wrap: getObjCPropertyAttributes(c: CXCursor; reserved: cuint): cuint	
+getObjCPropertyGetterName	hcparse/read_libclang/libclang_wrap.html#getObjCPropertyGetterName,CXCursor	libclang_wrap: getObjCPropertyGetterName(c: CXCursor): CXString	
+getObjCPropertySetterName	hcparse/read_libclang/libclang_wrap.html#getObjCPropertySetterName,CXCursor	libclang_wrap: getObjCPropertySetterName(c: CXCursor): CXString	
+ocdqkNone	hcparse/read_libclang/libclang_wrap.html#ocdqkNone	CXObjCDeclQualifierKind.ocdqkNone	
+ocdqkIn	hcparse/read_libclang/libclang_wrap.html#ocdqkIn	CXObjCDeclQualifierKind.ocdqkIn	
+ocdqkInout	hcparse/read_libclang/libclang_wrap.html#ocdqkInout	CXObjCDeclQualifierKind.ocdqkInout	
+ocdqkOut	hcparse/read_libclang/libclang_wrap.html#ocdqkOut	CXObjCDeclQualifierKind.ocdqkOut	
+ocdqkBycopy	hcparse/read_libclang/libclang_wrap.html#ocdqkBycopy	CXObjCDeclQualifierKind.ocdqkBycopy	
+ocdqkByref	hcparse/read_libclang/libclang_wrap.html#ocdqkByref	CXObjCDeclQualifierKind.ocdqkByref	
+ocdqkOneway	hcparse/read_libclang/libclang_wrap.html#ocdqkOneway	CXObjCDeclQualifierKind.ocdqkOneway	
+CXObjCDeclQualifierKind	hcparse/read_libclang/libclang_wrap.html#CXObjCDeclQualifierKind	libclang_wrap: CXObjCDeclQualifierKind	
+getObjCDeclQualifiers	hcparse/read_libclang/libclang_wrap.html#getObjCDeclQualifiers,CXCursor	libclang_wrap: getObjCDeclQualifiers(c: CXCursor): cuint	
+isObjCOptional	hcparse/read_libclang/libclang_wrap.html#isObjCOptional,CXCursor	libclang_wrap: isObjCOptional(c: CXCursor): cuint	
+isVariadic	hcparse/read_libclang/libclang_wrap.html#isVariadic,CXCursor	libclang_wrap: isVariadic(c: CXCursor): cuint	
+isExternalSymbol	hcparse/read_libclang/libclang_wrap.html#isExternalSymbol,CXCursor,ptr.,ptr.,ptr.	libclang_wrap: isExternalSymbol(c: CXCursor; language: ptr [CXString];\n                 definedIn: ptr [CXString]; isGenerated: ptr [cuint]): cuint	
+getCommentRange	hcparse/read_libclang/libclang_wrap.html#getCommentRange,CXCursor	libclang_wrap: getCommentRange(c: CXCursor): CXSourceRange	
+getRawCommentText	hcparse/read_libclang/libclang_wrap.html#getRawCommentText,CXCursor	libclang_wrap: getRawCommentText(c: CXCursor): CXString	
+getBriefCommentText	hcparse/read_libclang/libclang_wrap.html#getBriefCommentText,CXCursor	libclang_wrap: getBriefCommentText(c: CXCursor): CXString	
+getMangling	hcparse/read_libclang/libclang_wrap.html#getMangling,CXCursor	libclang_wrap: getMangling(argCXCursor: CXCursor): CXString	
+getManglings	hcparse/read_libclang/libclang_wrap.html#getManglings,CXCursor	libclang_wrap: getManglings(argCXCursor: CXCursor): ptr [CXStringSet]	
+getObjCManglings	hcparse/read_libclang/libclang_wrap.html#getObjCManglings,CXCursor	libclang_wrap: getObjCManglings(argCXCursor: CXCursor): ptr [CXStringSet]	
+CXModule	hcparse/read_libclang/libclang_wrap.html#CXModule	libclang_wrap: CXModule	
+getModule	hcparse/read_libclang/libclang_wrap.html#getModule,CXCursor	libclang_wrap: getModule(c: CXCursor): CXModule	
+getModuleForFile	hcparse/read_libclang/libclang_wrap.html#getModuleForFile,CXTranslationUnit,CXFile	libclang_wrap: getModuleForFile(argCXTranslationUnit: CXTranslationUnit; argCXFile: CXFile): CXModule	
+getASTFile	hcparse/read_libclang/libclang_wrap.html#getASTFile,CXModule	libclang_wrap: getASTFile(module: CXModule): CXFile	
+getParent	hcparse/read_libclang/libclang_wrap.html#getParent,CXModule	libclang_wrap: getParent(module: CXModule): CXModule	
+getName	hcparse/read_libclang/libclang_wrap.html#getName,CXModule	libclang_wrap: getName(module: CXModule): CXString	
+getFullName	hcparse/read_libclang/libclang_wrap.html#getFullName,CXModule	libclang_wrap: getFullName(module: CXModule): CXString	
+isSystem	hcparse/read_libclang/libclang_wrap.html#isSystem,CXModule	libclang_wrap: isSystem(module: CXModule): cint	
+module_getNumTopLevelHeaders	hcparse/read_libclang/libclang_wrap.html#module_getNumTopLevelHeaders,CXTranslationUnit,CXModule	libclang_wrap: module_getNumTopLevelHeaders(argCXTranslationUnit: CXTranslationUnit;\n                             module: CXModule): cuint	
+module_getTopLevelHeader	hcparse/read_libclang/libclang_wrap.html#module_getTopLevelHeader,CXTranslationUnit,CXModule,cuint	libclang_wrap: module_getTopLevelHeader(argCXTranslationUnit: CXTranslationUnit;\n                         module: CXModule; index: cuint): CXFile	
+constructor_isConvertingConstructor	hcparse/read_libclang/libclang_wrap.html#constructor_isConvertingConstructor,CXCursor	libclang_wrap: constructor_isConvertingConstructor(c: CXCursor): cuint	
+constructor_isCopyConstructor	hcparse/read_libclang/libclang_wrap.html#constructor_isCopyConstructor,CXCursor	libclang_wrap: constructor_isCopyConstructor(c: CXCursor): cuint	
+constructor_isDefaultConstructor	hcparse/read_libclang/libclang_wrap.html#constructor_isDefaultConstructor,CXCursor	libclang_wrap: constructor_isDefaultConstructor(c: CXCursor): cuint	
+constructor_isMoveConstructor	hcparse/read_libclang/libclang_wrap.html#constructor_isMoveConstructor,CXCursor	libclang_wrap: constructor_isMoveConstructor(c: CXCursor): cuint	
+field_isMutable	hcparse/read_libclang/libclang_wrap.html#field_isMutable,CXCursor	libclang_wrap: field_isMutable(c: CXCursor): cuint	
+method_isDefaulted	hcparse/read_libclang/libclang_wrap.html#method_isDefaulted,CXCursor	libclang_wrap: method_isDefaulted(c: CXCursor): cuint	
+method_isPureVirtual	hcparse/read_libclang/libclang_wrap.html#method_isPureVirtual,CXCursor	libclang_wrap: method_isPureVirtual(c: CXCursor): cuint	
+method_isStatic	hcparse/read_libclang/libclang_wrap.html#method_isStatic,CXCursor	libclang_wrap: method_isStatic(c: CXCursor): cuint	
+method_isVirtual	hcparse/read_libclang/libclang_wrap.html#method_isVirtual,CXCursor	libclang_wrap: method_isVirtual(c: CXCursor): cuint	
+record_isAbstract	hcparse/read_libclang/libclang_wrap.html#record_isAbstract,CXCursor	libclang_wrap: record_isAbstract(c: CXCursor): cuint	
+enumDecl_isScoped	hcparse/read_libclang/libclang_wrap.html#enumDecl_isScoped,CXCursor	libclang_wrap: enumDecl_isScoped(c: CXCursor): cuint	
+method_isConst	hcparse/read_libclang/libclang_wrap.html#method_isConst,CXCursor	libclang_wrap: method_isConst(c: CXCursor): cuint	
+getTemplateCursorKind	hcparse/read_libclang/libclang_wrap.html#getTemplateCursorKind,CXCursor	libclang_wrap: getTemplateCursorKind(c: CXCursor): CXCursorKind	
+getSpecializedCursorTemplate	hcparse/read_libclang/libclang_wrap.html#getSpecializedCursorTemplate,CXCursor	libclang_wrap: getSpecializedCursorTemplate(c: CXCursor): CXCursor	
+getCursorReferenceNameRange	hcparse/read_libclang/libclang_wrap.html#getCursorReferenceNameRange,CXCursor,cuint,cuint	libclang_wrap: getCursorReferenceNameRange(c: CXCursor; nameFlags: cuint; pieceIndex: cuint): CXSourceRange	
+nrfange_WantQualifier	hcparse/read_libclang/libclang_wrap.html#nrfange_WantQualifier	CXNameRefFlags.nrfange_WantQualifier	
+nrfange_WantTemplateArgs	hcparse/read_libclang/libclang_wrap.html#nrfange_WantTemplateArgs	CXNameRefFlags.nrfange_WantTemplateArgs	
+nrfange_WantSinglePiece	hcparse/read_libclang/libclang_wrap.html#nrfange_WantSinglePiece	CXNameRefFlags.nrfange_WantSinglePiece	
+CXNameRefFlags	hcparse/read_libclang/libclang_wrap.html#CXNameRefFlags	libclang_wrap: CXNameRefFlags	
+tokPunctuation	hcparse/read_libclang/libclang_wrap.html#tokPunctuation	CXTokenKind.tokPunctuation	
+tokKeyword	hcparse/read_libclang/libclang_wrap.html#tokKeyword	CXTokenKind.tokKeyword	
+tokIdentifier	hcparse/read_libclang/libclang_wrap.html#tokIdentifier	CXTokenKind.tokIdentifier	
+tokLiteral	hcparse/read_libclang/libclang_wrap.html#tokLiteral	CXTokenKind.tokLiteral	
+tokComment	hcparse/read_libclang/libclang_wrap.html#tokComment	CXTokenKind.tokComment	
+CXTokenKind	hcparse/read_libclang/libclang_wrap.html#CXTokenKind	libclang_wrap: CXTokenKind	
+CXToken	hcparse/read_libclang/libclang_wrap.html#CXToken	libclang_wrap: CXToken	
+getToken	hcparse/read_libclang/libclang_wrap.html#getToken,CXTranslationUnit,CXSourceLocation	libclang_wrap: getToken(tU: CXTranslationUnit; location: CXSourceLocation): ptr [CXToken]	
+getTokenKind	hcparse/read_libclang/libclang_wrap.html#getTokenKind,CXToken	libclang_wrap: getTokenKind(argCXToken: CXToken): CXTokenKind	
+getTokenSpelling	hcparse/read_libclang/libclang_wrap.html#getTokenSpelling,CXTranslationUnit,CXToken	libclang_wrap: getTokenSpelling(argCXTranslationUnit: CXTranslationUnit; argCXToken: CXToken): CXString	
+getTokenLocation	hcparse/read_libclang/libclang_wrap.html#getTokenLocation,CXTranslationUnit,CXToken	libclang_wrap: getTokenLocation(argCXTranslationUnit: CXTranslationUnit; argCXToken: CXToken): CXSourceLocation	
+getTokenExtent	hcparse/read_libclang/libclang_wrap.html#getTokenExtent,CXTranslationUnit,CXToken	libclang_wrap: getTokenExtent(argCXTranslationUnit: CXTranslationUnit; argCXToken: CXToken): CXSourceRange	
+tokenize	hcparse/read_libclang/libclang_wrap.html#tokenize,CXTranslationUnit,CXSourceRange,ptr.,ptr.	libclang_wrap: tokenize(tU: CXTranslationUnit; cxrange: CXSourceRange;\n         tokens: ptr [ptr [CXToken]]; numTokens: ptr [cuint]): void	
+annotateTokens	hcparse/read_libclang/libclang_wrap.html#annotateTokens,CXTranslationUnit,ptr.,cuint,ptr.	libclang_wrap: annotateTokens(tU: CXTranslationUnit; tokens: ptr [CXToken]; numTokens: cuint;\n               cursors: ptr [CXCursor]): void	
+disposeTokens	hcparse/read_libclang/libclang_wrap.html#disposeTokens,CXTranslationUnit,ptr.,cuint	libclang_wrap: disposeTokens(tU: CXTranslationUnit; tokens: ptr [CXToken]; numTokens: cuint): void	
+getCursorKindSpelling	hcparse/read_libclang/libclang_wrap.html#getCursorKindSpelling,CXCursorKind	libclang_wrap: getCursorKindSpelling(kind: CXCursorKind): CXString	
+getDefinitionSpellingAndExtent	hcparse/read_libclang/libclang_wrap.html#getDefinitionSpellingAndExtent,CXCursor,cstringArray,cstringArray,ptr.,ptr.,ptr.,ptr.	libclang_wrap: getDefinitionSpellingAndExtent(argCXCursor: CXCursor; startBuf: cstringArray;\n                               endBuf: cstringArray; startLine: ptr [cuint];\n                               startColumn: ptr [cuint]; endLine: ptr [cuint];\n                               endColumn: ptr [cuint]): void	
+enableStackTraces	hcparse/read_libclang/libclang_wrap.html#enableStackTraces	libclang_wrap: enableStackTraces(): void	
+executeOnThread	hcparse/read_libclang/libclang_wrap.html#executeOnThread,proc(pointer),pointer,cuint	libclang_wrap: executeOnThread(fn: proc (a0: pointer): void {.cdecl.}; user_data: pointer;\n                stack_size: cuint): void	
+CXCompletionString	hcparse/read_libclang/libclang_wrap.html#CXCompletionString	libclang_wrap: CXCompletionString	
+CXCompletionResult	hcparse/read_libclang/libclang_wrap.html#CXCompletionResult	libclang_wrap: CXCompletionResult	
+cckOptional	hcparse/read_libclang/libclang_wrap.html#cckOptional	CXCompletionChunkKind.cckOptional	
+cckTypedText	hcparse/read_libclang/libclang_wrap.html#cckTypedText	CXCompletionChunkKind.cckTypedText	
+cckText	hcparse/read_libclang/libclang_wrap.html#cckText	CXCompletionChunkKind.cckText	
+cckPlaceholder	hcparse/read_libclang/libclang_wrap.html#cckPlaceholder	CXCompletionChunkKind.cckPlaceholder	
+cckInformative	hcparse/read_libclang/libclang_wrap.html#cckInformative	CXCompletionChunkKind.cckInformative	
+cckCurrentParameter	hcparse/read_libclang/libclang_wrap.html#cckCurrentParameter	CXCompletionChunkKind.cckCurrentParameter	
+cckLeftParen	hcparse/read_libclang/libclang_wrap.html#cckLeftParen	CXCompletionChunkKind.cckLeftParen	
+cckRightParen	hcparse/read_libclang/libclang_wrap.html#cckRightParen	CXCompletionChunkKind.cckRightParen	
+cckLeftBracket	hcparse/read_libclang/libclang_wrap.html#cckLeftBracket	CXCompletionChunkKind.cckLeftBracket	
+cckRightBracket	hcparse/read_libclang/libclang_wrap.html#cckRightBracket	CXCompletionChunkKind.cckRightBracket	
+cckLeftBrace	hcparse/read_libclang/libclang_wrap.html#cckLeftBrace	CXCompletionChunkKind.cckLeftBrace	
+cckRightBrace	hcparse/read_libclang/libclang_wrap.html#cckRightBrace	CXCompletionChunkKind.cckRightBrace	
+cckLeftAngle	hcparse/read_libclang/libclang_wrap.html#cckLeftAngle	CXCompletionChunkKind.cckLeftAngle	
+cckRightAngle	hcparse/read_libclang/libclang_wrap.html#cckRightAngle	CXCompletionChunkKind.cckRightAngle	
+cckComma	hcparse/read_libclang/libclang_wrap.html#cckComma	CXCompletionChunkKind.cckComma	
+cckResultType	hcparse/read_libclang/libclang_wrap.html#cckResultType	CXCompletionChunkKind.cckResultType	
+cckColon	hcparse/read_libclang/libclang_wrap.html#cckColon	CXCompletionChunkKind.cckColon	
+cckSemiColon	hcparse/read_libclang/libclang_wrap.html#cckSemiColon	CXCompletionChunkKind.cckSemiColon	
+cckEqual	hcparse/read_libclang/libclang_wrap.html#cckEqual	CXCompletionChunkKind.cckEqual	
+cckHorizontalSpace	hcparse/read_libclang/libclang_wrap.html#cckHorizontalSpace	CXCompletionChunkKind.cckHorizontalSpace	
+cckVerticalSpace	hcparse/read_libclang/libclang_wrap.html#cckVerticalSpace	CXCompletionChunkKind.cckVerticalSpace	
+CXCompletionChunkKind	hcparse/read_libclang/libclang_wrap.html#CXCompletionChunkKind	libclang_wrap: CXCompletionChunkKind	
+getCompletionChunkKind	hcparse/read_libclang/libclang_wrap.html#getCompletionChunkKind,CXCompletionString,cuint	libclang_wrap: getCompletionChunkKind(completion_string: CXCompletionString;\n                       chunk_number: cuint): CXCompletionChunkKind	
+getCompletionChunkText	hcparse/read_libclang/libclang_wrap.html#getCompletionChunkText,CXCompletionString,cuint	libclang_wrap: getCompletionChunkText(completion_string: CXCompletionString;\n                       chunk_number: cuint): CXString	
+getCompletionChunkCompletionString	hcparse/read_libclang/libclang_wrap.html#getCompletionChunkCompletionString,CXCompletionString,cuint	libclang_wrap: getCompletionChunkCompletionString(completion_string: CXCompletionString;\n                                   chunk_number: cuint): CXCompletionString	
+getNumCompletionChunks	hcparse/read_libclang/libclang_wrap.html#getNumCompletionChunks,CXCompletionString	libclang_wrap: getNumCompletionChunks(completion_string: CXCompletionString): cuint	
+getCompletionPriority	hcparse/read_libclang/libclang_wrap.html#getCompletionPriority,CXCompletionString	libclang_wrap: getCompletionPriority(completion_string: CXCompletionString): cuint	
+getCompletionAvailability	hcparse/read_libclang/libclang_wrap.html#getCompletionAvailability,CXCompletionString	libclang_wrap: getCompletionAvailability(completion_string: CXCompletionString): CXAvailabilityKind	
+getCompletionNumAnnotations	hcparse/read_libclang/libclang_wrap.html#getCompletionNumAnnotations,CXCompletionString	libclang_wrap: getCompletionNumAnnotations(completion_string: CXCompletionString): cuint	
+getCompletionAnnotation	hcparse/read_libclang/libclang_wrap.html#getCompletionAnnotation,CXCompletionString,cuint	libclang_wrap: getCompletionAnnotation(completion_string: CXCompletionString;\n                        annotation_number: cuint): CXString	
+getCompletionParent	hcparse/read_libclang/libclang_wrap.html#getCompletionParent,CXCompletionString,ptr.	libclang_wrap: getCompletionParent(completion_string: CXCompletionString;\n                    kind: ptr [CXCursorKind]): CXString	
+getCompletionBriefComment	hcparse/read_libclang/libclang_wrap.html#getCompletionBriefComment,CXCompletionString	libclang_wrap: getCompletionBriefComment(completion_string: CXCompletionString): CXString	
+getCursorCompletionString	hcparse/read_libclang/libclang_wrap.html#getCursorCompletionString,CXCursor	libclang_wrap: getCursorCompletionString(cursor: CXCursor): CXCompletionString	
+CXCodeCompleteResults	hcparse/read_libclang/libclang_wrap.html#CXCodeCompleteResults	libclang_wrap: CXCodeCompleteResults	
+getCompletionNumFixIts	hcparse/read_libclang/libclang_wrap.html#getCompletionNumFixIts,ptr.,cuint	libclang_wrap: getCompletionNumFixIts(results: ptr [CXCodeCompleteResults];\n                       completion_index: cuint): cuint	
+getCompletionFixIt	hcparse/read_libclang/libclang_wrap.html#getCompletionFixIt,ptr.,cuint,cuint,ptr.	libclang_wrap: getCompletionFixIt(results: ptr [CXCodeCompleteResults];\n                   completion_index: cuint; fixit_index: cuint;\n                   replacement_range: ptr [CXSourceRange]): CXString	
+ccfIncludeMacros	hcparse/read_libclang/libclang_wrap.html#ccfIncludeMacros	CXCodeComplete_Flags.ccfIncludeMacros	
+ccfIncludeCodePatterns	hcparse/read_libclang/libclang_wrap.html#ccfIncludeCodePatterns	CXCodeComplete_Flags.ccfIncludeCodePatterns	
+ccfIncludeBriefComments	hcparse/read_libclang/libclang_wrap.html#ccfIncludeBriefComments	CXCodeComplete_Flags.ccfIncludeBriefComments	
+ccfSkipPreamble	hcparse/read_libclang/libclang_wrap.html#ccfSkipPreamble	CXCodeComplete_Flags.ccfSkipPreamble	
+ccfIncludeCompletionsWithFixIts	hcparse/read_libclang/libclang_wrap.html#ccfIncludeCompletionsWithFixIts	CXCodeComplete_Flags.ccfIncludeCompletionsWithFixIts	
+CXCodeComplete_Flags	hcparse/read_libclang/libclang_wrap.html#CXCodeComplete_Flags	libclang_wrap: CXCodeComplete_Flags	
+cocUnexposed	hcparse/read_libclang/libclang_wrap.html#cocUnexposed	CXCompletionContext.cocUnexposed	
+cocAnyType	hcparse/read_libclang/libclang_wrap.html#cocAnyType	CXCompletionContext.cocAnyType	
+cocAnyValue	hcparse/read_libclang/libclang_wrap.html#cocAnyValue	CXCompletionContext.cocAnyValue	
+cocObjCObjectValue	hcparse/read_libclang/libclang_wrap.html#cocObjCObjectValue	CXCompletionContext.cocObjCObjectValue	
+cocObjCSelectorValue	hcparse/read_libclang/libclang_wrap.html#cocObjCSelectorValue	CXCompletionContext.cocObjCSelectorValue	
+cocClassTypeValue	hcparse/read_libclang/libclang_wrap.html#cocClassTypeValue	CXCompletionContext.cocClassTypeValue	
+cocDotMemberAccess	hcparse/read_libclang/libclang_wrap.html#cocDotMemberAccess	CXCompletionContext.cocDotMemberAccess	
+cocArrowMemberAccess	hcparse/read_libclang/libclang_wrap.html#cocArrowMemberAccess	CXCompletionContext.cocArrowMemberAccess	
+cocObjCPropertyAccess	hcparse/read_libclang/libclang_wrap.html#cocObjCPropertyAccess	CXCompletionContext.cocObjCPropertyAccess	
+cocEnumTag	hcparse/read_libclang/libclang_wrap.html#cocEnumTag	CXCompletionContext.cocEnumTag	
+cocUnionTag	hcparse/read_libclang/libclang_wrap.html#cocUnionTag	CXCompletionContext.cocUnionTag	
+cocStructTag	hcparse/read_libclang/libclang_wrap.html#cocStructTag	CXCompletionContext.cocStructTag	
+cocClassTag	hcparse/read_libclang/libclang_wrap.html#cocClassTag	CXCompletionContext.cocClassTag	
+cocNamespace	hcparse/read_libclang/libclang_wrap.html#cocNamespace	CXCompletionContext.cocNamespace	
+cocNestedNameSpecifier	hcparse/read_libclang/libclang_wrap.html#cocNestedNameSpecifier	CXCompletionContext.cocNestedNameSpecifier	
+cocObjCInterface	hcparse/read_libclang/libclang_wrap.html#cocObjCInterface	CXCompletionContext.cocObjCInterface	
+cocObjCProtocol	hcparse/read_libclang/libclang_wrap.html#cocObjCProtocol	CXCompletionContext.cocObjCProtocol	
+cocObjCCategory	hcparse/read_libclang/libclang_wrap.html#cocObjCCategory	CXCompletionContext.cocObjCCategory	
+cocObjCInstanceMessage	hcparse/read_libclang/libclang_wrap.html#cocObjCInstanceMessage	CXCompletionContext.cocObjCInstanceMessage	
+cocObjCClassMessage	hcparse/read_libclang/libclang_wrap.html#cocObjCClassMessage	CXCompletionContext.cocObjCClassMessage	
+cocObjCSelectorName	hcparse/read_libclang/libclang_wrap.html#cocObjCSelectorName	CXCompletionContext.cocObjCSelectorName	
+cocMacroName	hcparse/read_libclang/libclang_wrap.html#cocMacroName	CXCompletionContext.cocMacroName	
+cocNaturalLanguage	hcparse/read_libclang/libclang_wrap.html#cocNaturalLanguage	CXCompletionContext.cocNaturalLanguage	
+cocIncludedFile	hcparse/read_libclang/libclang_wrap.html#cocIncludedFile	CXCompletionContext.cocIncludedFile	
+cocUnknown	hcparse/read_libclang/libclang_wrap.html#cocUnknown	CXCompletionContext.cocUnknown	
+CXCompletionContext	hcparse/read_libclang/libclang_wrap.html#CXCompletionContext	libclang_wrap: CXCompletionContext	
+defaultCodeCompleteOptions	hcparse/read_libclang/libclang_wrap.html#defaultCodeCompleteOptions	libclang_wrap: defaultCodeCompleteOptions(): cuint	
+codeCompleteAt	hcparse/read_libclang/libclang_wrap.html#codeCompleteAt,CXTranslationUnit,cstring,cuint,cuint,ptr.,cuint,cuint	libclang_wrap: codeCompleteAt(tU: CXTranslationUnit; complete_filename: cstring;\n               complete_line: cuint; complete_column: cuint;\n               unsaved_files: ptr [CXUnsavedFile]; num_unsaved_files: cuint;\n               options: cuint): ptr [CXCodeCompleteResults]	
+sortCodeCompletionResults	hcparse/read_libclang/libclang_wrap.html#sortCodeCompletionResults,ptr.,cuint	libclang_wrap: sortCodeCompletionResults(results: ptr [CXCompletionResult]; numResults: cuint): void	
+disposeCodeCompleteResults	hcparse/read_libclang/libclang_wrap.html#disposeCodeCompleteResults,ptr.	libclang_wrap: disposeCodeCompleteResults(results: ptr [CXCodeCompleteResults]): void	
+codeCompleteGetNumDiagnostics	hcparse/read_libclang/libclang_wrap.html#codeCompleteGetNumDiagnostics,ptr.	libclang_wrap: codeCompleteGetNumDiagnostics(results: ptr [CXCodeCompleteResults]): cuint	
+codeCompleteGetDiagnostic	hcparse/read_libclang/libclang_wrap.html#codeCompleteGetDiagnostic,ptr.,cuint	libclang_wrap: codeCompleteGetDiagnostic(results: ptr [CXCodeCompleteResults]; index: cuint): CXDiagnostic	
+codeCompleteGetContexts	hcparse/read_libclang/libclang_wrap.html#codeCompleteGetContexts,ptr.	libclang_wrap: codeCompleteGetContexts(results: ptr [CXCodeCompleteResults]): culonglong	
+codeCompleteGetContainerKind	hcparse/read_libclang/libclang_wrap.html#codeCompleteGetContainerKind,ptr.,ptr.	libclang_wrap: codeCompleteGetContainerKind(results: ptr [CXCodeCompleteResults];\n                             isIncomplete: ptr [cuint]): CXCursorKind	
+codeCompleteGetContainerUSR	hcparse/read_libclang/libclang_wrap.html#codeCompleteGetContainerUSR,ptr.	libclang_wrap: codeCompleteGetContainerUSR(results: ptr [CXCodeCompleteResults]): CXString	
+codeCompleteGetObjCSelector	hcparse/read_libclang/libclang_wrap.html#codeCompleteGetObjCSelector,ptr.	libclang_wrap: codeCompleteGetObjCSelector(results: ptr [CXCodeCompleteResults]): CXString	
+getClangVersion	hcparse/read_libclang/libclang_wrap.html#getClangVersion	libclang_wrap: getClangVersion(): CXString	
+toggleCrashRecovery	hcparse/read_libclang/libclang_wrap.html#toggleCrashRecovery,cuint	libclang_wrap: toggleCrashRecovery(isEnabled: cuint): void	
+CXInclusionVisitor	hcparse/read_libclang/libclang_wrap.html#CXInclusionVisitor	libclang_wrap: CXInclusionVisitor	
+getInclusions	hcparse/read_libclang/libclang_wrap.html#getInclusions,CXTranslationUnit,CXInclusionVisitor,CXClientData	libclang_wrap: getInclusions(tu: CXTranslationUnit; visitor: CXInclusionVisitor;\n              client_data: CXClientData): void	
+erkUnExposed	hcparse/read_libclang/libclang_wrap.html#erkUnExposed	CXEvalResultKind.erkUnExposed	
+erkInt	hcparse/read_libclang/libclang_wrap.html#erkInt	CXEvalResultKind.erkInt	
+erkFloat	hcparse/read_libclang/libclang_wrap.html#erkFloat	CXEvalResultKind.erkFloat	
+erkObjCStrLiteral	hcparse/read_libclang/libclang_wrap.html#erkObjCStrLiteral	CXEvalResultKind.erkObjCStrLiteral	
+erkStrLiteral	hcparse/read_libclang/libclang_wrap.html#erkStrLiteral	CXEvalResultKind.erkStrLiteral	
+erkCFStr	hcparse/read_libclang/libclang_wrap.html#erkCFStr	CXEvalResultKind.erkCFStr	
+erkOther	hcparse/read_libclang/libclang_wrap.html#erkOther	CXEvalResultKind.erkOther	
+CXEvalResultKind	hcparse/read_libclang/libclang_wrap.html#CXEvalResultKind	libclang_wrap: CXEvalResultKind	
+CXEvalResult	hcparse/read_libclang/libclang_wrap.html#CXEvalResult	libclang_wrap: CXEvalResult	
+evaluate	hcparse/read_libclang/libclang_wrap.html#evaluate,CXCursor	libclang_wrap: evaluate(c: CXCursor): CXEvalResult	
+getKind	hcparse/read_libclang/libclang_wrap.html#getKind,CXEvalResult	libclang_wrap: getKind(e: CXEvalResult): CXEvalResultKind	
+getAsInt	hcparse/read_libclang/libclang_wrap.html#getAsInt,CXEvalResult	libclang_wrap: getAsInt(e: CXEvalResult): cint	
+getAsLongLong	hcparse/read_libclang/libclang_wrap.html#getAsLongLong,CXEvalResult	libclang_wrap: getAsLongLong(e: CXEvalResult): clonglong	
+isUnsignedInt	hcparse/read_libclang/libclang_wrap.html#isUnsignedInt,CXEvalResult	libclang_wrap: isUnsignedInt(e: CXEvalResult): cuint	
+getAsUnsigned	hcparse/read_libclang/libclang_wrap.html#getAsUnsigned,CXEvalResult	libclang_wrap: getAsUnsigned(e: CXEvalResult): culonglong	
+getAsDouble	hcparse/read_libclang/libclang_wrap.html#getAsDouble,CXEvalResult	libclang_wrap: getAsDouble(e: CXEvalResult): cdouble	
+getAsStr	hcparse/read_libclang/libclang_wrap.html#getAsStr,CXEvalResult	libclang_wrap: getAsStr(e: CXEvalResult): cstring	
+dispose	hcparse/read_libclang/libclang_wrap.html#dispose,CXEvalResult	libclang_wrap: dispose(e: CXEvalResult): void	
+CXRemapping	hcparse/read_libclang/libclang_wrap.html#CXRemapping	libclang_wrap: CXRemapping	
+getRemappings	hcparse/read_libclang/libclang_wrap.html#getRemappings,cstring	libclang_wrap: getRemappings(path: cstring): CXRemapping	
+getRemappingsFromFileList	hcparse/read_libclang/libclang_wrap.html#getRemappingsFromFileList,cstringArray,cuint	libclang_wrap: getRemappingsFromFileList(filePaths: cstringArray; numFiles: cuint): CXRemapping	
+remap_getNumFiles	hcparse/read_libclang/libclang_wrap.html#remap_getNumFiles,CXRemapping	libclang_wrap: remap_getNumFiles(argCXRemapping: CXRemapping): cuint	
+remap_getFilenames	hcparse/read_libclang/libclang_wrap.html#remap_getFilenames,CXRemapping,cuint,ptr.,ptr.	libclang_wrap: remap_getFilenames(argCXRemapping: CXRemapping; index: cuint;\n                   original: ptr [CXString]; transformed: ptr [CXString]): void	
+remap_dispose	hcparse/read_libclang/libclang_wrap.html#remap_dispose,CXRemapping	libclang_wrap: remap_dispose(argCXRemapping: CXRemapping): void	
+vrBreak	hcparse/read_libclang/libclang_wrap.html#vrBreak	CXVisitorResult.vrBreak	
+vrContinue	hcparse/read_libclang/libclang_wrap.html#vrContinue	CXVisitorResult.vrContinue	
+CXVisitorResult	hcparse/read_libclang/libclang_wrap.html#CXVisitorResult	libclang_wrap: CXVisitorResult	
+CXCursorAndRangeVisitor	hcparse/read_libclang/libclang_wrap.html#CXCursorAndRangeVisitor	libclang_wrap: CXCursorAndRangeVisitor	
+rSuccess	hcparse/read_libclang/libclang_wrap.html#rSuccess	CXResult.rSuccess	
+rInvalid	hcparse/read_libclang/libclang_wrap.html#rInvalid	CXResult.rInvalid	
+rVisitBreak	hcparse/read_libclang/libclang_wrap.html#rVisitBreak	CXResult.rVisitBreak	
+CXResult	hcparse/read_libclang/libclang_wrap.html#CXResult	libclang_wrap: CXResult	
+findReferencesInFile	hcparse/read_libclang/libclang_wrap.html#findReferencesInFile,CXCursor,CXFile,CXCursorAndRangeVisitor	libclang_wrap: findReferencesInFile(cursor: CXCursor; file: CXFile;\n                     visitor: CXCursorAndRangeVisitor): CXResult	
+findIncludesInFile	hcparse/read_libclang/libclang_wrap.html#findIncludesInFile,CXTranslationUnit,CXFile,CXCursorAndRangeVisitor	libclang_wrap: findIncludesInFile(tU: CXTranslationUnit; file: CXFile;\n                   visitor: CXCursorAndRangeVisitor): CXResult	
+CXIdxClientFile	hcparse/read_libclang/libclang_wrap.html#CXIdxClientFile	libclang_wrap: CXIdxClientFile	
+CXIdxClientEntity	hcparse/read_libclang/libclang_wrap.html#CXIdxClientEntity	libclang_wrap: CXIdxClientEntity	
+CXIdxClientContainer	hcparse/read_libclang/libclang_wrap.html#CXIdxClientContainer	libclang_wrap: CXIdxClientContainer	
+CXIdxClientASTFile	hcparse/read_libclang/libclang_wrap.html#CXIdxClientASTFile	libclang_wrap: CXIdxClientASTFile	
+CXIdxLoc	hcparse/read_libclang/libclang_wrap.html#CXIdxLoc	libclang_wrap: CXIdxLoc	
+CXIdxIncludedFileInfo	hcparse/read_libclang/libclang_wrap.html#CXIdxIncludedFileInfo	libclang_wrap: CXIdxIncludedFileInfo	
+CXIdxImportedASTFileInfo	hcparse/read_libclang/libclang_wrap.html#CXIdxImportedASTFileInfo	libclang_wrap: CXIdxImportedASTFileInfo	
+iekUnexposed	hcparse/read_libclang/libclang_wrap.html#iekUnexposed	CXIdxEntityKind.iekUnexposed	
+iekTypedef	hcparse/read_libclang/libclang_wrap.html#iekTypedef	CXIdxEntityKind.iekTypedef	
+iekFunction	hcparse/read_libclang/libclang_wrap.html#iekFunction	CXIdxEntityKind.iekFunction	
+iekVariable	hcparse/read_libclang/libclang_wrap.html#iekVariable	CXIdxEntityKind.iekVariable	
+iekField	hcparse/read_libclang/libclang_wrap.html#iekField	CXIdxEntityKind.iekField	
+iekEnumConstant	hcparse/read_libclang/libclang_wrap.html#iekEnumConstant	CXIdxEntityKind.iekEnumConstant	
+iekObjCClass	hcparse/read_libclang/libclang_wrap.html#iekObjCClass	CXIdxEntityKind.iekObjCClass	
+iekObjCProtocol	hcparse/read_libclang/libclang_wrap.html#iekObjCProtocol	CXIdxEntityKind.iekObjCProtocol	
+iekObjCCategory	hcparse/read_libclang/libclang_wrap.html#iekObjCCategory	CXIdxEntityKind.iekObjCCategory	
+iekObjCInstanceMethod	hcparse/read_libclang/libclang_wrap.html#iekObjCInstanceMethod	CXIdxEntityKind.iekObjCInstanceMethod	
+iekObjCClassMethod	hcparse/read_libclang/libclang_wrap.html#iekObjCClassMethod	CXIdxEntityKind.iekObjCClassMethod	
+iekObjCProperty	hcparse/read_libclang/libclang_wrap.html#iekObjCProperty	CXIdxEntityKind.iekObjCProperty	
+iekObjCIvar	hcparse/read_libclang/libclang_wrap.html#iekObjCIvar	CXIdxEntityKind.iekObjCIvar	
+iekEnum	hcparse/read_libclang/libclang_wrap.html#iekEnum	CXIdxEntityKind.iekEnum	
+iekStruct	hcparse/read_libclang/libclang_wrap.html#iekStruct	CXIdxEntityKind.iekStruct	
+iekUnion	hcparse/read_libclang/libclang_wrap.html#iekUnion	CXIdxEntityKind.iekUnion	
+iekClass	hcparse/read_libclang/libclang_wrap.html#iekClass	CXIdxEntityKind.iekClass	
+iekNamespace	hcparse/read_libclang/libclang_wrap.html#iekNamespace	CXIdxEntityKind.iekNamespace	
+iekNamespaceAlias	hcparse/read_libclang/libclang_wrap.html#iekNamespaceAlias	CXIdxEntityKind.iekNamespaceAlias	
+iekStaticVariable	hcparse/read_libclang/libclang_wrap.html#iekStaticVariable	CXIdxEntityKind.iekStaticVariable	
+iekStaticMethod	hcparse/read_libclang/libclang_wrap.html#iekStaticMethod	CXIdxEntityKind.iekStaticMethod	
+iekInstanceMethod	hcparse/read_libclang/libclang_wrap.html#iekInstanceMethod	CXIdxEntityKind.iekInstanceMethod	
+iekConstructor	hcparse/read_libclang/libclang_wrap.html#iekConstructor	CXIdxEntityKind.iekConstructor	
+iekDestructor	hcparse/read_libclang/libclang_wrap.html#iekDestructor	CXIdxEntityKind.iekDestructor	
+iekConversionFunction	hcparse/read_libclang/libclang_wrap.html#iekConversionFunction	CXIdxEntityKind.iekConversionFunction	
+iekTypeAlias	hcparse/read_libclang/libclang_wrap.html#iekTypeAlias	CXIdxEntityKind.iekTypeAlias	
+iekInterface	hcparse/read_libclang/libclang_wrap.html#iekInterface	CXIdxEntityKind.iekInterface	
+CXIdxEntityKind	hcparse/read_libclang/libclang_wrap.html#CXIdxEntityKind	libclang_wrap: CXIdxEntityKind	
+ielNone	hcparse/read_libclang/libclang_wrap.html#ielNone	CXIdxEntityLanguage.ielNone	
+ielC	hcparse/read_libclang/libclang_wrap.html#ielC	CXIdxEntityLanguage.ielC	
+ielObjC	hcparse/read_libclang/libclang_wrap.html#ielObjC	CXIdxEntityLanguage.ielObjC	
+ielCXX	hcparse/read_libclang/libclang_wrap.html#ielCXX	CXIdxEntityLanguage.ielCXX	
+ielSwift	hcparse/read_libclang/libclang_wrap.html#ielSwift	CXIdxEntityLanguage.ielSwift	
+CXIdxEntityLanguage	hcparse/read_libclang/libclang_wrap.html#CXIdxEntityLanguage	libclang_wrap: CXIdxEntityLanguage	
+ietkNonTemplate	hcparse/read_libclang/libclang_wrap.html#ietkNonTemplate	CXIdxEntityTemplateKind.ietkNonTemplate	
+ietkTemplate	hcparse/read_libclang/libclang_wrap.html#ietkTemplate	CXIdxEntityTemplateKind.ietkTemplate	
+ietkTemplatePartialSpecialization	hcparse/read_libclang/libclang_wrap.html#ietkTemplatePartialSpecialization	CXIdxEntityTemplateKind.ietkTemplatePartialSpecialization	
+ietkTemplateSpecialization	hcparse/read_libclang/libclang_wrap.html#ietkTemplateSpecialization	CXIdxEntityTemplateKind.ietkTemplateSpecialization	
+CXIdxEntityTemplateKind	hcparse/read_libclang/libclang_wrap.html#CXIdxEntityTemplateKind	libclang_wrap: CXIdxEntityTemplateKind	
+iakUnexposed	hcparse/read_libclang/libclang_wrap.html#iakUnexposed	CXIdxAttrKind.iakUnexposed	
+iakIBAction	hcparse/read_libclang/libclang_wrap.html#iakIBAction	CXIdxAttrKind.iakIBAction	
+iakIBOutlet	hcparse/read_libclang/libclang_wrap.html#iakIBOutlet	CXIdxAttrKind.iakIBOutlet	
+iakIBOutletCollection	hcparse/read_libclang/libclang_wrap.html#iakIBOutletCollection	CXIdxAttrKind.iakIBOutletCollection	
+CXIdxAttrKind	hcparse/read_libclang/libclang_wrap.html#CXIdxAttrKind	libclang_wrap: CXIdxAttrKind	
+CXIdxAttrInfo	hcparse/read_libclang/libclang_wrap.html#CXIdxAttrInfo	libclang_wrap: CXIdxAttrInfo	
+CXIdxEntityInfo	hcparse/read_libclang/libclang_wrap.html#CXIdxEntityInfo	libclang_wrap: CXIdxEntityInfo	
+CXIdxContainerInfo	hcparse/read_libclang/libclang_wrap.html#CXIdxContainerInfo	libclang_wrap: CXIdxContainerInfo	
+CXIdxIBOutletCollectionAttrInfo	hcparse/read_libclang/libclang_wrap.html#CXIdxIBOutletCollectionAttrInfo	libclang_wrap: CXIdxIBOutletCollectionAttrInfo	
+idifFlag_Skipped	hcparse/read_libclang/libclang_wrap.html#idifFlag_Skipped	CXIdxDeclInfoFlags.idifFlag_Skipped	
+CXIdxDeclInfoFlags	hcparse/read_libclang/libclang_wrap.html#CXIdxDeclInfoFlags	libclang_wrap: CXIdxDeclInfoFlags	
+CXIdxDeclInfo	hcparse/read_libclang/libclang_wrap.html#CXIdxDeclInfo	libclang_wrap: CXIdxDeclInfo	
+iocckForwardRef	hcparse/read_libclang/libclang_wrap.html#iocckForwardRef	CXIdxObjCContainerKind.iocckForwardRef	
+iocckInterface	hcparse/read_libclang/libclang_wrap.html#iocckInterface	CXIdxObjCContainerKind.iocckInterface	
+iocckImplementation	hcparse/read_libclang/libclang_wrap.html#iocckImplementation	CXIdxObjCContainerKind.iocckImplementation	
+CXIdxObjCContainerKind	hcparse/read_libclang/libclang_wrap.html#CXIdxObjCContainerKind	libclang_wrap: CXIdxObjCContainerKind	
+CXIdxObjCContainerDeclInfo	hcparse/read_libclang/libclang_wrap.html#CXIdxObjCContainerDeclInfo	libclang_wrap: CXIdxObjCContainerDeclInfo	
+CXIdxBaseClassInfo	hcparse/read_libclang/libclang_wrap.html#CXIdxBaseClassInfo	libclang_wrap: CXIdxBaseClassInfo	
+CXIdxObjCProtocolRefInfo	hcparse/read_libclang/libclang_wrap.html#CXIdxObjCProtocolRefInfo	libclang_wrap: CXIdxObjCProtocolRefInfo	
+CXIdxObjCProtocolRefListInfo	hcparse/read_libclang/libclang_wrap.html#CXIdxObjCProtocolRefListInfo	libclang_wrap: CXIdxObjCProtocolRefListInfo	
+CXIdxObjCInterfaceDeclInfo	hcparse/read_libclang/libclang_wrap.html#CXIdxObjCInterfaceDeclInfo	libclang_wrap: CXIdxObjCInterfaceDeclInfo	
+CXIdxObjCCategoryDeclInfo	hcparse/read_libclang/libclang_wrap.html#CXIdxObjCCategoryDeclInfo	libclang_wrap: CXIdxObjCCategoryDeclInfo	
+CXIdxObjCPropertyDeclInfo	hcparse/read_libclang/libclang_wrap.html#CXIdxObjCPropertyDeclInfo	libclang_wrap: CXIdxObjCPropertyDeclInfo	
+CXIdxClassDeclInfo	hcparse/read_libclang/libclang_wrap.html#CXIdxClassDeclInfo	libclang_wrap: CXIdxClassDeclInfo	
+ierkDirect	hcparse/read_libclang/libclang_wrap.html#ierkDirect	CXIdxEntityRefKind.ierkDirect	
+ierkImplicit	hcparse/read_libclang/libclang_wrap.html#ierkImplicit	CXIdxEntityRefKind.ierkImplicit	
+CXIdxEntityRefKind	hcparse/read_libclang/libclang_wrap.html#CXIdxEntityRefKind	libclang_wrap: CXIdxEntityRefKind	
+srNone	hcparse/read_libclang/libclang_wrap.html#srNone	CXSymbolRole.srNone	
+srDeclaration	hcparse/read_libclang/libclang_wrap.html#srDeclaration	CXSymbolRole.srDeclaration	
+srDefinition	hcparse/read_libclang/libclang_wrap.html#srDefinition	CXSymbolRole.srDefinition	
+srReference	hcparse/read_libclang/libclang_wrap.html#srReference	CXSymbolRole.srReference	
+srRead	hcparse/read_libclang/libclang_wrap.html#srRead	CXSymbolRole.srRead	
+srWrite	hcparse/read_libclang/libclang_wrap.html#srWrite	CXSymbolRole.srWrite	
+srCall	hcparse/read_libclang/libclang_wrap.html#srCall	CXSymbolRole.srCall	
+srDynamic	hcparse/read_libclang/libclang_wrap.html#srDynamic	CXSymbolRole.srDynamic	
+srAddressOf	hcparse/read_libclang/libclang_wrap.html#srAddressOf	CXSymbolRole.srAddressOf	
+srImplicit	hcparse/read_libclang/libclang_wrap.html#srImplicit	CXSymbolRole.srImplicit	
+CXSymbolRole	hcparse/read_libclang/libclang_wrap.html#CXSymbolRole	libclang_wrap: CXSymbolRole	
+CXIdxEntityRefInfo	hcparse/read_libclang/libclang_wrap.html#CXIdxEntityRefInfo	libclang_wrap: CXIdxEntityRefInfo	
+IndexerCallbacks	hcparse/read_libclang/libclang_wrap.html#IndexerCallbacks	libclang_wrap: IndexerCallbacks	
+index_isEntityObjCContainerKind	hcparse/read_libclang/libclang_wrap.html#index_isEntityObjCContainerKind,CXIdxEntityKind	libclang_wrap: index_isEntityObjCContainerKind(argCXIdxEntityKind: CXIdxEntityKind): cint	
+index_getObjCContainerDeclInfo	hcparse/read_libclang/libclang_wrap.html#index_getObjCContainerDeclInfo,ptr.	libclang_wrap: index_getObjCContainerDeclInfo(argCXIdxDeclInfo: ptr [CXIdxDeclInfo]): ptr [\n    CXIdxObjCContainerDeclInfo]	
+index_getObjCInterfaceDeclInfo	hcparse/read_libclang/libclang_wrap.html#index_getObjCInterfaceDeclInfo,ptr.	libclang_wrap: index_getObjCInterfaceDeclInfo(argCXIdxDeclInfo: ptr [CXIdxDeclInfo]): ptr [\n    CXIdxObjCInterfaceDeclInfo]	
+index_getObjCCategoryDeclInfo	hcparse/read_libclang/libclang_wrap.html#index_getObjCCategoryDeclInfo,ptr.	libclang_wrap: index_getObjCCategoryDeclInfo(argCXIdxDeclInfo: ptr [CXIdxDeclInfo]): ptr [\n    CXIdxObjCCategoryDeclInfo]	
+index_getObjCProtocolRefListInfo	hcparse/read_libclang/libclang_wrap.html#index_getObjCProtocolRefListInfo,ptr.	libclang_wrap: index_getObjCProtocolRefListInfo(argCXIdxDeclInfo: ptr [CXIdxDeclInfo]): ptr [\n    CXIdxObjCProtocolRefListInfo]	
+index_getObjCPropertyDeclInfo	hcparse/read_libclang/libclang_wrap.html#index_getObjCPropertyDeclInfo,ptr.	libclang_wrap: index_getObjCPropertyDeclInfo(argCXIdxDeclInfo: ptr [CXIdxDeclInfo]): ptr [\n    CXIdxObjCPropertyDeclInfo]	
+index_getIBOutletCollectionAttrInfo	hcparse/read_libclang/libclang_wrap.html#index_getIBOutletCollectionAttrInfo,ptr.	libclang_wrap: index_getIBOutletCollectionAttrInfo(argCXIdxAttrInfo: ptr [CXIdxAttrInfo]): ptr [\n    CXIdxIBOutletCollectionAttrInfo]	
+index_getClassDeclInfo	hcparse/read_libclang/libclang_wrap.html#index_getClassDeclInfo,ptr.	libclang_wrap: index_getClassDeclInfo(argCXIdxDeclInfo: ptr [CXIdxDeclInfo]): ptr [\n    CXIdxClassDeclInfo]	
+index_getClientContainer	hcparse/read_libclang/libclang_wrap.html#index_getClientContainer,ptr.	libclang_wrap: index_getClientContainer(argCXIdxContainerInfo: ptr [CXIdxContainerInfo]): CXIdxClientContainer	
+index_setClientContainer	hcparse/read_libclang/libclang_wrap.html#index_setClientContainer,ptr.,CXIdxClientContainer	libclang_wrap: index_setClientContainer(argCXIdxContainerInfo: ptr [CXIdxContainerInfo];\n                         argCXIdxClientContainer: CXIdxClientContainer): void	
+index_getClientEntity	hcparse/read_libclang/libclang_wrap.html#index_getClientEntity,ptr.	libclang_wrap: index_getClientEntity(argCXIdxEntityInfo: ptr [CXIdxEntityInfo]): CXIdxClientEntity	
+index_setClientEntity	hcparse/read_libclang/libclang_wrap.html#index_setClientEntity,ptr.,CXIdxClientEntity	libclang_wrap: index_setClientEntity(argCXIdxEntityInfo: ptr [CXIdxEntityInfo];\n                      argCXIdxClientEntity: CXIdxClientEntity): void	
+CXIndexAction	hcparse/read_libclang/libclang_wrap.html#CXIndexAction	libclang_wrap: CXIndexAction	
+indexAction_create	hcparse/read_libclang/libclang_wrap.html#indexAction_create,CXIndex	libclang_wrap: indexAction_create(cIdx: CXIndex): CXIndexAction	
+dispose	hcparse/read_libclang/libclang_wrap.html#dispose,CXIndexAction	libclang_wrap: dispose(argCXIndexAction: CXIndexAction): void	
+iofNone	hcparse/read_libclang/libclang_wrap.html#iofNone	CXIndexOptFlags.iofNone	
+iofSuppressRedundantRefs	hcparse/read_libclang/libclang_wrap.html#iofSuppressRedundantRefs	CXIndexOptFlags.iofSuppressRedundantRefs	
+iofIndexFunctionLocalSymbols	hcparse/read_libclang/libclang_wrap.html#iofIndexFunctionLocalSymbols	CXIndexOptFlags.iofIndexFunctionLocalSymbols	
+iofIndexImplicitTemplateInstantiations	hcparse/read_libclang/libclang_wrap.html#iofIndexImplicitTemplateInstantiations	CXIndexOptFlags.iofIndexImplicitTemplateInstantiations	
+iofSuppressWarnings	hcparse/read_libclang/libclang_wrap.html#iofSuppressWarnings	CXIndexOptFlags.iofSuppressWarnings	
+iofSkipParsedBodiesInSession	hcparse/read_libclang/libclang_wrap.html#iofSkipParsedBodiesInSession	CXIndexOptFlags.iofSkipParsedBodiesInSession	
+CXIndexOptFlags	hcparse/read_libclang/libclang_wrap.html#CXIndexOptFlags	libclang_wrap: CXIndexOptFlags	
+indexSourceFile	hcparse/read_libclang/libclang_wrap.html#indexSourceFile,CXIndexAction,CXClientData,ptr.,cuint,cuint,cstring,cstringArray,cint,ptr.,cuint,ptr.,cuint	libclang_wrap: indexSourceFile(argCXIndexAction: CXIndexAction; client_data: CXClientData;\n                index_callbacks: ptr [IndexerCallbacks];\n                index_callbacks_size: cuint; index_options: cuint;\n                source_filename: cstring; command_line_args: cstringArray;\n                num_command_line_args: cint; unsaved_files: ptr [CXUnsavedFile];\n                num_unsaved_files: cuint; out_TU: ptr [CXTranslationUnit];\n                tU_options: cuint): cint	
+indexSourceFileFullArgv	hcparse/read_libclang/libclang_wrap.html#indexSourceFileFullArgv,CXIndexAction,CXClientData,ptr.,cuint,cuint,cstring,cstringArray,cint,ptr.,cuint,ptr.,cuint	libclang_wrap: indexSourceFileFullArgv(argCXIndexAction: CXIndexAction;\n                        client_data: CXClientData;\n                        index_callbacks: ptr [IndexerCallbacks];\n                        index_callbacks_size: cuint; index_options: cuint;\n                        source_filename: cstring;\n                        command_line_args: cstringArray;\n                        num_command_line_args: cint;\n                        unsaved_files: ptr [CXUnsavedFile];\n                        num_unsaved_files: cuint;\n                        out_TU: ptr [CXTranslationUnit]; tU_options: cuint): cint	
+indexTranslationUnit	hcparse/read_libclang/libclang_wrap.html#indexTranslationUnit,CXIndexAction,CXClientData,ptr.,cuint,cuint,CXTranslationUnit	libclang_wrap: indexTranslationUnit(argCXIndexAction: CXIndexAction; client_data: CXClientData;\n                     index_callbacks: ptr [IndexerCallbacks];\n                     index_callbacks_size: cuint; index_options: cuint;\n                     argCXTranslationUnit: CXTranslationUnit): cint	
+indexLoc_getFileLocation	hcparse/read_libclang/libclang_wrap.html#indexLoc_getFileLocation,CXIdxLoc,ptr.,ptr.,ptr.,ptr.,ptr.	libclang_wrap: indexLoc_getFileLocation(loc: CXIdxLoc; indexFile: ptr [CXIdxClientFile];\n                         file: ptr [CXFile]; line: ptr [cuint];\n                         column: ptr [cuint]; offset: ptr [cuint]): void	
+indexLoc_getCXSourceLocation	hcparse/read_libclang/libclang_wrap.html#indexLoc_getCXSourceLocation,CXIdxLoc	libclang_wrap: indexLoc_getCXSourceLocation(loc: CXIdxLoc): CXSourceLocation	
+CXFieldVisitor	hcparse/read_libclang/libclang_wrap.html#CXFieldVisitor	libclang_wrap: CXFieldVisitor	
+visitFields	hcparse/read_libclang/libclang_wrap.html#visitFields,CXType,CXFieldVisitor,CXClientData	libclang_wrap: visitFields(t: CXType; visitor: CXFieldVisitor; client_data: CXClientData): cuint	
+CXComment	hcparse/read_libclang/libclang_wrap.html#CXComment	libclang_wrap: CXComment	
+getParsedComment	hcparse/read_libclang/libclang_wrap.html#getParsedComment,CXCursor	libclang_wrap: getParsedComment(c: CXCursor): CXComment	
+cokNull	hcparse/read_libclang/libclang_wrap.html#cokNull	CXCommentKind.cokNull	
+cokText	hcparse/read_libclang/libclang_wrap.html#cokText	CXCommentKind.cokText	
+cokInlineCommand	hcparse/read_libclang/libclang_wrap.html#cokInlineCommand	CXCommentKind.cokInlineCommand	
+cokHTMLStartTag	hcparse/read_libclang/libclang_wrap.html#cokHTMLStartTag	CXCommentKind.cokHTMLStartTag	
+cokHTMLEndTag	hcparse/read_libclang/libclang_wrap.html#cokHTMLEndTag	CXCommentKind.cokHTMLEndTag	
+cokParagraph	hcparse/read_libclang/libclang_wrap.html#cokParagraph	CXCommentKind.cokParagraph	
+cokBlockCommand	hcparse/read_libclang/libclang_wrap.html#cokBlockCommand	CXCommentKind.cokBlockCommand	
+cokParamCommand	hcparse/read_libclang/libclang_wrap.html#cokParamCommand	CXCommentKind.cokParamCommand	
+cokTParamCommand	hcparse/read_libclang/libclang_wrap.html#cokTParamCommand	CXCommentKind.cokTParamCommand	
+cokVerbatimBlockCommand	hcparse/read_libclang/libclang_wrap.html#cokVerbatimBlockCommand	CXCommentKind.cokVerbatimBlockCommand	
+cokVerbatimBlockLine	hcparse/read_libclang/libclang_wrap.html#cokVerbatimBlockLine	CXCommentKind.cokVerbatimBlockLine	
+cokVerbatimLine	hcparse/read_libclang/libclang_wrap.html#cokVerbatimLine	CXCommentKind.cokVerbatimLine	
+cokFullComment	hcparse/read_libclang/libclang_wrap.html#cokFullComment	CXCommentKind.cokFullComment	
+CXCommentKind	hcparse/read_libclang/libclang_wrap.html#CXCommentKind	libclang_wrap: CXCommentKind	
+cicrkNormal	hcparse/read_libclang/libclang_wrap.html#cicrkNormal	CXCommentInlineCommandRenderKind.cicrkNormal	
+cicrkBold	hcparse/read_libclang/libclang_wrap.html#cicrkBold	CXCommentInlineCommandRenderKind.cicrkBold	
+cicrkMonospaced	hcparse/read_libclang/libclang_wrap.html#cicrkMonospaced	CXCommentInlineCommandRenderKind.cicrkMonospaced	
+cicrkEmphasized	hcparse/read_libclang/libclang_wrap.html#cicrkEmphasized	CXCommentInlineCommandRenderKind.cicrkEmphasized	
+cicrkAnchor	hcparse/read_libclang/libclang_wrap.html#cicrkAnchor	CXCommentInlineCommandRenderKind.cicrkAnchor	
+CXCommentInlineCommandRenderKind	hcparse/read_libclang/libclang_wrap.html#CXCommentInlineCommandRenderKind	libclang_wrap: CXCommentInlineCommandRenderKind	
+cppdIn	hcparse/read_libclang/libclang_wrap.html#cppdIn	CXCommentParamPassDirection.cppdIn	
+cppdOut	hcparse/read_libclang/libclang_wrap.html#cppdOut	CXCommentParamPassDirection.cppdOut	
+cppdInOut	hcparse/read_libclang/libclang_wrap.html#cppdInOut	CXCommentParamPassDirection.cppdInOut	
+CXCommentParamPassDirection	hcparse/read_libclang/libclang_wrap.html#CXCommentParamPassDirection	libclang_wrap: CXCommentParamPassDirection	
+getKind	hcparse/read_libclang/libclang_wrap.html#getKind,CXComment	libclang_wrap: getKind(comment: CXComment): CXCommentKind	
+getNumChildren	hcparse/read_libclang/libclang_wrap.html#getNumChildren,CXComment	libclang_wrap: getNumChildren(comment: CXComment): cuint	
+getChild	hcparse/read_libclang/libclang_wrap.html#getChild,CXComment,cuint	libclang_wrap: getChild(comment: CXComment; childIdx: cuint): CXComment	
+isWhitespace	hcparse/read_libclang/libclang_wrap.html#isWhitespace,CXComment	libclang_wrap: isWhitespace(comment: CXComment): cuint	
+inlineContentComment_hasTrailingNewline	hcparse/read_libclang/libclang_wrap.html#inlineContentComment_hasTrailingNewline,CXComment	libclang_wrap: inlineContentComment_hasTrailingNewline(comment: CXComment): cuint	
+textComment_getText	hcparse/read_libclang/libclang_wrap.html#textComment_getText,CXComment	libclang_wrap: textComment_getText(comment: CXComment): CXString	
+inlineCommandComment_getCommandName	hcparse/read_libclang/libclang_wrap.html#inlineCommandComment_getCommandName,CXComment	libclang_wrap: inlineCommandComment_getCommandName(comment: CXComment): CXString	
+inlineCommandComment_getRenderKind	hcparse/read_libclang/libclang_wrap.html#inlineCommandComment_getRenderKind,CXComment	libclang_wrap: inlineCommandComment_getRenderKind(comment: CXComment): CXCommentInlineCommandRenderKind	
+inlineCommandComment_getNumArgs	hcparse/read_libclang/libclang_wrap.html#inlineCommandComment_getNumArgs,CXComment	libclang_wrap: inlineCommandComment_getNumArgs(comment: CXComment): cuint	
+inlineCommandComment_getArgText	hcparse/read_libclang/libclang_wrap.html#inlineCommandComment_getArgText,CXComment,cuint	libclang_wrap: inlineCommandComment_getArgText(comment: CXComment; argIdx: cuint): CXString	
+hTMLTagComment_getTagName	hcparse/read_libclang/libclang_wrap.html#hTMLTagComment_getTagName,CXComment	libclang_wrap: hTMLTagComment_getTagName(comment: CXComment): CXString	
+hTMLStartTagComment_isSelfClosing	hcparse/read_libclang/libclang_wrap.html#hTMLStartTagComment_isSelfClosing,CXComment	libclang_wrap: hTMLStartTagComment_isSelfClosing(comment: CXComment): cuint	
+hTMLStartTag_getNumAttrs	hcparse/read_libclang/libclang_wrap.html#hTMLStartTag_getNumAttrs,CXComment	libclang_wrap: hTMLStartTag_getNumAttrs(comment: CXComment): cuint	
+hTMLStartTag_getAttrName	hcparse/read_libclang/libclang_wrap.html#hTMLStartTag_getAttrName,CXComment,cuint	libclang_wrap: hTMLStartTag_getAttrName(comment: CXComment; attrIdx: cuint): CXString	
+hTMLStartTag_getAttrValue	hcparse/read_libclang/libclang_wrap.html#hTMLStartTag_getAttrValue,CXComment,cuint	libclang_wrap: hTMLStartTag_getAttrValue(comment: CXComment; attrIdx: cuint): CXString	
+blockCommandComment_getCommandName	hcparse/read_libclang/libclang_wrap.html#blockCommandComment_getCommandName,CXComment	libclang_wrap: blockCommandComment_getCommandName(comment: CXComment): CXString	
+blockCommandComment_getNumArgs	hcparse/read_libclang/libclang_wrap.html#blockCommandComment_getNumArgs,CXComment	libclang_wrap: blockCommandComment_getNumArgs(comment: CXComment): cuint	
+blockCommandComment_getArgText	hcparse/read_libclang/libclang_wrap.html#blockCommandComment_getArgText,CXComment,cuint	libclang_wrap: blockCommandComment_getArgText(comment: CXComment; argIdx: cuint): CXString	
+blockCommandComment_getParagraph	hcparse/read_libclang/libclang_wrap.html#blockCommandComment_getParagraph,CXComment	libclang_wrap: blockCommandComment_getParagraph(comment: CXComment): CXComment	
+paramCommandComment_getParamName	hcparse/read_libclang/libclang_wrap.html#paramCommandComment_getParamName,CXComment	libclang_wrap: paramCommandComment_getParamName(comment: CXComment): CXString	
+paramCommandComment_isParamIndexValid	hcparse/read_libclang/libclang_wrap.html#paramCommandComment_isParamIndexValid,CXComment	libclang_wrap: paramCommandComment_isParamIndexValid(comment: CXComment): cuint	
+paramCommandComment_getParamIndex	hcparse/read_libclang/libclang_wrap.html#paramCommandComment_getParamIndex,CXComment	libclang_wrap: paramCommandComment_getParamIndex(comment: CXComment): cuint	
+paramCommandComment_isDirectionExplicit	hcparse/read_libclang/libclang_wrap.html#paramCommandComment_isDirectionExplicit,CXComment	libclang_wrap: paramCommandComment_isDirectionExplicit(comment: CXComment): cuint	
+paramCommandComment_getDirection	hcparse/read_libclang/libclang_wrap.html#paramCommandComment_getDirection,CXComment	libclang_wrap: paramCommandComment_getDirection(comment: CXComment): CXCommentParamPassDirection	
+tParamCommandComment_getParamName	hcparse/read_libclang/libclang_wrap.html#tParamCommandComment_getParamName,CXComment	libclang_wrap: tParamCommandComment_getParamName(comment: CXComment): CXString	
+tParamCommandComment_isParamPositionValid	hcparse/read_libclang/libclang_wrap.html#tParamCommandComment_isParamPositionValid,CXComment	libclang_wrap: tParamCommandComment_isParamPositionValid(comment: CXComment): cuint	
+tParamCommandComment_getDepth	hcparse/read_libclang/libclang_wrap.html#tParamCommandComment_getDepth,CXComment	libclang_wrap: tParamCommandComment_getDepth(comment: CXComment): cuint	
+tParamCommandComment_getIndex	hcparse/read_libclang/libclang_wrap.html#tParamCommandComment_getIndex,CXComment,cuint	libclang_wrap: tParamCommandComment_getIndex(comment: CXComment; depth: cuint): cuint	
+verbatimBlockLineComment_getText	hcparse/read_libclang/libclang_wrap.html#verbatimBlockLineComment_getText,CXComment	libclang_wrap: verbatimBlockLineComment_getText(comment: CXComment): CXString	
+verbatimLineComment_getText	hcparse/read_libclang/libclang_wrap.html#verbatimLineComment_getText,CXComment	libclang_wrap: verbatimLineComment_getText(comment: CXComment): CXString	
+hTMLTagComment_getAsString	hcparse/read_libclang/libclang_wrap.html#hTMLTagComment_getAsString,CXComment	libclang_wrap: hTMLTagComment_getAsString(comment: CXComment): CXString	
+fullComment_getAsHTML	hcparse/read_libclang/libclang_wrap.html#fullComment_getAsHTML,CXComment	libclang_wrap: fullComment_getAsHTML(comment: CXComment): CXString	
+fullComment_getAsXML	hcparse/read_libclang/libclang_wrap.html#fullComment_getAsXML,CXComment	libclang_wrap: fullComment_getAsXML(comment: CXComment): CXString	

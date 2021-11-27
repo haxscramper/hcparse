@@ -1,0 +1,16 @@
+primitiveName	hcparse/read_tree_sitter/hc_tsreader.html#primitiveName,CppNode	hc_tsreader: primitiveName(node: CppNode): string	
+mapOpName	hcparse/read_tree_sitter/hc_tsreader.html#mapOpName,CppNode	hc_tsreader: mapOpName(node: CppNode): string	
+mapTypeName	hcparse/read_tree_sitter/hc_tsreader.html#mapTypeName,CppNode	hc_tsreader: mapTypeName(node: CppNode): string	
+toCxxComment	hcparse/read_tree_sitter/hc_tsreader.html#toCxxComment,CppNode	hc_tsreader: toCxxComment(comm: CppNode): CxxComment	
+toCxxType	hcparse/read_tree_sitter/hc_tsreader.html#toCxxType,CppNode,Option[CxxNamePair],Option[CxxNamePair]	hc_tsreader: toCxxType(node: CppNode; parent, user: Option[CxxNamePair]): CxxTypeUse	
+toCxxMacro	hcparse/read_tree_sitter/hc_tsreader.html#toCxxMacro,CppNode,	hc_tsreader: toCxxMacro(node: CppNode; coms): CxxMacro	
+toCxxEnum	hcparse/read_tree_sitter/hc_tsreader.html#toCxxEnum,CppNode,	hc_tsreader: toCxxEnum(node: CppNode; coms): CxxEnum	
+initPointerWraps	hcparse/read_tree_sitter/hc_tsreader.html#initPointerWraps.t,untyped,untyped	hc_tsreader: initPointerWraps(newName, Type: untyped): untyped	
+getName	hcparse/read_tree_sitter/hc_tsreader.html#getName,CppNode	hc_tsreader: getName(node: CppNode): string	
+toCxxArg	hcparse/read_tree_sitter/hc_tsreader.html#toCxxArg,CppNode,int	hc_tsreader: toCxxArg(node: CppNode; idx: int): CxxArg	
+toCxxProc	hcparse/read_tree_sitter/hc_tsreader.html#toCxxProc,CppNode,,Option[CxxObject]	hc_tsreader: toCxxProc(node: CppNode; coms; parent: Option[CxxObject] = none(CxxObject)): CxxProc	
+toCxxField	hcparse/read_tree_sitter/hc_tsreader.html#toCxxField,CppNode,,CxxNamePair	hc_tsreader: toCxxField(node: CppNode; coms; parent: CxxNamePair): CxxField	
+toCxxForwardType	hcparse/read_tree_sitter/hc_tsreader.html#toCxxForwardType,CppNode,	hc_tsreader: toCxxForwardType(node: CppNode; coms): CxxForward	
+toCxxObject	hcparse/read_tree_sitter/hc_tsreader.html#toCxxObject,CppNode,	hc_tsreader: toCxxObject(node: CppNode; coms): CxxObject	
+toCxxTypeDefinition	hcparse/read_tree_sitter/hc_tsreader.html#toCxxTypeDefinition,CppNode,	hc_tsreader: toCxxTypeDefinition(node: CppNode; coms): seq[CxxEntry]	
+toCxx	hcparse/read_tree_sitter/hc_tsreader.html#toCxx,CppNode,	hc_tsreader: toCxx(node: CppNode; coms): seq[CxxEntry]	

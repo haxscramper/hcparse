@@ -1,0 +1,84 @@
+WaveContext	hcparse/read_boost_wave/boost_wave.html#WaveContext	boost_wave: WaveContext	
+WaveError	hcparse/read_boost_wave/boost_wave.html#WaveError	boost_wave: WaveError	
+first	hcparse/read_boost_wave/boost_wave.html#first,WaveContext	boost_wave: first(ctx: WaveContext): ptr WaveIteratorHandle	
+last	hcparse/read_boost_wave/boost_wave.html#last,WaveContext	boost_wave: last(ctx: WaveContext): ptr WaveIteratorHandle	
+getTok	hcparse/read_boost_wave/boost_wave.html#getTok,ptr.WaveIteratorHandle	boost_wave: getTok(iter: ptr WaveIteratorHandle): ptr WaveTokenHandle	
+advance	hcparse/read_boost_wave/boost_wave.html#advance,ptr.WaveIteratorHandle	boost_wave: advance(iter: ptr WaveIteratorHandle)	
+`!=`	hcparse/read_boost_wave/boost_wave.html#!=,ptr.WaveIteratorHandle,ptr.WaveIteratorHandle	boost_wave: `!=`(iter1, iter2: ptr WaveIteratorHandle): bool	
+`==`	hcparse/read_boost_wave/boost_wave.html#==,ptr.WaveIteratorHandle,ptr.WaveIteratorHandle	boost_wave: `==`(iter1, iter2: ptr WaveIteratorHandle): bool	
+getValue	hcparse/read_boost_wave/boost_wave.html#getValue,ptr.WaveTokenHandle	boost_wave: getValue(tok: ptr WaveTokenHandle): cstring	
+unescapeInclude	hcparse/read_boost_wave/boost_wave.html#unescapeInclude,cstring	boost_wave: unescapeInclude(tok: cstring): string	
+strVal	hcparse/read_boost_wave/boost_wave.html#strVal,ptr.WaveTokenHandle	boost_wave: strVal(tok: ptr WaveTokenHandle): string	
+kind	hcparse/read_boost_wave/boost_wave.html#kind,ptr.WaveTokenHandle	boost_wave: kind(tok: ptr WaveTokenHandle): WaveTokId	
+hasErrors	hcparse/read_boost_wave/boost_wave.html#hasErrors,WaveContext	boost_wave: hasErrors(c: var WaveContext): bool	
+hasWarnings	hcparse/read_boost_wave/boost_wave.html#hasWarnings,WaveContext	boost_wave: hasWarnings(c: var WaveContext): bool	
+popDiag	hcparse/read_boost_wave/boost_wave.html#popDiag,WaveContext	boost_wave: popDiag(c: var WaveContext): WaveDiagnostics	
+`$`	hcparse/read_boost_wave/boost_wave.html#$,ptr.WaveTokenHandle	boost_wave: `$`(t: ptr WaveTokenHandle): string	
+raiseErrors	hcparse/read_boost_wave/boost_wave.html#raiseErrors,WaveContext	boost_wave: raiseErrors(ctx: var WaveContext)	
+items	hcparse/read_boost_wave/boost_wave.html#items.i,WaveContext,bool	boost_wave: items(ctx: var WaveContext; ignoreHashLine: bool = true): ptr WaveTokenHandle	
+skipAll	hcparse/read_boost_wave/boost_wave.html#skipAll,WaveContext	boost_wave: skipAll(ctx: var WaveContext)	
+getExpanded	hcparse/read_boost_wave/boost_wave.html#getExpanded,WaveContext,bool	boost_wave: getExpanded(ctx: var WaveContext; ignoreHashLine: bool = true): string	
+`$`	hcparse/read_boost_wave/boost_wave.html#$,ptr.WaveTokenListHandle	boost_wave: `$`(l: ptr WaveTokenListHandle): string	
+len	hcparse/read_boost_wave/boost_wave.html#len,ptr.WaveTokenListHandle	boost_wave: len(l: ptr WaveTokenListHandle): int	
+len	hcparse/read_boost_wave/boost_wave.html#len,ptr.WaveTokenVectorHandle	boost_wave: len(l: ptr WaveTokenVectorHandle): int	
+`[]`	hcparse/read_boost_wave/boost_wave.html#[],ptr.WaveTokenVectorHandle,int	boost_wave: `[]`(l: ptr WaveTokenVectorHandle; idx: int): ptr WaveTokenHandle	
+items	hcparse/read_boost_wave/boost_wave.html#items.i,ptr.WaveTokenVectorHandle	boost_wave: items(l: ptr WaveTokenVectorHandle): ptr WaveTokenHandle	
+`$`	hcparse/read_boost_wave/boost_wave.html#$,ptr.WaveTokenVectorHandle	boost_wave: `$`(l: ptr WaveTokenVectorHandle): string	
+first	hcparse/read_boost_wave/boost_wave.html#first,ptr.WaveTokenListHandle	boost_wave: first(l: ptr WaveTokenListHandle): ptr WaveTokenListIteratorHandle	
+last	hcparse/read_boost_wave/boost_wave.html#last,ptr.WaveTokenListHandle	boost_wave: last(l: ptr WaveTokenListHandle): ptr WaveTokenListIteratorHandle	
+`!=`	hcparse/read_boost_wave/boost_wave.html#!=,ptr.WaveTokenListIteratorHandle,ptr.WaveTokenListIteratorHandle	boost_wave: `!=`(iter1, iter2: ptr WaveTokenListIteratorHandle): bool	
+`==`	hcparse/read_boost_wave/boost_wave.html#==,ptr.WaveTokenListIteratorHandle,ptr.WaveTokenListIteratorHandle	boost_wave: `==`(iter1, iter2: ptr WaveTokenListIteratorHandle): bool	
+deref	hcparse/read_boost_wave/boost_wave.html#deref,ptr.WaveTokenListIteratorHandle	boost_wave: deref(i: ptr WaveTokenListIteratorHandle): ptr WaveTokenHandle	
+advance	hcparse/read_boost_wave/boost_wave.html#advance,ptr.WaveTokenListIteratorHandle	boost_wave: advance(i: ptr WaveTokenListIteratorHandle)	
+items	hcparse/read_boost_wave/boost_wave.html#items.i,ptr.WaveTokenListHandle	boost_wave: items(l: ptr WaveTokenListHandle): ptr WaveTokenHandle	
+firstMacro	hcparse/read_boost_wave/boost_wave.html#firstMacro,WaveContext	boost_wave: firstMacro(l: var WaveContext): ptr WaveMacroIteratorHandle	
+lastMacro	hcparse/read_boost_wave/boost_wave.html#lastMacro,WaveContext	boost_wave: lastMacro(l: var WaveContext): ptr WaveMacroIteratorHandle	
+`!=`	hcparse/read_boost_wave/boost_wave.html#!=,ptr.WaveMacroIteratorHandle,ptr.WaveMacroIteratorHandle	boost_wave: `!=`(iter1, iter2: ptr WaveMacroIteratorHandle): bool	
+`==`	hcparse/read_boost_wave/boost_wave.html#==,ptr.WaveMacroIteratorHandle,ptr.WaveMacroIteratorHandle	boost_wave: `==`(iter1, iter2: ptr WaveMacroIteratorHandle): bool	
+deref	hcparse/read_boost_wave/boost_wave.html#deref,ptr.WaveMacroIteratorHandle	boost_wave: deref(i: ptr WaveMacroIteratorHandle): cstring	
+advance	hcparse/read_boost_wave/boost_wave.html#advance,ptr.WaveMacroIteratorHandle	boost_wave: advance(i: ptr WaveMacroIteratorHandle)	
+macroNames	hcparse/read_boost_wave/boost_wave.html#macroNames.i,WaveContext	boost_wave: macroNames(l: var WaveContext): cstring	
+addIncludePath	hcparse/read_boost_wave/boost_wave.html#addIncludePath,WaveContext,string	boost_wave: addIncludePath(ctx: var WaveContext; path: string): bool	
+addSysincludePath	hcparse/read_boost_wave/boost_wave.html#addSysincludePath,WaveContext,string	boost_wave: addSysincludePath(ctx: var WaveContext; path: string): bool	
+setSysincludeDelimiter	hcparse/read_boost_wave/boost_wave.html#setSysincludeDelimiter,WaveContext	boost_wave: setSysincludeDelimiter(ctx: var WaveContext)	
+setCurrentFilename	hcparse/read_boost_wave/boost_wave.html#setCurrentFilename,WaveContext,string	boost_wave: setCurrentFilename(ctx: var WaveContext; name: string)	
+currentFile	hcparse/read_boost_wave/boost_wave.html#currentFile,WaveContext	boost_wave: currentFile(ctx: WaveContext): string	
+currentLine	hcparse/read_boost_wave/boost_wave.html#currentLine,WaveContext	boost_wave: currentLine(ctx: WaveContext): int	
+findIncludeFile	hcparse/read_boost_wave/boost_wave.html#findIncludeFile,WaveContext,string,bool	boost_wave: findIncludeFile(ctx: WaveContext; file: string; isSystem: bool = false): AbsFile	
+setIncludePaths	hcparse/read_boost_wave/boost_wave.html#setIncludePaths,WaveContext,seq[string],seq[string]	boost_wave: setIncludePaths(ctx: var WaveContext; user, sys: seq[string])	
+setLanguageMode	hcparse/read_boost_wave/boost_wave.html#setLanguageMode,WaveContext,WaveLanguageModeImpl	boost_wave: setLanguageMode(context: var WaveContext; mode: WaveLanguageModeImpl)	
+wlmVersions	hcparse/read_boost_wave/boost_wave.html#wlmVersions	boost_wave: wlmVersions	
+wlmDefault	hcparse/read_boost_wave/boost_wave.html#wlmDefault	boost_wave: wlmDefault	
+setLanguageMode	hcparse/read_boost_wave/boost_wave.html#setLanguageMode,WaveContext,set[WaveLanguageModeImpl]	boost_wave: setLanguageMode(context: var WaveContext; mode: set[WaveLanguageModeImpl])	
+setFoundWarningDirective	hcparse/read_boost_wave/boost_wave.html#setFoundWarningDirective,WaveContext,FoundWarningDirectiveImplTypeNim	boost_wave: setFoundWarningDirective(ctx: var WaveContext;\n                         impl: FoundWarningDirectiveImplTypeNim)	
+onFoundWarningDirective	hcparse/read_boost_wave/boost_wave.html#onFoundWarningDirective.t,WaveContext,untyped	boost_wave: onFoundWarningDirective(inCtx: var WaveContext; body: untyped): untyped	
+setEvaluatedConditionalExpression	hcparse/read_boost_wave/boost_wave.html#setEvaluatedConditionalExpression,WaveContext,EvaluatedConditionalExpressionImplTypeNim	boost_wave: setEvaluatedConditionalExpression(ctx: var WaveContext; impl: EvaluatedConditionalExpressionImplTypeNim)	
+onEvaluatedConditionalExpression	hcparse/read_boost_wave/boost_wave.html#onEvaluatedConditionalExpression.t,WaveContext,untyped	boost_wave: onEvaluatedConditionalExpression(inCtx: var WaveContext; body: untyped): untyped	
+setExpandingFunctionLikeMacro	hcparse/read_boost_wave/boost_wave.html#setExpandingFunctionLikeMacro,WaveContext,ExpandingFunctionLikeMacroImplTypeNim	boost_wave: setExpandingFunctionLikeMacro(ctx: var WaveContext;\n                              impl: ExpandingFunctionLikeMacroImplTypeNim)	
+setFoundIncludeDirective	hcparse/read_boost_wave/boost_wave.html#setFoundIncludeDirective,WaveContext,FoundIncludeDirectiveImplTypeNim	boost_wave: setFoundIncludeDirective(ctx: var WaveContext;\n                         impl: FoundIncludeDirectiveImplTypeNim)	
+onFoundIncludeDirective	hcparse/read_boost_wave/boost_wave.html#onFoundIncludeDirective.t,WaveContext,untyped	boost_wave: onFoundIncludeDirective(ctx: var WaveContext; body: untyped): untyped	
+setOpenedIncludeFIle	hcparse/read_boost_wave/boost_wave.html#setOpenedIncludeFIle,WaveContext,OpenedIncludeFileImplTypeNim	boost_wave: setOpenedIncludeFIle(ctx: var WaveContext; impl: OpenedIncludeFileImplTypeNim)	
+onOpenedIncludeFile	hcparse/read_boost_wave/boost_wave.html#onOpenedIncludeFile.t,WaveContext,untyped	boost_wave: onOpenedIncludeFile(inCtx: var WaveContext; body: untyped): untyped	
+setReturningFromIncludeFile	hcparse/read_boost_wave/boost_wave.html#setReturningFromIncludeFile,WaveContext,ReturningFromIncludeFileImplTypeNim	boost_wave: setReturningFromIncludeFile(ctx: var WaveContext;\n                            impl: ReturningFromIncludeFileImplTypeNim)	
+onReturningFromIncludeFile	hcparse/read_boost_wave/boost_wave.html#onReturningFromIncludeFile.t,WaveContext,untyped	boost_wave: onReturningFromIncludeFile(inCtx: var WaveContext; body: untyped): untyped	
+setDefinedMacro	hcparse/read_boost_wave/boost_wave.html#setDefinedMacro,WaveContext,DefinedMacroImplTypeNim	boost_wave: setDefinedMacro(ctx: var WaveContext; impl: DefinedMacroImplTypeNim)	
+onDefinedMacro	hcparse/read_boost_wave/boost_wave.html#onDefinedMacro.t,WaveContext,untyped	boost_wave: onDefinedMacro(inCtx: var WaveContext; body: untyped): untyped	
+setExpandingObjectLikeMacro	hcparse/read_boost_wave/boost_wave.html#setExpandingObjectLikeMacro,WaveContext,ExpandingObjectLikeMacroImplTypeNim	boost_wave: setExpandingObjectLikeMacro(ctx: var WaveContext;\n                            impl: ExpandingObjectLikeMacroImplTypeNim)	
+onExpandingObjectLikeMacro	hcparse/read_boost_wave/boost_wave.html#onExpandingObjectLikeMacro.t,WaveContext,untyped	boost_wave: onExpandingObjectLikeMacro(inCtx: var WaveContext; body: untyped): untyped	
+onExpandingFunctionLikeMacro	hcparse/read_boost_wave/boost_wave.html#onExpandingFunctionLikeMacro.t,WaveContext,untyped	boost_wave: onExpandingFunctionLikeMacro(inCtx: var WaveContext; body: untyped): untyped	
+setExpandedMacro	hcparse/read_boost_wave/boost_wave.html#setExpandedMacro,WaveContext,proc(ptr.WaveContextImplHandle,ptr.WaveTokenListHandle)	boost_wave: setExpandedMacro(ctx: var WaveContext; impl: proc (\n    ctx: ptr WaveContextImplHandle; result: ptr WaveTokenListHandle): void)	
+onExpandedMacro	hcparse/read_boost_wave/boost_wave.html#onExpandedMacro.t,WaveContext,untyped	boost_wave: onExpandedMacro(inCtx: var WaveContext; body: untyped): untyped	
+setRescannedMacro	hcparse/read_boost_wave/boost_wave.html#setRescannedMacro,WaveContext,proc(ptr.WaveContextImplHandle,ptr.WaveTokenListHandle)	boost_wave: setRescannedMacro(ctx: var WaveContext; impl: proc (\n    ctx: ptr WaveContextImplHandle; result: ptr WaveTokenListHandle): void)	
+onRescannedMacro	hcparse/read_boost_wave/boost_wave.html#onRescannedMacro.t,WaveContext,untyped	boost_wave: onRescannedMacro(inCtx: var WaveContext; body: untyped): untyped	
+setEmitLineDirective	hcparse/read_boost_wave/boost_wave.html#setEmitLineDirective,WaveContext,proc(ptr.WaveContextImplHandle,ptr.WaveTokenListHandle,ptr.WaveTokenHandle)	boost_wave: setEmitLineDirective(ctx: var WaveContext; impl: proc (\n    ctx: ptr WaveContextImplHandle; pending: ptr WaveTokenListHandle;\n    act_token: ptr WaveTokenHandle): bool)	
+onEmitLineDirective	hcparse/read_boost_wave/boost_wave.html#onEmitLineDirective.t,WaveContext,untyped	boost_wave: onEmitLineDirective(inCtx: var WaveContext; body: untyped): untyped	
+setSkippedToken	hcparse/read_boost_wave/boost_wave.html#setSkippedToken,WaveContext,proc(ptr.WaveContextImplHandle,ptr.WaveTokenHandle)	boost_wave: setSkippedToken(ctx: var WaveContext; impl: proc (\n    context: ptr WaveContextImplHandle; token: ptr WaveTokenHandle): void)	
+onSkippedToken	hcparse/read_boost_wave/boost_wave.html#onSkippedToken.t,WaveContext,untyped	boost_wave: onSkippedToken(inCtx: var WaveContext; body: untyped): untyped	
+setLocateIncludeFIle	hcparse/read_boost_wave/boost_wave.html#setLocateIncludeFIle,WaveContext,LocateIncludeFileImplTypeNim	boost_wave: setLocateIncludeFIle(ctx: var WaveContext; impl: LocateIncludeFileImplTypeNim)	
+onLocateIncludeFile	hcparse/read_boost_wave/boost_wave.html#onLocateIncludeFile.t,WaveContext,untyped	boost_wave: onLocateIncludeFile(inCtx: var WaveContext; body: untyped): untyped	
+allTokens	hcparse/read_boost_wave/boost_wave.html#allTokens,WaveContext,proc(bool,ptr.WaveTokenHandle),bool	boost_wave: allTokens(ctx: var WaveContext;\n          onToken: proc (skipped: bool; tok: ptr WaveTokenHandle);\n          ignoreHashLine: bool = true)	
+addMacroDefinition	hcparse/read_boost_wave/boost_wave.html#addMacroDefinition,WaveContext,string,bool	boost_wave: addMacroDefinition(ctx: var WaveContext; str: string; isPredefined: bool = false): bool	
+addMacroDefinition	hcparse/read_boost_wave/boost_wave.html#addMacroDefinition,WaveContext,string,seq[string],Option[string],bool	boost_wave: addMacroDefinition(ctx: var WaveContext; name: string; args: seq[string];\n                   definition: Option[string] = none(string);\n                   isPredefined: bool = false)	
+newWaveContext	hcparse/read_boost_wave/boost_wave.html#newWaveContext,string,string,seq[string],seq[string],set[WaveLanguageModeImpl]	boost_wave: newWaveContext(str: string; file: string = &quot;&lt;unknown&gt;&quot;;\n               userIncludes: seq[string] = @[]; sysIncludes: seq[string] = @[];\n               languageMode: set[WaveLanguageModeImpl] = wlmDefault): WaveContext	
+WaveMacroDefinition	hcparse/read_boost_wave/boost_wave.html#WaveMacroDefinition	boost_wave: WaveMacroDefinition	
+getMacroDefinition	hcparse/read_boost_wave/boost_wave.html#getMacroDefinition,WaveContext,string	boost_wave: getMacroDefinition(ctx: var WaveContext; name: string): WaveMacroDefinition	

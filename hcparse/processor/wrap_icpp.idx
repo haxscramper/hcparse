@@ -1,0 +1,26 @@
+ipkArgSplice	hcparse/processor/wrap_icpp.html#ipkArgSplice	IcppPartKind.ipkArgSplice	
+ipkTextPart	hcparse/processor/wrap_icpp.html#ipkTextPart	IcppPartKind.ipkTextPart	
+ipkNextArg	hcparse/processor/wrap_icpp.html#ipkNextArg	IcppPartKind.ipkNextArg	
+ipkNextDotArg	hcparse/processor/wrap_icpp.html#ipkNextDotArg	IcppPartKind.ipkNextDotArg	
+ipkNextCnewArg	hcparse/processor/wrap_icpp.html#ipkNextCnewArg	IcppPartKind.ipkNextCnewArg	
+ipkResultType	hcparse/processor/wrap_icpp.html#ipkResultType	IcppPartKind.ipkResultType	
+ipkArgType	hcparse/processor/wrap_icpp.html#ipkArgType	IcppPartKind.ipkArgType	
+IcppPartKind	hcparse/processor/wrap_icpp.html#IcppPartKind	wrap_icpp: IcppPartKind	
+IcppPart	hcparse/processor/wrap_icpp.html#IcppPart	wrap_icpp: IcppPart	
+IcppPattern	hcparse/processor/wrap_icpp.html#IcppPattern	wrap_icpp: IcppPattern	
+add	hcparse/processor/wrap_icpp.html#add,IcppPattern,IcppPart	wrap_icpp: add(icpp: var IcppPattern; part: IcppPart)	
+len	hcparse/processor/wrap_icpp.html#len,IcppPattern	wrap_icpp: len(icpp: IcppPattern): int	
+icpp	hcparse/processor/wrap_icpp.html#icpp,IcppPartKind	wrap_icpp: icpp(kind: IcppPartKind): IcppPart	
+icpp	hcparse/processor/wrap_icpp.html#icpp,string	wrap_icpp: icpp(text: string): IcppPart	
+initIcpp	hcparse/processor/wrap_icpp.html#initIcpp,varargs[IcppPart,icpp]	wrap_icpp: initIcpp(parts: varargs[IcppPart, icpp]): IcppPattern	
+staticMethod	hcparse/processor/wrap_icpp.html#staticMethod,string,string	wrap_icpp: staticMethod(className, methodName: string): IcppPattern	
+dotMethod	hcparse/processor/wrap_icpp.html#dotMethod,IcppPattern,string	wrap_icpp: dotMethod(icpp: var IcppPattern; methodName: string)	
+standaloneProc	hcparse/processor/wrap_icpp.html#standaloneProc,IcppPattern,string	wrap_icpp: standaloneProc(icpp: var IcppPattern; name: string)	
+icppInfix	hcparse/processor/wrap_icpp.html#icppInfix,string	wrap_icpp: icppInfix(name: string): IcppPattern	
+joinName	hcparse/processor/wrap_icpp.html#joinName,seq[string],string,string	wrap_icpp: joinName(namespace: seq[string]; name: string; prefix: string = &quot;&quot;): string	
+ctype	hcparse/processor/wrap_icpp.html#ctype,IcppPattern,string	wrap_icpp: ctype(icpp: var IcppPattern; typeName: string)	
+ctype	hcparse/processor/wrap_icpp.html#ctype,IcppPattern,seq[string],string	wrap_icpp: ctype(icpp: var IcppPattern; namespace: seq[string]; typeName: string)	
+`[]`	hcparse/processor/wrap_icpp.html#[],IcppPattern,int	wrap_icpp: `[]`(icpp: IcppPattern; idx: int): IcppPart	
+`$`	hcparse/processor/wrap_icpp.html#$,IcppPart	wrap_icpp: `$`(part: IcppPart): string	
+`$`	hcparse/processor/wrap_icpp.html#$,IcppPattern	wrap_icpp: `$`(icpp: IcppPattern): string	
+parsePatternCall	hcparse/processor/wrap_icpp.html#parsePatternCall,string	wrap_icpp: parsePatternCall(pat: string): IcppPattern	

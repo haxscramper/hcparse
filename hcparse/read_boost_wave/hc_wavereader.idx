@@ -1,0 +1,5 @@
+WaveReader	hcparse/read_boost_wave/hc_wavereader.html#WaveReader	hc_wavereader: WaveReader	
+WaveCache	hcparse/read_boost_wave/hc_wavereader.html#WaveCache	hc_wavereader: WaveCache	
+newWaveReader	hcparse/read_boost_wave/hc_wavereader.html#newWaveReader,AbsFile,WaveCache,ParseConf,Option[string]	hc_wavereader: newWaveReader(file: AbsFile; cache: WaveCache; conf: ParseConf;\n              code: Option[string] = none string): WaveReader	
+newWaveCache	hcparse/read_boost_wave/hc_wavereader.html#newWaveCache	hc_wavereader: newWaveCache(): WaveCache	
+getExpanded	hcparse/read_boost_wave/hc_wavereader.html#getExpanded,WaveReader	hc_wavereader: getExpanded(reader: var WaveReader): string	

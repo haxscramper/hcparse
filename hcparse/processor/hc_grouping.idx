@@ -1,0 +1,25 @@
+mitems	hcparse/processor/hc_grouping.html#mitems.i,seq[T],seq[T]	hc_grouping: mitems[T](s1, s2: var seq[T]): var T	
+items	hcparse/processor/hc_grouping.html#items.i,seq[T],seq[T]	hc_grouping: items[T](s1, s2: seq[T]): T	
+pairs	hcparse/processor/hc_grouping.html#pairs.i,Table[K,V],Table[K,V]	hc_grouping: pairs[K, V](s1, s2: Table[K, V]): (K, V)	
+registerUse	hcparse/processor/hc_grouping.html#registerUse,CxxTypeUse,UsedSet	hc_grouping: registerUse(ctype: CxxTypeUse; used: var UsedSet)	
+registerUsedTypes	hcparse/processor/hc_grouping.html#registerUsedTypes,CxxProc,UsedSet	hc_grouping: registerUsedTypes(genProc: CxxProc; used: var UsedSet)	
+registerUsedTypes	hcparse/processor/hc_grouping.html#registerUsedTypes,CxxEntry,UsedGroups	hc_grouping: registerUsedTypes(entry: CxxEntry; used: var UsedGroups)	
+newUsedGroups	hcparse/processor/hc_grouping.html#newUsedGroups	hc_grouping: newUsedGroups(): UsedGroups	
+getUsedTypes	hcparse/processor/hc_grouping.html#getUsedTypes,CxxFile	hc_grouping: getUsedTypes(file: CxxFile): UsedGroups	
+getTypeStore	hcparse/processor/hc_grouping.html#getTypeStore,seq[CxxFile]	hc_grouping: getTypeStore(wrapped: seq[CxxFile]): CxxTypeStore	
+TypeGraph	hcparse/processor/hc_grouping.html#TypeGraph	hc_grouping: TypeGraph	
+getGroups	hcparse/processor/hc_grouping.html#getGroups,TypeGraph	hc_grouping: getGroups(importGraph: TypeGraph): seq[HNodeSet]	
+mergeFileName	hcparse/processor/hc_grouping.html#mergeFileName,seq[string]	hc_grouping: mergeFileName(names: seq[string]): string	
+groupFileName	hcparse/processor/hc_grouping.html#groupFileName,HNodeSet,TypeGraph	hc_grouping: groupFileName(group: HNodeSet; graph: TypeGraph): string	
+dotRepr	hcparse/processor/hc_grouping.html#dotRepr,TypeGraph	hc_grouping: dotRepr(g: TypeGraph): DotGraph	
+buildTypeGraph	hcparse/processor/hc_grouping.html#buildTypeGraph,seq[CxxFile]	hc_grouping: buildTypeGraph(wrapped: seq[CxxFile]): TypeGraph	
+removeForwardDeclared	hcparse/processor/hc_grouping.html#removeForwardDeclared,seq[CxxFile],CxxTypeStore	hc_grouping: removeForwardDeclared(wrapped: var seq[CxxFile]; store: CxxTypeStore)	
+regroupFiles	hcparse/processor/hc_grouping.html#regroupFiles,seq[CxxFile]	hc_grouping: regroupFiles(wrapped: seq[CxxFile]): seq[CxxFile]	
+cmkNewField	hcparse/processor/hc_grouping.html#cmkNewField	CxxMismatchKind.cmkNewField	
+cmkDeletedField	hcparse/processor/hc_grouping.html#cmkDeletedField	CxxMismatchKind.cmkDeletedField	
+cmkDifferentFieldType	hcparse/processor/hc_grouping.html#cmkDifferentFieldType	CxxMismatchKind.cmkDifferentFieldType	
+CxxMismatchKind	hcparse/processor/hc_grouping.html#CxxMismatchKind	hc_grouping: CxxMismatchKind	
+CxxMismatch	hcparse/processor/hc_grouping.html#CxxMismatch	hc_grouping: CxxMismatch	
+findMismatches	hcparse/processor/hc_grouping.html#findMismatches,CxxField,CxxField	hc_grouping: findMismatches(f1, f2: CxxField): seq[CxxMismatch]	
+findMismatches	hcparse/processor/hc_grouping.html#findMismatches,CxxObject,CxxObject	hc_grouping: findMismatches(obj1, obj2: CxxObject): seq[CxxMismatch]	
+clearRepeated	hcparse/processor/hc_grouping.html#clearRepeated,sinkseq[CxxFile]	hc_grouping: clearRepeated(files: sink seq[CxxFile]): seq[CxxFile]	

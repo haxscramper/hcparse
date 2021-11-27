@@ -1,0 +1,41 @@
+add	hcparse/hc_typeconv.html#add,NimType,	hc_typeconv: add(nimType: var NimType; genericParam: NimType | seq[NimType])	
+toScopedIdent	hcparse/hc_typeconv.html#toScopedIdent,CXCursor	hc_typeconv: toScopedIdent(cursor: CXCursor): CScopedIdent	
+fullScopedIdent	hcparse/hc_typeconv.html#fullScopedIdent,WrapConf,CXType,bool,bool	hc_typeconv: fullScopedIdent(conf: WrapConf; cxtype: CXType; filterInline: bool = true;\n                withType: bool = true): CScopedIdent	
+fullScopedIdent	hcparse/hc_typeconv.html#fullScopedIdent,WrapConf,NimType	hc_typeconv: fullScopedIdent(conf: WrapConf; nimType: NimType): CScopedIdent	
+toCName	hcparse/hc_typeconv.html#toCName,CXCursor	hc_typeconv: toCName(cursor: CXCursor): CName	
+toCName	hcparse/hc_typeconv.html#toCName,string,seq[CScopedIdent]	hc_typeconv: toCName(str: string; genp: seq[CScopedIdent] = @[]): CName	
+toScopedIdent	hcparse/hc_typeconv.html#toScopedIdent,seq[string]	hc_typeconv: toScopedIdent(name: seq[string]): CScopedIdent	
+toScopedIdent	hcparse/hc_typeconv.html#toScopedIdent,seq[CXCursor]	hc_typeconv: toScopedIdent(sem: seq[CXCursor]): CScopedIdent	
+toScopedIdent	hcparse/hc_typeconv.html#toScopedIdent,string	hc_typeconv: toScopedIdent(name: string): CScopedIdent	
+sameNoGeneric	hcparse/hc_typeconv.html#sameNoGeneric,CScopedIdent,CScopedIdent	hc_typeconv: sameNoGeneric(ident1, ident2: CScopedIdent): bool	
+typeName	hcparse/hc_typeconv.html#typeName,CScopedIdent	hc_typeconv: typeName(ident: CScopedIdent): seq[string]	
+namespacedName	hcparse/hc_typeconv.html#namespacedName,seq[CXCursor],WrapConf	hc_typeconv: namespacedName(name: seq[CXCursor]; conf: WrapConf): string	
+namespacedName	hcparse/hc_typeconv.html#namespacedName,CXCursor,WrapConf	hc_typeconv: namespacedName(decl: CXCursor; conf: WrapConf): string	
+namespacedName	hcparse/hc_typeconv.html#namespacedName,CXType,WrapConf	hc_typeconv: namespacedName(cxtype: CXType; conf: WrapConf): string	
+newNimType	hcparse/hc_typeconv.html#newNimType,WrapConf,seq[CXCursor],CXType	hc_typeconv: newNimType(conf: WrapConf; semspaces: seq[CXCursor]; cxType: CXType): NimType	
+isComplexType	hcparse/hc_typeconv.html#isComplexType,WrapConf,CXType,WrapCache	hc_typeconv: isComplexType(conf: WrapConf; cxType: CXType; cache: var WrapCache): bool	
+newTemplateUndefined	hcparse/hc_typeconv.html#newTemplateUndefined,CXType	hc_typeconv: newTemplateUndefined(cxType: CXType): NimType	
+newTemplateApproximate	hcparse/hc_typeconv.html#newTemplateApproximate,CXType,NimType	hc_typeconv: newTemplateApproximate(cxType: CXType; nimType: NimType): NimType	
+newComplexType	hcparse/hc_typeconv.html#newComplexType,WrapConf,CXType,WrapCache	hc_typeconv: newComplexType(conf: WrapConf; cxType: CXType; cache: var WrapCache): NimType	
+defaultTypeParameter	hcparse/hc_typeconv.html#defaultTypeParameter,CXCursor,WrapCache,WrapConf	hc_typeconv: defaultTypeParameter(cursor: CXCursor; cache: var WrapCache; conf: WrapConf): Option[\n    NimType]	
+cxxName	hcparse/hc_typeconv.html#cxxName,CScopedIdent	hc_typeconv: cxxName(ident: CScopedIdent): CxxName	
+cxxName	hcparse/hc_typeconv.html#cxxName,CXCursor,WrapConf	hc_typeconv: cxxName(cursor: CXCursor; conf: WrapConf): CxxName	
+setParamsForType	hcparse/hc_typeconv.html#setParamsForType,WrapCache,WrapConf,CScopedIdent,seq[NimType]	hc_typeconv: setParamsForType(cache: var WrapCache; conf: WrapConf; ident: CScopedIdent;\n                 params: seq[NimType])	
+setParamsForType	hcparse/hc_typeconv.html#setParamsForType,WrapCache,WrapConf,CScopedIdent,seq[CXCursor]	hc_typeconv: setParamsForType(cache: var WrapCache; conf: WrapConf; ident: CScopedIdent;\n                 params: seq[CXCursor])	
+replacePartials	hcparse/hc_typeconv.html#replacePartials,NimType,Table[string,NimType],WrapConf	hc_typeconv: replacePartials(nimType: var NimType; partials: Table[string, NimType];\n                conf: WrapConf)	
+getParamsForType	hcparse/hc_typeconv.html#getParamsForType,WrapCache,CxxName	hc_typeconv: getParamsForType(cache: WrapCache; name: CxxName): seq[NimType]	
+getPartialParams	hcparse/hc_typeconv.html#getPartialParams,CxxName,int,WrapConf,WrapCache,bool	hc_typeconv: getPartialParams(name: CxxName; partialMax: int; conf: WrapConf;\n                 cache: var WrapCache; defaulted: bool = true): seq[NimType]	
+getPartialParams	hcparse/hc_typeconv.html#getPartialParams,NimType,WrapConf,WrapCache,bool	hc_typeconv: getPartialParams(partial: NimType; conf: WrapConf; cache: var WrapCache;\n                 defaulted: bool = true): seq[NimType]	
+toNType	hcparse/hc_typeconv.html#toNType,NimType,WrapConf,WrapCache,bool,seq[CXCursor]	hc_typeconv: toNType(nimType: NimType; conf: WrapConf; cache: var WrapCache;\n        asResult: bool = false; noDefaulted: seq[CXCursor] = @[]): NType[PNode]	
+getTypeName	hcparse/hc_typeconv.html#getTypeName,CXType,WrapConf	hc_typeconv: getTypeName(cxtype: CXType; conf: WrapConf): string	
+typeNameForScoped	hcparse/hc_typeconv.html#typeNameForScoped,WrapConf,CScopedIdent,WrapCache	hc_typeconv: typeNameForScoped(conf: WrapConf; ident: CScopedIdent; cache: var WrapCache): NimType	
+isMutableRef	hcparse/hc_typeconv.html#isMutableRef,CXType	hc_typeconv: isMutableRef(cxtype: CXType): bool	
+fromCxxTypeName	hcparse/hc_typeconv.html#fromCxxTypeName,string	hc_typeconv: fromCxxTypeName(name: string): string	
+mapPrimitiveNameImpl	hcparse/hc_typeconv.html#mapPrimitiveNameImpl,string	hc_typeconv: mapPrimitiveNameImpl(name: string): tuple[nim: string, pod: CxxPodTypeKind]	
+mapPrimitiveName	hcparse/hc_typeconv.html#mapPrimitiveName,string	hc_typeconv: mapPrimitiveName(name: string): string	
+mapPrimitivePod	hcparse/hc_typeconv.html#mapPrimitivePod,string	hc_typeconv: mapPrimitivePod(name: string): CxxPodTypeKind	
+fixTypeParams	hcparse/hc_typeconv.html#fixTypeParams,NimType,seq[NimType]	hc_typeconv: fixTypeParams(nt: var NimType; params: seq[NimType])	
+hasSpecial	hcparse/hc_typeconv.html#hasSpecial,NimType,seq[string]	hc_typeconv: hasSpecial(nt: NimType; special: seq[string]): bool	
+hasUnexposed	hcparse/hc_typeconv.html#hasUnexposed,NimType	hc_typeconv: hasUnexposed(nt: NimType): bool	
+isEnum	hcparse/hc_typeconv.html#isEnum,CXType	hc_typeconv: isEnum(cxtype: CXType): bool	
+toInitCall	hcparse/hc_typeconv.html#toInitCall,CXCursor,WrapConf,WrapCache	hc_typeconv: toInitCall(cursor: CXCursor; conf: WrapConf; cache: var WrapCache): PNode	

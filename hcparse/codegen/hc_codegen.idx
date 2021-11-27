@@ -1,0 +1,31 @@
+CodegenConf	hcparse/codegen/hc_codegen.html#CodegenConf	hc_codegen: CodegenConf	
+cxxCodegenConf	hcparse/codegen/hc_codegen.html#cxxCodegenConf	hc_codegen: cxxCodegenConf	
+cCodegenConf	hcparse/codegen/hc_codegen.html#cCodegenConf	hc_codegen: cCodegenConf	
+getPrefix	hcparse/codegen/hc_codegen.html#getPrefix,CodegenConf,string,CxxNameContext	hc_codegen: getPrefix(conf: CodegenConf; name: string; ctx: CxxNameContext): string	
+getSuffix	hcparse/codegen/hc_codegen.html#getSuffix,CodegenConf,string,CxxNameContext	hc_codegen: getSuffix(conf: CodegenConf; name: string; ctx: CxxNameContext): string	
+getImport	hcparse/codegen/hc_codegen.html#getImport,CodegenConf	hc_codegen: getImport(conf: CodegenConf): string	
+toNNode	hcparse/codegen/hc_codegen.html#toNNode,CxxLibImport,bool	hc_codegen: toNNode[N](lib: CxxLibImport; asImport: bool): N	
+toNNode	hcparse/codegen/hc_codegen.html#toNNode,seq[CxxLibImport],bool	hc_codegen: toNNode[N](libs: seq[CxxLibImport]; asImport: bool): N	
+toNNode	hcparse/codegen/hc_codegen.html#toNNode,CxxTypeUse,CodegenConf,seq[NimDecl[N]]	hc_codegen: toNNode[N](t: CxxTypeUse; conf: CodegenConf; anon: var seq[NimDecl[N]]): NType[N]	
+toNNode	hcparse/codegen/hc_codegen.html#toNNode,CxxTypeDecl,CodegenConf,seq[NimDecl[N]]	hc_codegen: toNNode[N](t: CxxTypeDecl; conf: CodegenConf; anon: var seq[NimDecl[N]]): NType[\n    N]	
+toNNode	hcparse/codegen/hc_codegen.html#toNNode,CxxArg,CodegenConf,seq[NimDecl[N]]	hc_codegen: toNNode[N](arg: CxxArg; conf: CodegenConf; anon: var seq[NimDecl[N]]): NIdentDefs[\n    N]	
+toNimComment	hcparse/codegen/hc_codegen.html#toNimComment,seq[CxxComment]	hc_codegen: toNimComment(com: seq[CxxComment]): string	
+toNNode	hcparse/codegen/hc_codegen.html#toNNode,CxxField,CodegenConf,seq[NimDecl[N]]	hc_codegen: toNNode[N](field: CxxField; conf: CodegenConf; anon: var seq[NimDecl[N]]): ObjectField[\n    N]	
+toNNode	hcparse/codegen/hc_codegen.html#toNNode,CxxBind,CodegenConf,string	hc_codegen: toNNode[N](header: CxxBind; conf: CodegenConf; name: string): seq[N]	
+toNNode	hcparse/codegen/hc_codegen.html#toNNode,CxxAlias,CodegenConf,seq[NimDecl[N]]	hc_codegen: toNNode[N](def: CxxAlias; conf: CodegenConf; anon: var seq[NimDecl[N]]): tuple[\n    alias: AliasDecl[N], extra: seq[NimDecl[N]]]	
+getCbindAs	hcparse/codegen/hc_codegen.html#getCbindAs,CxxProc,Option[CxxObject]	hc_codegen: getCbindAs(pr: CxxProc; parent: Option[CxxObject]): CxxBind	
+toNNode	hcparse/codegen/hc_codegen.html#toNNode,CxxProc,CodegenConf,seq[NimDecl[N]],NimConstructorTarget,Option[CxxObject]	hc_codegen: toNNode[N](def: CxxProc; conf: CodegenConf; anon: var seq[NimDecl[N]];\n           onConstructor: NimConstructorTarget = nctRegular;\n           parent: Option[CxxObject] = none CxxObject): ProcDecl[N]	
+toNNode	hcparse/codegen/hc_codegen.html#toNNode,CxxObject,CodegenConf,seq[NimDecl[N]]	hc_codegen: toNNode[N](obj: CxxObject; conf: CodegenConf; anon: var seq[NimDecl[N]]): seq[\n    NimDecl[N]]	
+toNNode	hcparse/codegen/hc_codegen.html#toNNode,CxxForward,CodegenConf	hc_codegen: toNNode[N](obj: CxxForward; conf: CodegenConf): ObjectDecl[N]	
+isPowerOfTwo	hcparse/codegen/hc_codegen.html#isPowerOfTwo,BiggestInt	hc_codegen: isPowerOfTwo(x: BiggestInt): bool	
+toNNode	hcparse/codegen/hc_codegen.html#toNNode,CxxEnumValue,CodegenConf,bool	hc_codegen: toNNode[N](field: CxxEnumValue; conf: CodegenConf; testPow: bool): tuple[\n    c, n: EnumField[N]]	
+toNNode	hcparse/codegen/hc_codegen.html#toNNode,CxxEnum,CodegenConf	hc_codegen: toNNode[N](en: CxxEnum; conf: CodegenConf): seq[NimDecl[N]]	
+toNNode	hcparse/codegen/hc_codegen.html#toNNode,CxxEntry,CodegenConf,seq[NimDecl[N]]	hc_codegen: toNNode[N](entry: CxxEntry; conf: CodegenConf; anon: var seq[NimDecl[N]]): seq[\n    NimDecl[N]]	
+toNNode	hcparse/codegen/hc_codegen.html#toNNode,seq[CxxEntry],CodegenConf	hc_codegen: toNNode[N](entries: seq[CxxEntry]; conf: CodegenConf): seq[NimDecl[N]]	
+genDynDecl	hcparse/codegen/hc_codegen.html#genDynDecl,CodegenConf	hc_codegen: genDynDecl[N](conf: CodegenConf): N	
+toNNode	hcparse/codegen/hc_codegen.html#toNNode,CxxFile,CodegenConf	hc_codegen: toNNode[N](file: CxxFile; conf: CodegenConf): N	
+codegenFormatConf	hcparse/codegen/hc_codegen.html#codegenFormatConf	hc_codegen: codegenFormatConf	
+toString	hcparse/codegen/hc_codegen.html#toString,CxxFile,CodegenConf	hc_codegen: toString(file: CxxFile; conf: CodegenConf): string	
+toString	hcparse/codegen/hc_codegen.html#toString,seq[CxxEntry],CodegenConf	hc_codegen: toString(entries: seq[CxxEntry]; conf: CodegenConf): string	
+toString	hcparse/codegen/hc_codegen.html#toString,seq[CxxFile],CodegenConf	hc_codegen: toString(files: seq[CxxFile]; conf: CodegenConf): string	
+printNumerated	hcparse/codegen/hc_codegen.html#printNumerated,string,Slice[int]	hc_codegen: printNumerated(str: string; numRange: Slice[int]): string	
