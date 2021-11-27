@@ -68,3 +68,13 @@ jobs:
 
           # Run tests
           nim r tests/runall.nim test $(pwd)/hcparse.nimble
+
+          # Run documentation generation
+          nim r tests/runall.nim doc $(pwd)/hcparse.nimble --ignore="**/dox*.nim"
+
+      - name: "Deploy documentation"
+        uses: crazy-max/ghaction-github-pages@v1
+        with:
+          build_dir: htmldocs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
