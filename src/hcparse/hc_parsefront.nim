@@ -648,7 +648,7 @@ proc validateGenerated*(
       logger.fail file
 
   if testDir.canGet(test):
-    runTestDir(test, nimState.get(), l = logger)
+    discard runTestDir(test, nimState.get(), l = logger)
 
 
 # proc registerTypes*(files: var seq[CxxFile]) =
