@@ -17,7 +17,8 @@ jobs:
             python-pip \
             wget \
             git \
-            cmake
+            cmake \
+            make
 
       - name: "Install conan"
         run: pip install conan

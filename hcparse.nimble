@@ -9,7 +9,7 @@ srcDir        = "src"
 requires "nim >= 1.6.0"
 requires "hnimast"
 requires "htsparse >= 0.1.10"
-requires "https://github.com/haxscramper/frosty/tree/use-cast#head"
+requires "https://github.com/haxscramper/frosty#use-cast"
 requires "hmisc >= 0.11.5"
 
 import std/[os, strutils]
