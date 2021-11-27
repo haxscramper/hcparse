@@ -24,15 +24,23 @@ jobs:
           cd ..
 
       - run: |
-          apt-get -y install lsb-release wget software-properties-common
           wget https://nim-lang.org/choosenim/init.sh
           chmod +x init.sh
           sh init.sh -y
 
       - run: |
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          ./llvm.sh 13
+          echo "deb http://apt.llvm.org/hirsute/ llvm-toolchain-hirsute-13 main" > /etc/apt/sources.list.d/llvm-13.list
+          apt-get install -y \
+            clang-13 \
+            clang-tools-13 \
+            clang-13-doc \
+            libclang-common-13-dev \
+            libclang-13-dev \
+            libclang1-13 \
+            clang-format-13 \
+            clangd-13
+        env:
+          DEBIAN_FRONTEND: noninteractive
 
       - run: |
           wget "https://github.com/tree-sitter/tree-sitter/archive/refs/tags/v${TS_VERSION}.tar.gz" && \
