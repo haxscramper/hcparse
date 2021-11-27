@@ -101,24 +101,24 @@ suite "libgit":
 
   let outDir = getTestTempDir()
 
-  test "Expand libgit":
-    # This is not a tests, this is a fucking joke, but I have no idea how
-    # to debug spontaneous nim closure failures when they are passed to the
-    # boost wave side, so for now I just repeatedly run the same test file
-    # until I get all entries wrapped correctly.
+  # test "Expand libgit":
+  #   # This is not a tests, this is a fucking joke, but I have no idea how
+  #   # to debug spontaneous nim closure failures when they are passed to the
+  #   # boost wave side, so for now I just repeatedly run the same test file
+  #   # until I get all entries wrapped correctly.
 
-    mkDir outDir
-    let lib = AbsDir"/usr/include/git2"
-    var cache = newWaveCache()
-    for file in walkDir(lib, AbsFile):
-      if file.name() notin [
-        "stdint" # Use this header only with Microsoft Visual C++ compilers!
-      ]:
-        let resFile = (outDir /. file.name()) &. "h"
+  #   mkDir outDir
+  #   let lib = AbsDir"/usr/include/git2"
+  #   var cache = newWaveCache()
+  #   for file in walkDir(lib, AbsFile):
+  #     if file.name() notin [
+  #       "stdint" # Use this header only with Microsoft Visual C++ compilers!
+  #     ]:
+  #       let resFile = (outDir /. file.name()) &. "h"
 
-        if not exists(resFile):
-          var reader = newWaveReader(file, cache, baseCParseConf)
-          resFile.writeFile(reader.getExpanded())
+  #       if not exists(resFile):
+  #         var reader = newWaveReader(file, cache, baseCParseConf)
+  #         resFile.writeFile(reader.getExpanded())
 
 
   # test "libgit types":
