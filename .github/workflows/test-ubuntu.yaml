@@ -1,4 +1,4 @@
-name: test
+name: "CI ubuntu"
 on: [push]
 jobs:
   compile:
@@ -9,7 +9,10 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - run: apt-get -qq update
-      - run: apt-get -qq -y install cmake git g++ gcc make sudo tar wget curl xz-utils pip
+      - run: |
+          apt-get -qq -y install \
+            cmake git g++ gcc make sudo tar wget curl xz-utils pip clang
+
         env:
           DEBIAN_FRONTEND: noninteractive
 

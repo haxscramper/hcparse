@@ -1,4 +1,4 @@
-name: test
+name: "CI arch"
 on: [push]
 jobs:
   compile:
@@ -14,7 +14,7 @@ jobs:
             gcc \
             tree-sitter \
             clang \
-            pip \
+            python-pip \
             wget \
             git \
             cmake
