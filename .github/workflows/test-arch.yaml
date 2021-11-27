@@ -1,0 +1,68 @@
+name: test
+on: [push]
+jobs:
+  compile:
+    if: |
+      !contains(github.event.head_commit.message, 'SKIP')
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: pacman --noconfirm -Syu
+      - run: |
+          pacman --noconfirm -S \
+            gcc \
+            tree-sitter \
+            clang \
+            pip \
+            wget \
+            git \
+            cmake
+
+      - name: "Install conan"
+        run: pip install conan
+      - name: "Install boost wave reader dependencies and build library"
+        run: |
+          cd src/hcparse/read_boost_wave
+          conan install . --build=missing --settings compiler.libcxx="libstdc++11"
+          mkdir build
+          cd build
+          cmake ..
+          make -j8
+          cd ..
+
+      - name: "Install nim"
+        run: |
+          wget https://nim-lang.org/choosenim/init.sh
+          chmod +x init.sh
+          sh init.sh -y
+
+      - name: "Install nim dependencies"
+        run: |
+          export PATH=$HOME/.nimble/bin:$PATH
+          echo $PATH
+          nimble -y develop
+
+      - name: "Execute tests and build documentation"
+        shell: bash
+        run: |
+          export PATH=$HOME/.nimble/bin:$PATH
+          echo $PATH
+
+          # Setup paths to the wavereader library and llvm installation
+          export LD_LIBRARY_PATH=$LD_LIBRARY_PATH$(pwd)/lib
+          export LIBRARY_PATH=$LIBRARY_PATH:$(pwd)/lib
+
+          echo $LD_LIBRARY_PATH
+          echo $LIBRARY_PATH
+
+          # Setup paths for conan dependencies
+          cat src/hcparse/read_boost_wave/activate_run.sh
+          source src/hcparse/read_boost_wave/activate_run.sh
+
+          # Add path to the current nim compiler installation
+          echo '--path="$nim"' > nim.cfg
+          cat nim.cfg
+
+          # Run tests
+          nim r tests/runall.nim test $(pwd)/hcparse.nimble
