@@ -1,6 +1,6 @@
-note: work in progress - features and descriptions are largely accurate,
+Note: work in progress - features and descriptions are largely accurate,
 but large chunks of intended functionality is yet to be implemented. To see
-the current state of development process please see [[https://github.com/haxscramper/hcparse/projects/2][alpha verion project]]
+the current state of development process please see [[https://github.com/haxscramper/hcparse/projects/2][alpha version project]]
 
 This project provides two types of wrapper generators -
 
@@ -32,7 +32,7 @@ is provided.
 ** Tree-sitter & boost wave
 
 Command-line tool to either generate wrappers for C(++) code, or do full
-convesion of the project into nim. Based on tree-sitter and boost wave, and
+conversion of the project into nim. Based on tree-sitter and boost wave, and
 does not require complicated configuration to work. Is focused on first 90%
 of the wrapper implementation - remaining parts can be tweaked manually
 when initial wrapper generation is done.
@@ -44,33 +44,33 @@ c2nim or nimterop, but rather a /framework/ for implementing custom wrapper
 scripts. It can be used as one-off tool that you can tweak manually, but it
 is mainly designed to provide *fully automatic* wrapper generators for
 cases where it is not realistically possible to do it by hand. Re-wrap
-whole Qt library on each patch release? Whole posix API? That's what this
+whole Qt library on each patch release? Whole Posix API? That's what this
 project tries to give you. Sophisiticated tool for tackling complex
 wrapping problems, with built-in support for documentation, nep-1 style
 guide and comprehensive collection of automatic code generation tools.
 
 It is an open secret that C and C++ libraries lack consistent styling, code
-policies and more. Sometimes exception are completely banned (or even
+policies and more. Sometimes exceptions are completely banned (or even
 simply unaccessible as in C case), different naming styles. Heavy reliance
-on the templates or OOP-style C++. All of that forces nim wrapper authors
+on the templates or OOP-style C++. All of that forces Nim wrapper authors
 to spend more time in order to provide higher-level interfaces that take
-advantage of the rich nim features (~distinct~ types, exceptions, side
+advantage of the rich Nim features (~distinct~ types, exceptions, side
 effect tracking and ~enums~).
 
-Hcparse provides framework for adressing this problems in automated way,
-using user-provided or built-in tools, that allow you to
+Hcparse provides a framework for adressing this problems in automated way,
+using user-provided or built-in tools, that allows you to
 
 - Convert 'out' arguments for C functions to nim ~tuple[]~ returns
 - Wrap 'raw' C procedures that return exit codes to raising ones
 - Declare callback-based override for C++ classes. No more need to inherit
-  from ~DelegatePainter~ just to override single method - you can just set
-  callback for it.
-- Naming fully compilant with nep-1 style guide. No more awkward
+  from ~DelegatePainter~ just to override a single method - you can just set
+  a callback for it.
+- Naming fully compliant with nep-1 style guide. No more awkward
   ~XMapRaised~ that can be confused with type name or ~unordered_set~
 - Declare overloads for all constructors, including aggregate
-  initialization and 'placement new', that makes it possible to reuse nim
+  initialization and 'placement new', that makes it possible to reuse Nim
   memory management for C++ objects.
-- Convert 'macro enum groups' into full nim enums (~#define PAPI_OK 0~,
+- Convert 'macro enum groups' into full Nim enums (~#define PAPI_OK 0~,
   ~#define PAPI_EINVAL -1~)
 - Detect and solve import cycles caused by forward declarations and badly
   structured header dependencies.
@@ -88,28 +88,28 @@ using user-provided or built-in tools, that allow you to
 
 Why is it necessary to have multiple different approaches to code wrapping?
 Having single entry point would make it much easier for new users,
-simplifty documentation and explanation and so on.
+simplify documentation and explanation and so on.
 
-Main reason for providing two solutions is very simple - each has it's own
-downsides (for end user), and it is not possible to create a tool where
-both techniques are used, as they have large number of mutually exclusive
+Main reason for providing two solutions is very simple - each has its own
+downsides (for the end user), and it is not possible to create a tool where
+both techniques are used, as they have a large number of mutually exclusive
 requirements.
 
 - tree-sitter & boost wave ::
   - advantages ::
     - Does not require valid translation unit or even /valid code/ - it
       [[https://tree-sitter.github.io/tree-sitter/#underlying-research][uses]] LR parser with built-in support for error recovery, which means
-      I'm able to provide /best possible/ solution in case of malformed
+      I'm able to provide the /best possible/ solution in case of malformed
       code. This is important, because most of the C code you can find is
-      actually not *valid C*, it becomes valid after you use preprocessor.
+      actually not *valid C*, it becomes valid after you use the preprocessor.
       But with tree-sitter it is not required.
     - Can override behavior of the preprocessor - ~include~ statements in
       code might be ignored for initial processing, making it possible to
-      provide 1:1 mapping of the original source file.
+      provide a 1:1 mapping of the original source file.
     - Can provide /some/ level of automatic code enhancement - fixing
       identifiers, providing enum wrappers etc.
     - Can be used for syntax-directed translation. It is not possible to
-      automatically map C or C++ code to nim /in general/, but automating
+      automatically map C or C++ code to Nim /in general/, but automating
       manual code conversion is still helpful. Of course generated code
       requires a lot of manual correction (especially for cases that are
       syntactically identical, but /semantically/ different), but it is
@@ -118,7 +118,7 @@ requirements.
     - Does not really understand C++ code. In cases like ~using namespace
       std;~ followed by ~string getStr() {};~ there is no way to correctly
       track /actually used types/ - doing so would require reimplementing
-      all of the C++ bookeeping - ~using~ declarations, type aliases,
+      all of the C++ bookkeeping - ~using~ declarations, type aliases,
       active namespaces and so on.
   - extra ::
     - Why not use clang preprocessor callbacks? TODO explain
@@ -128,7 +128,7 @@ requirements.
       modification is needed *at all*. This is especially important for
       large libraries, where manual modification is out of the question.
     - Has full understanding of the C++ code -
-      ~getTypeDeclaration().getSemanticParent()~, all bookeeping, namespace
+      ~getTypeDeclaration().getSemanticParent()~, all bookkeeping, namespace
       tracking, type aliases and so on.
     - Can provide more powerful automatic code enhacement features ehanced
       with the type declaration knowledge.
@@ -136,11 +136,11 @@ requirements.
     - Requires fully valid translation unit to work with - all includes
       must be resolved, all defines must be specified. Much harder to use
       in libraries that use non-standard build system (e.g. cmake that
-      executes codegen, merges together multiple files and complies
-      everyting at once)
+      executes codegen, merges together multiple files and compiles
+      everything at once)
 - manual, using macros ::
   - advantanges ::
-    - Implementation controlled by end user - no intermediate code
+    - Implementation controlled by the end user - no intermediate code
       generation steps (even though they are not embedded in final
       compilation process like nimterop does, it might be somewhat annoying
       to deal with).
@@ -155,7 +155,7 @@ requirements.
       generated types - macros does not have full access to the comment
       fields.
 
-As you can see, each approach has it's own powerful sides, but it is
+As you can see, each approach has its own powerful sides, but it is
 fundamentally impossible to merge two of them, since they have completely
 opposite requirements - one does not understand C++ code, and *does not
 need to*, while for second one it is absolutely mandatory. Manual wrapping
@@ -166,13 +166,13 @@ same IR.
 
 Note: Main difference between other projects and hcparse is that they
 /already exist/, while hcparse is work-in-progress. For now, you can
-consider this section as an anwer to more practical question - "why
-reimplement already existing tooling?" and "how is it going to be different
-from existing tools?"
+consider this section as an answer to more practical question - "why
+reimplement the already existing tooling?" and "how is it going to be
+different from the existing tools?"
 
 - [[https://github.com/nim-lang/c2nim][c2nim]]
   - reimplements own C and C++ parser as well as preprocessor, resulting in
-    extermely fragile tool that usually requre a lot of manual tweaking and
+    an extremely fragile tool that usually requires a lot of manual tweaking and
     hacks.
   - By default does not try to generate nep1-compliant wrappers, requires
     passing ~--nep1~ flag (which is not really difficult to), but does not
@@ -181,21 +181,21 @@ from existing tools?"
   - Requires converting ~#define~ to ~#def~ for used macros, which is,
     again, pretty annoying to do manually.
 - [[https://github.com/nimterop/nimterop][nimterop]]
-  - Runs when code is [[https://github.com/nimterop/nimterop#wrapping][compiled]], which makes it hard to inspect generated
+  - Runs when code is [[https://github.com/nimterop/nimterop#wrapping][compiled]], which makes it hard to inspect the generated
     headers. Having generated ~.nim~ wrapper files also have several
     important advantages, including
     - You have source code that you can put documentation on
     - No implicit magic and intermediate compile-time actions between your
       call to wrappers and actual library code.
-    - Because there exists and dumb wrapper file that can be viewed we can
+    - Because there exists a dumb wrapper file that can be viewed we can
       get a lot more creative with actually mapping library code to nim.
       Make all identifiers nep1-conformant, generate wrappers that turn
       error codes into exceptions and so on (see list for libclang wrapper
       generator)
     - No need to have a wrapper generator as a dependency for your library,
-      which means I don't have to test whether /generator/ works on all
+      which means I don't have to test whether the /generator/ works on all
       possible systems, I just have to make sure wrappers make sense.
-  - Does not reimplement C++ parser, and instead uses tree-sitter (just
+  - Does not reimplement the C++ parser, and instead uses the tree-sitter (just
     like hcparse), but invokes C compiler to do the macro expansion, which
     merges all headers into a single file, and completely ignores any
     ~#include~ declarations. Boost wave, on the other hand [[https://www.boost.org/doc/libs/1_76_0/libs/wave/doc/class_reference_ctxpolicy.html#opened_include_file][allows]] to
@@ -212,10 +212,10 @@ from existing tools?"
     needed.
 
 NOTE: the project is still considered work-in-progress, but all the
-features mentioned above have already been implemeneted at least in
+features mentioned above have already been implemented at least in
 proof-of-concept quality.
 
-** Using hcparse as a library or wriging own code generation tools
+** Using hcparse as a library or writing own code generation tools
 
 note: this section describes unstable functionality that might potentially
 be changed in the future.
@@ -230,12 +230,12 @@ section of the boost wave (not constrained to the C++ backed!).
 
 In addition to the wrappers for lower-level C analysis tools ~hcparse~ also
 provides parse for the doxygen XML format (to be able to automatically port
-documentation without loosing important semantic information).
+documentation without losing important semantic information).
 
 Internal IR for the code is fully convertible to json (does not contain any
-lower-level details realted to the libclang or tree-sitter processing), and
+lower-level details related to the libclang or tree-sitter processing), and
 can theoretically be generated using other frontends. Code generation
 facility can also be decoupled into separate tool that provides different
 features, or even generates code for the different languages if needed
 (note that original implementation is fully focused on nim, and as of right
-now there is no plans to make hcparse fully source *and* target-agnositc)
+now there is no plans to make hcparse fully source *and* target-agnostic).
