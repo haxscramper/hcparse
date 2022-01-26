@@ -1,3 +1,10 @@
+Note: this project's development is temporarily paused due to my work on
+the https://github.com/nim-works/nimskull project. In the future I will
+come back to it, because I still think tooling like this is necessary,
+but there might be a delay in development for quite some time.
+
+------
+
 Note: work in progress - features and descriptions are largely accurate,
 but large chunks of intended functionality is yet to be implemented. To see
 the current state of development process please see [[https://github.com/haxscramper/hcparse/projects/2][alpha version project]]
