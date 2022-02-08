@@ -628,7 +628,7 @@ proc wrapCSharedLibViaTsWave*(
 proc validateGenerated*(
     files: GenFiles,
     testDir: Option[AbsDir] = none AbsDir,
-    nimState: Option[NimState] = none NimState,
+    nimState: Option[NimRunConf] = none NimRunConf,
     logger: HLogger = newTermLogger()
   ) =
 
@@ -648,7 +648,7 @@ proc validateGenerated*(
       logger.fail file
 
   if testDir.canGet(test):
-    discard runTestDir(test, nimState.get(), l = logger)
+    discard runTestDir(test, nimState.get())
 
 
 # proc registerTypes*(files: var seq[CxxFile]) =
