@@ -49,10 +49,10 @@ proc primitiveName*(node: CppNode): string =
 
 proc mapOpName*(node: CppNode): string =
   case node.strVal():
-    of "|": "or"
+    of "|", "||": "or"
     of "<<": "shl"
     of ">>": "shr"
-    of "&": "and"
+    of "&", "&&": "and"
     of "^": "xor"
     of "~": "not"
     of "!": "not" # QUESTION what is the difference between ~ and !
@@ -216,7 +216,7 @@ proc skipPointer(node: CppNode): CppNode =
     else: node
 
 template initPointerWraps*(newName, Type: untyped): untyped =
-  proc pointerWraps(node: CppNode, ftype: var TYpe) =
+  proc pointerWraps(node: CppNode, ftype: var Type) =
     case node.kind:
       of cppPointerDeclarator:
         ftype = ftype.wrap(ctkPtr)
@@ -514,6 +514,9 @@ proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
 
   elif node.len == 2:
     case node[1].kind:
+      of cppFieldDeclarationList:
+        result.add toCxxObject(node, coms)
+
       of cppTypeIdentifier,
          cppPointerDeclarator,
          cppPrimitiveType:

@@ -14,12 +14,7 @@ import compiler/ast
 
 import std/[strutils, sequtils]
 
-proc fixGit*(name: string, isType: bool): string =
-  dropPrefix(name, "git_").snakeToCamelCase()
-
-suite "Bug hunting for git":
-  let
-    dir = getTestTempDir()
+proc fixGit*(
     sys = dir / "sys"
     user = dir / "user"
     file = user /. "user_main.h"
