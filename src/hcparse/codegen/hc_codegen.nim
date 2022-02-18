@@ -100,6 +100,8 @@ proc toNNode*[N](
     t: CxxTypeUse, conf: CodegenConf,
     anon: var seq[NimDecl[N]]
   ): NType[N] =
+  ## Convert type use to the nim declaration code. Write any anonymous
+  ## nodes (`struct {} varname;`) in the `anon` list.
 
   case t.kind:
     of ctkPod:
@@ -227,10 +229,11 @@ proc toNNode*[N](
     docComment: field.docComment.toNimComment(),
     fldType: toNNode[N](field.getType(), conf, anon))
 
-  let cxx = field.cxxName.scopes[^1]
-  if cxx != field.nimName():
-    result.addPragma(
-      conf.getImport(), newNLit[N, string](field.cxxName.scopes[^1]))
+  if ?field.cxxName.scopes:
+    let cxx = field.cxxName.scopes[^1]
+    if cxx != field.nimName():
+      result.addPragma(
+        conf.getImport(), newNLit[N, string](field.cxxName.scopes[^1]))
 
 
 proc toNNode*[N](header: CxxBind, conf: CodegenConf, name: string): seq[N] =

@@ -119,6 +119,8 @@ type
     cncEnumField
 
   CxxNamePair* = object
+    ## Qualified cxx name with full scoping information and optional nim
+    ## name override.
     context*: CxxNameContext
     nim*: string
     cxx*: CxxName
@@ -258,8 +260,10 @@ type
         ## }
         ## ```
         objDef*: CxxObject
-        objParent*: CxxNamePair
-        objUser*: CxxNamePair
+        objParent*: CxxNamePair ## Name of the parent declaration. Used to
+        ## construct anonymous type name.
+        objUser*: CxxNamePair ## Name of the entry that /uses/ the type. Is
+        ## necessary to construct the name for anonymous type.
 
       of ctkAnonEnum:
         enumDef*: CxxEnum
@@ -367,6 +371,7 @@ type
     name*: CxxNamePair
     nimType*: CxxTypeUse
     flags*: set[CxxFieldFlag]
+    bitsize*: Option[int]
 
 
   CxxAlias* = ref object of CxxBase

@@ -557,6 +557,7 @@ func mapPrimitiveNameImpl*(name: string):
 
 
     of "float": ("cfloat", cptFloat)
+    of "double": ("cdouble", cptDouble)
     of "bool": ("bool", cptBool)
     of "size_t": ("csize_t", cptSizeT)
     of "ssize_t": ("csize_t", cptSizeT)

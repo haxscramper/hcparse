@@ -6,7 +6,7 @@ import
 
 import
   hmisc/core/[all],
-  hmisc/other/[oswrap],
+  hmisc/other/[oswrap, hpprint],
   hmisc/algo/[namegen, hstring_algo]
 
 type
@@ -143,7 +143,7 @@ func registerDeclarations*(
       store.addDecl(entry.cxxObject)
 
       for nest in mitems(entry.cxxObject.nested):
-        registerDeclarations(entry, store, lib)
+        registerDeclarations(nest, store, lib)
 
 func postprocessTypeUses*(
     entry: var CxxEntry, store: var CxxTypeStore, lib: CxxLibImport) =
@@ -211,16 +211,23 @@ func postprocessTypeUses*(
 proc fixIdentsRec*(
     entry: var CxxEntry,
     cache: var StringNameCache,
-    conf: CxxFixConf
+    conf: CxxFixConf,
+    entryIdx: int
   ) =
+  ## Fix wrapped entry identifier names, optionally constructing them using
+  ## `entryIdx` argument - necessary for completely anonymous enums that
+  ## don't have any user declarations inside, and used for field grouping.
 
   assertRefFields(conf)
   var context: CxxNameFixContext
   context[cancLibName] = some cxxPair(conf.libName, cxxName(conf.libName))
+  # pprint entry
   proc aux(name: var CxxNamePair, cache: var StringNameCache) =
-    # ploc()
-    name.nim = conf.fixName(name, cache, context)
-    # ploc()
+    if name.cxx.scopes.len == 0:
+      name.nim = "Type" & $entryIdx
+
+    else:
+      name.nim = conf.fixName(name, cache, context)
 
   proc aux(decl: var CxxTypeDecl, cache: var StringNameCache) =
     aux(decl.name, cache)
@@ -410,7 +417,7 @@ proc reuseStore*(
 proc postFixEntries*(
     conf: CxxFixConf,
     entries: var seq[CxxEntry],
-    lib: CxxLibImport,
+    lib: CxxLibImport = default CxxLibImport,
     file: Option[AbsFile] = none AbsFile
   ) =
   assertRefFields(conf)
@@ -420,8 +427,8 @@ proc postFixEntries*(
   var store = conf.typeStore
 
   # Fix all identifier names in entry lists
-  for item in mitems(entries):
-    fixIdentsRec(item, cache, conf)
+  for idx, item in mpairs(entries):
+    fixIdentsRec(item, cache, conf, idx)
 
   # Set spelling location file for all entries in the list
   if file.isSome():
@@ -445,11 +452,35 @@ proc postFixEntries*(
 proc postFixEntries*(
     entries: sink seq[CxxEntry],
     conf: CxxFixConf,
-    lib: CxxLibImport,
+    lib: CxxLibImport = default CxxLibImport,
     file: Option[AbsFile] = none AbsFile
   ): seq[CxxEntry] =
   result = entries
   conf.postFixEntries(result, lib, file)
+
+proc postFixEntries*(
+    typ: CxxTypeUse,
+    conf: CxxFixConf,
+    lib: CxxLibImport = default(CxxLibImport),
+    file: Option[AbsFile] = none AbsFile
+  ): CxxTypeUse =
+  ## Post-fix all nested anonymous type declarations in the type use, and
+  ## return reconstructed type use.
+
+  result = typ
+  var arg: seq[CxxEntry]
+  case typ.kind:
+    of ctkAnonObject:
+      arg.add typ.objDef
+      result.objDef = postFixEntries(arg, conf, lib, file)[0].cxxObject
+
+    of ctkAnonEnum:
+      arg.add typ.enumDef
+      result.enumDef = postFixEntries(arg, conf, lib, file)[0].cxxEnum
+
+    else:
+      discard
+
 
 
 iterator mentries*(files: var seq[CxxFile]): var CxxEntry =
@@ -464,8 +495,8 @@ proc postFixEntries*(conf: CxxFixConf, files: var seq[CxxFile]) =
   # Fix all identifier names in entry lists
   for file in mitems(files):
     var cache: StringNameCache
-    for item in mitems(file.entries):
-      fixIdentsRec(item, cache, conf)
+    for idx, item in mpairs(file.entries):
+      fixIdentsRec(item, cache, conf, idx)
 
   # Set spelling location file for all entries in the list
   for file in mitems(files):

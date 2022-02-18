@@ -25,6 +25,33 @@ import
 
 export parseCppString, treeRepr
 
+proc debug*(node: CppNode) =
+  echo node.treeRepr()
+
+proc failNode*(node: CppNode) {.noreturn.} =
+  raise newUnexpectedKindError(
+    node,
+    node.strVal() &
+      "\n" &
+      $node.treeRepr(
+        unnamed = true,
+        opts = hdisplay(maxLen = 5, maxDepth = 3)))
+
+type
+  CppFieldNode* = enum
+    cpfType = "type"
+    cpfDecl = "declarator"
+    cpfArgs = "arguments"
+    cpfInit = "initializer"
+    cpfCond = "condition"
+    cpfAlter = "alternative"
+
+proc contains*(node: CppNode, field: CppFieldNode): bool =
+  $field in node
+
+proc `[]`*(node: CppNode, field: CppFieldNode): CppNode =
+  node[$field]
+
 using coms: var seq[CxxComment]
 
 proc primitiveName*(node: CppNode): string =
@@ -117,15 +144,68 @@ proc toCxxType*(node: CppNode, parent, user: Option[CxxNamePair]): CxxTypeUse =
     of cppFieldDeclaration:
       var args: seq[CxxArg]
       var idx = 0
-      for param in node["declarator"]["parameters"]:
+      for param in node[cpfDecl]["parameters"]:
         args.add toCxxArg(param, idx)
         inc idx
 
-      result = cxxTypeUse(args, toCxxType(node["type"], parent, user))
+      result = cxxTypeUse(args, toCxxType(node[cpfType], parent, user))
 
     else:
       raise newImplementKindError(node, node.treeRepr())
 
+template initPointerWraps*(newName, Type: untyped): untyped =
+  proc pointerWraps(node: CppNode, ftype: var Type) =
+    case node.kind:
+      of cppPointerDeclarator:
+        ftype = ftype.wrap(ctkPtr)
+        if node[0] of cppTypeQualifier:
+          pointerWraps(node[1], ftype)
+
+        else:
+          pointerWraps(node[0], ftype)
+
+      of cppArrayDeclarator:
+        ftype = ftype.wrap(ctkDynamicArray)
+        pointerWraps(node[0], ftype)
+
+      of cppInitDeclarator,
+         cppTypeQualifier #[ TODO convert for CxxType? ]#:
+        pointerWraps(node[0], ftype)
+
+      of cppReferenceDeclarator:
+        ftype = ftype.wrap(ctkLVRef)
+        pointerWraps(node[0], ftype)
+
+      of cppAbstractPointerDeclarator:
+        ftype = ftype.wrap(ctkPtr)
+        if node.len > 0:
+          pointerWraps(node[0], ftype)
+
+      of {
+        cppFieldIdentifier,
+        cppTypeIdentifier,
+        cppIdentifier,
+        cppFunctionDeclarator
+      }:
+        discard
+
+      else:
+        raise newImplementKindError(
+          node, node.strVal() & "\n" & node.treeRepr())
+
+initPointerWraps(cxxTypeUse, CxxTypeUse)
+
+proc toCxxTypeWraps*(
+    node: CppNode,
+    parent, user: Option[CxxNamePair] = none(CxxNamePair),
+    typField: CppFieldNode = cpfType,
+    declField: CppFieldNode = cpfDecl
+  ): CxxTypeUse =
+  ## Convert C++ type usage to registered type usage. Wrap resulting type
+  ## in pointers if declarator contains them.
+  result = toCxxType(node[typField], parent, user)
+  if declField in node:
+    pointerWraps(node[declField], result)
 
 
 proc toCxxMacro*(node: CppNode, coms): CxxMacro =
@@ -215,68 +295,29 @@ proc skipPointer(node: CppNode): CppNode =
     of cppPointerDeclarator: skipPointer(node[0])
     else: node
 
-template initPointerWraps*(newName, Type: untyped): untyped =
-  proc pointerWraps(node: CppNode, ftype: var Type) =
-    case node.kind:
-      of cppPointerDeclarator:
-        ftype = ftype.wrap(ctkPtr)
-        if node[0] of cppTypeQualifier:
-          pointerWraps(node[1], ftype)
 
-        else:
-          pointerWraps(node[0], ftype)
-
-      of cppArrayDeclarator:
-        ftype = ftype.wrap(ctkDynamicArray)
-        pointerWraps(node[0], ftype)
-
-      of cppInitDeclarator,
-         cppTypeQualifier #[ TODO convert for CxxType? ]#:
-        pointerWraps(node[0], ftype)
-
-      of cppReferenceDeclarator:
-        ftype = ftype.wrap(ctkLVRef)
-        pointerWraps(node[0], ftype)
-
-      of cppAbstractPointerDeclarator:
-        ftype = ftype.wrap(ctkPtr)
-        if node.len > 0:
-          pointerWraps(node[0], ftype)
-
-      of {
-        cppFieldIdentifier,
-        cppTypeIdentifier,
-        cppIdentifier,
-        cppFunctionDeclarator
-      }:
-        discard
-
-      else:
-        raise newImplementKindError(
-          node, node.strVal() & "\n" & node.treeRepr())
-
-initPointerWraps(cxxTypeUse, CxxTypeUse)
-
-proc getName*(node: CppNode): string =
+proc getNameNode*(node: CppNode): CppNode =
   case node.kind:
     of cppFieldIdentifier,
        cppTypeIdentifier,
        cppIdentifier,
        cppPrimitiveType:
-      node.strVal()
+      node
 
     of cppArrayDeclarator, cppFunctionDeclarator:
-      node[0].getName()
+      node[0].getNameNode()
 
     of cppDeclaration, cppInitDeclarator:
-      node["declarator"].getName()
+      node[cpfDecl].getNameNode()
 
     else:
       if node.len > 0:
-        node[^1].getName()
+        node[^1].getNameNode()
 
       else:
-        raise newImplementKindError(node, node.treeRepr())
+        failNode node
+
+proc getName*(node: CppNode): string = node.getNameNode().strVal()
 
 proc toCxxArg*(node: CppNode, idx: int): CxxArg =
   assertKind(node, {
@@ -288,19 +329,19 @@ proc toCxxArg*(node: CppNode, idx: int): CxxArg =
     name: CxxNamePair
     argt: CxxTypeUse
 
-  if "declarator" in node:
-    if node["declarator"] of cppAbstractPointerDeclarator:
+  if cpfDecl in node:
+    if node[cpfDecl] of cppAbstractPointerDeclarator:
       name = cxxPair("a" & $idx, cncArg)
-      argt = toCxxType(node["type"], none CxxNamePair, some name).wrap(ctkPtr)
+      argt = toCxxType(node[cpfType], none CxxNamePair, some name).wrap(ctkPtr)
 
     else:
-      name = cxxPair(getName(node["declarator"]), cncArg)
-      argt = toCxxType(node["type"], none CxxNamePair, some name)
-      pointerWraps(node["declarator"], argt)
+      name = cxxPair(getName(node[cpfDecl]), cncArg)
+      argt = toCxxType(node[cpfType], none CxxNamePair, some name)
+      pointerWraps(node[cpfDecl], argt)
 
   else:
     name = cxxPair("a" & $idx, cncArg)
-    argt = toCxxType(node["type"], none CxxNamePair, some name)
+    argt = toCxxType(node[cpfType], none CxxNamePair, some name)
 
   if "default_value" in node:
     echov "missing default value for argument"
@@ -309,15 +350,28 @@ proc toCxxArg*(node: CppNode, idx: int): CxxArg =
 
 
 proc toCxxProc*(
-    node: CppNode,
+    main: CppNode,
     coms;
     parent: Option[CxxObject] = none(CxxObject),
   ): CxxProc =
 
-  result = cxxProc(cxxPair(node["declarator"].getName()))
-  if "type" in node:
+  var parameters = false
+  let node =
+    if main.kind == cppTemplateDeclaration:
+      parameters = true
+      main[1]
+
+    else:
+      main
+
+  result = cxxProc(cxxPair(node[cpfDecl].getName()))
+
+  if parameters and false:
+    echo main.treeRepr(opts = hdisplay(maxLen = 3))
+
+  if cpfType in node:
     result.returnType = toCxxType(
-      node["type"],
+      node[cpfType],
       some result.head.name,
       some result.head.name
     )
@@ -331,14 +385,14 @@ proc toCxxProc*(
   if node[0] of cppStorageClassSpecifier:
     result.flags.incl cpfStatic
 
-  pointerWraps(node["declarator"], result.returnType)
+  pointerWraps(node[cpfDecl], result.returnType)
 
   let decl =
-    if node["declarator"].kind == cppPointerDeclarator:
-      node["declarator"].skipPointer()
+    if node[cpfDecl].kind == cppPointerDeclarator:
+      node[cpfDecl].skipPointer()
 
     else:
-      node["declarator"]
+      node[cpfDecl]
 
   var argComs: seq[CxxComment]
 
@@ -359,15 +413,25 @@ proc toCxxProc*(
 
 proc toCxxField*(node: CppNode, coms; parent: CxxNamePair): CxxField =
   assertKind(node, {cppFieldDeclaration})
-  let decl = node["declarator"]
-  let name = cxxPair(getName(decl))
-
-  if decl of cppFunctionDeclarator:
-    result = cxxField(name, toCxxType(node, some parent, some name))
+  if cpfDecl notin node:
+    # It is possible to declare field without actual name, only using size.
+    result = cxxField(
+      CxxNamePair(), toCxxType(node[cpfType],
+                               some parent, none CxxNamePair))
 
   else:
-    result = cxxField(name, toCxxType(node["type"], some parent, some name))
-    pointerWraps(decl, result.nimType)
+    let decl = node[cpfDecl]
+    let name = cxxPair(getName(decl))
+    if decl of cppFunctionDeclarator:
+      result = cxxField(name, toCxxType(node, some parent, some name))
+
+    else:
+      result = cxxField(name, toCxxType(node[cpfType], some parent, some name))
+      pointerWraps(decl, result.nimType)
+
+  for item in node:
+    if item of cppBitfieldClause:
+      result.bitsize = some item[0].strVal().parseInt()
 
 proc toCxxForwardType*(node: CppNode, coms): CxxForward =
   result = cxxForward(
@@ -410,9 +474,9 @@ proc toCxxObject*(node: CppNode, coms): CxxObject =
         result.super.add toCxxType(
           class, none CxxNamePair, none CxxNamePair)
 
-  for field in node["body"]:
-    if field of cppAccessSpecifier:
-      let ts = field.getTs()
+  for item in node["body"]:
+    if item of cppAccessSpecifier:
+      let ts = item.getTs()
       case ts{0}.kind:
         of cppPublicTok: accs = casPublic
         of cppProtectedTok: accs = casProtected
@@ -446,31 +510,36 @@ proc toCxxObject*(node: CppNode, coms): CxxObject =
 
 
     elif accs == casPublic:
-      case field.kind:
+      case item.kind:
         of cppDeclaration:
-          var meth = toCxxProc(field, coms, some result).withIt do:
+          var meth = toCxxProc(item, coms, some result).withIt do:
             it.add coms
             coms.clear()
 
           if meth.cxxName().scopes.last() == result.cxxName().scopes.last():
             meth.constructorOf = some result.name()
 
-          elif node["declarator"]["declarator"] of cppDestructorName:
+          elif node[cpfDecl][cpfDecl] of cppDestructorName:
             meth.destructorOf = some result.name()
 
           result.methods.add meth
 
         of cppFieldDeclaration, cppFunctionDefinition:
-          if field["declarator"] of cppFunctionDeclarator:
-            let name = field["declarator"]["declarator"]
+          if cpfDecl notin item and
+             item[cpfType] of { cppStructSpecifier }:
+            result.nested.add toCxxObject(item[cpfType], coms)
+
+          elif cpfDecl in item and
+               item[cpfDecl] of cppFunctionDeclarator:
+            let name = item[cpfDecl][cpfDecl]
             if name of cppParenthesizedDeclarator:
               result.mfields.add toCxxField(
-                  field, coms, result.decl.name).withIt do:
+                  item, coms, result.decl.name).withIt do:
                 it.add coms
                 coms.clear()
 
             else:
-              var meth = toCxxProc(field, coms, some result).withIt do:
+              var meth = toCxxProc(item, coms, some result).withIt do:
                 it.add coms
                 coms.clear()
 
@@ -483,18 +552,18 @@ proc toCxxObject*(node: CppNode, coms): CxxObject =
 
           else:
             result.mfields.add toCxxField(
-                field, coms, result.decl.name).withIt do:
+                item, coms, result.decl.name).withIt do:
               it.add coms
               coms.clear()
 
         of cppComment:
-          coms.add toCxxComment(field)
+          coms.add toCxxComment(item)
 
         of cppQPropertyDeclaration:
           echov "skipping qproperty"
 
         else:
-          raise newImplementKindError(field, field.treeRepr())
+          failNode(item)
 
   if ?result.mfields:
     result.mfields.last().add coms
@@ -521,7 +590,7 @@ proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
          cppPointerDeclarator,
          cppPrimitiveType:
         let newType = toCxxType(
-          node["declarator"],
+          node[cpfDecl],
           parent = none CxxNamePair,
           user = none CxxNamePair).toDecl(ctdkTypedef #[ XXXX ]#)
 
@@ -535,11 +604,11 @@ proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
         ):
           var alias = cxxAlias(
             newType,
-            toCxxType(node["type"], none CxxNamePair, none CxxNamePair)
+            toCxxType(node[cpfType], none CxxNamePair, none CxxNamePair)
           ).withIt do:
                 it.add coms
                 coms.clear()
-          pointerWraps(node["declarator"], alias.baseType)
+          pointerWraps(node[cpfDecl], alias.baseType)
 
           if alias.baseType of ctkIdent and
             alias.decl.cxxName() == alias.baseType.cxxName():
@@ -586,7 +655,7 @@ proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
             baseBody, $node & " " & node.treeRepr())
 
       of cppFunctionDeclarator:
-        let d = "declarator"
+        let d = cpfDecl
         let body = node[d]
         var args: seq[CxxArg]
         var coms: seq[CxxComment]
@@ -603,7 +672,7 @@ proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
                 ""
 
 
-            var t = toCxxType(arg["type"], none CxxNamePair, none CxxNamePair)
+            var t = toCxxType(arg[cpfType], none CxxNamePair, none CxxNamePair)
             if d in arg:
               pointerWraps(arg[d], t)
 
@@ -614,7 +683,7 @@ proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
         result.add cxxAlias(
           body[d].getName().cxxPair().cxxTypeDecl(ctdkTypedef),
           cxxTypeUse(
-            args, toCxxType(node["type"], none CxxNamePair, none CxxNamePair)))
+            args, toCxxType(node[cpfType], none CxxNamePair, none CxxNamePair)))
 
       else:
         raise newImplementKindError(node, node.treeRepr())
@@ -679,7 +748,7 @@ proc toCxx*(node: CppNode, coms): seq[CxxEntry] =
       result.add toCxxTypeDefinition(node, coms)
 
     of cppDeclaration:
-      case node["declarator"].skipPointer().kind:
+      case node[cpfDecl].skipPointer().kind:
         of cppFunctionDeclarator:
           result.add toCxxProc(node, coms)
 
