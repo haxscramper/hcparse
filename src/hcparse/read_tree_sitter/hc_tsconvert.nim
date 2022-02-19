@@ -296,39 +296,28 @@ proc conv*(
     of cppLabeledStatement:
       result = newPTree(nnkBlockStmt, ~node[0], ~node[1])
 
-    of cppFunctionDefinition, cppTemplateDeclaration:
+    of cppEnumSpecifier:
       var coms: seq[CxxComment]
-      let entrs = postFixEntries(@[box(toCxxProc(node, coms))], fix)
-      var anon: seq[NimDecl[PNode]]
-      var impl = entrs[0].cxxProc.toNNode(conf, anon)
+      let
+        entrs = postFixEntries(@[box(toCxxEnum(node, coms))], fix)
+        impl = toNNodeImpl[PNode](entrs[0].cxxEnum, conf).nenum
+
+      result = impl.toNNode()
+
+    of cppFunctionDefinition, cppTemplateDeclaration:
+      var
+        coms: seq[CxxComment]
+        anon: seq[NimDecl[PNode]]
+
+      let
+        entrs = postFixEntries(@[box(toCxxProc(node, coms))], fix)
+        impl = entrs[0].cxxProc.toNNode(conf, anon)
+
       result = newPStmtList()
       for an in anon:
         result.add an.toNNode()
 
       result.add impl.toNNode()
-      # var impl = newPProcDecl(node[cpfDecl].getName())
-      # for arg in node[cpfDecl].skip(0, {cppPointerDeclarator})["parameters"]:
-      #   var name: string
-      #   var argType: NType[PNode]
-
-      #   if cpfDecl in arg:
-      #     name = c.fixIdentName(arg.getName(), "a")
-      #     argType = arg[cpfType].toPType()
-      #     pointerWraps(arg[cpfDecl], argType)
-
-      #   else:
-      #     name = "arg"
-      #     argType = arg[cpfType].toPType()
-
-      #   impl.addArgument(name, argType)
-
-      # if cpfType in node:
-      #   impl.returnType = node[cpfType].toPType()
-
-      # if impl.returnType.isSome():
-      #   impl.returnType = impl.returnType.get().withIt do:
-      #     pointerWraps(node[cpfDecl], it)
-
 
     of cppInitializerList:
       result = newPTree(nnkPar)
@@ -432,7 +421,10 @@ proc conv*(
                              value[0..^1])
 
       result.add nnkVarSection.newPTree(
-        nnkIdentDefs.newPTree(node.toName(), declType.toNNode(), value))
+        nnkIdentDefs.newPTree(
+          node.getNameNode().toName(),
+          declType.toNNode(),
+          value))
 
     of cppQualifiedIdentifier:
       result = newXCall(".", ~node[0], ~node[1])
@@ -489,7 +481,7 @@ import compiler/tools/docgen_code_renderer
 import hnimast/pprint
 
 when isMainModule:
-  const full = off
+  const full = on
   when full:
     let files = toSeq(walkDir(
       AbsDir"/tmp/infiles",

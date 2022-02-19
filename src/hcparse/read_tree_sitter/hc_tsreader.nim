@@ -346,6 +346,7 @@ proc cxxNamePair*(node: CppNode, context: CxxNameContext): CxxNamePair =
 
     of cppNamespaceIdentifier,
        cppIdentifier,
+       cppDestructorName,
        cppTypeIdentifier,
        cppFieldIdentifier:
       result.cxx.scopes = @[node.strVal()]
@@ -729,7 +730,7 @@ proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
         raise newImplementKindError(node, node.treeRepr())
 
   else:
-    raise newImplementError(node.treeRepr())
+    failNode node
 
 
 proc toCxx*(node: CppNode, coms): seq[CxxEntry] =

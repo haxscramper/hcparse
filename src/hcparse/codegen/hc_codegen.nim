@@ -508,7 +508,9 @@ proc toNNode*[N](
   result.n = makeEnumField[N](field.nimName)
   result.n.docComment = toNimComment(field.docComment)
 
-proc toNNode*[N](en: CxxEnum, conf: CodegenConf): seq[NimDecl[N]] =
+proc toNNodeImpl*[N](en: CxxEnum, conf: CodegenConf):
+  tuple[cenum, nenum: EnumDecl[N], other: seq[NimDecl[N]]] =
+
   var
     cenum = newEnumDecl[N](
       conf.getPrefix("c", cncType) & en.nimName)
@@ -570,11 +572,11 @@ proc toNNode*[N](en: CxxEnum, conf: CodegenConf): seq[NimDecl[N]] =
   cenum.docComment.add toNimComment(en.docComment)
   nenum.docComment.add toNimComment(en.docComment)
 
-  result.add cenum
-  result.add nenum
+  result.cenum = cenum
+  result.nenum = nenum
 
   let toCenum = conf.getPrefix("to", cncProc) & cenum.name
-  result.add newPProcDecl(
+  result.other.add newPProcDecl(
     name       = toCenum,
     args       = @{"arg": newNNtype[N](nenum.name)},
     returnType = some newNNtype[N](cenum.name),
@@ -582,7 +584,7 @@ proc toNNode*[N](en: CxxEnum, conf: CodegenConf): seq[NimDecl[N]] =
     declType   = ptkConverter
   )
 
-  result.add newPProcDecl(
+  result.other.add newPProcDecl(
     name       = conf.getPrefix("to", cncProc) & nenum.name,
     args       = @{"arg": newNNtype[N](cenum.name)},
     returnType = some newNNtype[N](nenum.name),
@@ -593,7 +595,7 @@ proc toNNode*[N](en: CxxEnum, conf: CodegenConf): seq[NimDecl[N]] =
   block:
     let cenum = newPident(cenum.name)
     let nenum = newPIdent(nenum.name)
-    result.add pquote do:
+    result.other.add pquote do:
       converter toCint*(arg: `cenum`): cint =
         ## Convert nim enum value into cint that can be passed to wrapped C
         ## procs.
@@ -604,24 +606,30 @@ proc toNNode*[N](en: CxxEnum, conf: CodegenConf): seq[NimDecl[N]] =
         ## procs.
         cint(ord(`newPident(toCenum)`(arg)))
 
-      func `+`*(arg: `cenum`, offset: int): `cenum` = cast[`cenum`](ord(arg) + offset)
-      func `+`*(offset: int, arg: `cenum`): `cenum` = cast[`cenum`](ord(arg) + offset)
-      func `-`*(arg: `cenum`, offset: int): `cenum` = cast[`cenum`](ord(arg) - offset)
-      func `-`*(offset: int, arg: `cenum`): `cenum` = cast[`cenum`](ord(arg) - offset)
+      func `+`*(arg: `cenum`, offset: int): `cenum` =
+        cast[`cenum`](ord(arg) + offset)
+      func `+`*(offset: int, arg: `cenum`): `cenum` =
+        cast[`cenum`](ord(arg) + offset)
+      func `-`*(arg: `cenum`, offset: int): `cenum` =
+        cast[`cenum`](ord(arg) - offset)
+      func `-`*(offset: int, arg: `cenum`): `cenum` =
+        cast[`cenum`](ord(arg) - offset)
 
     if isFullPow:
       if isHoleyPow:
         var convCase = newCase(newNident[N]("value"))
         for (name, pow) in items(powMap):
           if pow == -1:
-            convCase.add newOf(name, pquote(result = cint(result or (0 shl 0))))
+            convCase.add newOf(name, pquote(
+              result = cint(result or (0 shl 0))))
 
           else:
             let val = newNLit[N, int](pow)
-            convCase.add newOf(name, pquote(result = cint(result or (1 shl `val`))))
+            convCase.add newOf(name, pquote(
+              result = cint(result or (1 shl `val`))))
 
 
-        result.add pquote do:
+        result.other.add pquote do:
           converter toCint*(args: set[`nenum`]): cint =
             ## Convert set of nim enum values into cint that can be passed
             ## to wrapped C procs.
@@ -629,12 +637,17 @@ proc toNNode*[N](en: CxxEnum, conf: CodegenConf): seq[NimDecl[N]] =
               `convCase`
 
       else:
-        result.add pquote do:
+        result.other.add pquote do:
           converter toCint*(args: set[`nenum`]): cint =
             ## Convert set of nim enum values into cint that can be passed
             ## to wrapped C procs.
             cast[cint](args)
 
+proc toNNode*[N](en: CxxEnum, conf: CodegenConf): seq[NimDecl[N]] =
+  let (cen, nen, other) = toNNodeImpl[N](en, conf)
+  result.add cen
+  result.add nen
+  result.add other
 
 proc toNNode*[N](
     entry: CxxEntry, conf: CodegenConf,
