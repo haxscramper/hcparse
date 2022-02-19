@@ -148,11 +148,14 @@ proc toCxxType*(node: CppNode, parent, user: Option[CxxNamePair]): CxxTypeUse =
               toCxxEnum(node, coms), parent.get(), user.get())
 
           of cppUnionSpecifier, cppStructSpecifier:
-            result = cxxTypeUse(
-              toCxxObject(node, coms), parent.get(), user.get())
+            result = CxxTypeUse(
+              kind: ctkAnonObject, objDef: toCxxObject(node, coms))
+
+            if parent.isSome(): result.objParent = parent.get()
+            if user.isSome(): result.objUser = user.get()
 
           else:
-            raise newUnexpectedKindError(node)
+            failNode node
 
       else:
         result = toCxxType(node[0], parent, user)
@@ -167,7 +170,7 @@ proc toCxxType*(node: CppNode, parent, user: Option[CxxNamePair]): CxxTypeUse =
       result = cxxTypeUse(args, toCxxType(node[cpfType], parent, user))
 
     else:
-      raise newImplementKindError(node, node.treeRepr())
+      failNode node
 
 template initPointerWraps*(newName, Type: untyped): untyped =
   proc pointerWraps(node: CppNode, ftype: var Type) =
@@ -509,8 +512,10 @@ proc toCxxObject*(node: CppNode, coms): CxxObject =
   for part in node:
     if part of cppBaseClassClause:
       for class in part:
-        result.super.add toCxxType(
-          class, none CxxNamePair, none CxxNamePair)
+        if not(class of cppSyntaxError):
+          result.super.add toCxxType(
+            class, none CxxNamePair, none CxxNamePair)
+
 
   for item in node["body"]:
     if item of cppAccessSpecifier:
@@ -616,17 +621,18 @@ proc toCxxObject*(node: CppNode, coms): CxxObject =
 
 
 proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
-  if node.len == 1:
-    case node[0].kind:
-      of cppEnumSpecifier:
-        result.add toCxxEnum(node[0], coms).withIt do:
-          it.add coms
-          coms.clear()
+  if node.len == 1 and node[0] of cppEnumSpecifier:
+    return @[
+      box toCxxEnum(node[0], coms).withIt do:
+        it.add coms
+        coms.clear()
+    ]
 
-        return
-
-      else:
-        raise newImplementKindError(node[0])
+  elif node.len == 1 and node of {
+    cppStructSpecifier, cppClassSpecifier, cppUnionSpecifier
+  }:
+    # Forward class declaration
+    return @[box toCxxForwardType(node, coms)]
 
   let main = tern("body" in node, node["body"], node[1])
   case main.kind:

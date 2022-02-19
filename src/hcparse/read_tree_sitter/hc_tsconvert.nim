@@ -288,11 +288,11 @@ proc conv*(
 
       var coms: seq[CxxComment]
       var anon: seq[NimDecl[PNode]]
-      result = nnkTypeSection.newPTree()
+      result = newPStmtList()
 
       for ent in toCxxTypeDefinition(node, coms).postFixEntries(fix, CxxLibImport()):
         for en in ent.toNNode(conf, anon):
-          result.add toNNode(en, standalone = false)
+          result.add toNNode(en, standalone = true)
 
         for an in anon:
           result.add toNNode(an)
@@ -496,6 +496,7 @@ when isMainModule:
   else:
     let files = [AbsFile"/tmp/in.cpp"]
 
+  startHax()
   for file in files:
     echo file
     var str = file.readFile()

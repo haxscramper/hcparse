@@ -734,8 +734,27 @@ iterator items*(use: CxxTypeUse): CxxTypeUse =
   for i in 0 ..< len(use):
     yield use[i]
 
+var asdf = false
 
-func `==`*(n1, n2: CxxName): bool = n1.scopes == n2.scopes
+func `==`*(n1, n2: CxxName): bool =
+  if n1.scopes.len != n2.scopes.len:
+    return false
+
+  else:
+    for (s1, s2) in zip(n1.scopes, n2.scopes):
+      {.cast(noSideEffect).}:
+        if asdf and s1 == "SGRegister":
+          discard
+          # echov globalTick()
+          # assert false
+
+      if s1 != s2:
+        return false
+
+    return true
+
+
+
 func `==`*(l1, l2: CxxLibImport): bool =
   l1.library == l2.library and l1.importPath == l2.importPath
 
@@ -1536,7 +1555,19 @@ func getSuperTypes*(store: CxxTypeStore, decl: CxxTypeDecl): seq[CxxObject] =
       for super in decl.get().super:
         stack.add super.cxxName()
 
-  outset.del decl.cxxName()
+  return
+
+  {.cast(noSideEffect).}:
+    # asdf = true
+    let name = decl.cxxName()
+    echov "!!!!!!!!!!!!!!!!!!!!!!!!!!11"
+    echov repr outset
+    echov "ended repr"
+    echov outset
+    if name in outset:
+      outset.del name
+    echov "deleted"
+    # asdf = false
 
   for key, val in outset:
     result.add val
