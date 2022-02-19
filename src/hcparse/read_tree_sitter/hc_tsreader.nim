@@ -317,6 +317,7 @@ proc getNameNode*(node: CppNode): CppNode =
     of cppFieldIdentifier,
        cppTypeIdentifier,
        cppIdentifier,
+       cppQualifiedIdentifier,
        cppPrimitiveType:
       node
 
@@ -333,7 +334,26 @@ proc getNameNode*(node: CppNode): CppNode =
       else:
         failNode node
 
-proc getName*(node: CppNode): string = node.getNameNode().strVal()
+# proc getName*(node: CppNode): string = node.getNameNode().strVal()
+
+proc cxxNamePair*(node: CppNode, context: CxxNameContext): CxxNamePair =
+  result.context = context
+  case node.kind:
+    of cppQualifiedIdentifier:
+      result.cxx.scopes = (
+        node[0].cxxNamePair(context).cxx.scopes &
+          node[1].cxxNamePair(context).cxx.scopes )
+
+    of cppNamespaceIdentifier,
+       cppIdentifier,
+       cppTypeIdentifier,
+       cppFieldIdentifier:
+      result.cxx.scopes = @[node.strVal()]
+
+    else:
+      failNode node
+
+
 
 proc toCxxArg*(node: CppNode, idx: int): CxxArg =
   assertKind(node, {
@@ -351,7 +371,7 @@ proc toCxxArg*(node: CppNode, idx: int): CxxArg =
       argt = toCxxType(node[cpfType], none CxxNamePair, some name).wrap(ctkPtr)
 
     else:
-      name = cxxPair(getName(node[cpfDecl]), cncArg)
+      name = getNameNode(node[cpfDecl]).cxxNamePair(cncArg)
       argt = toCxxType(node[cpfType], none CxxNamePair, some name)
       pointerWraps(node[cpfDecl], argt)
 
@@ -380,7 +400,7 @@ proc toCxxProc*(
     else:
       main
 
-  result = cxxProc(cxxPair(node[cpfDecl].getName()))
+  result = node[cpfDecl].getNameNode().cxxNamePair(cncProc).cxxProc()
 
   if parameters and false:
     echo main.treeRepr(opts = hdisplay(maxLen = 3))
@@ -437,7 +457,7 @@ proc toCxxField*(node: CppNode, coms; parent: CxxNamePair): CxxField =
 
   else:
     let decl = node[cpfDecl]
-    let name = cxxPair(getName(decl))
+    let name = getNameNode(decl).cxxNamePair(cncField)
     if decl of cppFunctionDeclarator:
       result = cxxField(name, toCxxType(node, some parent, some name))
 
@@ -682,22 +702,22 @@ proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
           else:
             let name =
               if d in arg and (arg[d].kind != cppAbstractPointerDeclarator):
-                arg[d].getName()
+                arg[d].getNameNode().cxxNamePair(cncProc)
 
               else:
-                ""
+                CxxNamePair()
 
 
             var t = toCxxType(arg[cpfType], none CxxNamePair, none CxxNamePair)
             if d in arg:
               pointerWraps(arg[d], t)
 
-            args.add cxxArg(cxxPair(name), t).withIt do:
+            args.add cxxArg(name, t).withIt do:
               it.add coms
               coms.clear()
 
         result.add cxxAlias(
-          body[d].getName().cxxPair().cxxTypeDecl(ctdkTypedef),
+          body[d].getNameNode().cxxNamePair(cncNone).cxxTypeDecl(ctdkTypedef),
           cxxTypeUse(
             args, toCxxType(node[cpfType], none CxxNamePair, none CxxNamePair)))
 

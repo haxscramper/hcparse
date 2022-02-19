@@ -60,22 +60,6 @@ proc skip*(node: CppNode, idx: int, kind: set[CppNodeKind]): CppNode =
   else:
     result = node
 
-proc cxxNamePair*(node: CppNode): CxxNamePair =
-  case node.kind:
-    of cppQualifiedIdentifier:
-      result.cxx.scopes = (
-        node[0].cxxNamePair().cxx.scopes &
-          node[1].cxxNamePair().cxx.scopes )
-
-    of cppNamespaceIdentifier,
-       cppIdentifier,
-       cppTypeIdentifier,
-       cppFieldIdentifier:
-      result.cxx.scopes = @[node.strVal()]
-
-    else:
-      failNode node
-
 proc fillStmt*(node: PNode): PNode =
   if node.isEmptyTree():
     return newPTree(nnkDiscardStmt, newEmptyPNode())
@@ -100,7 +84,7 @@ proc conv*(
 
   proc toName(node: CppNode): PNode =
     return newPIdent(fix.fixName(
-      node.cxxNamePair().updateNim(), pc[],
+      node.cxxNamePair(cncNone).updateNim(), pc[],
       default(CxxNameFixContext)))
 
   proc toTypeWithAnon(
@@ -197,10 +181,18 @@ proc conv*(
       result = newPIdent("false")
 
     of cppUpdateExpression:
-      result = newXCall("postInc", ~node[0])
+      let call =
+        if node{0} of cppDoubleMinusTok: "preDec"
+        elif node{0} of cppDoublePlusTok: "preInc"
+        elif node{1} of cppDoubleMinusTok: "postDec"
+        elif node{1} of cppDoublePlusTok: "postInc"
+        else:
+          failNode(node)
+
+      result = newXCall(call, ~node[0])
 
     of cppStringLiteral:
-      result = newPLit(node.strVal().strip(chars = {'"'}))
+      result = newPLit(node.getBase()[node.slice()].strip(chars = {'"'}))
 
     of cppPointerExpression:
       if node{0}.strVal() == "*":
@@ -293,10 +285,10 @@ proc conv*(
 
       var impl = entrs[0].cxxProc.toNNode(conf, anon)
       if node.kind == cppTemplateDeclaration:
-        impl.impl = ~node[1]
+        impl.impl = fillStmt(~node[1])
 
       else:
-        impl.impl = ~node["body"]
+        impl.impl = fillStmt(~node["body"])
 
       result = newPStmtList()
       for an in anon:
@@ -409,7 +401,7 @@ proc conv*(
       let (declType, anon) = toTypeWithAnon(
         node,
         some CxxNamePair(),
-        some node.getNameNode().cxxNamePair().updateNim()
+        some node.getNameNode().cxxNamePair(cncArg).updateNim()
       )
 
       if "value" in decl:
@@ -428,11 +420,8 @@ proc conv*(
             value = newXCall(newPIdent("init" & node[cpfType].strVal()),
                              value[0..^1])
 
-
-
-      let name = c.fixIdentName(node.getName(), "f").newPIdent()
       result.add nnkVarSection.newPTree(
-        nnkIdentDefs.newPTree(name, declType.toNNode(), value))
+        nnkIdentDefs.newPTree(node.toName(), declType.toNNode(), value))
 
     of cppQualifiedIdentifier:
       result = newXCall(".", ~node[0], ~node[1])
@@ -489,7 +478,7 @@ import compiler/tools/docgen_code_renderer
 import hnimast/pprint
 
 when isMainModule:
-  const full = on
+  const full = off
   when full:
     let files = toSeq(walkDir(
       AbsDir"/tmp/infiles",
@@ -524,9 +513,8 @@ when isMainModule:
         # add any bindings to the generated entries.
         return cxxNoBind()
 
-    # debug node
+    echo node.getTs().treeRepr(node.getBase(), unnamed = true)
     let nim = node.conv(str, c, conf, fix)
-    # debug nim
     let code = nim.formatToStr()
     # let code = node.conv(str, c, conf, fix).`$`
     # let code = nim.toPString()
