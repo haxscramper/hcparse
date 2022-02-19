@@ -401,6 +401,7 @@ proc toCxxProc*(
       main
 
   result = node[cpfDecl].getNameNode().cxxNamePair(cncProc).cxxProc()
+  result.userData = cast[pointer](main)
 
   if parameters and false:
     echo main.treeRepr(opts = hdisplay(maxLen = 3))
@@ -597,6 +598,9 @@ proc toCxxObject*(node: CppNode, coms): CxxObject =
 
         of cppQPropertyDeclaration:
           echov "skipping qproperty"
+
+        of cppSyntaxError:
+          discard
 
         else:
           failNode(item)

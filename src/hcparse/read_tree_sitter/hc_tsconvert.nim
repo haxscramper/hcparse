@@ -214,8 +214,26 @@ proc conv*(
     of cppNull:
       result = newPIdent("nil")
 
-    of cppPreprocCall, cppPreprocIfdef, cppPreprocDef:
+    of cppPreprocCall, cppPreprocDef:
       result = newEmptyPNode()
+
+    of cppPreprocIfdef:
+      if node[0] of cppIdentifier:
+        # Include guard detection
+        let head = node[0].strVal()
+        if node[1] of cppPreprocDef and
+           node[1][0] of cppIdentifier and node[1][0].strVal() == head:
+
+          result = newPStmtList()
+          for item in node[2..^1]:
+            result.add ~item
+
+        else:
+          result = newEmptyPNode()
+
+      else:
+        result = newEmptyPNode()
+
 
     of cppSwitchStatement:
       var before = newPStmtList()
@@ -263,7 +281,7 @@ proc conv*(
         before.add result
         return before
 
-    of cppStructSpecifier, cppTypeDefinition:
+    of cppStructSpecifier, cppTypeDefinition, cppClassSpecifier:
       var coms: seq[CxxComment]
       var anon: seq[NimDecl[PNode]]
       result = nnkTypeSection.newPTree()
@@ -282,14 +300,7 @@ proc conv*(
       var coms: seq[CxxComment]
       let entrs = postFixEntries(@[box(toCxxProc(node, coms))], fix)
       var anon: seq[NimDecl[PNode]]
-
       var impl = entrs[0].cxxProc.toNNode(conf, anon)
-      if node.kind == cppTemplateDeclaration:
-        impl.impl = fillStmt(~node[1])
-
-      else:
-        impl.impl = fillStmt(~node["body"])
-
       result = newPStmtList()
       for an in anon:
         result.add an.toNNode()
@@ -494,8 +505,8 @@ when isMainModule:
     var str = file.readFile()
     var c: StringNameCache
     let node = parseCppString(addr str)
-    let conf = cxxCodegenConf.withIt do:
-      discard
+    var conf = cxxCodegenConf.withIt do:
+      it.nameStyle = idsSnake
 
     let fix = baseFixConf.withIt do:
       it.typeStore = newTypeStore()
@@ -511,9 +522,27 @@ when isMainModule:
       it.onGetBind():
         # We are performing code translation here, so there is no need to
         # add any bindings to the generated entries.
-        return cxxNoBind()
+        return cxxNotImported()
 
-    echo node.getTs().treeRepr(node.getBase(), unnamed = true)
+    conf.postProc = proc(
+      def: CxxProc,
+      impl: var ProcDecl[PNode],
+      conf: CodegenConf
+    ): seq[NimDecl[PNode]] =
+      assert def.userData.notNil()
+      let node = cast[CppNode](def.userData)
+      if tern(node.kind == cppTemplateDeclaration,
+              node.len < 2, "body" notin node):
+        # No body, only forward declaration.
+        impl.impl = fillStmt(newPStmtList())
+
+      else:
+        impl.impl = fillStmt(conv(tern(
+          node.kind == cppTemplateDeclaration,
+          node[1], node["body"]), str, c, conf, fix))
+
+
+    # echo node.getTs().treeRepr(node.getBase(), unnamed = true)
     let nim = node.conv(str, c, conf, fix)
     let code = nim.formatToStr()
     # let code = node.conv(str, c, conf, fix).`$`

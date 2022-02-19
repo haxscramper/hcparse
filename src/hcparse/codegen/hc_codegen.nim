@@ -18,6 +18,9 @@ type
     ]]
 
     nameStyle*: IdentStyle
+    postProc*: proc(
+      def: CxxProc, res: var ProcDecl[PNode],
+      conf: CodegenConf): seq[NimDecl[PNode]]
 
 
 
@@ -235,6 +238,9 @@ proc toNNode*[N](
       result.addPragma(
         conf.getImport(), newNLit[N, string](field.cxxName.scopes[^1]))
 
+  if field.bitsize.isSome():
+    result.addPragma("bitsize", newPLit(field.bitsize.get()))
+
 
 proc toNNode*[N](header: CxxBind, conf: CodegenConf, name: string): seq[N] =
   case header.kind:
@@ -253,7 +259,7 @@ proc toNNode*[N](header: CxxBind, conf: CodegenConf, name: string): seq[N] =
     of cbkLink:
       result.add(newNIdent[N]("nodecl"))
 
-    of cbkNone:
+    of cbkNone, cbkNotImported:
       discard
 
     of cbkDynamicPatt:
@@ -397,12 +403,11 @@ proc toNNode*[N](
 
       result.addArgument("this", ret)
 
+    if def.cbind.kind != cbkNotImported:
+      result.addPragma toNNode[N](def.getCbindAs(parent), conf, def.nimName)
+
+  elif def.cbind.kind != cbkNotImported:
     result.addPragma toNNode[N](def.getCbindAs(parent), conf, def.nimName)
-
-  else:
-    result.addPragma toNNode[N](def.getCbindAs(parent), conf, def.nimName)
-
-
 
   let ret: NType[N] =
     if def.isConstructor:
@@ -419,9 +424,11 @@ proc toNNode*[N](
   # nim's overload-resolution-in-generics magic
   proc_decl.`returnType=`(result, ret)
 
-
   for arg in def.arguments:
     result.addArgument toNNode[N](arg, conf, anon)
+
+  if conf.postProc.notNil():
+    anon.add conf.postProc(def, result, conf)
 
 proc toNNode*[N](
     obj: CxxObject, conf: CodegenConf,
@@ -437,7 +444,8 @@ proc toNNode*[N](
   for param in obj.decl.genParams:
     res.name.genParams.add newNNType[N](param.name.nim, @[])
 
-  res.addPragma toNNode[N](obj.cbind, conf, obj.nimName)
+  if obj.cbind.kind != cbkNotImported:
+    res.addPragma toNNode[N](obj.cbind, conf, obj.nimName)
 
   for field in obj.mfields:
     res.add toNNode[N](field, conf, anon)

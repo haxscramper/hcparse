@@ -58,6 +58,10 @@ type
     cbkDynamicExpr
     cbkDynamicCall
     cbkMacroBind
+    cbkNotImported ## Entry does not have any mapping to the original code
+    ## (necessary for code transpiler and conversion of the dynamic
+    ## libraries without need for headers afterwards (in that case type
+    ## should not be imported from anywhere.))
     cbkLink ## Bind via OS dynamic linker
 
   CxxLibImport* = object
@@ -70,7 +74,7 @@ type
                                 ## object binding
 
     case kind*: CxxBindKind
-      of cbkNone, cbkLink:
+      of cbkNone, cbkLink, cbkNotImported:
         discard
 
       of cbkGlobal:
@@ -322,13 +326,13 @@ type
     ## very similar structure (nim/cxx name, generic parameters with
     ## optional defaults). Missing elements are added as regular fields.
 
+    userData*: pointer ## Additional user data. Is not intended for use in
+    ## general, added only to hack in method body transpilation.
+    ## Tree-sitter casts the original node, and then codegen triggers 'post
+    ## convert' hook.
     arguments*: seq[CxxArg]
     returnType*: CxxTypeUse
     throws*: seq[CxxTypeUse]
-
-    # operatorKind*: Cxx
-
-
     flags*: set[CxxProcFlag]
 
     constructorOf*: Option[CxxNamePair]
@@ -949,6 +953,7 @@ func cxxHeader*(file: AbsFile): CxxBind =
 func cxxLinkBind*(): CxxBind = CxxBind(kind: cbkLink)
 
 func cxxNoBind*(): CxxBind = CxxBind(kind: cbkNone)
+func cxxNotImported*(): CxxBind = CxxBind(kind: cbkNotImported)
 
 func cxxArg*(name: CxxNamePair, argType: CxxTypeUse): CxxArg =
   result = CxxArg(nimType: argType, name: name, haxdocIdent: newJNull())
