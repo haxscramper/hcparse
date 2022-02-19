@@ -281,7 +281,11 @@ proc conv*(
         before.add result
         return before
 
-    of cppStructSpecifier, cppTypeDefinition, cppClassSpecifier:
+    of cppStructSpecifier,
+       cppTypeDefinition,
+       cppClassSpecifier,
+       cppUnionSpecifier:
+
       var coms: seq[CxxComment]
       var anon: seq[NimDecl[PNode]]
       result = nnkTypeSection.newPTree()

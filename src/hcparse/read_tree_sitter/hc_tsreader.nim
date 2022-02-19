@@ -567,10 +567,14 @@ proc toCxxObject*(node: CppNode, coms): CxxObject =
              item[cpfType] of { cppStructSpecifier }:
             result.nested.add toCxxObject(item[cpfType], coms)
 
-          elif cpfDecl in item and
-               item[cpfDecl] of cppFunctionDeclarator:
-            let name = item[cpfDecl][cpfDecl]
-            if name of cppParenthesizedDeclarator:
+          # TODO This piece of code is not really legible, so I need to
+          # provide at least some form of documentation that explains what
+          # is going on here.
+          elif item of cppFunctionDefinition or
+               # `Sequencer *get_seq(void) { return &seq; };` - for function definition.
+               (cpfDecl in item and item[cpfDecl] of { cppFunctionDeclarator }):
+            if not(item of cppFunctionDefinition) and
+               item[cpfDecl][cpfDecl] of cppParenthesizedDeclarator:
               result.mfields.add toCxxField(
                   item, coms, result.decl.name).withIt do:
                 it.add coms
@@ -619,118 +623,122 @@ proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
           it.add coms
           coms.clear()
 
+        return
+
       else:
         raise newImplementKindError(node[0])
 
-  elif node.len == 2:
-    case node[1].kind:
-      of cppFieldDeclarationList:
-        result.add toCxxObject(node, coms)
+  let main = tern("body" in node, node["body"], node[1])
+  case main.kind:
+    of cppFieldDeclarationList:
+      result.add toCxxObject(node, coms)
 
-      of cppTypeIdentifier,
-         cppPointerDeclarator,
-         cppPrimitiveType:
-        let newType = toCxxType(
-          node[cpfDecl],
-          parent = none CxxNamePair,
-          user = none CxxNamePair).toDecl(ctdkTypedef #[ XXXX ]#)
+    of cppTypeIdentifier,
+       cppPointerDeclarator,
+       cppPrimitiveType:
+      let newType = toCxxType(
+        node[cpfDecl],
+        parent = none CxxNamePair,
+        user = none CxxNamePair).toDecl(ctdkTypedef #[ XXXX ]#)
 
-        let baseBody = node[0]
-        if baseBody of {
-          cppSizedTypeSpecifier, cppPrimitiveType, cppTypeIdentifier
-        } or (
-          baseBody of {
-            cppStructSpecifier, cppUnionSpecifier, cppEnumSpecifier} and
-          "body" notin baseBody
-        ):
-          var alias = cxxAlias(
-            newType,
-            toCxxType(node[cpfType], none CxxNamePair, none CxxNamePair)
-          ).withIt do:
-                it.add coms
-                coms.clear()
-          pointerWraps(node[cpfDecl], alias.baseType)
-
-          if alias.baseType of ctkIdent and
-            alias.decl.cxxName() == alias.baseType.cxxName():
-            # `typedef struct T T;`
-            result.add cxxForward(
-              alias.decl.name, ctdkStruct #[ TEMP ]#).withIt do:
-
+      let baseBody = node[0]
+      if baseBody of {
+        cppSizedTypeSpecifier, cppPrimitiveType, cppTypeIdentifier
+      } or (
+        baseBody of {
+          cppStructSpecifier, cppUnionSpecifier, cppEnumSpecifier} and
+        "body" notin baseBody
+      ):
+        var alias = cxxAlias(
+          newType,
+          toCxxType(node[cpfType], none CxxNamePair, none CxxNamePair)
+        ).withIt do:
               it.add coms
               coms.clear()
+        pointerWraps(node[cpfDecl], alias.baseType)
 
-          else:
-            result.add alias
+        if alias.baseType of ctkIdent and
+          alias.decl.cxxName() == alias.baseType.cxxName():
+          # `typedef struct T T;`
+          result.add cxxForward(
+            alias.decl.name, ctdkStruct #[ TEMP ]#).withIt do:
 
-        elif baseBody of {cppStructSpecifier, cppUnionSpecifier}:
-          # FIXME handle multiple trailing typedefs
-          var struct = toCxxObject(baseBody, coms)
-          if struct.cxxName().isEmpty():
-            # Handle `typedef struct {} struct_name;`
-            struct.name = newType.name
-            result.add struct
-
-          else:
-            result.add struct
-            if struct.cxxName() != newType.cxxName():
-              result.add cxxAlias(newType, struct.decl.cxxTypeUse()).withIt do:
-                it.add coms
-                coms.clear()
-
-        elif baseBody of {cppEnumSpecifier}:
-          var enumd = toCxxEnum(node[0], coms)
-          if enumd.cxxName().isEmpty():
-            enumd.name = newType.name
-            result.add enumd
-
-          else:
-            result.add enumd
-            if enumd.cxxName() != newType.cxxName():
-              result.add cxxAlias(newType, enumd.decl.cxxTypeUse()).withIt do:
-                it.add coms
-                coms.clear()
+            it.add coms
+            coms.clear()
 
         else:
-          raise newImplementKindError(
-            baseBody, $node & " " & node.treeRepr())
+          result.add alias
 
-      of cppFunctionDeclarator:
-        let d = cpfDecl
-        let body = node[d]
-        var args: seq[CxxArg]
-        var coms: seq[CxxComment]
-        for arg in body["parameters"]:
-          if arg of cppComment:
-            coms.add toCxxComment(arg)
+      elif baseBody of {
+          cppStructSpecifier,
+          cppUnionSpecifier,
+          cppClassSpecifier
+        }:
+        # FIXME handle multiple trailing typedefs
+        var struct = toCxxObject(baseBody, coms)
+        if struct.cxxName().isEmpty():
+          # Handle `typedef struct {} struct_name;`
+          struct.name = newType.name
+          result.add struct
 
-          else:
-            let name =
-              if d in arg and (arg[d].kind != cppAbstractPointerDeclarator):
-                arg[d].getNameNode().cxxNamePair(cncProc)
-
-              else:
-                CxxNamePair()
-
-
-            var t = toCxxType(arg[cpfType], none CxxNamePair, none CxxNamePair)
-            if d in arg:
-              pointerWraps(arg[d], t)
-
-            args.add cxxArg(name, t).withIt do:
+        else:
+          result.add struct
+          if struct.cxxName() != newType.cxxName():
+            result.add cxxAlias(newType, struct.decl.cxxTypeUse()).withIt do:
               it.add coms
               coms.clear()
 
-        result.add cxxAlias(
-          body[d].getNameNode().cxxNamePair(cncNone).cxxTypeDecl(ctdkTypedef),
-          cxxTypeUse(
-            args, toCxxType(node[cpfType], none CxxNamePair, none CxxNamePair)))
+      elif baseBody of {cppEnumSpecifier}:
+        var enumd = toCxxEnum(node[0], coms)
+        if enumd.cxxName().isEmpty():
+          enumd.name = newType.name
+          result.add enumd
+
+        else:
+          result.add enumd
+          if enumd.cxxName() != newType.cxxName():
+            result.add cxxAlias(newType, enumd.decl.cxxTypeUse()).withIt do:
+              it.add coms
+              coms.clear()
 
       else:
-        raise newImplementKindError(node, node.treeRepr())
+        raise newImplementKindError(
+          baseBody, $node & " " & node.treeRepr())
 
-  else:
-    failNode node
+    of cppFunctionDeclarator:
+      let d = cpfDecl
+      let body = node[d]
+      var args: seq[CxxArg]
+      var coms: seq[CxxComment]
+      for arg in body["parameters"]:
+        if arg of cppComment:
+          coms.add toCxxComment(arg)
+
+        else:
+          let name =
+            if d in arg and (arg[d].kind != cppAbstractPointerDeclarator):
+              arg[d].getNameNode().cxxNamePair(cncProc)
+
+            else:
+              CxxNamePair()
+
+
+          var t = toCxxType(arg[cpfType], none CxxNamePair, none CxxNamePair)
+          if d in arg:
+            pointerWraps(arg[d], t)
+
+          args.add cxxArg(name, t).withIt do:
+            it.add coms
+            coms.clear()
+
+      result.add cxxAlias(
+        body[d].getNameNode().cxxNamePair(cncNone).cxxTypeDecl(ctdkTypedef),
+        cxxTypeUse(
+          args, toCxxType(node[cpfType], none CxxNamePair, none CxxNamePair)))
+
+    else:
+      raise newImplementKindError(node, node.treeRepr())
+
 
 
 proc toCxx*(node: CppNode, coms): seq[CxxEntry] =
