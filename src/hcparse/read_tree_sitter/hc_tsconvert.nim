@@ -22,10 +22,10 @@ import
   hmisc/algo/namegen,
   hnimast
 
-export parseCppString
+import compiler/utils/astrepr
+import compiler/ast/trees
 
-proc getIdent*(node: CppNode, c: var StringNameCache): PNode =
-  newPIdent(c.fixIdentName(node.strVal(), "f"))
+export parseCppString
 
 proc wrap*(ntype: NType[PNode], kind: CxxTypeKind): NType[PNode] =
   case kind:
@@ -67,11 +67,21 @@ proc cxxNamePair*(node: CppNode): CxxNamePair =
         node[0].cxxNamePair().cxx.scopes &
           node[1].cxxNamePair().cxx.scopes )
 
-    of cppNamespaceIdentifier, cppIdentifier:
+    of cppNamespaceIdentifier,
+       cppIdentifier,
+       cppTypeIdentifier,
+       cppFieldIdentifier:
       result.cxx.scopes = @[node.strVal()]
 
     else:
       failNode node
+
+proc fillStmt*(node: PNode): PNode =
+  if node.isEmptyTree():
+    return newPTree(nnkDiscardStmt, newEmptyPNode())
+
+  else:
+    node
 
 proc conv*(
     node: CppNode,
@@ -82,6 +92,16 @@ proc conv*(
   ): PNode =
   template `~`(expr: CppNode): untyped =
     conv(expr, str, c, conf, fix)
+
+  var pc = addr c
+  proc updateNim(pair: sink CxxNamePair): CxxNamePair =
+    result = pair
+    result.nim = result.cxx.scopes.join("_")
+
+  proc toName(node: CppNode): PNode =
+    return newPIdent(fix.fixName(
+      node.cxxNamePair().updateNim(), pc[],
+      default(CxxNameFixContext)))
 
   proc toTypeWithAnon(
     node: CppNode, parent, user: Option[CxxNamePair] = none CxxNamePair):
@@ -126,11 +146,24 @@ proc conv*(
 
       result.add call
 
-    of cppBinaryExpression, cppAssignmentExpression:
-      result = newXCall(node{1}.mapOpName(), ~node[0], ~node[1])
+    of cppBinaryExpression, cppAssignmentExpression, cppUnaryExpression:
+      let
+        op = node{1}.strVal()
+        lhs = ~node[0]
+        map = op.mapOpName(true)
 
-    of cppUnaryExpression:
-      result = newXCall(node{0}.mapOpName(), ~node[0])
+      if node of cppUnaryExpression:
+        result = newXCall(map, lhs)
+
+      else:
+        result = newXCall(map, ~node[0], ~node[1])
+
+      if op in cxxAsgnOps:
+        # NOTE this should be configurable, since not simply rewriting all
+        # the operators is not the best idea for a more complex C++ code
+        # that might actually have all the necesary overloads in place.
+        result = nnkAsgn.newPTree(lhs, newPar(result))
+
 
     of cppParenthesizedExpression:
       result = nnkPar.newPTree(~node[0])
@@ -139,7 +172,7 @@ proc conv*(
        cppFieldIdentifier,
        cppTypeIdentifier,
        cppNamespaceIdentifier:
-      result = newPident(c.fixIdentName(node.strVal(), "a"))
+      result = node.toName()
 
     of cppFieldExpression:
       # if node{1}.strVal() == "->":
@@ -200,28 +233,31 @@ proc conv*(
         case branch.kind:
           of cppComment: discard
           of cppCaseStatement:
-            if branch.len == 1:
+            let default = branch{0}.strVal() == "default"
+            if branch.len == 1 and not default:
               emptyList.add ~branch[0]
               continue
 
-            var body = newPStmtList()
-            for item in branch[1..^1]:
+            var body: seq[PNode]
+            for item in branch[tern(default, 0, 1)..^1]:
               body.add ~item
 
-            if "value" notin branch:
-              result.addBranch(
-                emptyList,
-                body[0 .. ^tern(body[^1].kind == nkBreakStmt, 2, 1)].
-                  newPStmtList().fixEmptyStmt())
+            if 0 < body.len and body[^1].kind == nkBreakStmt:
+              body.setLen(body.len - 1)
+
+            let body1 = newPStmtList(body).fillStmt()
+
+            if default:
+              result.addBranch(body1)
+
+            elif "value" notin branch:
+              result.addBranch(emptyList, body1)
 
             elif 0 < body.len:
-              result.addBranch(
-                emptyList &  ~branch["value"],
-                body[0 .. ^tern(body[^1].kind == nkBreakStmt, 2, 1)].
-                  newPStmtList().fixEmptyStmt())
+              result.addBranch(emptyList & ~branch["value"], body1)
 
             else:
-              result.addBranch(emptyList & ~branch["value"], body)
+              result.addBranch(emptyList & ~branch["value"], body1)
 
             emptyList = @[]
 
@@ -242,7 +278,7 @@ proc conv*(
 
       for ent in toCxxTypeDefinition(node, coms).postFixEntries(fix, CxxLibImport()):
         for en in ent.toNNode(conf, anon):
-          result.add toNNode(en)
+          result.add toNNode(en, standalone = false)
 
         for an in anon:
           result.add toNNode(an)
@@ -355,10 +391,9 @@ proc conv*(
         result = newPLit(node.strVal()[1])
 
     of cppIfStatement:
-      result = newIf(
-        ~node[cpfCond],
-        ~node["consequence"],
-        tern(cpfAlter in node, ~node[cpfAlter], nil))
+      result = newIf(~node[cpfCond], fillStmt(~node["consequence"]))
+      if cpfAlter in node:
+        result.addBranch(fillStmt(~node[cpfAlter]))
 
     of cppDoStatement:
       let body = ~node["body"]
@@ -374,7 +409,7 @@ proc conv*(
       let (declType, anon) = toTypeWithAnon(
         node,
         some CxxNamePair(),
-        some node.getNameNode().cxxNamePair()
+        some node.getNameNode().cxxNamePair().updateNim()
       )
 
       if "value" in decl:
@@ -409,10 +444,12 @@ proc conv*(
       result = newPTree(nnkExceptBranch)
       let param = node["parameters"]
       if param.len == 0:
-        result.add ~node["body"]
+        result.add newEmptyPNode()
 
       else:
         result.add newXCall("as", ~param[0][cpfType], ~param[0][cpfDecl])
+
+      result.add ~node["body"]
 
     of cppTryStatement:
       result = newPTree(nnkTryStmt, ~node["body"])
@@ -423,13 +460,15 @@ proc conv*(
       result = newPTree(nnkRaiseStmt, ~node[0])
 
     of cppConditionalExpression:
-      result = newPar(
-        newIf(
-          newPar ~node[cpfCond],
-          newPar ~node["consequence"],
-          newPar ~node[cpfAlter]
-        )
-      )
+      let cond = node[cpfCond]
+      if cond of cppAssignmentExpression:
+        result = nnkAsgn.newPTree(
+          ~cond["left"],
+          newPar(
+            newIf(~cond["right"], ~node["consequence"], ~node[cpfAlter])))
+
+      else:
+        result = newPar(newIf(~cond, ~node["consequence"], ~node[cpfAlter]))
 
     of cppArgumentList:
       result = newPTree(nnkPar)
@@ -446,29 +485,51 @@ proc conv*(
       failNode node
 
 
+import compiler/tools/docgen_code_renderer
+import hnimast/pprint
+
 when isMainModule:
-  for file in walkDir(
+  const full = on
+  when full:
+    let files = toSeq(walkDir(
       AbsDir"/tmp/infiles",
       AbsFile,
       recurse = true,
-      exts = @["h", "c", "hpp", "cpp"]):
-  # for file in [AbsFile"/tmp/in.c"]:
+      exts = @["h", "c", "hpp", "cpp"]))
+
+  else:
+    let files = [AbsFile"/tmp/in.cpp"]
+
+  for file in files:
     echo file
     var str = file.readFile()
     var c: StringNameCache
     let node = parseCppString(addr str)
-    # debug node
     let conf = cxxCodegenConf.withIt do:
       discard
 
     let fix = baseFixConf.withIt do:
       it.typeStore = newTypeStore()
+      it.onFixName():
+        if name.nim.len == 0:
+          result = name.cxx.scopes.join("_")
+        else:
+          result = name.nim
+
+        if not cache.knownRename(name.nim):
+          cache.newRename(name.nim, result)
+
       it.onGetBind():
         # We are performing code translation here, so there is no need to
         # add any bindings to the generated entries.
         return cxxNoBind()
 
-    let code = node.conv(str, c, conf, fix).`$`
+    # debug node
+    let nim = node.conv(str, c, conf, fix)
+    # debug nim
+    let code = nim.formatToStr()
+    # let code = node.conv(str, c, conf, fix).`$`
+    # let code = nim.toPString()
     writeFile(file.withBaseSuffix(file.ext()).withExt("nim"), code)
 
 

@@ -74,16 +74,32 @@ proc primitiveName*(node: CppNode): string =
 
   return aux(node.getTs())
 
-proc mapOpName*(node: CppNode): string =
-  case node.strVal():
+const cxxAsgnOps* = [
+  "<<=", ">>=", "%=", "&=", "|=", "^=",
+  # basic math operators are more likely to work with the operands, but in
+  # general it is not really possible to know what is going on in the C++
+  # code from the syntax alone, so the assumption here is that rewriting
+  # all `+=` would reduce the amount of errors in the final code because
+  # most of the times `+=` was used for integer addition.
+  "+=", "-=", "/=", "*="
+]
+
+proc mapOpName*(op: string, mapAsgn: bool = false): string =
+  case op:
     of "|", "||": "or"
     of "<<": "shl"
     of ">>": "shr"
     of "&", "&&": "and"
     of "^": "xor"
+    of "%": "mod"
     of "~": "not"
     of "!": "not" # QUESTION what is the difference between ~ and !
-    else: node.strVal()
+    else:
+      if mapAsgn and op in cxxAsgnOps:
+        mapOpName(op[0..^2])
+
+      else:
+        op
 
 proc mapTypeName*(node: CppNode): string =
   case node.kind:
