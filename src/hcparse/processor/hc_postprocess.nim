@@ -222,15 +222,23 @@ proc fixIdentsRec*(
   var context: CxxNameFixContext
   context[cancLibName] = some cxxPair(conf.libName, cxxName(conf.libName))
   # pprint entry
-  proc aux(name: var CxxNamePair, cache: var StringNameCache) =
+  proc aux(
+      name: var CxxNamePair, cache: var StringNameCache, entryIdx: int = -1) =
+
     if name.cxx.scopes.len == 0:
-      name.nim = "Type" & $entryIdx
+      assert entryIdx != -1
+      case name.context:
+        of cncField:
+          name.nim = "field" & $entryIdx
+
+        else:
+          name.nim = "Type" & $entryIdx
 
     else:
       name.nim = conf.fixName(name, cache, context)
 
   proc aux(decl: var CxxTypeDecl, cache: var StringNameCache) =
-    aux(decl.name, cache)
+    aux(decl.name, cache, entryIdx)
 
     for param in mitems(decl.genParams):
       aux(param.name, cache)
@@ -320,8 +328,8 @@ proc fixIdentsRec*(
         assertRef entry.cxxObject
         aux(entry.cxxObject.decl, cache)
         context[cancParentObjectName] = some entry.cxxObject.decl.name
-        for field in mitems(entry.cxxObject.mfields):
-          aux(field.name, cache)
+        for idx, field in mpairs(entry.cxxObject.mfields):
+          aux(field.name, cache, idx)
           aux(field.nimType, cache)
 
         for mproc in mitems(entry.cxxObject.methods):

@@ -122,6 +122,13 @@ proc toCxxArg*(node: CppNode, idx: int): CxxArg
 proc toCxxEnum*(node: CppNode, coms): CxxEnum
 proc toCxxObject*(main: CppNode, coms): CxxObject
 
+proc parseCppInt*(val: string): int =
+  if val.startsWith("0x"):
+    return parseHexInt(val)
+
+  else:
+    return parseInt(val)
+
 proc pointerWraps*(node: CppNode, ftype: var CxxTypeUse) =
   case node.kind:
     of cppPointerDeclarator:
@@ -141,7 +148,7 @@ proc pointerWraps*(node: CppNode, ftype: var CxxTypeUse) =
             kind: ctkStaticParam,
             value: CxxExpr(
               kind: cekIntLit,
-              intVal: size.strVal().parseInt())),
+              intVal: size.strVal().parseCppInt())),
           ftype
         )
 
@@ -168,6 +175,18 @@ proc pointerWraps*(node: CppNode, ftype: var CxxTypeUse) =
       pointerWraps(node[0], ftype)
 
     of cppFunctionDeclarator:
+      if node[cpfDecl] of {
+        cppFieldIdentifier, # Simple procedure
+        cppDestructorName,
+        cppQualifiedIdentifier # wraps of `void* VGA::get_windowsize`
+      } and
+         node["parameters"] of cppParameterList:
+        # `int proc();` `~Name()` are parsed as field declarator by
+        # tree-sitter, so providing early detection here. This procedure is
+        # also called for 'pointer wraps' of the standalone procs, so
+        # filtering out identifiers here.
+        return
+
       var args: seq[CxxArg]
       var idx = 0
       for param in node["parameters"]:
@@ -183,7 +202,7 @@ proc pointerWraps*(node: CppNode, ftype: var CxxTypeUse) =
         # executable opcodes).
         pointerWraps(node[cpfDecl][0][0], ftype)
 
-      elif node[cpfDecl] of { cppFieldIdentifier }:
+      elif node[cpfDecl] of { cppFieldIdentifier, cppIdentifier }:
         # Ignoring simple field identifier here - `int (*foo)();` has no
         # additional indirection layers.
         discard
@@ -310,45 +329,6 @@ proc evalEnumValue(node: CppNode, ctx: CxxEvalCtx): BiggestInt =
         $node & "\n" & node.treeRepr(),
       )
 
-proc toCxxEnum*(node: CppNode, coms): CxxEnum =
-  var name: CxxNamePair
-
-  if "name" in node:
-    name = cxxPair(node["name"].strVal())
-
-  result = cxxEnum(name)
-  result.add coms
-  coms.clear()
-
-  var env: CxxEvalCtx
-  var value: BiggestInt = 0
-  for en in node["body"]:
-    case en.kind:
-      of cppEnumerator:
-        if "value" in en:
-          value = evalEnumValue(en["value"], env)
-
-        let name = en["name"].strVal()
-        env.table[name] = value
-        result.values.add cxxEnumValue(cxxPair(name), value)
-        result.values[^1].add coms
-        coms.clear()
-        inc value
-
-
-      of cppComment:
-        coms.add toCxxComment(en)
-
-      else:
-        raise newImplementKindError(en)
-
-
-proc skipPointer(node: CppNode): CppNode =
-  case node.kind:
-    of cppPointerDeclarator: skipPointer(node[0])
-    else: node
-
-
 proc getNameNode*(node: CppNode): CppNode =
   case node.kind:
     of cppFieldIdentifier,
@@ -358,7 +338,10 @@ proc getNameNode*(node: CppNode): CppNode =
        cppPrimitiveType:
       node
 
-    of cppArrayDeclarator, cppFunctionDeclarator:
+    of cppArrayDeclarator,
+       cppFunctionDeclarator,
+       cppEnumerator,
+       cppAssignmentExpression:
       node[0].getNameNode()
 
     of cppDeclaration, cppInitDeclarator:
@@ -390,6 +373,60 @@ proc cxxNamePair*(node: CppNode, context: CxxNameContext): CxxNamePair =
 
     else:
       failNode node
+
+
+proc toCxxEnum*(node: CppNode, coms): CxxEnum =
+  var name = node.getNameNode().cxxNamePair(cncType)
+  result = cxxEnum(name)
+  result.add coms
+  coms.clear()
+
+  var env: CxxEvalCtx
+  var elements: seq[CppNode]
+  if "body" in node:
+    for en in node["body"]:
+      elements.add en
+
+  # HACK it seems like current version of the C++ parser does not support
+  # nested enum declarations. As a result `enum Kind {}` is treated like a
+  # regular field declaration with initializer list. For now I will just
+  # work around that, in the future grammar should be fixed instead.
+  # Currently `class Name { enum class Kind { Item1, Item2 }; };` is parsed
+  # incorrectly
+  elif "default_value" in node:
+    for en in node["default_value"]:
+      elements.add en
+
+  var value: BiggestInt = 0
+  for en in elements:
+    case en.kind:
+      of cppEnumerator, cppAssignmentExpression, cppIdentifier:
+        if "value" in en:
+          value = evalEnumValue(en["value"], env)
+
+        elif "right" in en:
+          value = evalEnumValue(en["right"], env)
+
+        let name = en.getNameNode().strVal()
+        env.table[name] = value
+        result.values.add cxxEnumValue(cxxPair(name), value)
+        result.values[^1].add coms
+        coms.clear()
+        inc value
+
+      of cppComment:
+        coms.add toCxxComment(en)
+
+      else:
+        raise newImplementKindError(en)
+
+
+proc skipPointer(node: CppNode): CppNode =
+  case node.kind:
+    of cppPointerDeclarator: skipPointer(node[0])
+    else: node
+
+
 
 
 
@@ -657,9 +694,31 @@ proc toCxxObject*(main: CppNode, coms): CxxObject =
             # Regular function
             toMethod(item)
 
+        elif cpfType in item and item[cpfType] of {
+          cppStructSpecifier, cppUnionSpecifier, cppClassSpecifier
+        }:
+          res.nested.add toCxxObject(item[0], coms).withIt do:
+            it.access = accs
+
+        elif cpfType in item and item[cpfType] of { cppEnumSpecifier }:
+          res.nested.add toCxxEnum(item, coms).withIt do:
+            it.access = accs
+
         else:
           # Regular field
           toField(item)
+
+      of cppComment:
+        coms.add toCxxComment(item)
+
+      of cppQPropertyDeclaration:
+        echov "skipping qproperty"
+
+      of cppSyntaxError:
+        discard
+
+      else:
+        failNode(item)
 
       # elif cpfDecl notin item and
       #      item[cpfType] of { cppStructSpecifier }
@@ -689,17 +748,6 @@ proc toCxxObject*(main: CppNode, coms): CxxObject =
       #   else:
       #     toField(item)
 
-      of cppComment:
-        coms.add toCxxComment(item)
-
-      of cppQPropertyDeclaration:
-        echov "skipping qproperty"
-
-      of cppSyntaxError:
-        discard
-
-      else:
-        failNode(item)
 
   if ?result.mfields:
     result.mfields.last().add coms

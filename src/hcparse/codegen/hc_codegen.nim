@@ -12,6 +12,7 @@ import
 type
   CodegenConf* = object
     isIcpp*: bool
+    helperEnum*: bool
     declBinds*: Option[tuple[
       decl: CxxBind,
       perOs: seq[(string, CxxBind)]
@@ -26,7 +27,8 @@ type
 
 const
   cxxCodegenConf* = CodegenConf(
-    isIcpp: true
+    isIcpp: true,
+    helperEnum: true
   )
 
   cCodegenConf* = cxxCodegenConf.withIt do:
@@ -664,9 +666,10 @@ proc toNNodeImpl*[N](en: CxxEnum, conf: CodegenConf):
 
 proc toNNode*[N](en: CxxEnum, conf: CodegenConf): seq[NimDecl[N]] =
   let (cen, nen, other) = toNNodeImpl[N](en, conf)
-  result.add cen
   result.add nen
-  result.add other
+  if conf.helperEnum:
+    result.add cen
+    result.add other
 
 proc toNNode*[N](
     entry: CxxEntry, conf: CodegenConf,

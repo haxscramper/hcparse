@@ -289,9 +289,9 @@ proc conv*(
       var coms: seq[CxxComment]
       let
         entrs = postFixEntries(@[box(toCxxEnum(node, coms))], fix)
-        impl = toNNodeImpl[PNode](entrs[0].cxxEnum, conf).nenum
 
-      result = impl.toNNode()
+      for item in toNNode[PNode](entrs[0].cxxEnum, conf):
+        result = item.toNNode()
 
     of cppFunctionDefinition, cppTemplateDeclaration:
       var
@@ -360,7 +360,12 @@ proc conv*(
       result = ~node[0]
 
     of cppSizeofExpression:
-      result = newXCall("sizeof", ~node["value"])
+      # debug node
+      if "value" in node:
+        result = newXCall("sizeof", ~node["value"])
+
+      else:
+        result = newXCall("sizeof", ~node["type"])
 
     of cppTypeDescriptor:
       let (decl, anon) = toTypeWithAnon(node)
@@ -474,7 +479,7 @@ import compiler/tools/docgen_code_renderer
 import hnimast/pprint
 
 when isMainModule:
-  const full = off
+  const full = on
   when full:
     let files = toSeq(walkDir(
       AbsDir"/tmp/infiles",
@@ -493,6 +498,7 @@ when isMainModule:
     let node = parseCppString(addr str)
     var conf = cxxCodegenConf.withIt do:
       it.nameStyle = idsSnake
+      it.helperEnum = false
 
     let fix = baseFixConf.withIt do:
       it.typeStore = newTypeStore()

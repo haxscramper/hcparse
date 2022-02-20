@@ -664,6 +664,9 @@ func `$`*(alias: CxxAlias): string =
 
 func `$`*(obj: CxxObject): string = "object!" & $obj.decl
 
+func `$`*(obj: CxxField): string =
+  "field!$#: $#" % [$obj.name, $obj.nimType]
+
 func `$`*(e: CxxEntry): string =
   case e.kind:
     of cekEnum: result = "enum!" & $e.cxxEnum.decl
