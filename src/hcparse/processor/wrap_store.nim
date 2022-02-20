@@ -228,6 +228,7 @@ type
     cptLongDouble
     cptSizeT
     cptSSizeT
+    cptAuto
 
   CxxTypeUse* = ref object
     ## Instantiated type
@@ -341,7 +342,7 @@ type
   CxxExprKind* = enum
     cekIntLit
     cekStrLit
-    cekCall
+    cekVar
 
   CxxExpr* = object
     case kind*: CxxExprKind
@@ -351,7 +352,7 @@ type
       of cekStrLit:
         strVal*: string
 
-      of cekCall:
+      of cekVar:
         ident*: CxxNamePair
 
   CxxArgFlag = enum
@@ -543,14 +544,9 @@ func `$`*(name: CxxNamePair): string =
 
 func `$`*(expr: CxxExpr): string =
   case expr.kind:
-    of cekIntLit:
-      result = $expr.intVal
-
-    of cekStrLit:
-      result = expr.strVal
-
-    of cekCall:
-      result = $expr.ident
+    of cekIntLit: $expr.intVal
+    of cekStrLit: expr.strVal
+    of cekVar:    $expr.ident
 
 func `$`*(tref: CxxTypeRef): string =
   if not tref.isParam:

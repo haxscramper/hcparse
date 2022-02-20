@@ -297,16 +297,29 @@ proc conv*(
       var
         coms: seq[CxxComment]
         anon: seq[NimDecl[PNode]]
+        impl: PNode
 
-      let
-        entrs = postFixEntries(@[box(toCxxProc(node, coms))], fix)
-        impl = entrs[0].cxxProc.toNNode(conf, anon)
+      if node of cppFunctionDefinition or
+         node[1] of cppFunctionDefinition:
+        impl = postFixEntries(@[box(toCxxProc(node, coms))], fix)[0].
+          cxxProc.
+          toNNode(conf, anon).toNNode()
+
+      elif node[1] of cppTypeSpecSpec:
+        impl = postFixEntries(@[box(toCxxObject(node, coms))], fix)[0].
+          cxxObject.
+          toNNode(conf, anon).toNNode()
+
+      else:
+        failNode node
+
+
 
       result = newPStmtList()
       for an in anon:
         result.add an.toNNode()
 
-      result.add impl.toNNode()
+      result.add impl
 
     of cppInitializerList:
       result = newPTree(nnkPar)
@@ -524,11 +537,16 @@ when isMainModule:
       assert def.userData.notNil()
       let node = cast[CppNode](def.userData)
       if tern(node.kind == cppTemplateDeclaration,
-              node.len < 2, "body" notin node):
+              node.len < 2 or
+              # `template <class T> uint32_t update_eflags_add(T v1, uint32_t v2);`
+              "body" notin node[1],
+              "body" notin node):
         # No body, only forward declaration.
         impl.impl = fillStmt(newPStmtList())
 
       else:
+        # echov "--------------"
+        # debug node
         impl.impl = fillStmt(
           conv(
             tern(

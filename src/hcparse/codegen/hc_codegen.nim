@@ -102,14 +102,9 @@ proc toNNode*[N](
 
 proc toNNode*(expr: CxxExpr, conf: CodegenConf): PNode =
   case expr.kind:
-    of cekIntLit:
-      result = newPLit(expr.intVal)
-
-    of cekStrLit:
-      result = newPLit(expr.strVal)
-
-    else:
-      assert false
+    of cekIntLit: newPLit(expr.intVal)
+    of cekStrLit: newPLit(expr.strVal)
+    of cekVar:    newPIdent(expr.ident.nim)
 
 proc toNNode*[N](
     t: CxxTypeUse, conf: CodegenConf,
@@ -145,6 +140,7 @@ proc toNNode*[N](
         of cptLongDouble: "clongdouble"
         of cptSizeT:      "csize_t"
         of cptSsizeT:     "csize_t"
+        of cptAuto:       "auto"
 
       result = newNNType[N](name, @[])
 

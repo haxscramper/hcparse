@@ -28,6 +28,11 @@ export parseCppString, treeRepr
 proc debug*(node: CppNode) =
   echo node.treeRepr()
 
+const cppTypeSpecSpec* = {
+  cppClassSpecifier,
+  cppUnionSpecifier,
+  cppStructSpecifier }
+
 proc failNode*(node: CppNode) {.noreturn.} =
   raise newUnexpectedKindError(
     node,
@@ -129,6 +134,59 @@ proc parseCppInt*(val: string): int =
   else:
     return parseInt(val)
 
+proc getNameNode*(node: CppNode): CppNode =
+  case node.kind:
+    of cppFieldIdentifier,
+       cppTypeIdentifier,
+       cppIdentifier,
+       cppQualifiedIdentifier,
+       cppPrimitiveType:
+      node
+
+    of cppArrayDeclarator,
+       cppFunctionDeclarator,
+       cppEnumerator,
+       cppAssignmentExpression:
+      node[0].getNameNode()
+
+    of cppDeclaration, cppInitDeclarator:
+      node[cpfDecl].getNameNode()
+
+    else:
+      if node.len > 0:
+        node[^1].getNameNode()
+
+      else:
+        failNode node
+
+proc cxxNamePair*(node: CppNode, context: CxxNameContext): CxxNamePair =
+  result.context = context
+  case node.kind:
+    of cppQualifiedIdentifier:
+      result.cxx.scopes = (
+        node[0].cxxNamePair(context).cxx.scopes &
+          node[1].cxxNamePair(context).cxx.scopes )
+
+    of cppNamespaceIdentifier,
+       cppIdentifier,
+       cppDestructorName,
+       cppTypeIdentifier,
+       cppFieldIdentifier:
+      result.cxx.scopes = @[node.strVal()]
+
+    of cppTemplateType:
+      # FIXME dropping the template arguments. In the future
+      # `CxxNamePair`'s scopes should contain information about template
+      # arguments instead of simple sequence of strings.
+      #
+      # NOTE when handling template arguments don't forget to switch
+      # context of the template type parameters to a something different.
+      result = cxxNamePair(node["name"], context)
+
+    else:
+      failNode node
+
+
 proc pointerWraps*(node: CppNode, ftype: var CxxTypeUse) =
   case node.kind:
     of cppPointerDeclarator:
@@ -142,15 +200,15 @@ proc pointerWraps*(node: CppNode, ftype: var CxxTypeUse) =
     of cppArrayDeclarator:
       if "size" in node:
         let size = node["size"]
-        assert size.kind == cppNumberLiteral
-        ftype = wrapArray(
-          CxxTypeUse(
-            kind: ctkStaticParam,
-            value: CxxExpr(
-              kind: cekIntLit,
-              intVal: size.strVal().parseCppInt())),
-          ftype
-        )
+        let value =
+          if size of cppNumberLiteral:
+            CxxExpr(kind: cekIntLit, intVal: size.strVal().parseCppInt())
+
+          else:
+            CxxExpr(
+              kind: cekVar, ident: getNameNode(size).cxxNamePair(cncNone))
+
+        ftype = wrapArray(CxxTypeUse(kind: ctkStaticParam, value: value), ftype)
 
         pointerWraps(node[0], ftype)
 
@@ -215,6 +273,7 @@ proc pointerWraps*(node: CppNode, ftype: var CxxTypeUse) =
       cppFieldIdentifier,
       cppTypeIdentifier,
       cppIdentifier,
+      cppAuto
     }:
       discard
 
@@ -228,7 +287,7 @@ proc toCxxType*(node: CppNode, parent, user: Option[CxxNamePair]): CxxTypeUse =
         mapTypeName(node),
         cxxName(@[node.strVal()])))
 
-    of cppSizedTypeSpecifier, cppPrimitiveType:
+    of cppSizedTypeSpecifier, cppPrimitiveType, cppAuto:
       result = cxxTypeUse(node.primitiveName().mapPrimitivePod())
 
     of cppQualifiedIdentifier:
@@ -329,50 +388,9 @@ proc evalEnumValue(node: CppNode, ctx: CxxEvalCtx): BiggestInt =
         $node & "\n" & node.treeRepr(),
       )
 
-proc getNameNode*(node: CppNode): CppNode =
-  case node.kind:
-    of cppFieldIdentifier,
-       cppTypeIdentifier,
-       cppIdentifier,
-       cppQualifiedIdentifier,
-       cppPrimitiveType:
-      node
-
-    of cppArrayDeclarator,
-       cppFunctionDeclarator,
-       cppEnumerator,
-       cppAssignmentExpression:
-      node[0].getNameNode()
-
-    of cppDeclaration, cppInitDeclarator:
-      node[cpfDecl].getNameNode()
-
-    else:
-      if node.len > 0:
-        node[^1].getNameNode()
-
-      else:
-        failNode node
 
 # proc getName*(node: CppNode): string = node.getNameNode().strVal()
 
-proc cxxNamePair*(node: CppNode, context: CxxNameContext): CxxNamePair =
-  result.context = context
-  case node.kind:
-    of cppQualifiedIdentifier:
-      result.cxx.scopes = (
-        node[0].cxxNamePair(context).cxx.scopes &
-          node[1].cxxNamePair(context).cxx.scopes )
-
-    of cppNamespaceIdentifier,
-       cppIdentifier,
-       cppDestructorName,
-       cppTypeIdentifier,
-       cppFieldIdentifier:
-      result.cxx.scopes = @[node.strVal()]
-
-    else:
-      failNode node
 
 
 proc toCxxEnum*(node: CppNode, coms): CxxEnum =
@@ -485,9 +503,13 @@ proc toCxxProc*(
     parent: Option[CxxObject] = none(CxxObject),
   ): CxxProc =
 
+  # echo "-------------"
+  # debug main
 
   let (node, params) = unpackTemplate(main)
-  result = node[cpfDecl].getNameNode().cxxNamePair(cncProc).cxxProc()
+  result = node[cpfDecl].getNameNode().withResIt do:
+    it.cxxNamePair(cncProc).cxxProc()
+
   result.userData = cast[pointer](main)
   result.head.genParams = params
 
@@ -594,6 +616,8 @@ proc updateAccess(item: CppNode, accs: var CxxAccessSpecifier, signal: var CxxQS
       raise newUnexpectedKindError(ts{1})
 
 
+proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry]
+
 proc toCxxObject*(main: CppNode, coms): CxxObject =
   let (node, params) = unpackTemplate(main)
 
@@ -680,8 +704,22 @@ proc toCxxObject*(main: CppNode, coms): CxxObject =
             res.nested.add toCxxObject(item, coms).withIt do:
               it.access = accs
 
+          of cppDeclaration:
+            if item[1][cpfDecl] of {
+              cppFunctionDefinition, cppFunctionDeclarator }:
+              toMethod(item)
+
+            else:
+              failNode(item)
+
           else:
             failNode item
+
+      of cppTypeDefinition:
+        for item in toCxxTypeDefinition(item, coms):
+          res.nested.add withIt(item) do:
+            discard
+            # it.access = accs
 
       of cppFieldDeclaration:
         if cpfDecl in item and item[cpfDecl] of cppFunctionDeclarator:
@@ -694,11 +732,14 @@ proc toCxxObject*(main: CppNode, coms): CxxObject =
             # Regular function
             toMethod(item)
 
-        elif cpfType in item and item[cpfType] of {
-          cppStructSpecifier, cppUnionSpecifier, cppClassSpecifier
-        }:
-          res.nested.add toCxxObject(item[0], coms).withIt do:
-            it.access = accs
+        elif cpfType in item and item[cpfType] of cppTypeSpecSpec:
+          if "body" notin item[0]:
+            # `struct ModRM modrm;` as a field
+            toField(item)
+
+          else:
+            res.nested.add toCxxObject(item[0], coms).withIt do:
+              it.access = accs
 
         elif cpfType in item and item[cpfType] of { cppEnumSpecifier }:
           res.nested.add toCxxEnum(item, coms).withIt do:
@@ -714,10 +755,11 @@ proc toCxxObject*(main: CppNode, coms): CxxObject =
       of cppQPropertyDeclaration:
         echov "skipping qproperty"
 
-      of cppSyntaxError:
+      of cppSyntaxError, cppFriendDeclaration:
         discard
 
       else:
+        debug item
         failNode(item)
 
       # elif cpfDecl notin item and
@@ -762,9 +804,7 @@ proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
         coms.clear()
     ]
 
-  elif node.len == 1 and node of {
-    cppStructSpecifier, cppClassSpecifier, cppUnionSpecifier
-  }:
+  elif node.len == 1 and node of cppTypeSpecSpec:
     # Forward class declaration
     return @[box toCxxForwardType(node, coms)]
 
@@ -809,11 +849,7 @@ proc toCxxTypeDefinition*(node: CppNode, coms): seq[CxxEntry] =
         else:
           result.add alias
 
-      elif baseBody of {
-          cppStructSpecifier,
-          cppUnionSpecifier,
-          cppClassSpecifier
-        }:
+      elif baseBody of cppTypeSpecSpec:
         # FIXME handle multiple trailing typedefs
         var struct = toCxxObject(baseBody, coms)
         if struct.cxxName().isEmpty():
@@ -902,7 +938,7 @@ proc toCxx*(node: CppNode, coms): seq[CxxEntry] =
     of cppPreprocCall:
       discard
 
-    of cppClassSpecifier, cppStructSpecifier, cppUnionSpecifier:
+    of cppTypeSpecSpec:
       if "body" in node:
         result.add toCxxObject(node, coms)
 
