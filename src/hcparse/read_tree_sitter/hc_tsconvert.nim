@@ -38,21 +38,6 @@ proc wrap*(ntype: NType[PNode], kind: CxxTypeKind): NType[PNode] =
     else:
       raise newImplementKindError(kind)
 
-initPointerWraps(newPType, NType[PNode])
-
-proc toPType*(node: CppNode): NType[PNode] =
-  case node.kind:
-    of cppTypeDescriptor:
-      result = toPType(node[cpfType])
-      if cpfDecl in node:
-        pointerWraps(node[cpfDecl], result)
-
-    of cppStructSpecifier:
-      result = toPType(node["name"])
-
-    else:
-      result = newPType(mapTypeName(node))
-
 proc skip*(node: CppNode, idx: int, kind: set[CppNodeKind]): CppNode =
   if node.kind in kind:
     result = node[idx]
@@ -208,8 +193,8 @@ proc conv*(
       result = newXCall("[]", ~node["argument"], ~node["index"])
 
     of cppCastExpression:
-      result = nnkCast.newPTree(
-        node[cpfType].toPType().toNNode(), ~node["value"])
+      let (decl, anon) = toTypeWithAnon(node[cpfType])
+      result = nnkCast.newPTree(decl.toNNode(), ~node["value"])
 
     of cppNull:
       result = newPIdent("nil")
@@ -378,7 +363,8 @@ proc conv*(
       result = newXCall("sizeof", ~node["value"])
 
     of cppTypeDescriptor:
-      result = toPType(node).toNNode()
+      let (decl, anon) = toTypeWithAnon(node)
+      result = decl.toNNode()
 
     of cppCharLiteral:
       if node.len != 0 and node[0].kind == cppEscapeSequence:
@@ -407,6 +393,9 @@ proc conv*(
         some CxxNamePair(),
         some node.getNameNode().cxxNamePair(cncArg).updateNim()
       )
+
+      for an in anon:
+        result.add an
 
       if "value" in decl:
         if decl[cpfDecl] of cppArrayDeclarator:
@@ -485,7 +474,7 @@ import compiler/tools/docgen_code_renderer
 import hnimast/pprint
 
 when isMainModule:
-  const full = on
+  const full = off
   when full:
     let files = toSeq(walkDir(
       AbsDir"/tmp/infiles",
@@ -534,9 +523,13 @@ when isMainModule:
         impl.impl = fillStmt(newPStmtList())
 
       else:
-        impl.impl = fillStmt(conv(tern(
-          node.kind == cppTemplateDeclaration,
-          node[1], node["body"]), str, c, conf, fix))
+        impl.impl = fillStmt(
+          conv(
+            tern(
+              node.kind == cppTemplateDeclaration,
+              node[1]["body"],
+              node["body"]),
+            str, c, conf, fix))
 
 
     # echo node.getTs().treeRepr(node.getBase(), unnamed = true)

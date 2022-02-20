@@ -101,7 +101,7 @@ type
     iinfo*: LineInfo
     spellingLocation*: Option[CxxSpellingLocation]
     cbind*: CxxBind
-    private*: bool
+    access*: CxxAccessSpecifier
     docComment*: seq[CxxComment]
     haxdocIdent* #[ {.requiresinit.} ]#: JsonNode
 

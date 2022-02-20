@@ -232,8 +232,11 @@ proc fixIdentsRec*(
   proc aux(decl: var CxxTypeDecl, cache: var StringNameCache) =
     aux(decl.name, cache)
 
+    for param in mitems(decl.genParams):
+      aux(param.name, cache)
+
   proc aux(use: var CxxTypeUse, cache: var StringNameCache) =
-    var cache {.byaddr1.} = cache
+    var cache {.byaddr.} = cache
     eachKind(use, {ctkIdent}) do (use: var CxxTypeUse):
       aux(use.cxxType.name, cache)
 
@@ -288,7 +291,7 @@ proc fixIdentsRec*(
                "Missing name for operator proc."
 
     else:
-      aux(decl.head.name, cache)
+      aux(decl.head, cache)
 
     aux(decl.returnType, cache)
 
@@ -315,7 +318,7 @@ proc fixIdentsRec*(
 
       of cekObject:
         assertRef entry.cxxObject
-        aux(entry.cxxObject.decl.name, cache)
+        aux(entry.cxxObject.decl, cache)
         context[cancParentObjectName] = some entry.cxxObject.decl.name
         for field in mitems(entry.cxxObject.mfields):
           aux(field.name, cache)

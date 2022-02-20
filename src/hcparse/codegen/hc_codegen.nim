@@ -98,6 +98,16 @@ proc toNNode*[N](
     anon: var seq[NimDecl[N]]
   ): NIdentDefs[N]
 
+proc toNNode*(expr: CxxExpr, conf: CodegenConf): PNode =
+  case expr.kind:
+    of cekIntLit:
+      result = newPLit(expr.intVal)
+
+    of cekStrLit:
+      result = newPLit(expr.strVal)
+
+    else:
+      assert false
 
 proc toNNode*[N](
     t: CxxTypeUse, conf: CodegenConf,
@@ -174,6 +184,12 @@ proc toNNode*[N](
       result = newNType[N]("ptr", @[
         newNType[N]("UncheckedArray", @[
           toNNode[N](t.wrapped, conf, anon)])])
+
+    of ctkFixedArray:
+      result = newNType[N](
+        "array", [
+          NType[N](value: toNNode(t.arraySize.value, conf), kind: ntkValue),
+          toNNode[N](t.arrayElement, conf, anon)])
 
     of ctkAnonObject:
       var def = t.objDef
@@ -377,12 +393,15 @@ proc toNNode*[N](
         cbind.icpp.standaloneProc(def.getIcppName())
         result.addPragma toNNode[N](cbind, conf, def.nimName)
 
-        result.addPragma("constructor")
+        if def.cbind.kind != cbkNotImported:
+          result.addPragma("constructor")
+
         result.name = "init" & name
 
       of nctPtr:
         cbind.icpp.standaloneProc("new " & def.getIcppName())
-        result.addPragma toNNode[N](cbind, conf, def.nimName)
+        if def.cbind.kind != cbkNotImported:
+          result.addPragma toNNode[N](cbind, conf, def.nimName)
 
         result.name = "cnew" & name
 

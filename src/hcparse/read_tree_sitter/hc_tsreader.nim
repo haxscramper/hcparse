@@ -120,7 +120,63 @@ proc toCxxComment*(comm: CppNode): CxxComment =
 proc toCxxArg*(node: CppNode, idx: int): CxxArg
 
 proc toCxxEnum*(node: CppNode, coms): CxxEnum
-proc toCxxObject*(node: CppNode, coms): CxxObject
+proc toCxxObject*(main: CppNode, coms): CxxObject
+
+proc pointerWraps*(node: CppNode, ftype: var CxxTypeUse) =
+  case node.kind:
+    of cppPointerDeclarator:
+      ftype = ftype.wrap(ctkPtr)
+      if node[0] of cppTypeQualifier:
+        pointerWraps(node[1], ftype)
+
+      else:
+        pointerWraps(node[0], ftype)
+
+    of cppArrayDeclarator:
+      if "size" in node:
+        let size = node["size"]
+        assert size.kind == cppNumberLiteral
+        ftype = wrapArray(
+          CxxTypeUse(
+            kind: ctkStaticParam,
+            value: CxxExpr(
+              kind: cekIntLit,
+              intVal: size.strVal().parseInt())),
+          ftype
+        )
+
+        pointerWraps(node[0], ftype)
+
+      else:
+        ftype = ftype.wrap(ctkDynamicArray)
+        pointerWraps(node[0], ftype)
+
+    of cppInitDeclarator,
+       cppTypeQualifier #[ TODO convert for CxxType? ]#:
+      pointerWraps(node[0], ftype)
+
+    of cppReferenceDeclarator:
+      ftype = ftype.wrap(ctkLVRef)
+      pointerWraps(node[0], ftype)
+
+    of cppAbstractPointerDeclarator:
+      ftype = ftype.wrap(ctkPtr)
+      if node.len > 0:
+        pointerWraps(node[0], ftype)
+
+    of cppParenthesizedDeclarator:
+      pointerWraps(node[0], ftype)
+
+    of {
+      cppFieldIdentifier,
+      cppTypeIdentifier,
+      cppIdentifier,
+      cppFunctionDeclarator
+    }:
+      discard
+
+    else:
+      failNode node
 
 proc toCxxType*(node: CppNode, parent, user: Option[CxxNamePair]): CxxTypeUse =
   case node.kind:
@@ -168,51 +224,12 @@ proc toCxxType*(node: CppNode, parent, user: Option[CxxNamePair]): CxxTypeUse =
         inc idx
 
       result = cxxTypeUse(args, toCxxType(node[cpfType], parent, user))
+      pointerWraps(node[cpfDecl][cpfDecl], result)
+      # debug node
 
     else:
       failNode node
 
-template initPointerWraps*(newName, Type: untyped): untyped =
-  proc pointerWraps(node: CppNode, ftype: var Type) =
-    case node.kind:
-      of cppPointerDeclarator:
-        ftype = ftype.wrap(ctkPtr)
-        if node[0] of cppTypeQualifier:
-          pointerWraps(node[1], ftype)
-
-        else:
-          pointerWraps(node[0], ftype)
-
-      of cppArrayDeclarator:
-        ftype = ftype.wrap(ctkDynamicArray)
-        pointerWraps(node[0], ftype)
-
-      of cppInitDeclarator,
-         cppTypeQualifier #[ TODO convert for CxxType? ]#:
-        pointerWraps(node[0], ftype)
-
-      of cppReferenceDeclarator:
-        ftype = ftype.wrap(ctkLVRef)
-        pointerWraps(node[0], ftype)
-
-      of cppAbstractPointerDeclarator:
-        ftype = ftype.wrap(ctkPtr)
-        if node.len > 0:
-          pointerWraps(node[0], ftype)
-
-      of {
-        cppFieldIdentifier,
-        cppTypeIdentifier,
-        cppIdentifier,
-        cppFunctionDeclarator
-      }:
-        discard
-
-      else:
-        raise newImplementKindError(
-          node, node.strVal() & "\n" & node.treeRepr())
-
-initPointerWraps(cxxTypeUse, CxxTypeUse)
 
 proc toCxxTypeWraps*(
     node: CppNode,
@@ -389,26 +406,36 @@ proc toCxxArg*(node: CppNode, idx: int): CxxArg =
   result = cxxArg(name, argt)
 
 
+proc unpackTemplate(node: CppNode): tuple[
+  body: CppNode, params: CxxGenParams] =
+  if node.kind == cppTemplateDeclaration:
+    for item in node[0]:
+      let name = item[0]
+      if item.len != 1:
+        failNode item
+
+      var defaultType: Option[CxxTypeUse]
+
+      result.params.add(
+        cxxNamePair(name, cncType), defaultType)
+
+    result.body = node[1]
+
+  else:
+    result.body = node
+
+
 proc toCxxProc*(
     main: CppNode,
     coms;
     parent: Option[CxxObject] = none(CxxObject),
   ): CxxProc =
 
-  var parameters = false
-  let node =
-    if main.kind == cppTemplateDeclaration:
-      parameters = true
-      main[1]
 
-    else:
-      main
-
+  let (node, params) = unpackTemplate(main)
   result = node[cpfDecl].getNameNode().cxxNamePair(cncProc).cxxProc()
   result.userData = cast[pointer](main)
-
-  if parameters and false:
-    echo main.treeRepr(opts = hdisplay(maxLen = 3))
+  result.head.genParams = params
 
   if cpfType in node:
     result.returnType = toCxxType(
@@ -457,8 +484,7 @@ proc toCxxField*(node: CppNode, coms; parent: CxxNamePair): CxxField =
   if cpfDecl notin node:
     # It is possible to declare field without actual name, only using size.
     result = cxxField(
-      CxxNamePair(), toCxxType(node[cpfType],
-                               some parent, none CxxNamePair))
+      CxxNamePair(), toCxxTypeWraps(node, some parent))
 
   else:
     let decl = node[cpfDecl]
@@ -467,8 +493,7 @@ proc toCxxField*(node: CppNode, coms; parent: CxxNamePair): CxxField =
       result = cxxField(name, toCxxType(node, some parent, some name))
 
     else:
-      result = cxxField(name, toCxxType(node[cpfType], some parent, some name))
-      pointerWraps(decl, result.nimType)
+      result = cxxField(name, toCxxTypeWraps(node, some parent, some name))
 
   for item in node:
     if item of cppBitfieldClause:
@@ -482,13 +507,49 @@ proc toCxxForwardType*(node: CppNode, coms): CxxForward =
   result.add coms
   coms.clear()
 
-proc toCxxObject*(node: CppNode, coms): CxxObject =
+proc updateAccess(item: CppNode, accs: var CxxAccessSpecifier, signal: var CxxQSignals) =
+  let ts = item.getTs()
+  case ts{0}.kind:
+    of cppPublicTok: accs = casPublic
+    of cppProtectedTok: accs = casProtected
+    of cppPrivateTok: accs = casPrivate
+    of cppSignalsTok: signal = cqsSignal
+    of cppSlotsTok: signal = cqsSlot
+    else: raise newUnexpectedKindError(ts{0})
+
+  case ts{1}.kind:
+    of cppColonTok:
+      if ts{0} of {cppSignalsTok, cppSlotsTok}:
+        # `signals:` or `slots:` - no visibility change here
+        discard
+
+      else:
+        # `private:`, `public:`, `protected:` - visibility changed
+        # already, but this closed signal/slot section
+        signal = cqsNone
+
+    of cppSlotsTok:
+      # `public/private/protected slots:`
+      signal = cqsSlot
+
+    of cppSignalsTok:
+      # `public/private/protected signals:`
+      signal = cqsSignal
+
+    else:
+      raise newUnexpectedKindError(ts{1})
+
+
+proc toCxxObject*(main: CppNode, coms): CxxObject =
+  let (node, params) = unpackTemplate(main)
+
   var decl: CxxNamePair
   if "name" in node:
     decl = cxxPair(node["name"].strVal())
 
   result = cxxObject(decl)
   result.add coms
+  result.decl.genParams = params
   coms.clear()
 
   var accs = casPublic
@@ -517,103 +578,111 @@ proc toCxxObject*(node: CppNode, coms): CxxObject =
             class, none CxxNamePair, none CxxNamePair)
 
 
+  var res {.byaddr.} = result
+  var resComs {.byaddr.} = coms
+  proc toMethod(item: CppNode) =
+    var meth = toCxxProc(item, resComs, some res).withIt do:
+      it.add resComs
+      resComs.clear()
+
+    if meth.cxxName().scopes.last() == res.cxxName().scopes.last():
+      meth.constructorOf = some res.name()
+
+    elif not(item of cppTemplateDeclaration) and
+         # Destructors can't be templated so we can omit checks here,
+         # instead of reaching for the declarator body.
+         item[cpfDecl][cpfDecl] of cppDestructorName:
+      meth.destructorOf = some res.name()
+
+    case signal:
+      of cqsNone: discard
+      of cqsSignal: meth.flags.incl cpfSignal
+      of cqsSlot: meth.flags.incl cpfSlot
+
+    meth.access = accs
+    res.methods.add meth
+
+  proc toField(item: CppNode) =
+    res.mfields.add toCxxField(item, resComs, res.decl.name).withIt do:
+      it.add resComs
+      resComs.clear()
+      it.access = accs
+
   for item in node["body"]:
     if item of cppAccessSpecifier:
-      let ts = item.getTs()
-      case ts{0}.kind:
-        of cppPublicTok: accs = casPublic
-        of cppProtectedTok: accs = casProtected
-        of cppPrivateTok: accs = casPrivate
-        of cppSignalsTok: signal = cqsSignal
-        of cppSlotsTok: signal = cqsSlot
-        else: raise newUnexpectedKindError(ts{0})
+      updateAccess(item, accs, signal)
+      continue
 
-      case ts{1}.kind:
-        of cppColonTok:
-          if ts{0} of {cppSignalsTok, cppSlotsTok}:
-            # `signals:` or `slots:` - no visibility change here
-            discard
+    case item.kind:
+      of cppDeclaration, cppFunctionDefinition:
+        toMethod(item)
 
-          else:
-            # `private:`, `public:`, `protected:` - visibility changed
-            # already, but this closed signal/slot section
-            signal = cqsNone
+      of cppTemplateDeclaration:
+        case item[1].kind:
+          of cppFunctionDefinition:
+            toMethod(item)
 
-
-        of cppSlotsTok:
-          # `public/private/protected slots:`
-          signal = cqsSlot
-
-        of cppSignalsTok:
-          # `public/private/protected signals:`
-          signal = cqsSignal
-
-        else:
-          raise newUnexpectedKindError(ts{1})
-
-
-    elif accs == casPublic:
-      case item.kind:
-        of cppDeclaration:
-          var meth = toCxxProc(item, coms, some result).withIt do:
-            it.add coms
-            coms.clear()
-
-          if meth.cxxName().scopes.last() == result.cxxName().scopes.last():
-            meth.constructorOf = some result.name()
-
-          elif node[cpfDecl][cpfDecl] of cppDestructorName:
-            meth.destructorOf = some result.name()
-
-          result.methods.add meth
-
-        of cppFieldDeclaration, cppFunctionDefinition:
-          if cpfDecl notin item and
-             item[cpfType] of { cppStructSpecifier }:
-            result.nested.add toCxxObject(item[cpfType], coms)
-
-          # TODO This piece of code is not really legible, so I need to
-          # provide at least some form of documentation that explains what
-          # is going on here.
-          elif item of cppFunctionDefinition or
-               # `Sequencer *get_seq(void) { return &seq; };` - for function definition.
-               (cpfDecl in item and item[cpfDecl] of { cppFunctionDeclarator }):
-            if not(item of cppFunctionDefinition) and
-               item[cpfDecl][cpfDecl] of cppParenthesizedDeclarator:
-              result.mfields.add toCxxField(
-                  item, coms, result.decl.name).withIt do:
-                it.add coms
-                coms.clear()
-
-            else:
-              var meth = toCxxProc(item, coms, some result).withIt do:
-                it.add coms
-                coms.clear()
-
-              case signal:
-                of cqsNone: discard
-                of cqsSignal: meth.flags.incl cpfSignal
-                of cqsSlot: meth.flags.incl cpfSlot
-
-              result.methods.add meth
+          of cppStructSpecifier:
+            res.nested.add toCxxObject(item, coms).withIt do:
+              it.access = accs
 
           else:
-            result.mfields.add toCxxField(
-                item, coms, result.decl.name).withIt do:
-              it.add coms
-              coms.clear()
+            failNode item
 
-        of cppComment:
-          coms.add toCxxComment(item)
+      of cppFieldDeclaration:
+        if cpfDecl in item and item[cpfDecl] of cppFunctionDeclarator:
+          # Either function declaration or field with callback type
+          if item[cpfDecl][cpfDecl] of cppParenthesizedDeclarator:
+            # Field with callback type
+            toField(item)
 
-        of cppQPropertyDeclaration:
-          echov "skipping qproperty"
-
-        of cppSyntaxError:
-          discard
+          else:
+            # Regular function
+            toMethod(item)
 
         else:
-          failNode(item)
+          # Regular field
+          toField(item)
+
+      # elif cpfDecl notin item and
+      #      item[cpfType] of { cppStructSpecifier }
+
+      # of cppFieldDeclaration,
+      #    cppFunctionDefinition,
+      #    cppTemplateDeclaration:
+      #   if :
+      #
+
+      #   # TODO This piece of code is not really legible, so I need to
+      #   # provide at least some form of documentation that explains what
+      #   # is going on here.
+      #   elif item of { cppFunctionDefinition, cppTemplateDeclaration } or
+      #        # `Sequencer *get_seq(void) { return &seq; };` - for function
+      #        # definition.
+      #        (cpfDecl in item and item[cpfDecl] of { cppFunctionDeclarator }):
+      #     if not(item of { cppFunctionDefinition, cppTemplateDeclaration }) and
+      #        # Not a standalone function declaration, and not a template
+      #        # (function or non-function)
+      #        item[cpfDecl][cpfDecl] of cppParenthesizedDeclarator:
+      #       toField(item)
+
+      #     else:
+      #       toMethod(item)
+
+      #   else:
+      #     toField(item)
+
+      of cppComment:
+        coms.add toCxxComment(item)
+
+      of cppQPropertyDeclaration:
+        echov "skipping qproperty"
+
+      of cppSyntaxError:
+        discard
+
+      else:
+        failNode(item)
 
   if ?result.mfields:
     result.mfields.last().add coms

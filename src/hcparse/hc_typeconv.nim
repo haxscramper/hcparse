@@ -292,8 +292,7 @@ proc setParamsForType*(
 
     # Convenience helper to avoid writing `cache.paramsForType[name]`
     # all over the place.
-    var list {.byaddr1.} = cache.paramsForType[name]
-
+    var list {.byaddr.} = cache.paramsForType[name]
     for idx, param in params:
       var nimType = newNimType($param, param.cxType())
       # param.cxtype.toNimType(conf, cache)
