@@ -167,11 +167,35 @@ proc pointerWraps*(node: CppNode, ftype: var CxxTypeUse) =
     of cppParenthesizedDeclarator:
       pointerWraps(node[0], ftype)
 
+    of cppFunctionDeclarator:
+      var args: seq[CxxArg]
+      var idx = 0
+      for param in node["parameters"]:
+        args.add toCxxArg(param, idx)
+        inc idx
+
+      ftype = cxxTypeUse(args, ftype)
+      if node[cpfDecl] of cppParenthesizedDeclarator and
+         node[cpfDecl][0] of cppPointerDeclarator:
+        # Skipping single pointer layer `(*(*foo))`, because 'ctkProc' already
+        # implies this is a pointer (we can't have procedure as a value
+        # type stored in the object, unless it is a literal blob of
+        # executable opcodes).
+        pointerWraps(node[cpfDecl][0][0], ftype)
+
+      elif node[cpfDecl] of { cppFieldIdentifier }:
+        # Ignoring simple field identifier here - `int (*foo)();` has no
+        # additional indirection layers.
+        discard
+
+      else:
+        # Sanity check fallback to avoid missing other weird edge cases.
+        failNode node[cpfDecl]
+
     of {
       cppFieldIdentifier,
       cppTypeIdentifier,
       cppIdentifier,
-      cppFunctionDeclarator
     }:
       discard
 
@@ -217,15 +241,8 @@ proc toCxxType*(node: CppNode, parent, user: Option[CxxNamePair]): CxxTypeUse =
         result = toCxxType(node[0], parent, user)
 
     of cppFieldDeclaration:
-      var args: seq[CxxArg]
-      var idx = 0
-      for param in node[cpfDecl]["parameters"]:
-        args.add toCxxArg(param, idx)
-        inc idx
-
-      result = cxxTypeUse(args, toCxxType(node[cpfType], parent, user))
-      pointerWraps(node[cpfDecl][cpfDecl], result)
-      # debug node
+      result = toCxxType(node[cpfType], parent, user)
+      pointerWraps(node[cpfDecl], result)
 
     else:
       failNode node

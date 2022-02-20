@@ -541,7 +541,16 @@ func `$`*(name: CxxNamePair): string =
   else:
     result &= cxx & "/" & nim
 
-func `$`*(expr: CxxExpr): string = raise newImplementError()
+func `$`*(expr: CxxExpr): string =
+  case expr.kind:
+    of cekIntLit:
+      result = $expr.intVal
+
+    of cekStrLit:
+      result = expr.strVal
+
+    of cekCall:
+      result = $expr.ident
 
 func `$`*(tref: CxxTypeRef): string =
   if not tref.isParam:
