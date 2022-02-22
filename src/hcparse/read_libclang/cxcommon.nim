@@ -1,6 +1,7 @@
 import std/[strutils, sequtils, parseutils]
 import hmisc/other/oswrap
 import hmisc/algo/hstring_algo
+import hmisc/core/all
 
 func toCamelCase*(str: string): string =
   var buf = str.split("_").
@@ -81,15 +82,16 @@ func stripComment*(text: string): string =
   var idx = 0
   for line in text.splitLines():
     var pos = line.skipWhile({' '})
-    var final = line.high
     for start in starts:
       if pos + start.len < line.len and
          line[pos .. pos + start.high] == start:
         pos = clamp(pos + start.len, 0, high(line))
         break
 
+    var final = line.high
     for endc in ends:
-      if line[final - endc.high .. final] == endc:
+      if ?line and line[
+        clamp(final - endc.high, 0, final) .. final] == endc:
         final = clamp(final - endc.len, pos, high(line))
         break
 
@@ -97,11 +99,11 @@ func stripComment*(text: string): string =
       result.add "\n"
 
     else:
-      while line[pos] in {' '}:
+      while pos < line.len and line[pos] in {' '}:
         inc pos
 
     inc idx
-    if line.len > 0:
+    if 0 < line.len:
       if line[pos .. final] in ["*", "/"]:
         result.add ""
 

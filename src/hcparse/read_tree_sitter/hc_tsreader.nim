@@ -737,7 +737,7 @@ proc toCxxObject*(main: CppNode, coms): CxxObject =
           of cppFunctionDefinition:
             toMethod(item)
 
-          of cppStructSpecifier:
+          of cppTypeSpecSpec:
             res.nested.add toCxxObject(item, coms).withIt do:
               it.access = accs
 
@@ -1009,12 +1009,41 @@ proc toCxx*(node: CppNode, coms): seq[CxxEntry] =
       result.add toCxxTypeDefinition(node, coms)
 
     of cppDeclaration:
-      case node[cpfDecl].skipPointer().kind:
+      case node[cpfDecl].kind:
         of cppFunctionDeclarator:
           result.add toCxxProc(node, coms)
 
+        of cppIdentifier, cppInitDeclarator:
+          # TODO skipping toplevel variable declarations
+          discard
+
         else:
-          raise newImplementKindError(node[1], node.treeRepr())
+          failNode(node)
+
+    of cppTemplateDeclaration:
+      case node[1].kind:
+        of cppFunctionDefinition:
+          result.add toCxxProc(node, coms)
+
+        of cppTypeSpecSpec:
+          result.add toCxxObject(node, coms)
+
+        of cppDeclaration:
+          if node[1][cpfDecl] of {
+            cppFunctionDefinition, cppFunctionDeclarator }:
+            result.add toCxxProc(node, coms)
+
+          else:
+            failNode(node)
+
+        else:
+          failNode(node)
+
+    of cppTemplateInstantiation:
+      discard
+
+    of cppFunctionDefinition:
+      result.add toCxxProc(node, coms)
 
     of cppTypeIdentifier:
       discard

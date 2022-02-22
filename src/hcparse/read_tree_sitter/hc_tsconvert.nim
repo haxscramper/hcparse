@@ -491,6 +491,7 @@ proc conv*(
 
 import compiler/tools/docgen_code_renderer
 import hnimast/pprint
+import std/tables
 
 when isMainModule:
   const full = on
@@ -505,6 +506,22 @@ when isMainModule:
     let files = [AbsFile"/tmp/in.cpp"]
 
   startHax()
+
+  var methodsOf: Table[CxxName, seq[string]]
+  for file in files:
+    var str = file.readFile()
+    let node = parseCppString(addr str)
+    var coms: seq[CxxComment]
+    for entry in toCxx(node, coms):
+      if entry.kind == cekObject:
+        let user = entry.cxxName()
+        echov "methods of", user
+        for meth in entry.cxxObject.methods:
+          let name = meth.cxxName().scopes.last()
+          echov name
+          methodsOf.mgetOrPut(user, @[]).add name
+
+  quit 0
   for file in files:
     echo file
     var str = file.readFile()
