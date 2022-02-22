@@ -300,7 +300,8 @@ proc conv*(
         impl: PNode
 
       if node of cppFunctionDefinition or
-         node[1] of cppFunctionDefinition:
+         node[1] of cppFunctionDefinition or
+         (node.has([1, 1]) and node[1][1] of cppFunctionDeclarator):
         impl = postFixEntries(@[box(toCxxProc(node, coms))], fix)[0].
           cxxProc.
           toNNode(conf, anon).toNNode()
@@ -557,6 +558,7 @@ when isMainModule:
 
 
     # echo node.getTs().treeRepr(node.getBase(), unnamed = true)
+    # debug node
     let nim = node.conv(str, c, conf, fix)
     let code = nim.formatToStr()
     # let code = node.conv(str, c, conf, fix).`$`

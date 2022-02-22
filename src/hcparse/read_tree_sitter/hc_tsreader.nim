@@ -140,12 +140,14 @@ proc getNameNode*(node: CppNode): CppNode =
        cppTypeIdentifier,
        cppIdentifier,
        cppQualifiedIdentifier,
+       cppNamespaceIdentifier,
        cppPrimitiveType:
       node
 
     of cppArrayDeclarator,
        cppFunctionDeclarator,
        cppEnumerator,
+       cppTemplateType,
        cppAssignmentExpression:
       node[0].getNameNode()
 
@@ -291,11 +293,45 @@ proc toCxxType*(node: CppNode, parent, user: Option[CxxNamePair]): CxxTypeUse =
       result = cxxTypeUse(node.primitiveName().mapPrimitivePod())
 
     of cppQualifiedIdentifier:
-      var names: seq[string]
-      for name in items(node):
-        names.add name.strVal()
+      # Iterate over qualified identifiers, compacting namespaces and
+      # recusing into types
+      proc aux(node: CppNode): seq[CppNode] =
+        case node.kind:
+          of cppQualifiedIdentifier:
+            result.add aux(node[0])
+            result.add aux(node[1])
 
-      result = cxxPair(mapTypeName(node), cxxName(names)).cxxTypeUse()
+          of cppNamespaceIdentifier,
+             cppTemplateType,
+             cppTypeIdentifier:
+            result.add node
+
+          else:
+            failNode node
+
+      let fold: seq[CppNode] = aux(node)
+
+      result = CxxTypeUse(kind: ctkIdent)
+      var curr = CxxTypeRef()
+      for item in fold:
+        # echo ">>>>>>>>>>>>>>"
+        # debug item
+        var name = getNameNode(item)
+        # debug name
+        curr.name.cxx.scopes.add name.strVal()
+        if item of { cppTypeIdentifier, cppTemplateType }:
+          result.types.add(curr, @[])
+
+        if item of cppTemplateType:
+          for param in item["arguments"]:
+            result.types.last().genParams.add(
+              param["type"].toCxxType(parent, user))
+
+      # var names: seq[string]
+      # for name in items(node):
+      #   names.add name.strVal()
+
+      # result = cxxPair(mapTypeName(node), cxxName(names)).cxxTypeUse()
 
     of cppStructSpecifier, cppEnumSpecifier, cppUnionSpecifier:
       if node[0] of cppFieldDeclarationList:
@@ -321,6 +357,10 @@ proc toCxxType*(node: CppNode, parent, user: Option[CxxNamePair]): CxxTypeUse =
     of cppFieldDeclaration:
       result = toCxxType(node[cpfType], parent, user)
       pointerWraps(node[cpfDecl], result)
+
+    of cppDecltype:
+      result = CxxTypeUse(kind: ctkDecltype, value: CxxExpr(
+        kind: cekCallLit, strVal: node.getBase()[node[0].slice()]))
 
     else:
       failNode node
@@ -502,9 +542,6 @@ proc toCxxProc*(
     coms;
     parent: Option[CxxObject] = none(CxxObject),
   ): CxxProc =
-
-  # echo "-------------"
-  # debug main
 
   let (node, params) = unpackTemplate(main)
   result = node[cpfDecl].getNameNode().withResIt do:
@@ -759,7 +796,6 @@ proc toCxxObject*(main: CppNode, coms): CxxObject =
         discard
 
       else:
-        debug item
         failNode(item)
 
       # elif cpfDecl notin item and

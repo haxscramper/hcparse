@@ -602,65 +602,6 @@ func mapPrimitiveName*(name: string): string =
 func mapPrimitivePod*(name: string): CxxPodTypeKind =
   mapPrimitiveNameImpl(name).pod
 
-func fixTypeParams*(nt: var NimType, params: seq[NimType]) =
-  func aux(nt: var NimType, idx: var int) =
-    case nt.kind:
-      of ctkAnonObject, ctkAnonEnum:
-        raise newImplementKindError(nt)
-
-      of ctkWrapKinds:
-        aux(nt.wrapped, idx)
-
-      of ctkArrayKinds:
-        aux(nt.arrayElement, idx)
-
-      of ctkStaticParam, ctkPod:
-        discard
-
-      of ctkIdent:
-        if startsWith(nt.nimName, "TYPE_PARAM"):
-          nt.nimName = params[idx].nimName
-          inc idx
-
-        for sub in mitems(nt.genParams):
-          aux(sub, idx)
-
-      of ctkProc:
-        for arg in mitems(nt.arguments):
-          aux(arg.nimType, idx)
-
-
-
-  var idx: int
-  aux(nt, idx)
-
-
-func hasSpecial*(nt: NimType, special: seq[string]): bool =
-  case nt.kind:
-    of ctkAnonEnum, ctkAnonObject:
-      raise newImplementKindError(nt)
-
-    of ctkWrapKinds:
-      nt.wrapped.hasSpecial(special)
-
-    of ctkArrayKinds:
-      nt.arrayElement.hasSpecial(special)
-
-    of ctkStaticParam, ctkPod:
-      false
-
-    of ctkIdent:
-      nt.nimName in special or
-      nt.genParams.anyIt(it.hasSpecial(special))
-
-    of ctkProc:
-      nt.arguments.anyIt(it.nimType.hasSpecial(special))
-
-
-func hasUnexposed*(nt: NimType): bool =
-  nt.hasSpecial(@[ "UNEXPOSED", "DEPENDENT" ])
-
-
 proc isEnum*(cxtype: CXType): bool =
   case cxtype.cxKind():
     of tkEnum:

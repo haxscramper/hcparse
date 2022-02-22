@@ -129,7 +129,7 @@ proc fixTypeName*(ntype: var NimType, conf: WrapConf, idx: int = 0) =
     of ctkArrayKinds:
       fixTypeName(ntype.arrayElement, conf, idx)
 
-    of ctkStaticParam, ctkPod:
+    of ctkStaticParam, ctkPod, ctkDecltype:
       discard
 
     of ctkIdent:

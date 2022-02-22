@@ -532,8 +532,6 @@ proc wrapAlias*(
     # # QUESTION is it necessary?
     # # baseType.genParams.add baseType.getPartialParams(conf, cache, defaulted = true)
 
-    # fixTypeParams(baseType, newAlias.genParams)
-
     result = cxxALias(newAlias, baseType)
 
 

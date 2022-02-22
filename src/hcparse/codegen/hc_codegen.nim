@@ -104,7 +104,8 @@ proc toNNode*(expr: CxxExpr, conf: CodegenConf): PNode =
   case expr.kind:
     of cekIntLit: newPLit(expr.intVal)
     of cekStrLit: newPLit(expr.strVal)
-    of cekVar:    newPIdent(expr.ident.nim)
+    of cekCallLit: newPIdent(expr.strVal)
+    of cekVar: newPIdent(expr.ident.nim)
 
 proc toNNode*[N](
     t: CxxTypeUse, conf: CodegenConf,
@@ -152,8 +153,9 @@ proc toNNode*[N](
       else:
         result = newNNType[N](t.nimName, @[])
 
-      for param in t.genParams:
-        result.add toNNode[N](param, conf, anon)
+      for typ in t.types:
+        for param in typ.genParams:
+          result.add toNNode[N](param, conf, anon)
 
     of ctkPtr:
       if t.wrapped of ctkPod:
@@ -165,7 +167,7 @@ proc toNNode*[N](
       else:
         result = newNType[N]("ptr", @[toNNode[N](t.wrapped, conf, anon)])
 
-    of ctkLVref:
+    of ctkLVref, ctkRVref:
       # QUESTION how to map lvref properly?
       result = toNNode[N](t.wrapped, conf, anon)
 
@@ -189,6 +191,12 @@ proc toNNode*[N](
           NType[N](value: toNNode(t.arraySize.value, conf), kind: ntkValue),
           toNNode[N](t.arrayElement, conf, anon)])
 
+    of ctkDependentArray:
+      result = newNType[N](
+        "array", [
+          toNNode[N](t.arraySize, conf, anon),
+          toNNode[N](t.arrayElement, conf, anon)])
+
     of ctkAnonObject:
       var def = t.objDef
       def.decl.name = t.objParent & t.objUser
@@ -203,9 +211,12 @@ proc toNNode*[N](
       anon.add gen
       result = newNNType[N](def.nimName)
 
-    else:
-      raise newImplementKindError(t)
+    of ctkDecltype:
+      result = NType[N](
+        value: newXCall("typeof", toNNode(t.value, conf)), kind: ntkValue)
 
+    of ctkStaticParam:
+      result = NType[N](value: toNNode(t.value, conf), kind: ntkValue)
 
 
 

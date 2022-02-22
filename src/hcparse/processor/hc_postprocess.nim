@@ -156,8 +156,9 @@ func postprocessTypeUses*(
   func aux(use: var CxxTypeUse, store: CxxTypeStore) =
     eachKind(use, {ctkIdent}) do (use: var CxxTypeUse):
       if not use.cxxType.isParam:
-        use.cxxType.typeStore = store
-        use.cxxType.typeLib = some lib.library
+        for typ in mitems(use.types):
+          typ.cxxType.typeStore = store
+          typ.cxxType.typeLib = some lib.library
 
         let decl = use.getDecl()
 
@@ -246,7 +247,8 @@ proc fixIdentsRec*(
   proc aux(use: var CxxTypeUse, cache: var StringNameCache) =
     var cache {.byaddr.} = cache
     eachKind(use, {ctkIdent}) do (use: var CxxTypeUse):
-      aux(use.cxxType.name, cache)
+      for typ in mitems(use.types):
+        aux(typ.cxxType.name, cache)
 
     proc auxArg(use: var CxxTypeUse, cache: var StringNameCache) =
       case use.kind:
@@ -255,15 +257,16 @@ proc fixIdentsRec*(
           if use.value.kind == cekVar:
             aux(use.value.ident, cache, 0)
 
-        of ctkPod: discard
+        of ctkPod, ctkDecltype: discard
         of ctkAnonEnum:
           aux(use.enumParent, cache)
           aux(use.enumUser, cache)
 
         of ctkArrayKinds: auxArg(use.arrayElement, cache)
         of ctkIdent:
-          for param in mitems(use.genParams):
-            auxArg(param, cache)
+          for typ in mitems(use.types):
+            for param in mitems(typ.genParams):
+              auxArg(param, cache)
 
         of ctkAnonObject:
           aux(use.objParent, cache)

@@ -6,7 +6,8 @@ import
 import
   std/[
     options, macros, json, strutils,
-    tables, hashes, sets, sequtils
+    tables, hashes, sets, sequtils,
+    math
   ]
 
 import
@@ -24,6 +25,7 @@ type
     ctkFixedArray
     ctkDependentArray
     ctkDynamicArray
+    ctkDecltype
 
     ctkStaticParam
 
@@ -234,22 +236,32 @@ type
     ## Instantiated type
     flags*: set[CxxTypeFlag]
     case kind*: CxxTypeKind
-      of ctkStaticParam:
+      of ctkStaticParam, ctkDecltype:
         value*: CxxExpr
 
       of ctkPtr, ctkLVRef, ctkRVRef, ctkDynamicArray:
         wrapped*: CxxTypeUse
 
       of ctkFixedArray, ctkDependentArray:
-        arraySize*: CxxTypeUse
-        arrayElement*: CxxTypeUse
+        arraySize*: CxxTypeUse ## Array size type or static parameter
+        ## (usually static parameter). Dynamic arrays without explicitly
+        ## specified parameters are handled as 'wrapped'
+        arrayElement*: CxxTypeUse ## Array type.
 
       of ctkPod:
         podKind*: CxxPodTypeKind
 
       of ctkIdent:
-        cxxType*: CxxTypeRef
-        genParams*: seq[CxxTypeUse]
+        types*: seq[tuple[
+          cxxType: CxxTypeRef,
+          genParams: seq[CxxTypeUse]
+        ]] ## Scopes of the fully qualified identifier, such as
+           ## `std::vector<int>` or `std::map<char, float>`. Might contain
+           ## single identifier. For scoped parameters each section
+           ## contains fully qualified - `std::vector` is stored as a
+           ## single entry, `name::space::type` is stored as single as
+           ## well, and only `space::type<A>::nested<B>` will have two
+           ## entries (because it actually has two separate types)
 
       of ctkProc:
         arguments*: seq[CxxArg]
@@ -343,13 +355,14 @@ type
     cekIntLit
     cekStrLit
     cekVar
+    cekCallLit
 
   CxxExpr* = object
     case kind*: CxxExprKind
       of cekIntLit:
         intVal*: int
 
-      of cekStrLit:
+      of cekStrLit, cekCallLit:
         strVal*: string
 
       of cekVar:
@@ -545,8 +558,10 @@ func `$`*(name: CxxNamePair): string =
 func `$`*(expr: CxxExpr): string =
   case expr.kind:
     of cekIntLit: $expr.intVal
-    of cekStrLit: expr.strVal
     of cekVar:    $expr.ident
+
+    of cekStrLit, cekCallLit:
+      expr.strVal
 
 func `$`*(tref: CxxTypeRef): string =
   if not tref.isParam:
@@ -575,6 +590,9 @@ func `$`*(ct: CxxTypeUse): string =
       of ctkPod:
         result = $ct.podKind
 
+      of ctkDecltype:
+        result = "typeof($#)" % $ct.value
+
       of ctkPtr:
         result = $ct.wrapped & "*"
 
@@ -594,11 +612,13 @@ func `$`*(ct: CxxTypeUse): string =
         result = $ct.value
 
       of ctkIdent:
-        result &= $ct.cxxType
-        if ?ct.genParams:
-          result &= "["
-          result &= ct.genParams.mapIt($it).join(", ")
-          result &= "]"
+        for idx, part in ct.types:
+          if 0 < idx: result.add "+"
+          result &= $part.cxxType
+          if ?part.genParams:
+            result &= "["
+            result &= part.genParams.mapIt($it).join(", ")
+            result &= "]"
 
       of ctkAnonEnum:
         result &= "anon-enum"
@@ -682,58 +702,60 @@ func `[]`*(t: CxxTypeUse, idx: int): CxxTypeUse =
   ## return their parameters, arrays return `[0 => arraySize, 1 =>
   ## arrayElement]`, wrapped kinds (pointer, ref etc.) return wrapped type
   ## on 0'th parameter, procedural type yield return type on 0'th argument,
-  ## and types of arguments on others.
+  ## and types of arguments on others. For nested types index generic type
+  ## parameters from left to right.
   ##
   ## - `array[Enum, int]` :: `0 -> Enum`, `1 -> int`
   ## - `proc(a: int): float` :: `0 -> float`, `1 -> int`
   ## - `ptr X` :: `0 -> X`
+  ## - `A::B<C>::<D>` :: `0 -> C`, `0 -> D`
   case t.kind:
     of ctkWrapKinds:
       if idx != 0: raise newArgumentError(
         "Wrap kinds only support indexing into 0'th parameter, but ",
         idx, " was used")
 
-      result = t.wrapped
+      return t.wrapped
 
     of ctkArrayKinds:
       case idx:
-        of 0: result = t.arraySize
-        of 1: result = t.arrayElement
+        of 0: return t.arraySize
+        of 1: return t.arrayElement
         else: raise newArgumentError(
           "Array kinds only supports indexing into 0'th of 1st parameters, ",
           "but ", idx, " was used")
 
     of ctkIdent:
-      result = t.genParams[idx]
+      var curr = 0
+      for typ in t.types:
+        if idx in curr .. typ.genParams.len:
+          return typ.genParams[curr]
+
+        else:
+          curr += typ.genParams.len
+
+      raise newArgumentError(
+        "No generic parameter indexed ", idx, " for identifier")
 
     of ctkProc:
       if idx == 0:
-        result = t.returnType
+        return t.returnType
 
       else:
-        result = t.arguments[idx - 1].nimType
+        return t.arguments[idx - 1].nimType
 
-    of ctkStaticParam:
+    of ctkStaticParam, ctkDecltype, ctkPod, ctkAnonObject, ctkAnonEnum:
       raise newUnexpectedKindError(
-        t, "Static param does not support generic parameter indexing")
-
-    of ctkPod:
-      raise newUnexpectedKindError(
-        t, "Pod types do not support generic parameter indexing")
-
-    of ctkAnonObject, ctkAnonEnum:
-      raise newUnexpectedKindError(
-        t, "Anonymous enum/object does not support generic parameter indexing")
-
-
+        t, "Static parameters, POD types, decltype() calls, anonymous objects/enums ",
+        "do not support generic parameter indexing")
 
 func len*(t: CxxTypeUse): int =
   case t.kind:
     of ctkWrapKinds: 1
     of ctkArrayKinds: 2
-    of ctkIdent: t.genParams.len
+    of ctkIdent: t.types.mapIt(it.genParams.len).sum()
     of ctkProc: 1 + t.arguments.len
-    of ctkStaticParam, ctkAnonObject, ctkAnonEnum, ctkPod: 0
+    of ctkStaticParam, ctkAnonObject, ctkAnonEnum, ctkPod, ctkDecltype: 0
 
 func `[]`*(back: CxxTypeUse, idx: BackwardsIndex): CxxTypeUse =
   back[back.len - idx.int]
@@ -816,7 +838,7 @@ func hash*(use: CxxTypeUse): Hash =
       for field in items(use.objDef.mfields):
         result = hash(field.nimType) !& result
 
-    of ctkStaticParam:
+    of ctkStaticParam, ctkDecltype:
       raise newImplementKindError(use)
 
     of ctkWrapKinds:
@@ -826,7 +848,8 @@ func hash*(use: CxxTypeUse): Hash =
       result = result !& hash(use.arraySize) !& hash(use.arrayElement)
 
     of ctkIdent:
-      result = result !& hash(use.cxxType) !& hash(use.genParams)
+      for typ in use.types:
+        result = result !& hash(typ.cxxType) !& hash(typ.genParams)
 
     of ctkProc:
       result = result !& hash(use.arguments)
@@ -835,6 +858,11 @@ func hash*(use: CxxTypeUse): Hash =
 
 func hash*(decl: CxxTypeDecl): Hash =
   !$(hash(decl.name) !& hash(decl.genParams) !& hash(decl.typeImport))
+
+func cxxType*(use: CxxTypeUse): CxxTypeRef =
+  ## Get reference to the last (full) type in the fully qualified type
+  ## identifier.
+  use.types.last().cxxType
 
 func `nimName=`*(pr: var CxxProc, name: string) =
   pr.head.name.nim = name
@@ -945,14 +973,17 @@ func isEmpty*(name: CxxName): bool =
 func isPOD*(use: CxxTypeUse): bool = ctfIsPodType in use.flags
 
 func add*(t: var CxxTypeUse, other: CxxTypeUse) =
-  t.genParams.add other
-  t.genParams.last().flags.incl ctfParam
+  ## Add new generic parameter to the last identifier type.
+  t.types.last().genParams.add other
+  t.types.last().genParams.last().flags.incl ctfParam
 
 func getConstructed*(pr: CxxProc): CxxNamePair =
+  ## Get name of the object constructed by the procedure
   assertOption(pr.constructorOf)
   pr.constructorOf.get()
 
 func getIcppName*(pr: CxxProc, asMethod: bool = false): string =
+  ## Get C++ identifier name joined on namespace separators
   if asMethod:
     pr.cxxName.scopes[^1]
 
@@ -1029,7 +1060,9 @@ func cxxTypeUse*(
   var head = head
   head.context = cncType
   CxxTypeUse(
-    kind: ctkIdent, cxxType: cxxTypeRef(head, store), genParams: @genParams)
+    kind: ctkIdent, types: @[(
+      cxxType: cxxTypeRef(head, store),
+      genParams: @genParams)])
 
 func cxxTypeParams*(decl: CxxTypeDecl): seq[CxxTypeUse] =
   for (param, default) in decl.genParams:
@@ -1068,6 +1101,8 @@ func box*(en: CxxMacro): CxxEntry = CxxEntry(kind: cekMacro, cxxMacro: en)
 
 
 func toDecl*(use: CxxTypeUse, kind: CxxTypeDeclKind): CxxTypeDecl =
+  ## Construct type declaration using type identifier. Use the latest
+  ## element of the fully scoped type identifier.
   assertKind(use, {ctkIdent})
   return cxxTypeDecl(use.cxxType.name, kind)
 
@@ -1157,7 +1192,6 @@ func getDecl*(use: CxxTypeUse): Option[CxxTypeDecl] =
   ## identical types present they are disambiguated based on the library
   ## name if possible.
   assertKind(use, {ctkIdent})
-  assert not use.cxxType.isParam
   assertRef use.cxxType.typeStore
   return use.cxxType.typeStore.getDecl(
     use.cxxName(), use.cxxType.typeLib)
@@ -1250,6 +1284,9 @@ func addReExport*(file: var CxxFile, cimport: CxxLibImport) =
 # proc eachIdent*(use: CxxTypeUse, cb: proc(ident: CxxTypeUse))
 
 template eachKindAux(inUse, cb, iterateWith: untyped, target: set[CxxTypeKind]) =
+  ## Iterate over each subtype in the `inUse` type, using `iterateWith`
+  ## call (must be either `mitems` or `items`). If called on type that is
+  ## in `target` set, execute callback `cb`
   if inUse.kind in target:
     cb(inUse)
 
@@ -1262,11 +1299,12 @@ template eachKindAux(inUse, cb, iterateWith: untyped, target: set[CxxTypeKind]) 
         eachKind(field.nimType, target, cb)
 
     of ctkWrapKinds: eachKind(inUse.wrapped, target, cb)
-    of ctkStaticParam, ctkPod: discard
+    of ctkStaticParam, ctkPod, ctkDecltype: discard
     of ctkArrayKinds: eachKind(inUse.arrayElement, target, cb)
     of ctkIdent:
-      for param in iterateWith(inUse.genParams):
-        eachKind(param, target, cb)
+      for typ in iterateWith(inUse.types):
+        for param in iterateWith(typ.genParams):
+          eachKind(param, target, cb)
 
     of ctkProc:
       for arg in iterateWith(inUse.arguments):
@@ -1339,10 +1377,9 @@ func cxxTypeUse*(
 func cxxTypeUse*(decl: CxxTypeDecl, store: CxxTypeStore = nil): CxxTypeUse =
   CxxTypeUse(
     kind: ctkIdent,
-    cxxType: cxxTypeRef(decl.name, store),
-    genParams: cxxTypeParams(decl)
-  )
-
+    types: @[(
+      cxxType: cxxTypeRef(decl.name, store),
+      genParams: cxxTypeParams(decl))])
 
 func cxxTypeUse*(name: string, args: seq[CxxTypeUse]): CxxTypeUse =
   cxxTypeUse(cxxPair(name), args)
@@ -1448,9 +1485,15 @@ proc setStoreRec*(entry: var CxxEntry, store: CxxTypeStore) =
       ctkIdent, ctkAnonObject, ctkAnonEnum
     }) do (use: var CxxTypeUse):
       case use.kind:
-        of ctkIdent: use.cxxType.typeStore = store
-        of ctkAnonObject: aux(use.objDef)
-        of ctkAnonEnum: aux(use.enumDef)
+        of ctkIdent:
+          for typ in mitems(use.types):
+            typ.cxxType.typeStore = store
+
+        of ctkAnonObject:
+          aux(use.objDef)
+
+        of ctkAnonEnum:
+          aux(use.enumDef)
         else: discard
 
   case entry.kind:

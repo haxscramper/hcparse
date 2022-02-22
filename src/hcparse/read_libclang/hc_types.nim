@@ -108,7 +108,7 @@ type
       of ctkWrapKinds:
         wrapped*: NimType
 
-      of ctkStaticParam:
+      of ctkStaticParam, ctkDecltype:
         param*: CXCursor
 
       of ctkArrayKinds:
@@ -892,7 +892,7 @@ func hash*(nt: NimType): Hash =
     of ctkArrayKinds:
       result = !$(hash(nt.arraySize) !& hash(nt.arrayElement))
 
-    of ctkStaticParam:
+    of ctkStaticParam, ctkDecltype:
       result = hash(nt.param)
 
     of ctkIdent:
@@ -926,7 +926,7 @@ func `==`*(t1, t2: NimType): bool =
       of ctkWrapKinds:
         return t1.wrapped == t2.wrapped
 
-      of ctkStaticParam:
+      of ctkStaticParam, ctkDecltype:
         return t1.param == t2.param
 
       of ctkArrayKinds:
@@ -1023,6 +1023,9 @@ proc `$`*(nimType: NimType): string =
 
       of ctkStaticParam:
         result = $nimType.param
+
+      of ctkDecltype:
+        result = "decltype($#)" % $nimType.param
 
       of ctkIdent:
         if nimType.isParam:
