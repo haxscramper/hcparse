@@ -1473,7 +1473,8 @@ func setCxxBind*(target: var CxxBind, source: CxxBind) =
   target = source
   target.icpp = icpp
 
-
+func isImported*(def: CxxProc | CxxObject): bool =
+  def.cbind.kind != cbkNotImported
 
 
 

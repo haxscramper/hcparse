@@ -167,14 +167,14 @@ proc cxxNamePair*(node: CppNode, context: CxxNameContext): CxxNamePair =
     of cppQualifiedIdentifier:
       result.cxx.scopes = (
         node[0].cxxNamePair(context).cxx.scopes &
-          node[1].cxxNamePair(context).cxx.scopes )
+          node[1].cxxNamePair(context).cxx.scopes)
 
     of cppNamespaceIdentifier,
        cppIdentifier,
        cppDestructorName,
        cppTypeIdentifier,
        cppFieldIdentifier:
-      result.cxx.scopes = @[node.strVal()]
+      result.cxx.scopes = @[node.getBase()[node.slice()]]
 
     of cppTemplateType:
       # FIXME dropping the template arguments. In the future

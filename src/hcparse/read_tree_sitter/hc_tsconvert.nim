@@ -65,7 +65,6 @@ type
     methodTable: Table[CxxName, MethodList]
 
 proc dropForwardMethods(obj: var CxxObject, conf: ConvConf) =
-  return
   var idx = 0
   while idx < obj.methods.len():
     let class = obj.cxxName()
@@ -78,15 +77,17 @@ proc dropForwardMethods(obj: var CxxObject, conf: ConvConf) =
       inc idx
 
 proc updateOutOfBody(pr: var CxxProc, conf: ConvConf) =
-  return
   let class = pr.cxxName()[0..^2]
   let name = pr.cxxName().lastScope()
   if class in conf.objects:
     let obj = conf.objects[class]
     assertRef(obj)
-    pr.arguments.insert(cxxArg(
-      cxxPair("this", cxxName("this")),
-      obj.decl.cxxTypeUse()))
+    var typ = obj.decl.cxxTypeUse()
+    if not pr.isConst():
+      echov "out of body update"
+      typ = typ.wrap(ctkLVref)
+
+    pr.arguments.insert(cxxArg(cxxPair("this", cxxName("this")), typ))
 
     pr.cxxName = pr.cxxName()[^1]
     pr.head.genParams.insert(obj.decl.genParams)
@@ -344,6 +345,7 @@ proc conv*(
          node[1] of cppFunctionDefinition or
          (node.has([1, 1]) and node[1][1] of cppFunctionDeclarator):
         var pr = toCxxProc(node, coms)
+        echov pr.cxxName()
         pr.updateOutOfBody(conf)
         var conv = postFixEntries(@[box(pr)], conf.fix)[0].
           cxxProc.
@@ -540,7 +542,7 @@ proc conv*(
 import compiler/tools/docgen_code_renderer except `of`
 
 if isMainModule:
-  const full = on
+  const full = off
   when full:
     let files = toSeq(walkDir(
       AbsDir"/tmp/infiles",
@@ -580,7 +582,7 @@ if isMainModule:
     var c: StringNameCache
     let node = parseCppString(addr str)
     var conf = cxxCodegenConf.withIt do:
-      it.nameStyle = idsSnake
+      it.nameStyle = idsCamel
       it.helperEnum = false
 
     let fix = baseFixConf.withIt do:
@@ -590,6 +592,8 @@ if isMainModule:
           result = name.cxx.scopes.join("_")
         else:
           result = name.nim
+
+        result = result.replace("~", "destroy")
 
         if not cache.knownRename(name.nim):
           cache.newRename(name.nim, result)

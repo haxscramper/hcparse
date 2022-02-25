@@ -167,8 +167,10 @@ proc toNNode*[N](
       else:
         result = newNType[N]("ptr", @[toNNode[N](t.wrapped, conf, anon)])
 
-    of ctkLVref, ctkRVref:
-      # QUESTION how to map lvref properly?
+    of ctkLVref:
+      result = newNType[N]("var", @[toNNode[N](t.wrapped, conf, anon)])
+
+    of ctkRVref:
       result = toNNode[N](t.wrapped, conf, anon)
 
     of ctkProc:
@@ -394,24 +396,23 @@ proc toNNode*[N](
   if cpfSignal in def.flags: result.addPragma("qsignal")
 
   if def.isConstructor:
-    let name = conf.getSuffix(result.name, cncProc)
+    if def.isImported():
+      assert onConstructor == nctRegular, $onConstructor
 
+    let name = conf.getSuffix(result.name, cncProc)
     var cbind = def.cbind
     case onConstructor:
       of nctRegular:
-        cbind.icpp.standaloneProc(def.getIcppName())
-        result.addPragma toNNode[N](cbind, conf, def.nimName)
-
-        if def.cbind.kind != cbkNotImported:
+        if def.isImported():
+          cbind.icpp.standaloneProc(def.getIcppName())
+          result.addPragma toNNode[N](cbind, conf, def.nimName)
           result.addPragma("constructor")
 
         result.name = "init" & name
 
       of nctPtr:
         cbind.icpp.standaloneProc("new " & def.getIcppName())
-        if def.cbind.kind != cbkNotImported:
-          result.addPragma toNNode[N](cbind, conf, def.nimName)
-
+        result.addPragma toNNode[N](cbind, conf, def.nimName)
         result.name = "cnew" & name
 
       of nctRef:
@@ -472,7 +473,7 @@ proc toNNode*[N](
   for param in obj.decl.genParams:
     res.name.genParams.add newNNType[N](param.name.nim, @[])
 
-  if obj.cbind.kind != cbkNotImported:
+  if not obj.isImported():
     res.addPragma toNNode[N](obj.cbind, conf, obj.nimName)
 
   for field in obj.mfields:
@@ -481,7 +482,11 @@ proc toNNode*[N](
   result.add toNimDecl(res)
 
   for meth in obj.methods:
-    result.add toNNode[N](meth, conf, anon, nctPtr, some obj)
+    if meth.isConstructor:
+      result.add toNNode[N](meth, conf, anon, nctRegular, some obj)
+      if meth.isImported():
+        result.add toNNode[N](meth, conf, anon, nctRef, some obj)
+        result.add toNNode[N](meth, conf, anon, nctPtr, some obj)
 
   for n in obj.nested:
     result.add toNNode[N](n, conf, anon)
