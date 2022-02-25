@@ -26,7 +26,7 @@ import
 export parseCppString, treeRepr
 
 proc debug*(node: CppNode) =
-  echo node.treeRepr()
+  echo node.getTs().treeRepr(node.getBase(), unnamed = true)
 
 const cppTypeSpecSpec* = {
   cppClassSpecifier,
@@ -173,7 +173,9 @@ proc cxxNamePair*(node: CppNode, context: CxxNameContext): CxxNamePair =
 
     of cppNamespaceIdentifier,
        cppIdentifier,
+       cppSizedTypeSpecifier,
        cppDestructorName,
+       cppPrimitiveType,
        cppTypeIdentifier,
        cppFieldIdentifier:
       result.cxx.scopes = @[node.getBase()[node.slice()]]

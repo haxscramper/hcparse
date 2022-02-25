@@ -28,6 +28,8 @@ import compiler/ast/trees
 
 export parseCppString
 
+
+
 proc wrap*(ntype: NType[PNode], kind: CxxTypeKind): NType[PNode] =
   case kind:
     of ctkPtr:
@@ -109,7 +111,7 @@ proc conv*(
     result.nim = result.cxx.scopes.join("_")
 
   proc toName(node: CppNode): PNode =
-    return newPIdent(conf.fix.fixName(
+    return escapedPIdent(conf.fix.fixName(
       node.cxxNamePair(cncNone).updateNim(), pc[],
       default(CxxNameFixContext)))
 
@@ -133,9 +135,26 @@ proc conv*(
     of cppTranslationUnit,
        cppCompoundStatement,
        cppExpressionStatement:
-      result = newPStmtList()
-      for sub in items(node):
-        result.add ~sub
+
+      if node of cppCompoundStatement and
+         node[0] of cppExpressionStatement and
+         node[0][0] of cppCommaExpression:
+        proc flatten(node: CppNode): seq[CppNode] =
+          case node.kind:
+            of cppCommaExpression:
+              result.add node["left"].flatten()
+              result.add node["right"].flatten()
+            else:
+              result.add node
+
+        result = newPTree(nnkPar)
+        for item in node[0][0].flatten():
+          result.add ~item
+
+      else:
+        result = newPStmtList()
+        for sub in items(node):
+          result.add ~sub
 
     of cppReturnStatement:
       result = nnkReturnStmt.newPTree(
@@ -181,6 +200,8 @@ proc conv*(
     of cppIdentifier,
        cppFieldIdentifier,
        cppTypeIdentifier,
+       cppSizedTypeSpecifier,
+       cppPrimitiveType,
        cppNamespaceIdentifier:
       result = node.toName()
 
@@ -192,19 +213,19 @@ proc conv*(
       let file = RelFile(node[0].strVal()[1..^2])
       result = newPTree(
         nnkImportStmt,
-        newPIdent(file.withoutExt().getStr() & file.ext()))
+        escapedPIdent(file.withoutExt().getStr() & file.ext()))
 
     of cppComment:
       result = newEmptyPNode()
 
     of cppNumberLiteral:
-      result = newPIdent(node.strVal())
+      result = escapedPIdent(node.strVal())
 
     of cppTrue:
-      result = newPIdent("true")
+      result = escapedPIdent("true")
 
     of cppFalse:
-      result = newPIdent("false")
+      result = escapedPIdent("false")
 
     of cppUpdateExpression:
       let call =
@@ -238,7 +259,7 @@ proc conv*(
       result = nnkCast.newPTree(decl.toNNode(), ~node["value"])
 
     of cppNull:
-      result = newPIdent("nil")
+      result = escapedPIdent("nil")
 
     of cppCommaExpression:
       result = newPar newPTree(nnkStmtListExpr, ~node[0], ~node[1])
@@ -263,11 +284,13 @@ proc conv*(
           if node of nkIdent:
             let name = node.getStrVal()
             if name.startsWith(pref):
-              node = newXCall("astToStr", newPIdent(name.dropPrefix(pref)))
+              node = newXCall(
+                "astToStr", escapedPIdent(name.dropPrefix(pref)))
 
             elif inf in name:
               let split = name.split(inf)
-              node = newXCall("``", newPIdent(split[0]), newPIdent(split[1]))
+              node = newXCall(
+                "``", escapedPIdent(split[0]), escapedPIdent(split[1]))
 
           else:
             for i in 0 ..< safeLen(node):
@@ -280,6 +303,7 @@ proc conv*(
                cppCommaExpression,
                cppCompoundStatement,
                cppBinaryExpression,
+               cppParenthesizedExpression,
                cppSyntaxError:
               for sub in node:
                 if not sub.simpleExpr():
@@ -287,21 +311,17 @@ proc conv*(
 
               return true
 
-            of cppCallExpression,
-               cppIdentifier,
-               cppDeclaration:
-              return false
-
             of cppNumberLiteral:
               return true
 
             else:
-              failNode node
+              return false
 
 
 
         val = val.multiReplace({re"\s*##\s*": inf, re"#\s*": pref})
         let bodyNode = parseCppString(addr val)
+        debug bodyNode
         var impl = ~bodyNode
 
         if bodyNode.simpleExpr():
@@ -469,22 +489,22 @@ proc conv*(
         result.add ~item
 
     of cppThis:
-      result = newPIdent("this")
+      result = escapedPIdent("this")
 
     of cppGotoStatement:
       # Nim does not have support for 'goto' statements, so translating
       # them literally here, this code would have to be rewritten manually.
-      result = newPTree(nnkCommand, newPIdent("cxx_goto"), ~node[0])
+      result = newPTree(nnkCommand, escapedPIdent("cxx_goto"), ~node[0])
 
     of cppDeleteExpression:
       # There is no corresponding 'delete' expression either, so I wrap it
       # with placeholder proc, it should be supplied from user, or
       # rewritten.
-      result = newPTree(nnkCommand, newPIdent("cxx_delete"), ~node[0])
+      result = newPTree(nnkCommand, escapedPIdent("cxx_delete"), ~node[0])
 
     of cppSyntaxError:
       if node.len == 0:
-        result = newXCall(newPIdent"CXX_SYNTAX_ERROR", @[newPIdent(node.strVal())])
+        result = newXCall(escapedPIdent"CXX_SYNTAX_ERROR", @[newPLit(node.strVal())])
 
       elif node.len == 1:
         result = ~node[0]
@@ -497,7 +517,7 @@ proc conv*(
         result = fillStmt(result)
 
     of cppStatementIdentifier:
-      result = newPIdent(node.strVal())
+      result = escapedPIdent(node.strVal())
 
     of cppInitializerPair:
       result = newPTree(nnkExprColonExpr, ~node[0], ~node[1])
@@ -507,7 +527,7 @@ proc conv*(
 
     of cppNewExpression:
       result = newXCall(
-        newPIdent("new" & node[cpfType].strVal()),
+        escapedPIdent("new" & node[cpfType].strVal()),
         tern(cpfArgs in node, node[cpfArgs].mapIt(~it), @[]))
 
     of cppForStatement:
@@ -551,11 +571,11 @@ proc conv*(
 
       if forvar.notNil() and rmin.notNil() and rmax.notNil() and rangeDir == 1:
         if shift != 0:
-          rmax = newXCall(newPIdent("+"), @[rmax, newPLit(shift)])
+          rmax = newXCall(escapedPIdent("+"), @[rmax, newPLit(shift)])
 
         result = newFor(
           forvar,
-          newXCall(newPIdent("..<"), @[rmin, rmax]),
+          newXCall(escapedPIdent("..<"), @[rmin, rmax]),
           fillStmt(~node[^1]))
 
       else:
@@ -566,6 +586,15 @@ proc conv*(
 
     of cppWhileStatement:
       result = newWhile(newPar ~node[cpfCond], ~node["body"])
+
+    of cppDoStatement:
+      let id = newPIdent("doTmp")
+      result = newBlock(
+        newVar(id, newPType("bool"), newPLit(true)),
+        newWhile(
+          newXCall("or", id, ~node[cpfCond]),
+          newAsgn(id, newPLit("false")),
+          ~node["body"]))
 
     of cppConcatenatedString:
       result = newPLit(node.strVal())
@@ -596,10 +625,6 @@ proc conv*(
       if cpfAlter in node:
         result.addBranch(fillStmt(~node[cpfAlter]))
 
-    of cppDoStatement:
-      let body = ~node["body"]
-      result = newPStmtList(body, newWhile(~node[cpfCond], body))
-
     of cppDeclaration:
       let decl = node[cpfDecl]
       var value = newEmptyPNode()
@@ -629,7 +654,7 @@ proc conv*(
           if decl["value"] of cppArgumentList:
             # `Instr16 instr16(&emu, &instr);` is converted into
             # `let instr16: Instr16 = initInstr16(addr emu, addr instr)`
-            value = newXCall(newPIdent("init" & node[cpfType].strVal()),
+            value = newXCall(escapedPIdent("init" & node[cpfType].strVal()),
                              value[0..^1])
 
       result.add nnkVarSection.newPTree(
