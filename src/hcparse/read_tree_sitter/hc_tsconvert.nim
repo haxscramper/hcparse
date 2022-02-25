@@ -6,7 +6,7 @@ import
   htsparse/cpp/cpp
 
 import
-  std/[strutils, sequtils]
+  std/[strutils, sequtils, tables, sets]
 
 import
   ./hc_tsreader,
@@ -52,15 +52,52 @@ proc fillStmt*(node: PNode): PNode =
   else:
     node
 
+type
+  MethodList = object
+    forward: HashSet[string] ## Names of methods that were forward-declared
+    moved: HashSet[string] ## Methods that were later found in the
+                           ## out-of-body definitions.
+
+  ConvConf = object
+    conf: CodegenConf
+    fix: CxxFixConf
+    objects: Table[CxxName, CxxObject]
+    methodTable: Table[CxxName, MethodList]
+
+proc dropForwardMethods(obj: var CxxObject, conf: ConvConf) =
+  var idx = 0
+  while idx < obj.methods.len():
+    let class = obj.cxxName()
+    let name = obj.methods[idx].cxxName().lastScope()
+    if class in conf.methodTable and
+       name in conf.methodTable[class].forward and
+       name in conf.methodTable[class].moved:
+      obj.methods.del(idx)
+    else:
+      inc idx
+
+proc updateOutOfBody(pr: var CxxProc, conf: ConvConf) =
+  let class = pr.cxxName()[0..^2]
+  let name = pr.cxxName().lastScope()
+  if class in conf.objects:
+    let obj = conf.objects[class]
+    assertRef(obj)
+    pr.arguments.insert(cxxArg(
+      cxxPair("this", cxxName("this")),
+      obj.decl.cxxTypeUse()))
+
+    pr.cxxName = pr.cxxName()[^1]
+    pr.head.genParams.insert(obj.decl.genParams)
+
+
 proc conv*(
     node: CppNode,
     str: string,
     c: var StringNameCache,
-    conf: CodegenConf,
-    fix: CxxFixConf,
+    conf: ConvConf
   ): PNode =
   template `~`(expr: CppNode): untyped =
-    conv(expr, str, c, conf, fix)
+    conv(expr, str, c, conf)
 
   var pc = addr c
   proc updateNim(pair: sink CxxNamePair): CxxNamePair =
@@ -68,7 +105,7 @@ proc conv*(
     result.nim = result.cxx.scopes.join("_")
 
   proc toName(node: CppNode): PNode =
-    return newPIdent(fix.fixName(
+    return newPIdent(conf.fix.fixName(
       node.cxxNamePair(cncNone).updateNim(), pc[],
       default(CxxNameFixContext)))
 
@@ -80,10 +117,10 @@ proc conv*(
         node,
         parent = parent,
         user = user).
-        postFixEntries(fix, CxxLibImport())
+        postFixEntries(conf.fix, CxxLibImport())
 
     var anon: seq[NimDecl[PNode]]
-    result.nimt = cxx.toNNode(conf, anon)
+    result.nimt = cxx.toNNode(conf.conf, anon)
     result.anon = newPStmtList()
     for an in anon:
       result.anon.add an.toNNode()
@@ -266,17 +303,19 @@ proc conv*(
         before.add result
         return before
 
-    of cppStructSpecifier,
-       cppTypeDefinition,
-       cppClassSpecifier,
-       cppUnionSpecifier:
-
+    of cppTypeDefinition, cppTypeSpecSpec:
       var coms: seq[CxxComment]
       var anon: seq[NimDecl[PNode]]
       result = newPStmtList()
 
-      for ent in toCxxTypeDefinition(node, coms).postFixEntries(fix, CxxLibImport()):
-        for en in ent.toNNode(conf, anon):
+      for ent in toCxxTypeDefinition(node, coms).
+                 postFixEntries(conf.fix, CxxLibImport()):
+
+        var ent = ent
+        if ent of cekObject:
+          dropForwardMethods(ent.cxxObject, conf)
+
+        for en in ent.toNNode(conf.conf, anon):
           result.add toNNode(en, standalone = true)
 
         for an in anon:
@@ -288,9 +327,9 @@ proc conv*(
     of cppEnumSpecifier:
       var coms: seq[CxxComment]
       let
-        entrs = postFixEntries(@[box(toCxxEnum(node, coms))], fix)
+        entrs = postFixEntries(@[box(toCxxEnum(node, coms))], conf.fix)
 
-      for item in toNNode[PNode](entrs[0].cxxEnum, conf):
+      for item in toNNode[PNode](entrs[0].cxxEnum, conf.conf):
         result = item.toNNode()
 
     of cppFunctionDefinition, cppTemplateDeclaration:
@@ -302,14 +341,21 @@ proc conv*(
       if node of cppFunctionDefinition or
          node[1] of cppFunctionDefinition or
          (node.has([1, 1]) and node[1][1] of cppFunctionDeclarator):
-        impl = postFixEntries(@[box(toCxxProc(node, coms))], fix)[0].
+        var pr = toCxxProc(node, coms)
+        pr.updateOutOfBody(conf)
+        var conv = postFixEntries(@[box(pr)], conf.fix)[0].
           cxxProc.
-          toNNode(conf, anon).toNNode()
+          toNNode(conf.conf, anon)
+
+        conv.impl = fillStmt(conv.impl)
+        impl = conv.toNNode()
 
       elif node[1] of cppTypeSpecSpec:
-        impl = postFixEntries(@[box(toCxxObject(node, coms))], fix)[0].
+        var obj = toCxxObject(node, coms)
+        dropForwardMethods(obj, conf)
+        impl = postFixEntries(@[box(obj)], conf.fix)[0].
           cxxObject.
-          toNNode(conf, anon).toNNode()
+          toNNode(conf.conf, anon).toNNode()
 
       else:
         failNode node
@@ -489,11 +535,9 @@ proc conv*(
       failNode node
 
 
-import compiler/tools/docgen_code_renderer
-import hnimast/pprint
-import std/tables
+import compiler/tools/docgen_code_renderer except `of`
 
-when isMainModule:
+if isMainModule:
   const full = on
   when full:
     let files = toSeq(walkDir(
@@ -507,21 +551,27 @@ when isMainModule:
 
   startHax()
 
-  var methodsOf: Table[CxxName, seq[string]]
+  var conv = ConvConf()
   for file in files:
     var str = file.readFile()
     let node = parseCppString(addr str)
     var coms: seq[CxxComment]
     for entry in toCxx(node, coms):
-      if entry.kind == cekObject:
+      if entry of cekObject:
         let user = entry.cxxName()
-        echov "methods of", user
+        conv.objects[user] = entry.cxxObject
         for meth in entry.cxxObject.methods:
           let name = meth.cxxName().scopes.last()
-          echov name
-          methodsOf.mgetOrPut(user, @[]).add name
+          conv.methodTable.mgetOrPut(
+            user, default MethodList).forward.incl name
 
-  quit 0
+      elif entry of cekProc:
+        if not entry.isForward():
+          let name = entry.cxxName()
+          conv.methodTable.mgetOrPut(
+            name[0..^2], default MethodList).moved.incl(
+              name[^1].lastScope())
+
   for file in files:
     echo file
     var str = file.readFile()
@@ -571,12 +621,14 @@ when isMainModule:
               node.kind == cppTemplateDeclaration,
               node[1]["body"],
               node["body"]),
-            str, c, conf, fix))
+            str, c, conv))
 
 
     # echo node.getTs().treeRepr(node.getBase(), unnamed = true)
     # debug node
-    let nim = node.conv(str, c, conf, fix)
+    conv.conf = conf
+    conv.fix = fix
+    let nim = node.conv(str, c, conv)
     let code = nim.formatToStr()
     # let code = node.conv(str, c, conf, fix).`$`
     # let code = nim.toPString()

@@ -108,7 +108,6 @@ type
     haxdocIdent* #[ {.requiresinit.} ]#: JsonNode
 
     isAnonymous*: bool
-    isPromotedForward*: bool
 
   CxxName* = object
     scopes*: seq[string]
@@ -864,6 +863,9 @@ func cxxType*(use: CxxTypeUse): CxxTypeRef =
   ## identifier.
   use.types.last().cxxType
 
+func `cxxName=`*(pr: var CxxProc, name: CxxName) =
+  pr.head.name.cxx = name
+
 func `nimName=`*(pr: var CxxProc, name: string) =
   pr.head.name.nim = name
 
@@ -951,10 +953,19 @@ func cxxPair*(
 
   cxxPair(name, cxxName(@[name]), context)
 
+func `&`*(n1, n2: CxxName): CxxName =
+  CxxName(scopes: n1.scopes & n2.scopes)
+
+func `[]`*(n: CxxName, idx: SliceTypes): CxxName =
+  CxxName(scopes: n.scopes[idx.normalizeSlice(n.scopes.len)])
+
+func `[]`*(n: CxxName, idx: IndexTypes): CxxName =
+  CxxName(scopes: @[n.scopes[idx.normalizeIndex(n.scopes.len)]])
+
+func lastScope*(n: CxxName): string = n.scopes.last()
+
 func `&`*(p1, p2: CxxNamePair): CxxNamePair =
-  CxxNamePair(
-    context: p2.context, nim: p1.nim & p2.nim,
-    cxx: CxxName(scopes: p1.cxx.scopes & p2.cxx.scopes))
+  CxxNamePair(context: p2.context, nim: p1.nim & p2.nim, cxx: p1.cxx & p2.cxx)
 
 func isConst*(pr: CxxProc): bool = cpfConst in pr.flags
 func isStatic*(pr: CxxProc): bool = cpfStatic in pr.flags
@@ -965,6 +976,13 @@ func isConstructor*(pr: CxxProc): bool =
 func isDestructor*(pr: CxxProc): bool = pr.destructorOf.isSome()
 func isMethod*(pr: CxxProc): bool = cpfMethod in pr.flags
 
+func isForward*(pr: CxxProc): bool = pr.head.isForward
+func isForward*(ob: CxxObject): bool = ob.decl.isForward
+func isForward*(en: CxxEntry): bool =
+  case en.kind:
+    of cekProc: return en.cxxProc.isForward()
+    of cekObject: return en.cxxObject.isForward()
+    else: raise newUnexpectedKindError(en)
 
 func isEmpty*(name: CxxName): bool =
   name.scopes.len == 0 or
