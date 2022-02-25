@@ -1,7 +1,8 @@
 import
   hmisc/other/[oswrap],
   hmisc/core/[all, code_errors],
-  hmisc/algo/[hstring_algo]
+  hmisc/algo/[hstring_algo],
+  hmisc/hasts/json_serde
 
 import
   std/[
@@ -338,10 +339,10 @@ type
     ## very similar structure (nim/cxx name, generic parameters with
     ## optional defaults). Missing elements are added as regular fields.
 
-    userData*: pointer ## Additional user data. Is not intended for use in
-    ## general, added only to hack in method body transpilation.
-    ## Tree-sitter casts the original node, and then codegen triggers 'post
-    ## convert' hook.
+    userData* {.Serde(SerSkip).}: pointer ## Additional user data. Is not
+    ## intended for use in general, added only to hack in method body
+    ## transpilation. Tree-sitter casts the original node, and then codegen
+    ## triggers 'post convert' hook.
     arguments*: seq[CxxArg]
     returnType*: CxxTypeUse
     throws*: seq[CxxTypeUse]

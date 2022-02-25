@@ -148,6 +148,8 @@ proc getNameNode*(node: CppNode): CppNode =
        cppFunctionDeclarator,
        cppEnumerator,
        cppTemplateType,
+       cppPreprocDef,
+       cppPreprocFunctionDef,
        cppAssignmentExpression:
       node[0].getNameNode()
 
@@ -544,11 +546,9 @@ proc toCxxProc*(
   ): CxxProc =
 
   let (node, params) = unpackTemplate(main)
-  result = node[cpfDecl].getNameNode().withResIt do:
+  let name = node[cpfDecl].getNameNode()
+  result = name.withResIt do:
     it.cxxNamePair(cncProc).cxxProc()
-
-  result.userData = cast[pointer](main)
-  result.head.genParams = params
 
   if cpfType in node:
     result.returnType = toCxxType(
@@ -556,6 +556,18 @@ proc toCxxProc*(
       some result.head.name,
       some result.head.name
     )
+
+  else:
+    if "name" in name and
+       name["name"] of cppDestructorName:
+      result.destructorOf = some cxxNamePair(name, cncProc)
+
+    else:
+      result.constructorOf = some cxxNamePair(name, cncProc)
+
+  result.userData = cast[pointer](main)
+  result.head.genParams = params
+
 
   if parent.isSome():
     result.flags.incl cpfMethod
@@ -583,9 +595,12 @@ proc toCxxProc*(
       argComs.add toCxxComment(arg)
 
     else:
-      result.arguments.add toCxxArg(arg, idx).withIt do:
-        it.add argComs
-        argComs.clear()
+      var arg = toCxxArg(arg, idx)
+      if not (arg.nimType of ctkPod and
+              arg.nimType.podKind == cptVoid):
+        result.arguments.add arg.withIt do:
+          it.add argComs
+          argComs.clear()
 
   for p in items(decl["parameters"].getTs(), unnamed = true):
     if p.kind in {cppTripleDotTok}:

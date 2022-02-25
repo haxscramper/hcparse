@@ -6,7 +6,7 @@ import
   htsparse/cpp/cpp
 
 import
-  std/[strutils, sequtils, tables, sets]
+  std/[strutils, sequtils, tables, sets, re]
 
 import
   ./hc_tsreader,
@@ -19,7 +19,8 @@ import
   hmisc/other/oswrap,
   hmisc/wrappers/[treesitter],
   hmisc/types/colorstring,
-  hmisc/algo/namegen,
+  hmisc/algo/[namegen, hstring_algo],
+  hmisc/hasts/[json_serde, json_serde_extra],
   hnimast
 
 import compiler/utils/astrepr
@@ -84,10 +85,10 @@ proc updateOutOfBody(pr: var CxxProc, conf: ConvConf) =
     assertRef(obj)
     var typ = obj.decl.cxxTypeUse()
     if not pr.isConst():
-      echov "out of body update"
       typ = typ.wrap(ctkLVref)
 
-    pr.arguments.insert(cxxArg(cxxPair("this", cxxName("this")), typ))
+    if not pr.isConstructor:
+      pr.arguments.insert(cxxArg(cxxPair("this", cxxName("this")), typ))
 
     pr.cxxName = pr.cxxName()[^1]
     pr.head.genParams.insert(obj.decl.genParams)
@@ -193,7 +194,7 @@ proc conv*(
         nnkImportStmt,
         newPIdent(file.withoutExt().getStr() & file.ext()))
 
-    of cppComment, cppPreprocFunctionDef:
+    of cppComment:
       result = newEmptyPNode()
 
     of cppNumberLiteral:
@@ -239,7 +240,98 @@ proc conv*(
     of cppNull:
       result = newPIdent("nil")
 
-    of cppPreprocCall, cppPreprocDef:
+    of cppCommaExpression:
+      result = newPar newPTree(nnkStmtListExpr, ~node[0], ~node[1])
+
+    of cppPreprocDef, cppPreprocFunctionDef:
+      var val = ""
+      if "value" in node:
+        for line in splitLines(node.getBase()[node["value"].slice()]):
+          var trail = line.high()
+          while 0 < trail and line[trail] in {' ', '\\'}:
+            dec trail
+
+          val.add line[0 .. trail]
+          val.add "\n"
+
+
+        const
+          pref = "PP_STRINGIFY_PREFIX_"
+          inf = "_PP_STRINGIFY_INFIX"
+
+        proc rewrite(node: var PNode) =
+          if node of nkIdent:
+            let name = node.getStrVal()
+            if name.startsWith(pref):
+              node = newXCall("astToStr", newPIdent(name.dropPrefix(pref)))
+
+            elif inf in name:
+              let split = name.split(inf)
+              node = newXCall("``", newPIdent(split[0]), newPIdent(split[1]))
+
+          else:
+            for i in 0 ..< safeLen(node):
+              rewrite(node[i])
+
+        proc simpleExpr(node: CppNode): bool =
+          case node.kind:
+            of cppTranslationUnit,
+               cppExpressionStatement,
+               cppCommaExpression,
+               cppCompoundStatement,
+               cppBinaryExpression,
+               cppSyntaxError:
+              for sub in node:
+                if not sub.simpleExpr():
+                  return false
+
+              return true
+
+            of cppCallExpression,
+               cppIdentifier,
+               cppDeclaration:
+              return false
+
+            of cppNumberLiteral:
+              return true
+
+            else:
+              failNode node
+
+
+
+        val = val.multiReplace({re"\s*##\s*": inf, re"#\s*": pref})
+        let bodyNode = parseCppString(addr val)
+        var impl = ~bodyNode
+
+        if bodyNode.simpleExpr():
+          result = newConst(
+            name = node.getNameNode().strVal(),
+            expr = ~bodyNode.skip(0, {cppTranslationUnit})
+          )
+
+        else:
+          impl.rewrite()
+          var args: seq[string]
+          if "parameters" in node:
+            for param in node["parameters"]:
+              args.add param.getNameNode().strVal()
+
+          var temp = newPProcDecl(
+            name = node.getNameNode().strVal(),
+            args = mapIt(args, (it, newPType("untyped"))),
+            declType = ptkTemplate,
+            impl = impl
+          )
+
+          temp.addPragma("dirty")
+
+          result = temp.toNNode()
+
+      else:
+        result = newEmptyPNode()
+
+    of cppPreprocCall:
       result = newEmptyPNode()
 
     of cppPreprocIfdef:
@@ -345,7 +437,6 @@ proc conv*(
          node[1] of cppFunctionDefinition or
          (node.has([1, 1]) and node[1][1] of cppFunctionDeclarator):
         var pr = toCxxProc(node, coms)
-        echov pr.cxxName()
         pr.updateOutOfBody(conf)
         var conv = postFixEntries(@[box(pr)], conf.fix)[0].
           cxxProc.
@@ -392,7 +483,18 @@ proc conv*(
       result = newPTree(nnkCommand, newPIdent("cxx_delete"), ~node[0])
 
     of cppSyntaxError:
-      result = newXCall(newPIdent"CXX_SYNTAX_ERROR", @[newPIdent(node.strVal())])
+      if node.len == 0:
+        result = newXCall(newPIdent"CXX_SYNTAX_ERROR", @[newPIdent(node.strVal())])
+
+      elif node.len == 1:
+        result = ~node[0]
+
+      else:
+        result = newPStmtList()
+        for sub in node:
+          result.add ~sub
+
+        result = fillStmt(result)
 
     of cppStatementIdentifier:
       result = newPIdent(node.strVal())
@@ -409,10 +511,58 @@ proc conv*(
         tern(cpfArgs in node, node[cpfArgs].mapIt(~it), @[]))
 
     of cppForStatement:
-      let update = tern("update" in node, ~node["update"], newEmptyPNode())
-      result = newWhile(~node[cpfCond], ~node[^1], update)
+      var
+        rangeDir = 0
+        shift = 0
+        forvar, rmin, rmax: PNode
+
       if cpfInit in node:
-        result = newBlock(~node[cpfInit], result)
+        let init = node[cpfInit]
+        if cpfType in init and
+           init[cpfType] of cppPrimitiveType and
+           cpfDecl in init:
+          forvar = ~init[cpfDecl][cpfDecl]
+          rmin = ~init[cpfDecl]["value"]
+
+      if cpfCond in node:
+        let cond = node[cpfCond]
+        if cond of cppBinaryExpression:
+          if cond{"operator"} of cppLessThanTok:
+            rmax = ~cond["right"]
+
+          elif cond{"operator"} of cppLessThanEqualTok:
+            rmax = ~cond["right"]
+            shift = 1
+
+          # echov treeRepr(cond.getTs(), cond.getBase(), unnamed = true)
+
+      if "update" in node:
+        let upd = node["update"]
+        # echov treeRepr(upd.getTs(), upd.getBase(), unnamed = true)
+        if upd of cppUpdateExpression:
+          if upd{"operator"} of cppDoublePlusTok and
+             upd{"argument"} of cppIdentifier:
+            rangeDir = 1
+
+          elif upd{"operator"} of cppDoubleMinusTok and
+               upd{"argument"} of cppIdentifier:
+            rangeDir = -1
+
+
+      if forvar.notNil() and rmin.notNil() and rmax.notNil() and rangeDir == 1:
+        if shift != 0:
+          rmax = newXCall(newPIdent("+"), @[rmax, newPLit(shift)])
+
+        result = newFor(
+          forvar,
+          newXCall(newPIdent("..<"), @[rmin, rmax]),
+          fillStmt(~node[^1]))
+
+      else:
+        let update = tern("update" in node, ~node["update"], newEmptyPNode())
+        result = newWhile(~node[cpfCond], ~node[^1], update)
+        if cpfInit in node:
+          result = newBlock(~node[cpfInit], result)
 
     of cppWhileStatement:
       result = newWhile(newPar ~node[cpfCond], ~node["body"])
@@ -560,7 +710,11 @@ if isMainModule:
     var str = file.readFile()
     let node = parseCppString(addr str)
     var coms: seq[CxxComment]
-    for entry in toCxx(node, coms):
+    let cxx = toCxx(node, coms)
+
+    let outfile = file.withBaseSuffix(file.ext()).withExt("json")
+    writeFile(outfile, toJson(cxx))
+    for entry in cxx:
       if entry of cekObject:
         let user = entry.cxxName()
         conv.objects[user] = entry.cxxObject
