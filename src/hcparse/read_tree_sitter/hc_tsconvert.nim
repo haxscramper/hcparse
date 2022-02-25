@@ -65,6 +65,7 @@ type
     methodTable: Table[CxxName, MethodList]
 
 proc dropForwardMethods(obj: var CxxObject, conf: ConvConf) =
+  return
   var idx = 0
   while idx < obj.methods.len():
     let class = obj.cxxName()
@@ -77,6 +78,7 @@ proc dropForwardMethods(obj: var CxxObject, conf: ConvConf) =
       inc idx
 
 proc updateOutOfBody(pr: var CxxProc, conf: ConvConf) =
+  return
   let class = pr.cxxName()[0..^2]
   let name = pr.cxxName().lastScope()
   if class in conf.objects:

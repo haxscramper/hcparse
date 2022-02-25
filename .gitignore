@@ -68,3 +68,5 @@ wrap-examples.rst
 
 **/.xmake/*
 htmldocs/*
+
+perf.*
