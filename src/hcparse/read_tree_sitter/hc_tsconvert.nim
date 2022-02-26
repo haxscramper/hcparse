@@ -311,7 +311,7 @@ proc conv*(
       result = nnkCast.newPTree(decl.toNNode(), ~node["value"])
 
     of cppNull:
-      result = escapedPIdent("nil")
+      result = newPIdent("nil")
 
     of cppCommaExpression:
       result = newPar newPTree(nnkStmtListExpr, ~node[0], ~node[1])
@@ -378,7 +378,8 @@ proc conv*(
         if bodyNode.simpleExpr():
           result = newConst(
             name = node.getNameNode().strVal(),
-            expr = ~bodyNode.skip(0, {cppTranslationUnit})
+            expr = ~bodyNode.skip(0, {cppTranslationUnit}),
+            exported = true
           )
 
         else:
@@ -391,6 +392,7 @@ proc conv*(
           var temp = newPProcDecl(
             name = node.getNameNode().strVal(),
             args = mapIt(args, (it, newPType("untyped"))),
+            returnType = some newPType("untyped"),
             declType = ptkTemplate,
             impl = impl
           )

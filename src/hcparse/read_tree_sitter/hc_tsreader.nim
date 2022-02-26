@@ -628,6 +628,7 @@ proc toCxxField*(node: CppNode, coms; parent: CxxNamePair): CxxField =
     # It is possible to declare field without actual name, only using size.
     result = cxxField(
       CxxNamePair(), toCxxTypeWraps(node, some parent))
+    result.isAnonymous = true
 
   else:
     let decl = node[cpfDecl]
