@@ -280,7 +280,7 @@ proc fixIdentsRec*(
           if ?use.objUser:
             cxx = cxx & use.objUser.get().cxx
 
-          use.objDef.name = cxxPair("", cxx & cxxName("Type"))
+          use.objDef.name = cxxPair("", cxx)
 
           aux(use.objDef, cache)
 
@@ -336,9 +336,11 @@ proc fixIdentsRec*(
         let name = "field" & $idx
         field.name = cxxPair(name, cxxName(name), cncField)
         if field.typ of ctkAnonObject:
+          field.typ.objParent = some obj.name
           field.typ.objUser = some field.name
 
         if field.typ of ctkAnonEnum:
+          field.typ.enumParent = some obj.name
           field.typ.enumUser = some field.name
 
       else:

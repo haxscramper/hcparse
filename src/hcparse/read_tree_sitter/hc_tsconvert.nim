@@ -740,7 +740,7 @@ proc conv*(
 import compiler/tools/docgen_code_renderer except `of`
 
 if isMainModule:
-  const full = on
+  const full = off
   when full:
     let files = toSeq(walkDir(
       AbsDir"/tmp/infiles",
