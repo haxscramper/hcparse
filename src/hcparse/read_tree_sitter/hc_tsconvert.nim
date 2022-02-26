@@ -227,7 +227,6 @@ proc conv*(
       result.add call
 
     of cppBinaryExpression, cppAssignmentExpression, cppUnaryExpression:
-      # debug node
       let
         op = node{"operator"}.strVal()
         lhs = ~node[0]
@@ -740,7 +739,7 @@ proc conv*(
 import compiler/tools/docgen_code_renderer except `of`
 
 if isMainModule:
-  const full = off
+  const full = on
   when full:
     let files = toSeq(walkDir(
       AbsDir"/tmp/infiles",
@@ -835,15 +834,15 @@ if isMainModule:
             str, c, conv))
 
 
-    # echo node.getTs().treeRepr(node.getBase(), unnamed = true)
     conv.conf = conf
     conv.fix = fix
 
     let node = parseCppString(addr str)
+    when not full:
+      debug node
+
     let nim = node.conv(str, c, conv)
     let code = nim.formatToStr()
-    # let code = node.conv(str, c, conf, fix).`$`
-    # let code = nim.toPString()
     writeFile(file.withBaseSuffix(file.ext()).withExt("nim"), code)
 
 

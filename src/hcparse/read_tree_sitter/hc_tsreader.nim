@@ -150,6 +150,7 @@ proc getNameNode*(node: CppNode): CppNode =
        cppEnumerator,
        cppTemplateType,
        cppPreprocDef,
+       cppEnumSpecifier,
        cppPointerDeclarator,
        cppPreprocFunctionDef,
        cppAssignmentExpression:
