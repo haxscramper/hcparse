@@ -378,7 +378,7 @@ type
   CxxArg* = ref object of CxxBase
     flags*: set[CxxArgFlag]
     name*: CxxNamePair
-    nimType*: CxxTypeUse
+    typ*: CxxTypeUse
     default*: Option[CxxExpr]
     # docComment*: seq[CxxComment]
 
@@ -389,10 +389,13 @@ type
     cffProtected
 
   CxxField* = ref object of CxxBase
-    name*: Option[CxxNamePair] ## Name of the field. It is optional because
-    ## it can be explicitly omitted if you have (1) bitsize clause - `uint8
-    ## : 1;` is a valid 'field' declaration (2) anonymous struct.
-    nimType*: CxxTypeUse
+    name*: CxxNamePair ## Name of the field. It is not optional even though
+    ## can be explicitly omitted if you have (1) bitsize clause - `uint8 :
+    ## 1;` is a valid 'field' declaration (2) anonymous struct. This is
+    ## made to allow for intermediate corrections to work properly - `name`
+    ## might be corrected afterwards. Whether field was originally empty or
+    ## not is defined in `isAnonymous` field passed from `CxxBase`
+    typ*: CxxTypeUse
     flags*: set[CxxFieldFlag]
     bitsize*: Option[int]
 
@@ -581,7 +584,7 @@ func `$`*(ct: CxxTypeUse): string
 
 func `$`*(arg: CxxArg): string =
   assertRef(arg)
-  result = $arg.name & ": " & $arg.nimType
+  result = $arg.name & ": " & $arg.typ
   if arg.default.isSome():
     result &= " = "
     result &= $arg.default.get()
@@ -591,7 +594,10 @@ func `$`*(decl: CxxTypeDecl): string
 # func `$`*(ct: CxxTypeUse): string
 
 func `$`*(obj: CxxField): string =
-  "field!$#: $#" % [tern(?obj.name, $obj.name.get(), "???"), $obj.nimType]
+  "field!$#$#: $#" % [
+    tern(obj.isAnonymous, "???", ""),
+    $obj.name,
+    $obj.typ]
 
 func `$`*(obj: CxxObject): string =
   if obj.isAnonymous:
@@ -777,7 +783,7 @@ func `[]`*(t: CxxTypeUse, idx: int): CxxTypeUse =
         return t.returnType
 
       else:
-        return t.arguments[idx - 1].nimType
+        return t.arguments[idx - 1].typ
 
     of ctkStaticParam, ctkDecltype, ctkPod, ctkAnonObject, ctkAnonEnum:
       raise newUnexpectedKindError(
@@ -855,7 +861,7 @@ func hash*(use: CxxTypeUse): Hash
 
 func hash*(lib: CxxLibImport): Hash = hash(lib.library) !& hash(lib.importPath)
 
-func hash*(arg: CxxArg): Hash = hash(arg.name) !& hash(arg.nimType)
+func hash*(arg: CxxArg): Hash = hash(arg.name) !& hash(arg.typ)
 
 func hash*(use: CxxTypeUse): Hash =
   result = hash(use.kind) !& hash(use.flags)
@@ -871,7 +877,7 @@ func hash*(use: CxxTypeUse): Hash =
     of ctkAnonObject:
       result = hash(use.objDef.mfields.len)
       for field in items(use.objDef.mfields):
-        result = hash(field.nimType) !& result
+        result = hash(field.typ) !& result
 
     of ctkStaticParam, ctkDecltype:
       raise newImplementKindError(use)
@@ -925,13 +931,13 @@ func nimName*(obj: CxxObject): string    = obj.decl.name.nim
 func nimName*(obj: CxxForward): string   = obj.decl.name.nim
 func nimName*(obj: CxxEnum): string      = obj.decl.name.nim
 func nimName*(obj: CxxAlias): string     = obj.decl.name.nim
-func nimName*(field: CxxField): string   = field.name.get().nim
+func nimName*(field: CxxField): string   = field.name.nim
 func nimName*(t: CxxTypeDecl): string    = t.name.nim
 func nimName*(pair: CxxNamePair): string = pair.nim
 
 func cxxName*(pair: CxxNamePair): CxxName   = pair.cxx
 func cxxName*(arg: CxxArg): CxxName         = arg.name.cxx
-func cxxName*(field: CxxField): CxxName     = field.name.get().cxx
+func cxxName*(field: CxxField): CxxName     = field.name.cxx
 func cxxName*(t: CxxTypeUse): CxxName       = t.cxxType.name.cxx
 func cxxName*(t: CxxTypeDecl): CxxName      = t.name.cxx
 func cxxName*(pr: CxxProc): CxxName         = pr.head.name.cxx
@@ -1073,7 +1079,7 @@ func cxxNoBind*(): CxxBind = CxxBind(kind: cbkNone)
 func cxxNotImported*(): CxxBind = CxxBind(kind: cbkNotImported)
 
 func cxxArg*(name: CxxNamePair, argType: CxxTypeUse): CxxArg =
-  result = CxxArg(nimType: argType, name: name, haxdocIdent: newJNull())
+  result = CxxArg(typ: argType, name: name, haxdocIdent: newJNull())
   result.name.context = cncArg
 
 func wrapArray*(size, element: CxxTypeUse): CxxTypeUse =
@@ -1323,8 +1329,8 @@ func getFile*(file: CxxFile): RelFile = file.savePath.getFile()
 
 func getFilename*(file: CxxFile): string = file.savePath.getFilename()
 
-func getType*(arg: CxxArg): CxxTypeUse = arg.nimType
-func getType*(field: CxxField): CxxTypeUse = field.nimType
+func getType*(arg: CxxArg): CxxTypeUse = arg.typ
+func getType*(field: CxxField): CxxTypeUse = field.typ
 
 func add*(file: var CxxFile, entry: CxxEntry) =
   file.entries.add entry
@@ -1355,7 +1361,7 @@ template eachKindAux(inUse, cb, iterateWith: untyped, target: set[CxxTypeKind]) 
 
     of ctkAnonObject:
       for field in iterateWith(inUse.objDef.mfields):
-        eachKind(field.nimType, target, cb)
+        eachKind(field.typ, target, cb)
 
     of ctkWrapKinds: eachKind(inUse.wrapped, target, cb)
     of ctkStaticParam, ctkPod, ctkDecltype: discard
@@ -1367,7 +1373,7 @@ template eachKindAux(inUse, cb, iterateWith: untyped, target: set[CxxTypeKind]) 
 
     of ctkProc:
       for arg in iterateWith(inUse.arguments):
-        eachKind(arg.nimType, target, cb)
+        eachKind(arg.typ, target, cb)
 
       eachKind(inUse.returnType, target, cb)
 
@@ -1467,13 +1473,17 @@ func cxxContext*(name: sink CxxTypeDecl, ctx: CxxNameContext): CxxTypeDecl =
   result.name.context = ctx
 
 
-func cxxField*(name: CxxNamePair, nimType: CxxTypeUse): CxxField =
+func cxxField*(name: CxxNamePair, typ: CxxTypeUse): CxxField =
   CxxField(
-    name: some name.cxxContext(cncField),
-    nimType: nimType, haxdocIdent: newJNull())
+    name: name.cxxContext(cncField),
+    typ: typ, haxdocIdent: newJNull())
 
-func cxxField*(name: Option[CxxNamePair], nimType: CxxTypeUse): CxxField =
-  CxxField(name: name, nimType: nimType, haxdocIdent: newJNull())
+func cxxField*(name: Option[CxxNamePair], typ: CxxTypeUse): CxxField =
+  if name.isNone():
+    CxxField(isAnonymous: true, typ: typ, haxdocIdent: newJNull())
+
+  else:
+    cxxField(name.get(), typ)
 
 func cxxAlias*(decl: CxxTypeDecl, baseType: CxxTypeUse): CxxAlias =
   CxxAlias(decl: decl, baseType: baseType, haxdocIdent: newJNull())
@@ -1533,12 +1543,12 @@ proc setStoreRec*(entry: var CxxEntry, store: CxxTypeStore) =
 
     for meth in mitems(def.methods):
       for arg in mitems(meth.arguments):
-        aux(arg.nimType)
+        aux(arg.typ)
 
       aux(meth.returnType)
 
     for field in mitems(def.mfields):
-      aux(field.nimType)
+      aux(field.typ)
 
   proc aux(def: var CxxEnum) =
     def.decl.store = store
@@ -1567,7 +1577,7 @@ proc setStoreRec*(entry: var CxxEntry, store: CxxTypeStore) =
     of cekProc:
       entry.cxxProc.head.store = store
       for arg in mitems(entry.cxxProc.arguments):
-        aux(arg.nimType)
+        aux(arg.typ)
 
       aux(entry.cxxProc.returnType)
 

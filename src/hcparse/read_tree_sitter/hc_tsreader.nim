@@ -173,6 +173,10 @@ proc optCxxNamePair*(
         context
       )
 
+    of cppFieldDeclaration:
+      if cpfDecl in node:
+        result = optCxxNamePair(node[cpfDecl], context)
+
     of cppNamespaceIdentifier,
        cppIdentifier,
        cppSizedTypeSpecifier,
@@ -604,8 +608,8 @@ proc toCxxProc*(
 
     else:
       var arg = toCxxArg(arg, idx)
-      if not (arg.nimType of ctkPod and
-              arg.nimType.podKind == cptVoid):
+      if not (arg.typ of ctkPod and
+              arg.typ.podKind == cptVoid):
         result.arguments.add arg.withIt do:
           it.add argComs
           argComs.clear()
@@ -803,10 +807,10 @@ proc toCxxObject*(main: CppNode, coms): CxxObject =
           else:
             let obj = toCxxObject(item[0], coms)
             if obj.isAnonymous:
-              echov "Nested object declaration in the field"
-              debug item
+              # echov "Nested object declaration in the field"
+              # debug item
               let user = optCxxNamePair(item, cncType)
-              echov user
+              # echov user
               res.mfields.add cxxField(
                 user,
                 cxxTypeUse(obj, parent = some result.name, user = user))

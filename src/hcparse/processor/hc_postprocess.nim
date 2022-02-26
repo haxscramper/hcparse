@@ -151,7 +151,7 @@ func postprocessTypeUses*(
   func aux(use: var CxxTypeUse, store: CxxTypeStore)
 
   func aux(use: var CxxArg, store: CxxTypeStore) =
-    aux(use.nimType, store)
+    aux(use.typ, store)
 
   func aux(use: var CxxTypeUse, store: CxxTypeStore) =
     eachKind(use, {ctkIdent}) do (use: var CxxTypeUse):
@@ -207,7 +207,7 @@ func postprocessTypeUses*(
         aux(meth, store)
 
       for field in mitems(entry.cxxObject.mfields):
-        aux(field.nimType, store)
+        aux(field.typ, store)
 
 proc fixIdentsRec*(
     entry: var CxxEntry,
@@ -291,7 +291,7 @@ proc fixIdentsRec*(
 
 
             aux(arg.name, cache)
-            auxArg(arg.nimType, cache)
+            auxArg(arg.typ, cache)
 
           auxArg(use.returnType, cache)
 
@@ -306,12 +306,12 @@ proc fixIdentsRec*(
         arg.name = cxxPair("arg" & $idx)
 
       aux(arg.name, cache)
-      aux(arg.nimType, cache)
+      aux(arg.typ, cache)
 
     if ?decl.arguments:
       context[cancFirstArgName] = some decl.arguments[0].name
-      if decl.arguments[0].nimType.kind == ctkIdent:
-        context[cancFirstArgName] = some decl.arguments[0].nimType.cxxType.name
+      if decl.arguments[0].typ.kind == ctkIdent:
+        context[cancFirstArgName] = some decl.arguments[0].typ.cxxType.name
 
     if decl of cpkOperatorKinds:
       assert decl.head.name.nim.len > 0,
@@ -332,21 +332,19 @@ proc fixIdentsRec*(
     aux(obj.decl, cache)
     context[cancParentObjectName] = some obj.decl.name
     for idx, field in mpairs(obj.mfields):
-      if ?field.name:
-        aux(field.name.get(), cache, idx)
+      if field.isAnonymous:
+        let name = "field" & $idx
+        field.name = cxxPair(name, cxxName(name), cncField)
+        if field.typ of ctkAnonObject:
+          field.typ.objUser = some field.name
+
+        if field.typ of ctkAnonEnum:
+          field.typ.enumUser = some field.name
 
       else:
-        let name = "field" & $idx
-        let pair = cxxPair(name, cxxName(name), cncField)
-        field.name = some pair
-        if field.nimType of ctkAnonObject:
-          field.nimType.objUser = some pair
+        aux(field.name, cache, idx)
 
-        if field.nimType of ctkAnonEnum:
-          field.nimType.enumUser = some pair
-
-      aux(field.nimType, cache)
-      echov field
+      aux(field.typ, cache)
 
     for mproc in mitems(obj.methods):
       aux(mproc, cache)

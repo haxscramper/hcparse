@@ -237,7 +237,7 @@ proc toNNode*[N](
 
   newNIdentDefs[N](
     arg.nimName,
-    toNNode[N](arg.nimType, conf, anon),
+    toNNode[N](arg.typ, conf, anon),
     value = some newEmptyNNode[N]())
 
 proc toNimComment*(com: seq[CxxComment]): string =
@@ -457,6 +457,35 @@ proc toNNode*[N](
   if conf.postProc.notNil():
     anon.add conf.postProc(def, result, conf)
 
+proc anonAccessors*[N](
+    obj: CxxObject, field: CxxField,
+    conf: CodegenConf, anon: var seq[NimDecl[N]]) =
+
+  var anon {.byaddr.} = anon
+  proc aux(field: CxxField, path: seq[string]) =
+    if field.isAnonymous:
+      if field.typ of ctkAnonObject:
+        for sub in field.typ.objDef.mfields:
+          aux(sub, path & sub.nimName)
+
+    else:
+      if 1 < path.len:
+        for kind in [pkRegular, pkAssgn]:
+          var this = toNNode[N](obj.decl.cxxTypeUse(), conf, anon)
+          if kind == pkAssgn:
+            this = newNType[N]("var", @[this])
+
+          anon.add newPProcDecl(
+            name = field.nimName(),
+            args = @{ "this": this },
+            impl = newXCall[N](newPIdent("."), mapIt("this" & path, escapedPIdent(it))),
+            returnType = some toNNode[N](field.typ, conf, anon),
+            kind = kind
+          )
+
+  aux(field, @[field.nimName()])
+
+
 proc toNNode*[N](
     obj: CxxObject, conf: CodegenConf,
     anon: var seq[NimDecl[N]]
@@ -476,6 +505,7 @@ proc toNNode*[N](
 
   for field in obj.mfields:
     res.add toNNode[N](field, conf, anon)
+    anonAccessors(obj, field, conf, anon)
 
   result.add toNimDecl(res)
 
