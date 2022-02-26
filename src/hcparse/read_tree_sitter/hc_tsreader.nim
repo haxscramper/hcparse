@@ -138,6 +138,7 @@ proc getNameNode*(node: CppNode): CppNode =
   case node.kind:
     of cppFieldIdentifier,
        cppTypeIdentifier,
+       cppNull,
        cppIdentifier,
        cppQualifiedIdentifier,
        cppNamespaceIdentifier,
@@ -149,6 +150,7 @@ proc getNameNode*(node: CppNode): CppNode =
        cppEnumerator,
        cppTemplateType,
        cppPreprocDef,
+       cppPointerDeclarator,
        cppPreprocFunctionDef,
        cppAssignmentExpression:
       node[0].getNameNode()
@@ -183,6 +185,7 @@ proc optCxxNamePair*(
        cppDestructorName,
        cppPrimitiveType,
        cppTypeIdentifier,
+       cppNull,
        cppFieldIdentifier:
       result = some cxxPair(
         cxxName node.getBase()[node.slice()], context)
@@ -257,6 +260,7 @@ proc pointerWraps*(node: CppNode, ftype: var CxxTypeUse) =
       if node[cpfDecl] of {
         cppFieldIdentifier, # Simple procedure
         cppDestructorName,
+        cppIdentifier, # wraps of `void* debug_print`
         cppQualifiedIdentifier # wraps of `void* VGA::get_windowsize`
       } and
          node["parameters"] of cppParameterList:
@@ -271,6 +275,7 @@ proc pointerWraps*(node: CppNode, ftype: var CxxTypeUse) =
       for param in node["parameters"]:
         args.add toCxxArg(param, idx)
         inc idx
+
 
       ftype = cxxTypeUse(args, ftype)
       if node[cpfDecl] of cppParenthesizedDeclarator and
@@ -333,10 +338,7 @@ proc toCxxType*(node: CppNode, parent, user: Option[CxxNamePair]): CxxTypeUse =
       result = CxxTypeUse(kind: ctkIdent)
       var curr = CxxTypeRef()
       for item in fold:
-        # echo ">>>>>>>>>>>>>>"
-        # debug item
         var name = getNameNode(item)
-        # debug name
         curr.name.cxx.scopes.add name.strVal()
         if item of { cppTypeIdentifier, cppTemplateType }:
           result.types.add(curr, @[])
@@ -530,6 +532,7 @@ proc toCxxArg*(node: CppNode, idx: int): CxxArg =
     echov "missing default value for argument"
 
   result = cxxArg(name, argt)
+  # echov result
 
 
 proc unpackTemplate(node: CppNode): tuple[
@@ -615,7 +618,7 @@ proc toCxxProc*(
           argComs.clear()
 
   for p in items(decl["parameters"].getTs(), unnamed = true):
-    if p.kind in {cppTripleDotTok}:
+    if p.kind in { cppTripleDotTok }:
       result.flags.incl cpfVariadic
 
 
@@ -807,17 +810,12 @@ proc toCxxObject*(main: CppNode, coms): CxxObject =
           else:
             let obj = toCxxObject(item[0], coms)
             if obj.isAnonymous:
-              # echov "Nested object declaration in the field"
-              # debug item
               let user = optCxxNamePair(item, cncType)
-              # echov user
               res.mfields.add cxxField(
                 user,
                 cxxTypeUse(obj, parent = some result.name, user = user))
 
             else:
-              # echov "Standalone nested proc"
-              # debug item[0]
               res.nested.add obj.withIt do:
                 it.access = accs
 

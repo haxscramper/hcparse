@@ -96,6 +96,57 @@ proc updateOutOfBody(pr: var CxxProc, conf: ConvConf) =
     pr.head.genParams.insert(obj.decl.genParams)
 
 
+proc convProc*(
+    node: CppNode, c: var StringNameCache, conf: ConvConf): PNode =
+  var
+    coms: seq[CxxComment]
+    anon: seq[NimDecl[PNode]]
+    impl: PNode
+
+  const declKinds = {
+    cppFunctionDefinition,
+    # `void debug_print(const char *file);`
+    # `extern void test();`
+    cppFunctionDeclarator
+  }
+
+  if ( node of cppFunctionDefinition ) or (
+       node[1] of declKinds or
+       (cpfDecl in node and node[cpfDecl] of declKinds)
+     ) or (
+       node.has([1, 1]) and
+       node[1][1] of cppFunctionDeclarator
+     ):
+
+    var pr = toCxxProc(node, coms)
+    pr.updateOutOfBody(conf)
+    var conv = postFixEntries(@[box(pr)], conf.fix)[0].
+      cxxProc.
+      toNNode(conf.conf, anon)
+
+    conv.impl = fillStmt(conv.impl)
+    impl = conv.toNNode()
+
+  elif node[1] of cppTypeSpecSpec:
+    var obj = toCxxObject(node, coms)
+    dropForwardMethods(obj, conf)
+    impl = postFixEntries(@[box(obj)], conf.fix)[0].
+      cxxObject.
+      toNNode(conf.conf, anon).toNNode()
+
+  else:
+    failNode node
+
+
+
+  result = newPStmtList()
+  for an in anon:
+    result.add an.toNNode()
+
+  result.add impl
+
+
+
 proc conv*(
     node: CppNode,
     str: string,
@@ -176,8 +227,9 @@ proc conv*(
       result.add call
 
     of cppBinaryExpression, cppAssignmentExpression, cppUnaryExpression:
+      # debug node
       let
-        op = node{1}.strVal()
+        op = node{"operator"}.strVal()
         lhs = ~node[0]
         map = op.mapOpName(true)
 
@@ -193,6 +245,7 @@ proc conv*(
         # that might actually have all the necesary overloads in place.
         result = nnkAsgn.newPTree(lhs, newPar(result))
 
+      # debug result
 
     of cppParenthesizedExpression:
       result = nnkPar.newPTree(~node[0])
@@ -206,7 +259,6 @@ proc conv*(
       result = node.toName()
 
     of cppFieldExpression:
-      # if node{1}.strVal() == "->":
       result = nnkDotExpr.newPTree(~node[0], ~node[1])
 
     of cppPreprocInclude:
@@ -447,40 +499,7 @@ proc conv*(
         result = item.toNNode()
 
     of cppFunctionDefinition, cppTemplateDeclaration:
-      var
-        coms: seq[CxxComment]
-        anon: seq[NimDecl[PNode]]
-        impl: PNode
-
-      if node of cppFunctionDefinition or
-         node[1] of cppFunctionDefinition or
-         (node.has([1, 1]) and node[1][1] of cppFunctionDeclarator):
-        var pr = toCxxProc(node, coms)
-        pr.updateOutOfBody(conf)
-        var conv = postFixEntries(@[box(pr)], conf.fix)[0].
-          cxxProc.
-          toNNode(conf.conf, anon)
-
-        conv.impl = fillStmt(conv.impl)
-        impl = conv.toNNode()
-
-      elif node[1] of cppTypeSpecSpec:
-        var obj = toCxxObject(node, coms)
-        dropForwardMethods(obj, conf)
-        impl = postFixEntries(@[box(obj)], conf.fix)[0].
-          cxxObject.
-          toNNode(conf.conf, anon).toNNode()
-
-      else:
-        failNode node
-
-
-
-      result = newPStmtList()
-      for an in anon:
-        result.add an.toNNode()
-
-      result.add impl
+      result = convProc(node, c, conf)
 
     of cppInitializerList:
       result = newPTree(nnkPar)
@@ -584,7 +603,7 @@ proc conv*(
           result = newBlock(~node[cpfInit], result)
 
     of cppWhileStatement:
-      result = newWhile(newPar ~node[cpfCond], ~node["body"])
+      result = newWhile(newPar ~node[cpfCond], fillStmt(~node["body"] ))
 
     of cppDoStatement:
       let id = newPIdent("doTmp")
@@ -593,7 +612,7 @@ proc conv*(
         newWhile(
           newXCall("or", id, ~node[cpfCond]),
           newAsgn(id, newPLit("false")),
-          ~node["body"]))
+          fillStmt(~node["body"])))
 
     of cppConcatenatedString:
       result = newPLit(node.strVal())
@@ -624,42 +643,46 @@ proc conv*(
         result.addBranch(fillStmt(~node[cpfAlter]))
 
     of cppDeclaration:
-      let decl = node[cpfDecl]
-      var value = newEmptyPNode()
+      if node[cpfDecl] of cppFunctionDeclarator:
+        result = convProc(node, c, conf)
 
-      result = newPStmtList()
-      # Construct wrapped type declaration. Supplying `parent/name` in case
-      # type is an anonymous struct/union.
-      let (declType, anon) = toTypeWithAnon(
-        node,
-        some CxxNamePair(),
-        some node.getNameNode().cxxNamePair(cncArg).updateNim()
-      )
+      else:
+        let decl = node[cpfDecl]
+        var value = newEmptyPNode()
 
-      for an in anon:
-        result.add an
+        result = newPStmtList()
+        # Construct wrapped type declaration. Supplying `parent/name` in case
+        # type is an anonymous struct/union.
+        let (declType, anon) = toTypeWithAnon(
+          node,
+          some CxxNamePair(),
+          some node.getNameNode().cxxNamePair(cncArg).updateNim()
+        )
 
-      if "value" in decl:
-        if decl[cpfDecl] of cppArrayDeclarator:
-          value = newPTree(nnkBracket)
-          for item in decl["value"]:
-            value.add ~item
+        for an in anon:
+          result.add an
 
-          value = newXCall("@", value)
+        if "value" in decl:
+          if decl[cpfDecl] of cppArrayDeclarator:
+            value = newPTree(nnkBracket)
+            for item in decl["value"]:
+              value.add ~item
 
-        else:
-          value = ~decl["value"]
-          if decl["value"] of cppArgumentList:
-            # `Instr16 instr16(&emu, &instr);` is converted into
-            # `let instr16: Instr16 = initInstr16(addr emu, addr instr)`
-            value = newXCall(escapedPIdent("init" & node[cpfType].strVal()),
-                             value[0..^1])
+            value = newXCall("@", value)
 
-      result.add nnkVarSection.newPTree(
-        nnkIdentDefs.newPTree(
-          node.getNameNode().toName(),
-          declType.toNNode(),
-          value))
+          else:
+            value = ~decl["value"]
+            if decl["value"] of cppArgumentList:
+              # `Instr16 instr16(&emu, &instr);` is converted into
+              # `let instr16: Instr16 = initInstr16(addr emu, addr instr)`
+              value = newXCall(escapedPIdent("init" & node[cpfType].strVal()),
+                               value[0..^1])
+
+        result.add nnkVarSection.newPTree(
+          nnkIdentDefs.newPTree(
+            node.getNameNode().toName(),
+            declType.toNNode(),
+            value))
 
     of cppQualifiedIdentifier:
       result = newXCall(".", ~node[0], ~node[1])
@@ -715,7 +738,7 @@ proc conv*(
 import compiler/tools/docgen_code_renderer except `of`
 
 if isMainModule:
-  const full = off
+  const full = on
   when full:
     let files = toSeq(walkDir(
       AbsDir"/tmp/infiles",
@@ -730,12 +753,16 @@ if isMainModule:
 
   var conv = ConvConf()
   for file in files:
-    var str = file.readFile()
-    let node = parseCppString(addr str)
-    var coms: seq[CxxComment]
-    let cxx = toCxx(node, coms)
+    # echov file
+    var
+      str = file.readFile()
+      coms: seq[CxxComment]
 
-    let outfile = file.withBaseSuffix(file.ext()).withExt("json")
+    let
+      node = parseCppString(addr str)
+      cxx = toCxx(node, coms)
+      outfile = file.withBaseSuffix(file.ext()).withExt("json")
+
     writeFile(outfile, toJson(cxx))
     for entry in cxx:
       if entry of cekObject:
@@ -754,10 +781,7 @@ if isMainModule:
               name[^1].lastScope())
 
   for file in files:
-    echo file
-    var str = file.readFile()
-    var c: StringNameCache
-    let node = parseCppString(addr str)
+    echov file
     var conf = cxxCodegenConf.withIt do:
       it.nameStyle = idsCamel
       it.helperEnum = false
@@ -780,6 +804,10 @@ if isMainModule:
         # add any bindings to the generated entries.
         return cxxNotImported()
 
+    var
+      str = file.readFile()
+      c: StringNameCache
+
     conf.postProc = proc(
       def: CxxProc,
       impl: var ProcDecl[PNode],
@@ -789,7 +817,7 @@ if isMainModule:
       let node = cast[CppNode](def.userData)
       if tern(node.kind == cppTemplateDeclaration,
               node.len < 2 or
-              # `template <class T> uint32_t update_eflags_add(T v1, uint32_t v2);`
+              # `template <class T> uint32_t update_eflags_add(T v1);`
               "body" notin node[1],
               "body" notin node):
         # No body, only forward declaration.
@@ -806,9 +834,10 @@ if isMainModule:
 
 
     # echo node.getTs().treeRepr(node.getBase(), unnamed = true)
-    # debug node
     conv.conf = conf
     conv.fix = fix
+
+    let node = parseCppString(addr str)
     let nim = node.conv(str, c, conv)
     let code = nim.formatToStr()
     # let code = node.conv(str, c, conf, fix).`$`

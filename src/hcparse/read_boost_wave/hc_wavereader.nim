@@ -100,9 +100,6 @@ proc newWaveReader*(
         # FIXME keep track of all defined macros to avoid illegal macro
         # redefinition excepsions that might potentially be reaised
         # here.?
-        # if "HOSTED" in name:
-        #   echov name, $args, $body
-
         resCtx.addMacroDefinition(name, args, some body.join(""))
 
     except:

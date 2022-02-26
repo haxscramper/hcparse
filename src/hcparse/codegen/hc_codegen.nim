@@ -510,11 +510,10 @@ proc toNNode*[N](
   result.add toNimDecl(res)
 
   for meth in obj.methods:
-    if meth.isConstructor:
-      result.add toNNode[N](meth, conf, anon, nctRegular, some obj)
-      if meth.isImported():
-        result.add toNNode[N](meth, conf, anon, nctRef, some obj)
-        result.add toNNode[N](meth, conf, anon, nctPtr, some obj)
+    result.add toNNode[N](meth, conf, anon, nctRegular, some obj)
+    if meth.isImported() and meth.isConstructor:
+      result.add toNNode[N](meth, conf, anon, nctRef, some obj)
+      result.add toNNode[N](meth, conf, anon, nctPtr, some obj)
 
   for n in obj.nested:
     result.add toNNode[N](n, conf, anon)
