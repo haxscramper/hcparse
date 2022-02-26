@@ -238,11 +238,10 @@ proc wrapViaClang*(
     let file = parseFileViaClang(file, wrapConf, cache)
     result.add wrapViaClang(file, wrapConf, fixConf, cache, dir)
 
-proc convertViaTs*(text: string): PNode =
+proc convertViaTs*(text: string, conf: ConvConf): PNode =
   var text = text
   var cache: StringNameCache
-  return parseCppString(addr text).conv(text, cache)
-
+  return parseCppString(addr text).conv(text, cache, conf)
 
 
 

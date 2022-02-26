@@ -10,11 +10,16 @@ import hmisc/algo/[ hparse_pegs, hstring_algo ]
 import hmisc/preludes/unittest
 import hmisc/other/oswrap
 
-import compiler/ast
+import compiler/ast/ast
 
 import std/[strutils, sequtils]
 
-proc fixGit*(
+proc fixGit*(name: string, isType: bool): string =
+  dropPrefix(name, "git_").snakeToCamelCase()
+
+suite "Bug hunting for git":
+  let
+    dir = getTestTempDir()
     sys = dir / "sys"
     user = dir / "user"
     file = user /. "user_main.h"

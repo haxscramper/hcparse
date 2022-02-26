@@ -235,14 +235,14 @@ proc toCxxType*(
 
   let params = cxtype.templateParams()
   for p in params:
-    result.genParams.add toCxxType(p, conf, cache)
+    result.types.last().genParams.add toCxxType(p, conf, cache)
 
   if result of ctkIdent:
     let part = getPartialParams(
       result.cxxName(), params.high, conf, cache)
 
     for param in part:
-      result.genParams.add param.toCxxType(conf, cache)
+      result.types.last().genParams.add param.toCxxType(conf, cache)
 
 
   if startsWith($cxType, "const"):
@@ -519,7 +519,7 @@ proc wrapAlias*(
 
     var maxIdx = 0
     for idx, param in al.cursor.cxType().templateParams():
-      baseType.genParams[idx] = param.toCxxType(conf, cache)
+      baseType.types.last().genParams[idx] = param.toCxxType(conf, cache)
       maxIdx = idx
 
     # FIXME WARNING skipping generic parameters for now, I don't remember

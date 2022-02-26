@@ -3,7 +3,7 @@ import
   hcparse/[hc_parsefront],
   hcparse/codegen/[hc_codegen],
   hcparse/processor/[wrap_store, hc_postprocess],
-  compiler/[ast, renderer],
+  compiler/ast/[ast, renderer],
   hnimast/[nim_decl, object_decl, obj_field_macros, hast_common, proc_decl]
 
 import std/[strutils]

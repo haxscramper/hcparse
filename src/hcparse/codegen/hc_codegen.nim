@@ -25,7 +25,9 @@ type
 
 
 
-const
+let
+  # HACK using `const` here causes incorrect code generation errors on the
+  # C and C++ backends, so for now this is a `seq`.
   cxxCodegenConf* = CodegenConf(
     isIcpp: true,
     helperEnum: true

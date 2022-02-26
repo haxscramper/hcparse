@@ -12,7 +12,7 @@ import
   hcparse/processor/[hc_grouping, wrap_store]
 
 import std/[strutils, sets, sequtils]
-import compiler/[ast]
+import compiler/ast/[ast]
 
 
 proc lib(path: varargs[string]): CxxLibImport =

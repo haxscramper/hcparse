@@ -56,16 +56,16 @@ proc fillStmt*(node: PNode): PNode =
     node
 
 type
-  MethodList = object
-    forward: HashSet[string] ## Names of methods that were forward-declared
-    moved: HashSet[string] ## Methods that were later found in the
+  MethodList* = object
+    forward*: HashSet[string] ## Names of methods that were forward-declared
+    moved*: HashSet[string] ## Methods that were later found in the
                            ## out-of-body definitions.
 
-  ConvConf = object
-    conf: CodegenConf
-    fix: CxxFixConf
-    objects: Table[CxxName, CxxObject]
-    methodTable: Table[CxxName, MethodList]
+  ConvConf* = object
+    conf*: CodegenConf
+    fix*: CxxFixConf
+    objects*: Table[CxxName, CxxObject]
+    methodTable*: Table[CxxName, MethodList]
 
 proc dropForwardMethods(obj: var CxxObject, conf: ConvConf) =
   var idx = 0

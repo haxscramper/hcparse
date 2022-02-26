@@ -1,7 +1,7 @@
 import hmisc/preludes/unittest
 
 import
-  compiler/[ast, renderer],
+  compiler/ast/[ast, renderer],
   hcparse,
   hmisc/other/hpprint,
   hmisc/algo/[namegen, hstring_algo],
