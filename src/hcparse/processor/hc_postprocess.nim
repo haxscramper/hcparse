@@ -225,24 +225,16 @@ proc fixIdentsRec*(
   # pprint entry
   proc aux(
       name: var CxxNamePair, cache: var StringNameCache, entryIdx: int = -1) =
-
-    if name.cxx.scopes.len == 0:
-      assert entryIdx != -1
-      case name.context:
-        of cncField:
-          name.nim = "field" & $entryIdx
-
-        else:
-          name.nim = "Type" & $entryIdx
-
-    else:
-      name.nim = conf.fixName(name, cache, context)
+    name.nim = conf.fixName(name, cache, context)
 
   proc aux(decl: var CxxTypeDecl, cache: var StringNameCache) =
     aux(decl.name, cache, entryIdx)
 
     for param in mitems(decl.genParams):
       aux(param.name, cache)
+
+  proc aux(obj: var CxxObject, cache: var StringNameCache)
+  proc aux(enu: var CxxEnum, cache: var StringNameCache)
 
   proc aux(use: var CxxTypeUse, cache: var StringNameCache) =
     var cache {.byaddr.} = cache
@@ -259,8 +251,13 @@ proc fixIdentsRec*(
 
         of ctkPod, ctkDecltype: discard
         of ctkAnonEnum:
-          aux(use.enumParent, cache)
-          aux(use.enumUser, cache)
+          if ?use.enumParent:
+            aux(use.enumParent.get(), cache)
+
+          if ?use.enumUser:
+            aux(use.enumUser.get(), cache)
+
+          aux(use.enumDef, cache)
 
         of ctkArrayKinds: auxArg(use.arrayElement, cache)
         of ctkIdent:
@@ -269,8 +266,23 @@ proc fixIdentsRec*(
               auxArg(param, cache)
 
         of ctkAnonObject:
-          aux(use.objParent, cache)
-          aux(use.objUser, cache)
+          if ?use.objParent:
+            aux(use.objParent.get(), cache)
+
+          if ?use.objUser:
+            aux(use.objUser.get(), cache)
+
+          var cxx = CxxName()
+
+          if ?use.objParent:
+            cxx = cxx & use.objParent.get().cxx
+
+          if ?use.objUser:
+            cxx = cxx & use.objUser.get().cxx
+
+          use.objDef.name = cxxPair("", cxx & cxxName("Type"))
+
+          aux(use.objDef, cache)
 
         of ctkProc:
           for idx, arg in mpairs(use.arguments):
@@ -313,39 +325,59 @@ proc fixIdentsRec*(
     context[cancFirstArgName].clear()
     context[cancFirstArgType].clear()
 
-  proc aux(
-      entry: var CxxEntry,
-      cache: var StringNameCache
-    ) =
+
+  proc aux(entry: var CxxEntry, cache: var StringNameCache)
+  proc aux(obj: var CxxObject, cache: var StringNameCache) =
+    assertRef obj
+    aux(obj.decl, cache)
+    context[cancParentObjectName] = some obj.decl.name
+    for idx, field in mpairs(obj.mfields):
+      if ?field.name:
+        aux(field.name.get(), cache, idx)
+
+      else:
+        let name = "field" & $idx
+        let pair = cxxPair(name, cxxName(name), cncField)
+        field.name = some pair
+        if field.nimType of ctkAnonObject:
+          field.nimType.objUser = some pair
+
+        if field.nimType of ctkAnonEnum:
+          field.nimType.enumUser = some pair
+
+      aux(field.nimType, cache)
+      echov field
+
+    for mproc in mitems(obj.methods):
+      aux(mproc, cache)
+
+    for nestd in mitems(obj.nested):
+      aux(nestd, cache)
+
+    context[cancParentObjectName].clear()
+
+
+  proc aux(enu: var CxxEnum, cache: var StringNameCache) =
+    assertRef enu
+    aux(enu.decl.name, cache)
+    context[cancParentEnumName] = some enu.decl.name
+    for value in mitems(enu.values):
+      aux(value.name, cache)
+
+    context[cancParentEnumName].clear()
+
+
+  proc aux(entry: var CxxEntry, cache: var StringNameCache) =
 
     case entry.kind:
       of cekEnum:
-        assertref entry.cxxEnum
-        aux(entry.cxxEnum.decl.name, cache)
-        context[cancParentEnumName] = some entry.cxxEnum.decl.name
-        for value in mitems(entry.cxxEnum.values):
-          aux(value.name, cache)
-
-        context[cancParentEnumName].clear()
+        aux(entry.cxxEnum, cache)
 
       of cekForward:
         aux(entry.cxxForward.decl.name, cache)
 
       of cekObject:
-        assertRef entry.cxxObject
-        aux(entry.cxxObject.decl, cache)
-        context[cancParentObjectName] = some entry.cxxObject.decl.name
-        for idx, field in mpairs(entry.cxxObject.mfields):
-          aux(field.name, cache, idx)
-          aux(field.nimType, cache)
-
-        for mproc in mitems(entry.cxxObject.methods):
-          aux(mproc, cache)
-
-        for nestd in mitems(entry.cxxObject.nested):
-          aux(nestd, cache)
-
-        context[cancParentObjectName].clear()
+        aux(entry.cxxObject, cache)
 
       of cekProc:
         aux(entry.cxxProc, cache)

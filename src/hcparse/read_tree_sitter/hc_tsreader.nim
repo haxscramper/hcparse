@@ -26,7 +26,7 @@ import
 export parseCppString, treeRepr
 
 proc debug*(node: CppNode) =
-  echo node.getTs().treeRepr(node.getBase(), unnamed = true)
+  echo node.getTs().treeRepr(node.getBase())
 
 const cppTypeSpecSpec* = {
   cppClassSpecifier,
@@ -163,13 +163,15 @@ proc getNameNode*(node: CppNode): CppNode =
       else:
         failNode node
 
-proc cxxNamePair*(node: CppNode, context: CxxNameContext): CxxNamePair =
-  result.context = context
+proc optCxxNamePair*(
+  node: CppNode, context: CxxNameContext): Option[CxxNamePair] =
   case node.kind:
     of cppQualifiedIdentifier:
-      result.cxx.scopes = (
-        node[0].cxxNamePair(context).cxx.scopes &
-          node[1].cxxNamePair(context).cxx.scopes)
+      result = some cxxPair(
+        node[0].optCxxNamePair(context).get().cxx &
+        node[1].optCxxNamePair(context).get().cxx,
+        context
+      )
 
     of cppNamespaceIdentifier,
        cppIdentifier,
@@ -178,7 +180,8 @@ proc cxxNamePair*(node: CppNode, context: CxxNameContext): CxxNamePair =
        cppPrimitiveType,
        cppTypeIdentifier,
        cppFieldIdentifier:
-      result.cxx.scopes = @[node.getBase()[node.slice()]]
+      result = some cxxPair(
+        cxxName node.getBase()[node.slice()], context)
 
     of cppTemplateType:
       # FIXME dropping the template arguments. In the future
@@ -187,11 +190,19 @@ proc cxxNamePair*(node: CppNode, context: CxxNameContext): CxxNamePair =
       #
       # NOTE when handling template arguments don't forget to switch
       # context of the template type parameters to a something different.
-      result = cxxNamePair(node["name"], context)
+      result = optCxxNamePair(node["name"], context)
 
     else:
-      failNode node
+      discard
 
+
+proc cxxNamePair*(node: CppNode, context: CxxNameContext): CxxNamePair =
+  let pair = optCxxNamePair(node, context)
+  if pair.isNone():
+    failNode node
+
+  else:
+    return pair.get()
 
 proc pointerWraps*(node: CppNode, ftype: var CxxTypeUse) =
   case node.kind:
@@ -342,15 +353,10 @@ proc toCxxType*(node: CppNode, parent, user: Option[CxxNamePair]): CxxTypeUse =
         var coms: seq[CxxComment]
         case node.kind:
           of cppEnumSpecifier:
-            result = cxxTypeUse(
-              toCxxEnum(node, coms), parent.get(), user.get())
+            result = cxxTypeUse(toCxxEnum(node, coms), parent, user)
 
           of cppUnionSpecifier, cppStructSpecifier:
-            result = CxxTypeUse(
-              kind: ctkAnonObject, objDef: toCxxObject(node, coms))
-
-            if parent.isSome(): result.objParent = parent.get()
-            if user.isSome(): result.objUser = user.get()
+            result = cxxTypeUse(toCxxObject(node, coms), parent, user)
 
           else:
             failNode node
@@ -680,6 +686,9 @@ proc toCxxObject*(main: CppNode, coms): CxxObject =
     decl = cxxPair(node["name"].strVal())
 
   result = cxxObject(decl)
+  if "name" notin node:
+    result.isAnonymous = true
+
   result.add coms
   result.decl.genParams = params
   coms.clear()
@@ -792,8 +801,21 @@ proc toCxxObject*(main: CppNode, coms): CxxObject =
             toField(item)
 
           else:
-            res.nested.add toCxxObject(item[0], coms).withIt do:
-              it.access = accs
+            let obj = toCxxObject(item[0], coms)
+            if obj.isAnonymous:
+              echov "Nested object declaration in the field"
+              debug item
+              let user = optCxxNamePair(item, cncType)
+              echov user
+              res.mfields.add cxxField(
+                user,
+                cxxTypeUse(obj, parent = some result.name, user = user))
+
+            else:
+              # echov "Standalone nested proc"
+              # debug item[0]
+              res.nested.add obj.withIt do:
+                it.access = accs
 
         elif cpfType in item and item[cpfType] of { cppEnumSpecifier }:
           res.nested.add toCxxEnum(item, coms).withIt do:

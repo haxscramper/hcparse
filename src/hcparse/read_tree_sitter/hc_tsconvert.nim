@@ -137,8 +137,8 @@ proc conv*(
        cppExpressionStatement:
 
       if node of cppCompoundStatement and
-         node[0] of cppExpressionStatement and
-         node[0][0] of cppCommaExpression:
+         node.has(0) and node[0] of cppExpressionStatement and
+         node[0].has(0) and node[0][0] of cppCommaExpression:
         proc flatten(node: CppNode): seq[CppNode] =
           case node.kind:
             of cppCommaExpression:
@@ -321,7 +321,6 @@ proc conv*(
 
         val = val.multiReplace({re"\s*##\s*": inf, re"#\s*": pref})
         let bodyNode = parseCppString(addr val)
-        debug bodyNode
         var impl = ~bodyNode
 
         if bodyNode.simpleExpr():
@@ -603,7 +602,6 @@ proc conv*(
       result = ~node[0]
 
     of cppSizeofExpression:
-      # debug node
       if "value" in node:
         result = newXCall("sizeof", ~node["value"])
 
@@ -798,8 +796,6 @@ if isMainModule:
         impl.impl = fillStmt(newPStmtList())
 
       else:
-        # echov "--------------"
-        # debug node
         impl.impl = fillStmt(
           conv(
             tern(

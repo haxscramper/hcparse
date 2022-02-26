@@ -1,7 +1,7 @@
 import
   hmisc/other/[oswrap],
   hmisc/core/[all, code_errors],
-  hmisc/algo/[hstring_algo],
+  hmisc/algo/[hstring_algo, halgorithm],
   hmisc/hasts/json_serde
 
 import
@@ -277,15 +277,18 @@ type
         ## }
         ## ```
         objDef*: CxxObject
-        objParent*: CxxNamePair ## Name of the parent declaration. Used to
-        ## construct anonymous type name.
-        objUser*: CxxNamePair ## Name of the entry that /uses/ the type. Is
-        ## necessary to construct the name for anonymous type.
+        objParent*: Option[CxxNamePair] ## Name of the parent declaration.
+        ## Used to construct anonymous type name. Optional because it is
+        ## possible to declare global variable with anonymous type.
+        objUser*: Option[CxxNamePair] ## Name of the entry that /uses/ the
+        ## type. Is necessary to construct the name for anonymous type.
+        ## Optional because it is possible to declare `struct` that is used
+        ## only for field grouping.
 
       of ctkAnonEnum:
         enumDef*: CxxEnum
-        enumParent*: CxxNamePair
-        enumUser*: CxxNamePair
+        enumParent*: Option[CxxNamePair]
+        enumUser*: Option[CxxNamePair]
 
 
 
@@ -386,7 +389,9 @@ type
     cffProtected
 
   CxxField* = ref object of CxxBase
-    name*: CxxNamePair
+    name*: Option[CxxNamePair] ## Name of the field. It is optional because
+    ## it can be explicitly omitted if you have (1) bitsize clause - `uint8
+    ## : 1;` is a valid 'field' declaration (2) anonymous struct.
     nimType*: CxxTypeUse
     flags*: set[CxxFieldFlag]
     bitsize*: Option[int]
@@ -581,6 +586,28 @@ func `$`*(arg: CxxArg): string =
     result &= " = "
     result &= $arg.default.get()
 
+
+func `$`*(decl: CxxTypeDecl): string
+# func `$`*(ct: CxxTypeUse): string
+
+func `$`*(obj: CxxField): string =
+  "field!$#: $#" % [tern(?obj.name, $obj.name.get(), "???"), $obj.nimType]
+
+func `$`*(obj: CxxObject): string =
+  if obj.isAnonymous:
+    result = "anon-object!{"
+    for first, field in obj.mfields.itemsIsFirst():
+      if not first: result &= ","
+      result.addf("[$#]", $field)
+
+    result &= "}"
+
+  else:
+    result = "object!" & $obj.decl
+
+func `$`*(enu: CxxEnum): string =
+  "enum!" & $enu.decl
+
 func `$`*(ct: CxxTypeUse): string =
   if isNil(ct):
     result = "void"
@@ -621,10 +648,22 @@ func `$`*(ct: CxxTypeUse): string =
             result &= "]"
 
       of ctkAnonEnum:
-        result &= "anon-enum"
+        result &= $ct.enumDef
+
+        if ?ct.enumParent:
+          result &= ",parent=" & $ct.enumParent.get()
+
+        if ?ct.enumUser:
+          result &= ",user=" & $ct.enumUser.get()
 
       of ctkAnonObject:
-        result &= "anon-object"
+        result &= $ct.objDef
+
+        if ?ct.objParent:
+          result &= ",parent=" & $ct.objParent.get()
+
+        if ?ct.objUser:
+          result &= ",user=" & $ct.objUser.get()
 
       of ctkProc:
         result &= "proc("
@@ -678,10 +717,6 @@ func `$`*(p: CxxProc): string =
 func `$`*(alias: CxxAlias): string =
   $alias.decl & " = " & $alias.baseType
 
-func `$`*(obj: CxxObject): string = "object!" & $obj.decl
-
-func `$`*(obj: CxxField): string =
-  "field!$#: $#" % [$obj.name, $obj.nimType]
 
 func `$`*(e: CxxEntry): string =
   case e.kind:
@@ -890,13 +925,13 @@ func nimName*(obj: CxxObject): string    = obj.decl.name.nim
 func nimName*(obj: CxxForward): string   = obj.decl.name.nim
 func nimName*(obj: CxxEnum): string      = obj.decl.name.nim
 func nimName*(obj: CxxAlias): string     = obj.decl.name.nim
-func nimName*(field: CxxField): string   = field.name.nim
+func nimName*(field: CxxField): string   = field.name.get().nim
 func nimName*(t: CxxTypeDecl): string    = t.name.nim
 func nimName*(pair: CxxNamePair): string = pair.nim
 
 func cxxName*(pair: CxxNamePair): CxxName   = pair.cxx
 func cxxName*(arg: CxxArg): CxxName         = arg.name.cxx
-func cxxName*(field: CxxField): CxxName     = field.name.cxx
+func cxxName*(field: CxxField): CxxName     = field.name.get().cxx
 func cxxName*(t: CxxTypeUse): CxxName       = t.cxxType.name.cxx
 func cxxName*(t: CxxTypeDecl): CxxName      = t.name.cxx
 func cxxName*(pr: CxxProc): CxxName         = pr.head.name.cxx
@@ -939,6 +974,11 @@ func getLocation*(e: CxxEntry): CxxSpellingLocation =
 
   assertOption tmp, $e
   return tmp.get
+
+
+func cxxPair*(
+    cxx: CxxName, context: CxxNameContext = cncNone): CxxNamePair =
+  CxxNamePair(cxx: cxx, context: context)
 
 func cxxPair*(
     nim: string, cxx: CxxName,
@@ -1093,7 +1133,7 @@ func cxxTypeParams*(decl: CxxTypeDecl): seq[CxxTypeUse] =
 
 
 func cxxTypeUse*(
-    objDef: CxxObject, parent, user: CxxNamePair
+    objDef: CxxObject, parent, user: Option[CxxNamePair]
   ): CxxTypeUse =
   CxxTypeUse(
     kind: ctkAnonObject,
@@ -1104,7 +1144,7 @@ func cxxTypeUse*(
 
 
 func cxxTypeUse*(
-    enumDef: CxxEnum, parent, user: CxxNamePair
+    enumDef: CxxEnum, parent, user: Option[CxxNamePair]
   ): CxxTypeUse =
   CxxTypeUse(
     kind: ctkAnonEnum, enumDef: enumDef,
@@ -1429,8 +1469,11 @@ func cxxContext*(name: sink CxxTypeDecl, ctx: CxxNameContext): CxxTypeDecl =
 
 func cxxField*(name: CxxNamePair, nimType: CxxTypeUse): CxxField =
   CxxField(
-    name: name.cxxContext(cncField),
+    name: some name.cxxContext(cncField),
     nimType: nimType, haxdocIdent: newJNull())
+
+func cxxField*(name: Option[CxxNamePair], nimType: CxxTypeUse): CxxField =
+  CxxField(name: name, nimType: nimType, haxdocIdent: newJNull())
 
 func cxxAlias*(decl: CxxTypeDecl, baseType: CxxTypeUse): CxxAlias =
   CxxAlias(decl: decl, baseType: baseType, haxdocIdent: newJNull())

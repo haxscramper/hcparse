@@ -202,18 +202,14 @@ proc toNNode*[N](
           toNNode[N](t.arrayElement, conf, anon)])
 
     of ctkAnonObject:
-      var def = t.objDef
-      def.decl.name = t.objParent & t.objUser
-      let gen = toNNode[N](def, conf, anon)
+      let gen = toNNode[N](t.objDef, conf, anon)
       anon.add gen
-      result = newNNType[N](def.nimName)
+      result = newNNType[N](t.objDef.nimName)
 
     of ctkAnonEnum:
-      var def = t.enumDef
-      def.decl.name = t.enumParent & t.enumUser
-      let gen = toNNode[N](def, conf)
+      let gen = toNNode[N](t.enumDef, conf)
       anon.add gen
-      result = newNNType[N](def.nimName)
+      result = newNNType[N](t.enumDef.nimName)
 
     of ctkDecltype:
       result = NType[N](
