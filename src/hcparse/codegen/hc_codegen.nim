@@ -470,18 +470,28 @@ proc anonAccessors*[N](
 
     else:
       if 1 < path.len:
-        for kind in [pkRegular, pkAssgn]:
-          var this = toNNode[N](obj.decl.cxxTypeUse(), conf, anon)
-          if kind == pkAssgn:
-            this = newNType[N]("var", @[this])
+        let this = toNNode[N](obj.decl.cxxTypeUse(), conf, anon)
+        anon.add newPProcDecl(
+          name = field.nimName(),
+          args = @{ "this": this },
+          impl = newXCall[N](newPIdent("."), mapIt("this" & path, escapedPIdent(it))),
+          returnType = some toNNode[N](field.typ, conf, anon),
+          kind = pkRegular
+        )
 
-          anon.add newPProcDecl(
-            name = field.nimName(),
-            args = @{ "this": this },
-            impl = newXCall[N](newPIdent("."), mapIt("this" & path, escapedPIdent(it))),
-            returnType = some toNNode[N](field.typ, conf, anon),
-            kind = kind
-          )
+        anon.add newPProcDecl(
+          name = field.nimName(),
+          args = @{
+            "this": newNType[N]("var", @[this]),
+            "value": toNNode[N](field.typ, conf, anon)
+          },
+          impl = newXCall[N](
+            "=",
+            newXCall[N](newPIdent("."), mapIt("this" & path, escapedPIdent(it))),
+            newPIdent("value")
+          ),
+          kind = pkAssgn
+        )
 
   aux(field, @[field.nimName()])
 
