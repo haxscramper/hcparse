@@ -1,10 +1,3 @@
-*
-!*.*
-!**/*.*
-!/**/
-!.*
-!/*
-
 nimcache/
 **/*.bin
 **/*.png
@@ -70,3 +63,6 @@ wrap-examples.rst
 htmldocs/*
 
 perf.*
+**/TAGS
+bin
+build

@@ -14,3 +14,5 @@ nim c \
     -d=nimDebugUtils \
     --path=$SKULL \
     $@
+
+echo "compilation done"

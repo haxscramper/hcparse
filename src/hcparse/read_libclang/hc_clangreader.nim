@@ -69,10 +69,10 @@ proc toCxxType*(
 
   case anon.kind:
     of cekEnum:
-      result = cxxTypeUse(anon.cxxEnum, parent, user)
+      result = cxxTypeUse(anon.cxxEnum, some parent, some user)
 
     of cekObject:
-      result = cxxTypeUse(anon.cxxObject, parent, user)
+      result = cxxTypeUse(anon.cxxObject, some parent, some user)
 
     else:
       raise newUnexpectedKindError(anon)
