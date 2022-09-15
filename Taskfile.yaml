@@ -1,0 +1,20 @@
+version: 3
+vars:
+  REL_CONAN: "build/dependencies/conan"
+  CONAN_DIR: |
+    {{env "PWD"}}/build/dependencies/conan
+
+tasks:
+  conan_install:
+    cmds:
+      - conan install . -if {{.REL_CONAN}} --build=missing --settings compiler.libcxx="libstdc++11"
+    status:
+      - test -e {{.CONAN_DIR}}
+
+  main:
+    dir: build
+    desc: "Build main project"
+    deps: [conan_install]
+    cmds:
+      - cmake ..
+      - make -j8
