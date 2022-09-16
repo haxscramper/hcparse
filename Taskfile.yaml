@@ -18,3 +18,5 @@ tasks:
     cmds:
       - cmake ..
       - make -j8
+      - cmake .. -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+      - ./bin/hcparse -o build/db.sqlite -a -b compile_commands.json
